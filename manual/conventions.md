@@ -37,9 +37,11 @@ C++ 采用 C++20，格式以根目录 `.clang-format` 为准：4 空格、100 �
 | 枚举值与具名常量 | PascalCase | `QueueType::Graphics` |
 | 必要的宏 | `RENDERLAB_` 前缀 | `RENDERLAB_ASSERT` |
 
-自有标识符使用 ASCII，注释、诊断和文档可以使用中文。运行时普通窄字符串约定为 UTF-8；调用 Win32 宽字符 API 时在平台边界显式转换，路径使用明确的 filesystem/平台转换流程，不依赖系统 ANSI 代码页。
+自有标识符使用 ASCII，源码注释使用英文；诊断、测试数据和项目文档可以使用中文。关键类和公共方法使用简短的 Doxygen 风格注释，说明职责、所有权、生命周期、前置条件与异常；普通实现注释优先解释原因和约束，不逐行复述代码。
 
-M0.1 的构建配置必须显式启用 C++20、关闭编译器语言扩展，并对 MSVC 自有目标启用 `/utf-8`。警告配置作用于自有 Target，不把项目规则传递给第三方。完成构建验证后，在使用说明中固定实际工具链版本。
+运行时普通窄字符串约定为 UTF-8；调用 Win32 宽字符 API 时在平台边界显式转换，路径使用明确的 filesystem/平台转换流程，不依赖系统 ANSI 代码页。
+
+构建显式启用 C++20、关闭编译器语言扩展，并对 MSVC 自有目标启用 `/utf-8`。警告配置作用于自有 Target，不把项目规则传递给第三方。已验证工具链见 [构建与运行](build.md)。
 
 HLSL 使用 `.hlsl` 与 `.hlsli`，遵守 UTF-8、LF、空格和命名约定。C++ formatter 不自动视作 HLSL formatter；正式 Shader 工具链阶段再确定合适的格式化工具。Shader 属性的稳定 ID 与显示名、代码 symbol 分开维护。
 
@@ -50,7 +52,7 @@ clang-format --dry-run --Werror path/to/file.cpp
 clang-format -i path/to/file.cpp
 ```
 
-团队和后续 CI 使用一致的 clang-format 版本，避免版本差异造成无意义改动。当前尚未固定和验证工具版本，不把配置文件存在当作格式化已执行。
+当前使用 clang-format 22.1.3，已用于自有 C++ 源文件格式化和检查。团队和后续 CI 使用一致版本，避免版本差异造成无意义改动。
 
 ## C# 编辑器
 

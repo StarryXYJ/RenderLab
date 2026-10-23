@@ -1,0 +1,74 @@
+cmake_minimum_required(VERSION 3.28)
+project(RenderLab VERSION 0.1.0 LANGUAGES C CXX)
+set(CMAKE_CXX_SCAN_FOR_MODULES OFF)
+
+if(NOT WIN32 OR NOT CMAKE_SIZEOF_VOID_P EQUAL 8)
+    message(FATAL_ERROR "RenderLab currently requires Windows x64.")
+endif()
+if(CMAKE_SOURCE_DIR STREQUAL CMAKE_BINARY_DIR)
+    message(FATAL_ERROR "Use an out-of-source build: cmake --preset windows-debug")
+endif()
+
+include(CTest)
+include(cmake/Dependencies.cmake)
+option(RENDERLAB_GPU_TESTS "Register tests requiring a GPU, validation layers and desktop session" OFF)
+
+add_library(renderlab_options INTERFACE)
+target_compile_features(renderlab_options INTERFACE cxx_std_20)
+target_compile_definitions(renderlab_options INTERFACE UNICODE _UNICODE NOMINMAX WIN32_LEAN_AND_MEAN)
+if(MSVC)
+    target_compile_options(renderlab_options INTERFACE /W4 /WX /permissive- /utf-8 /Zc:__cplusplus)
+else()
+    target_compile_options(renderlab_options INTERFACE -Wall -Wextra -Wpedantic -Werror)
+endif()
+set(CMAKE_CXX_EXTENSIONS OFF)
+
+add_library(renderlab_core STATIC src/core/log.cpp)
+target_include_directories(renderlab_core PUBLIC src)
+target_link_libraries(renderlab_core PRIVATE renderlab_options)
+
+add_library(renderlab_platform STATIC src/platform/window.cpp src/platform/text.cpp)
+target_include_directories(renderlab_platform PUBLIC src)
+target_link_libraries(renderlab_platform PRIVATE renderlab_options user32)
+
+add_library(renderlab_rhi STATIC
+    src/rhi/device.cpp
+    src/rhi/dx12/dx12_device.cpp
+    src/rhi/vulkan/vulkan_device.cpp)
+target_include_directories(renderlab_rhi PUBLIC src)
+target_link_libraries(renderlab_rhi PRIVATE renderlab_options renderlab_core renderlab_platform
+    d3d12 dxgi dxguid volk)
+
+add_library(renderlab_sandbox_options STATIC src/apps/sandbox/options.cpp)
+target_include_directories(renderlab_sandbox_options PUBLIC src)
+target_link_libraries(renderlab_sandbox_options PRIVATE renderlab_options)
+
+add_executable(renderlab_sandbox src/apps/sandbox/main.cpp)
+target_link_libraries(renderlab_sandbox PRIVATE renderlab_options renderlab_core
+    renderlab_platform renderlab_rhi renderlab_sandbox_options)
+
+if(BUILD_TESTING)
+    add_executable(renderlab_core_tests tests/core_tests.cpp)
+    target_link_libraries(renderlab_core_tests PRIVATE renderlab_options renderlab_core
+        renderlab_sandbox_options renderlab_rhi)
+    add_test(NAME core.contracts COMMAND renderlab_core_tests)
+    add_test(NAME cli.help COMMAND renderlab_sandbox --help)
+    add_test(NAME cli.invalid_backend COMMAND renderlab_sandbox --backend unknown)
+    add_test(NAME cli.invalid_adapter COMMAND renderlab_sandbox --adapter -1)
+    add_test(NAME cli.unknown_option COMMAND renderlab_sandbox --unknown)
+    set_tests_properties(cli.invalid_backend cli.invalid_adapter cli.unknown_option
+        PROPERTIES WILL_FAIL TRUE)
+    if(RENDERLAB_GPU_TESTS)
+        foreach(backend IN ITEMS dx12 vulkan)
+            add_test(NAME gpu.${backend}.init COMMAND renderlab_sandbox
+                --backend ${backend} --headless --validation on
+                --report ${CMAKE_BINARY_DIR}/reports/${backend}.json
+                --log ${CMAKE_BINARY_DIR}/logs/${backend}.log)
+            add_test(NAME gpu.${backend}.window COMMAND renderlab_sandbox
+                --backend ${backend} --validation on --window-test --exit-after-ms 250
+                --log ${CMAKE_BINARY_DIR}/logs/${backend}-window.log)
+            set_tests_properties(gpu.${backend}.init gpu.${backend}.window PROPERTIES
+                LABELS gpu RUN_SERIAL TRUE TIMEOUT 30)
+        endforeach()
+    endif()
+endif()
