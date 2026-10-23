@@ -1,6 +1,6 @@
 # 构建与运行
 
-RenderLab M0 支持 Windows x64，使用 C++20、MSVC、Windows SDK、CMake 和 Ninja。当前程序负责原生窗口、设备初始化与能力查询，尚未创建交换链或执行绘制。
+RenderLab 支持 Windows x64，使用 C++20、MSVC、Windows SDK、CMake 和 Ninja。Sandbox 在 DX12/Vulkan 上展示三角形与 Compute 噪声纹理，支持独立的设备报告和 RHI 读回验收。
 
 ## 工具链
 
@@ -14,6 +14,7 @@ RenderLab M0 支持 Windows x64，使用 C++20、MSVC、Windows SDK、CMake 和 
 | CMake | 4.3.1-msvc1，项目最低要求 3.28 |
 | Ninja | 1.13.2 |
 | clang-format | 22.1.3 |
+| DXC | 1.9.0.5512（01b62ad47），来自本机 Vulkan SDK 1.4.363.0 |
 
 需要 Visual Studio 的 x64 C++ 工具、Windows SDK 和 CMake/Ninja 组件。源文件使用 `/utf-8`、`/std:c++20`、`/permissive-`、`/Zc:__cplusplus` 和 `/W4 /WX`，不把这些选项传给第三方 Target。当前不使用 C++ Modules，关闭自动模块扫描。
 
@@ -34,10 +35,13 @@ chcp 65001
 | --- | --- | --- |
 | Vulkan-Headers | `2cd90f9d20df57eac214c148f3aed885372ddcfe` | Vulkan 头文件 |
 | volk | `a8da8ef3368482b0ee9b0ec0c6079a16a89c6924` | 从系统 Vulkan Loader 加载函数 |
+| WinPixEventRuntime | NuGet `1.0.240308001`，固定 SHA-256 见 `cmake/Dependencies.cmake` | DX12 GPU Marker |
 
 两者对应 Vulkan SDK 1.4.321.0 源码版本，实际运行最低要求 Vulkan 1.3。首次配置需要 Git 和 GitHub 网络访问。依赖来源与授权说明位于各依赖源码的 LICENSE 文件，不在引擎源码中复制或修改它们。
 
-基础构建不要求完整 Vulkan SDK，但运行需要显卡驱动提供的 Vulkan Loader。DX12 使用系统运行库和 Windows SDK。严格验证额外需要 Windows Graphics Tools 的 D3D12 Debug Layer，以及已安装、能被 Loader 发现的 Khronos Vulkan Validation Layer。
+构建需要能同时输出 DXIL 和 SPIR-V 的 DXC。CMake 从 PATH、`VULKAN_SDK/Bin` 或显式 `RENDERLAB_DXC` 路径查找，不在共享配置中保存本机 SDK 路径。完整 Vulkan SDK 不是构建必需，但提供 DXC 与验证层更方便。运行需要显卡驱动提供的 Vulkan Loader；DX12 使用系统运行库和 Windows SDK。严格验证额外需要 Windows Graphics Tools 的 D3D12 Debug Layer，以及 Khronos Vulkan Validation Layer（含 synchronization validation 设置）。
+
+例如在本机安装 SDK 后，配置 `VULKAN_SDK`，或在配置命令后加 `-DRENDERLAB_DXC=C:/你的SDK/Bin/dxc.exe`。本机路径也可放入被忽略的 CMakeUserPresets.json。首次配置还会从 NuGet 下载带哈希校验的 PIX 包；构建会将其 DLL 复制到程序目录。不要仅复制 exe 后删掉同目录的 DLL 或 shaders。
 
 ## 配置与构建
 
@@ -53,7 +57,7 @@ ctest --preset windows-release
 
 输出分别在 `out/build/windows-debug` 和 `out/build/windows-release`。默认注册 5 项不需要创建设备的基础测试。预设与依赖版本纳入 Git，本机设置使用被忽略的 `CMakeUserPresets.json`。
 
-完整 M0 验证启用 GPU 测试，共 9 项。GPU 测试要求验证层和桌面会话，会短暂打开原生窗口：
+完整验收启用 GPU 测试，共 13 项。GPU 测试要求验证层和桌面会话，会短暂打开原生窗口：
 
 ```powershell
 cmake --preset windows-debug -DRENDERLAB_GPU_TESTS=ON
@@ -84,12 +88,25 @@ GPU 测试使用 `--validation on`，层不可用时失败，不静默降级。�
 
 默认使用 `--validation auto`，验证层缺失会给出警告并在报告中标记禁用；`on` 要求可用，`off` 明确关闭。能力表表示硬件支持，不代表引擎已启用光追、Mesh Shader 或 GPU Driven。
 
-`--adapter N` 使用当前后端报告中的索引，默认优先硬件高性能适配器，不自动选择软件适配器。两种 API 的枚举顺序可能不同。`--exit-after-ms N` 自动关闭窗口，`--window-test` 验证缩放、最小化、恢复和关闭；不提供 `--headless` 时才运行窗口循环。
+`--adapter N` 使用当前后端报告中的索引，默认优先硬件高性能适配器，不自动选择软件适配器。两种 API 的枚举顺序可能不同。`--exit-after-ms N` 或 `--frames N` 自动关闭窗口。`--window-test` 在呈现中执行十次尺寸/暂停变化与两次最小化恢复，不要用过短的退出时间截断它。不提供 `--headless` 时才运行窗口循环；`--headless` 单独使用仍只输出设备报告。
+
+验收并保存读回图像：
+
+```powershell
+./out/build/windows-debug/renderlab_sandbox.exe --backend dx12 --headless --validation on --rhi-test --output out/m1
+./out/build/windows-debug/renderlab_sandbox.exe --backend vulkan --headless --validation on --rhi-test --output out/m1
+./out/build/windows-debug/renderlab_sandbox.exe --backend dx12 --validation on --window-test
+./out/build/windows-debug/renderlab_sandbox.exe --backend vulkan --validation on --frames 1
+```
+
+`out/m1/dx12` 和 `out/m1/vulkan` 各包含 `triangle-noise.bmp`、`noise.bmp` 与去除行 padding 的 `noise.rgba`。CTest 使用各构建目录的 `acceptance/后端` 输出图像与原始数据，`logs` 输出日志，`Testing/Temporary/LastTest.log` 保留测试结果。Compute 噪声为固定种子、257×131 的两次 Dispatch，CPU 参考检查全部像素；屏幕样例另测深度、绕序、线性混合、sRGB 和采样坐标。
+
+应用从可执行文件同目录的 `shaders/dx12` 或 `shaders/vulkan` 读取构建产物，启动工作目录可以不同。修改 HLSL 后运行正常构建即可重编译，不需要在运行时寻找 DXC。M1 使用固定测试入口；M2 再引入正式 Shader 资产工具链。
 
 日志默认写入当前工作目录的 `logs/renderlab.log`，可用 `--log PATH` 修改。JSON 报告通过 `--report PATH` 指定，父目录会自动创建。日志与报告均为 UTF-8 无 BOM、LF。返回码 0 表示成功，1 表示运行或验证错误，2 表示参数错误。
 
 ## 验证结果与边界
 
-M0 在上述工具链、NVIDIA GeForce RTX 5060 与 Intel Graphics 上完成设备初始化验证，主 GPU 的 Debug/Release 完整测试各 9 项通过。两后端验证层均启用，测试期间没有验证错误。详细结果和接口边界见 [M0 基础模块](../docs/m0-foundation.md)。
+M0 的设备初始化历史见 [M0 基础模块](../docs/m0-foundation.md)。M1 的 API、生命周期、分配预算和支持范围见 [最小 RHI](../docs/m1-rhi.md)，各阶段的实际验收配置与结论统一见 [阶段计划](../design/phaseplan.md)。
 
-当前没有帧提交、交换链、Shader 编译和资源上传。设备只创建最小队列，关闭时没有待完成的 GPU 工作；M1 必须先实现提交完成点与在途资源回收，不能沿用“无工作即可销毁”的假设。
+M1 首期资源为单 mip/layer 的 2D 纹理、显式单流顶点布局和单 Graphics Queue；Vulkan 的 Host 内存要求 coherent，Timestamp 要求 64 位有效计数。资源分配采用显式预算下的 dedicated/committed 分配，尚未采用子分配、Bindless 或 GPU 剔除。验证开启时的 Timestamp 只验证读回链路，不是性能基准。

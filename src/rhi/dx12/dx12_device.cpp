@@ -1,4 +1,5 @@
 #include "rhi/device.hpp"
+#include "rhi/dx12/dx12_runtime.hpp"
 
 #include "platform/text.hpp"
 
@@ -15,16 +16,8 @@ namespace renderlab::rhi
 {
 namespace
 {
+using dx12::Check;
 using Microsoft::WRL::ComPtr;
-
-void Check(HRESULT result, const char* operation)
-{
-    if (FAILED(result))
-    {
-        throw std::runtime_error(
-            std::format("{} failed (HRESULT 0x{:08X})", operation, static_cast<uint32_t>(result)));
-    }
-}
 
 class Dx12Device final : public Device
 {
@@ -183,7 +176,7 @@ public:
             throw std::runtime_error("Shader Model 6.0 is required");
         }
         const auto shaderModel = static_cast<uint32_t>(shader.HighestShaderModel);
-        report_.shaderTarget = std::format("Shader Model {}.{} supported; DXC not configured in M0",
+        report_.shaderTarget = std::format("Shader Model {}.{} supported; M1 DXC target 6.0",
                                            shaderModel >> 4, shaderModel & 15);
 
         D3D12_FEATURE_DATA_D3D12_OPTIONS base{};
@@ -209,8 +202,8 @@ public:
         report_.details.emplace_back("resourceBindingTier",
                                      std::to_string(base.ResourceBindingTier));
         report_.details.emplace_back("rayTracingTier", std::to_string(rayTracing.RaytracingTier));
-        report_.details.emplace_back(
-            "enabledWork", "device and one direct queue; no rendering or ray tracing commands");
+        report_.details.emplace_back("enabledWork", "one direct queue; M1 graphics, compute, copy "
+                                                    "and indirect draw; no ray tracing commands");
         report_.details.emplace_back("descriptorIndexingScope",
                                      "resource arrays; shader and tier limits still apply");
 
@@ -235,6 +228,10 @@ public:
     const DeviceReport& GetReport() const override
     {
         return report_;
+    }
+    std::unique_ptr<Runtime> CreateRuntime() override
+    {
+        return CreateDx12Runtime(device_.Get(), queue_.Get(), factory_.Get());
     }
     uint32_t GetValidationErrorCount() const override
     {

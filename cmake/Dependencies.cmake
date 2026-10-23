@@ -15,3 +15,14 @@ FetchContent_Declare(volk
 FetchContent_MakeAvailable(volk)
 target_link_libraries(volk PUBLIC Vulkan::Headers)
 target_compile_definitions(volk PUBLIC VK_USE_PLATFORM_WIN32_KHR)
+
+FetchContent_Declare(winpix
+    URL https://www.nuget.org/api/v2/package/WinPixEventRuntime/1.0.240308001
+    URL_HASH SHA256=726acc93d6968e2146261a1e415521747d50ad69894c2b42b5d0d4c29fd66ec4
+    DOWNLOAD_EXTRACT_TIMESTAMP FALSE)
+FetchContent_MakeAvailable(winpix)
+add_library(renderlab_pix SHARED IMPORTED)
+set_target_properties(renderlab_pix PROPERTIES
+    IMPORTED_IMPLIB "${winpix_SOURCE_DIR}/bin/x64/WinPixEventRuntime.lib"
+    IMPORTED_LOCATION "${winpix_SOURCE_DIR}/bin/x64/WinPixEventRuntime.dll"
+    INTERFACE_INCLUDE_DIRECTORIES "${winpix_SOURCE_DIR}/Include/WinPixEventRuntime")

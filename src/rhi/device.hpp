@@ -11,6 +11,7 @@
 
 namespace renderlab::rhi
 {
+class Runtime;
 enum class Backend
 {
     Dx12,
@@ -101,7 +102,7 @@ struct DeviceReport
 /**
  * @brief Owns a backend device and its initialization diagnostics.
  *
- * M0 creates a device and queue without submitting GPU work. The logger supplied to CreateDevice
+ * The logger supplied to CreateDevice
  * must outlive this object, including initialization failure and shutdown callbacks.
  */
 class Device
@@ -109,11 +110,13 @@ class Device
 public:
     virtual ~Device() = default;
     virtual const DeviceReport& GetReport() const = 0;
+    /// Create one graphics runtime; destroy it and all GPU objects before Shutdown.
+    virtual std::unique_ptr<Runtime> CreateRuntime() = 0;
     /// Collect pending diagnostics; callback-driven backends may have already recorded them.
     virtual void PollDiagnostics() = 0;
     /**
      * @brief Releases native objects idempotently, retaining the report and diagnostic counters.
-     * @pre No outstanding GPU work may reference these objects; M0 submits no GPU work.
+     * @pre All runtimes and GPU objects have been released after waiting for submissions.
      */
     virtual void Shutdown() noexcept = 0;
     /// Read after Shutdown to include diagnostics emitted during cleanup.

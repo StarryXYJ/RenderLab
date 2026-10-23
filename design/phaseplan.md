@@ -4,14 +4,14 @@
 
 ## 当前状态
 
-- 当前待实施阶段：M1 最小双后端 RHI，尚未开始。
-- 下一工作项：M1.1 展示与帧上下文。
-- M0 已完成并验收，完成摘要和验证入口见下文；本轮未进入 M1。
+- M1 及本轮维护性重构均已完成，状态 DONE；公共接口、双后端实现、样例验收与宿主展示按职责拆分并复验通过。
+- 当前没有进行中的实现工作项；下一计划阶段为 M2 Shader 与材质数据链路，尚未开始。
+- M1 已通过双后端三角形、固定种子 Compute 噪声及读回、同步、生命周期和 resize 验收，结果见下文。
 
 | 阶段 | 目标 | 前置依赖 | 状态 |
 | --- | --- | --- | --- |
 | M0 | 工程与设备基础 | 无 | DONE |
-| M1 | 最小双后端 RHI | M0 | NOT_STARTED |
+| M1 | 最小双后端 RHI | M0 | DONE |
 | M2 | Shader 与材质数据链路 | M1 | NOT_STARTED |
 | M3 | 单队列 Render Graph | M2 | NOT_STARTED |
 | M4 | 场景资源与基础 Renderer | M3 | NOT_STARTED |
@@ -67,44 +67,25 @@
 
 文档：[构建与运行](../manual/build.md)、[基础模块与验收](../docs/m0-foundation.md)、[工程约定](../manual/conventions.md)。原始报告与日志位于各构建树 reports、logs 和 Testing，不提交本机生成物。
 
-限制与后续：当前队列不提交 GPU 工作，光追等高级能力仅查询。M1 必须增加完成点、在途资源回收和展示层。中文 MSVC 的首次配置需使用代码页一致的控制台，避免 CMake/Ninja 头文件依赖误解码；复现方式已写入构建说明。
+限制与后续：M0 交付时不提交 GPU 工作，M1 已补齐完成点、在途回收与展示层；光追等高级能力仍仅查询。中文 MSVC 的首次配置需使用代码页一致的控制台，避免 CMake/Ninja 头文件依赖误解码；复现方式已写入构建说明。
 
 ## M1 最小双后端 RHI
 
-目标是验证资源、命令和在途生命周期。每个子阶段先完成 DX12 的最小功能，再用同一语义补齐 Vulkan；在本阶段内完成两后端验证。
+状态：DONE，日期：2026 年 10 月 23 日（含维护性重构复验）。
 
-### M1.1 展示与帧上下文
+结果：M1.1 交换链、两个独立 FrameContext、真实提交完成点、录制保活/取消/退休与原生命令上下文复用；M1.2 Buffer/Texture/View/Sampler、预算分配、两段上传环、显式屏障与读回；M1.3 不可变绑定、构建时双目标 Shader、顶点/索引绘制与 Compute；M1.4 坐标/矩阵/UV/绕序、Reversed-Z、线性混合/sRGB、资源名称、GPU Marker、Timestamp 和 16 字节 DrawIndirect 参数均已打通。RHI 不依赖样例顶点结构、固定入口名、材质或 Render Graph。
 
-- [ ] Swapchain 获取、清屏、提交和 Present。
-- [ ] FrameContext、提交完成点、命令分配器重置和延迟销毁。
-- [ ] 命令录制持有使用引用，提交转为完成点回收，取消时正确释放。
-- [ ] FrameContext 与交换链图像索引分离；处理零尺寸、resize、恢复与退出。
+验证：MSVC 19.51、Windows SDK 10.0.26100、CMake 4.3.1、Ninja 1.13.2、DXC 1.9.0.5512；RTX 5060、NVIDIA 591.74 上 Debug/Release 完整 CTest 各 13/13 通过。DX12 Debug Layer 与 Vulkan synchronization validation 开启，错误数均为 0。每后端/配置窗口测试呈现 54 帧、重建/暂停变化 10 次、两次最小化恢复和单帧立即退出通过；正常帧无 DeviceIdle/QueueIdle。
 
-验收连续呈现、反复 resize 和立即退出；覆盖录制后释放应用引用、延迟提交和取消命令，没有使用中资源被重置或提前销毁。正常帧不通过 DeviceIdle 串行化。
+读回与生命周期：宽 1/63/64/65/257、奇数行、非零 512 字节 offset 与 256 字节 pitch 的纹理/Buffer 往返通过；两段上传环跨六次提交正确；取消、提前释放应用引用、延迟提交、完成回收及场景退出占用归零通过。257×131 噪声的两次 Dispatch 经过 Storage→Storage 内存依赖，全部 33,667 个像素与 CPU 整数参考逐字节一致；四份双后端/配置 `noise.rgba` 的 SHA-256 均为 `ed59cd2517b5c5c076a93c45fda5a61aa1f6f43ff52f96af600bec1059be9527`。三角形、采样坐标、深度、混合、间接绘制与 Timestamp 探针通过；已查看读回图像。
 
-### M1.2 资源与上传
+工程验证：自有 C++ 通过 clang-format 22.1.3 检查，手工文本通过 UTF-8 无 BOM/LF 检查。WinPixEventRuntime 1.0.240308001 的 NuGet 正常下载、固定哈希和 CMake 集成已验证。原始图像/数据见各构建树 `acceptance/{dx12,vulkan}`，日志与 CTest 结果见 `logs` 和 `Testing`，不提交本机生成物。
 
-- [ ] Buffer、Texture、View、Sampler 和最小分配器集成。
-- [ ] 上传环、拷贝、Readback、纹理行间距和对齐处理。
-- [ ] 定义资源用途、显式屏障和状态交接；此时只使用 Graphics Queue。
+维护性重构：公共 RHI 分为 resources、commands、runtime、swapchain、upload；双后端实现分为设备/能力、资源、绑定/管线、命令、展示与完成点，仍由同一 Runtime 维护提交所有权。场景准备/录制、验收、Shader 文件读取与 Sandbox 展示循环分离，错误检查复用，未增加状态管理层。`runtime.hpp` 从 460 行降到 83 行，DX12/Vulkan 的 `runtime.cpp` 分别从 752/1119 行降到 66/76 行。上述相同工具链和 RTX 5060 上重新通过 Debug/Release 各 13/13，验证错误为 0，四份噪声数据保持相同 SHA-256；25 个自有头文件逐一独立编译通过，双配置增量构建通过。文件职责见 [M1 文档](../docs/m1-rhi.md#文件职责与依赖)。
 
-验收有已知数据的 Buffer 往返与纹理测试图。覆盖尺寸和行间距边界，记录临时内存占用。
+文档：[最小 RHI API 与约束](../docs/m1-rhi.md)、[构建与验收命令](../manual/build.md)。
 
-### M1.3 图形与计算
-
-- [ ] BindingLayout、BindingGroup、ShaderModule、Graphics/Compute Pipeline。
-- [ ] 顶点/索引绘制、深度、基础混合与计算 Dispatch。
-- [ ] 测试 Compute 写后采样和连续 Storage 写入间的内存依赖。
-
-此时可用最小构建时编译脚本提供测试 Shader，M2 再替换为正式工具链，避免 RHI 与 Shader 系统循环依赖。
-
-### M1.4 约定与诊断
-
-- [ ] 坐标、矩阵、UV、绕序、Reversed-Z 和颜色空间的测试场景。
-- [ ] 资源名称、GPU Marker、基础 Timestamp 与验证错误定位。
-- [ ] 冒烟验证未来需要的间接参数格式和能力入口，不实现 GPU 剔除系统。
-
-退出条件：相同绘制、计算和读回样例在双后端通过，资源生命周期及 resize 正确。提交最小 API 文档，不一次填满全部未来 RHI 接口。
+限制与后续：最小分配采用 committed/dedicated，未做 VMA/D3D12MA 子分配；纹理限单 mip/layer，顶点限单流 float2/3/4，Storage 限 RGBA8_UNORM，只有 Graphics Queue。Vulkan Host 内存要求 coherent、Timestamp 要求 64 个有效位。CPU 矩阵上传/真实相机、其他 GPU 的 M1、设备丢失注入和 PIX/RenderDoc 人工 Capture 尚未验证；测试中的 Shader 常量矩阵和原始计时不能替代这些事项。正式 Shader 资产工具链、反射与材质由 M2 实现，本轮未进入 M2。
 
 ## M2 Shader 与材质数据链路
 
@@ -344,4 +325,4 @@
 
 ## 已完成阶段
 
-已完成：M0 工程与设备基础。摘要保留在对应章节，本节只维护索引。
+已完成：M0 工程与设备基础、M1 最小双后端 RHI。摘要保留在对应章节，本节只维护索引。

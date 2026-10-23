@@ -159,6 +159,10 @@ CPU 所有权通过 RAII 管理，GPU 实际销毁按所有相关队列的完成
 
 FrameContext 按自身提交完成点复用，与交换链图像索引分开。窗口最小化或尺寸为零时暂停该视口，重建后使尺寸相关历史失效；首期 resize 可以使用明确的粗粒度等待，但正常逐帧提交不使用 DeviceIdle。设备丢失先保留日志和诊断并退出，不自动重建整个引擎。
 
+M1 采用拥有资源引用的命令包序列，在 Submit 时由后端生成原生命令；提交完成后回收命令包并复用原生命令上下文。绑定描述和快照构造后只读。展示完成与图形提交完成分开处理：DX12 在 resize/关闭时等待 Present 之后的队列尾部，Vulkan 按图像管理展示信号量，并在重建前等待展示队列。最小资源与 API 边界见 [M1 RHI](../docs/m1-rhi.md)。
+
+实现文件按资源、管线、命令提交和展示职责拆分，仍由单一 Runtime 维护提交与退休所有权。公共资源/命令/上传/展示契约分别包含，后端对象声明只在各自实现中共享。示例渲染、验收、Shader 文件读取和宿主展示循环分别组织；不通过拆文件增加新层级或重复状态。具体入口见 [M1 文件职责](../docs/m1-rhi.md#文件职责与依赖)。
+
 显存分配可以采用 VMA 和 D3D12 Memory Allocator；上传、描述符分配、驻留策略、资源池和图内复用仍由引擎管理。帧内临时分配器避免零散堆分配，按实际用途选择 std::pmr。上传、光追 scratch 和资源池记录当前占用与高水位，设置容量上限，并在相关提交完成后按预算或显式请求清理闲置分配。容量不足时明确扩容、分批处理或报错，避免无限增长及每帧缩扩容。
 
 ## 场景数据与 GPU Driven
@@ -461,4 +465,4 @@ CPU 逻辑测试集中在 Render Graph 的依赖、资源版本、剔除、生�
 - [Filament FrameGraph](https://google.github.io/filament/notes/framegraph.html) 与 [Material Guide](https://google.github.io/filament/main/materials.html)：参考小型图模型、材质定义和变体边界。
 - [pbrt GPU Rendering](https://pbr-book.org/4ed/Wavefront_Rendering_on_GPUs/Mapping_Path_Tracing_to_the_GPU)：参考离线积分器的 GPU 数据组织，避免把实时 Pass 和逐路径调度强行统一。
 
-当前没有阻碍启动的设计问题。进入实现前，M0 检查开发 GPU、驱动、SDK 和 Shader 编译器，输出能力报告；M1 细化最小 RHI 接口并以双后端运行结果验证本设计。
+开发 GPU、驱动、SDK 与 Shader 编译器通过基础设备报告和双后端最小样例验证。最小 RHI 的具体接口与限制见 [M1 RHI](../docs/m1-rhi.md)，各阶段实际完成状态与硬件证据以 [阶段计划](phaseplan.md) 为准。

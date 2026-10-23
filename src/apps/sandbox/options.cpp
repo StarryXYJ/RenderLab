@@ -51,6 +51,14 @@ Options ParseOptions(std::span<const std::string_view> arguments)
         {
             options.logPath = value();
         }
+        else if (arg == "--frames")
+        {
+            options.frames = number();
+        }
+        else if (arg == "--output")
+        {
+            options.outputPath = value();
+        }
         else if (arg == "--report")
         {
             options.reportPath = value();
@@ -62,6 +70,10 @@ Options ParseOptions(std::span<const std::string_view> arguments)
         else if (arg == "--window-test")
         {
             options.windowTest = true;
+        }
+        else if (arg == "--rhi-test")
+        {
+            options.rhiTest = true;
         }
         else if (arg == "--help" || arg == "-h")
         {
@@ -88,18 +100,25 @@ Options ParseOptions(std::span<const std::string_view> arguments)
     {
         throw std::invalid_argument("--log cannot be empty");
     }
+    if (options.outputPath.empty())
+        throw std::invalid_argument("--output cannot be empty");
+    if (options.headless && options.frames)
+        throw std::invalid_argument("--frames requires a window");
     return options;
 }
 
 std::string_view Usage()
 {
-    return "RenderLab M0 Sandbox\n"
+    return "RenderLab M1 Sandbox\n"
            "  --backend dx12|vulkan       Backend (default: dx12)\n"
            "  --adapter N                 Index from this backend's adapter list\n"
            "  --validation auto|on|off    auto warns if validation is unavailable\n"
            "  --headless                  Initialize and report without a window\n"
            "  --exit-after-ms N           Close the window after N milliseconds\n"
            "  --window-test               Exercise resize, minimize, restore and close\n"
+           "  --frames N                  Present N frames then close\n"
+           "  --rhi-test                  Verify transfers, lifetime, compute and raster readback\n"
+           "  --output PATH               Acceptance images and data (default: out/m1)\n"
            "  --report PATH               Write a JSON capability report\n"
            "  --log PATH                  UTF-8 log (default: logs/renderlab.log)\n"
            "  --help                      Show this help\n";

@@ -14,10 +14,13 @@ struct Options
     std::string validation = "auto";
     std::optional<uint32_t> adapter;
     std::optional<uint32_t> exitAfterMs;
+    std::optional<uint32_t> frames;
     std::string logPath = "logs/renderlab.log";
     std::string reportPath;
+    std::string outputPath = "out/m1";
     bool headless = false;
     bool windowTest = false;
+    bool rhiTest = false;
     bool help = false;
 };
 

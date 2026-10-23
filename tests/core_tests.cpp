@@ -1,6 +1,8 @@
 #include "apps/sandbox/options.hpp"
 #include "core/log.hpp"
+#include "rhi/commands.hpp"
 #include "rhi/device.hpp"
+#include "rhi/upload.hpp"
 
 #include <array>
 #include <filesystem>
@@ -12,6 +14,14 @@
 
 namespace
 {
+struct TestBuffer : renderlab::rhi::Buffer
+{
+    using Buffer::Buffer;
+    std::span<std::byte> Map() override
+    {
+        return {};
+    }
+};
 void Require(bool condition, const char* message)
 {
     if (!condition)
@@ -51,6 +61,38 @@ int main()
         RequireInvalid([] { ParseOptions(std::array{"--validation"sv, "maybe"sv}); });
         RequireInvalid([] { ParseOptions(std::array{"--report"sv}); });
         RequireInvalid([] { ParseOptions(std::array{"--window-test"sv, "--headless"sv}); });
+        RequireInvalid([] { ParseOptions(std::array{"--frames"sv, "1"sv, "--headless"sv}); });
+        RequireInvalid([] { ParseOptions(std::array{"--frames"sv, "-1"sv}); });
+        RequireInvalid([] { ParseOptions(std::array{"--output"sv, ""sv}); });
+
+        using namespace renderlab::rhi;
+        int owner = 0, otherOwner = 0;
+        auto buffer =
+            std::make_shared<TestBuffer>(&owner, BufferDesc{1024, Memory::Device, "test"});
+        auto foreign =
+            std::make_shared<TestBuffer>(&otherOwner, BufferDesc{1024, Memory::Device, "foreign"});
+        CommandList commands(&owner);
+        RequireInvalid([&] { commands.Copy(buffer, foreign, 1); });
+        RequireInvalid([&] { commands.Copy(buffer, buffer, 1); });
+        auto destination =
+            std::make_shared<TestBuffer>(&owner, BufferDesc{1024, Memory::Readback, "readback"});
+        RequireInvalid([&] { commands.Copy(buffer, destination, 2, 1023); });
+        RequireInvalid([&] { commands.Copy(buffer, destination, 1, UINT64_MAX); });
+        auto texture = std::make_shared<Texture>(&owner, TextureDesc{65, 3, Format::Rgba8});
+        RequireInvalid([&] { commands.CopyTexture(buffer, texture, 260, true); });
+        RequireInvalid([&] { commands.CopyTexture(buffer, texture, 512, true); });
+        RequireInvalid([&] { commands.CopyTexture(buffer, texture, 512, true, 1); });
+        RequireInvalid([&] { commands.Barrier(texture, State::Undefined, State::Storage); });
+        RequireInvalid([&] { commands.ReadTimestamps(destination); });
+        commands.WriteTimestamp(0);
+        RequireInvalid([&] { commands.WriteTimestamp(0); });
+        RequireInvalid([&] { commands.EndMarker(); });
+        commands.Cancel();
+        RequireInvalid([&] { commands.WriteTimestamp(1); });
+        Require(TextureRowPitch(1) == 256 && TextureRowPitch(64) == 256 &&
+                    TextureRowPitch(65) == 512,
+                "Texture row pitch boundaries");
+        RequireInvalid([] { TextureRowPitch(UINT32_MAX); });
 
         renderlab::rhi::DeviceReport report;
         report.backend = "test\"\\\n\t";

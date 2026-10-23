@@ -1,12 +1,12 @@
 #include "apps/sandbox/options.hpp"
+#include "apps/sandbox/presentation.hpp"
 #include "core/assert.hpp"
 #include "core/log.hpp"
 #include "platform/text.hpp"
 #include "platform/window.hpp"
 #include "rhi/device.hpp"
+#include "rhi/runtime.hpp"
 
-#include <algorithm>
-#include <chrono>
 #include <filesystem>
 #include <format>
 #include <fstream>
@@ -20,39 +20,13 @@ namespace
 {
 using namespace renderlab;
 
-void CheckWindow(platform::Window& window, Logger& logger)
-{
-    const auto previousResizeEvents = window.GetState().resizeEvents;
-    window.Resize(640, 360);
-    window.PumpEvents();
-    const auto& resized = window.GetState();
-    if (resized.width != 640 || resized.height != 360 ||
-        resized.resizeEvents <= previousResizeEvents)
-    {
-        throw std::runtime_error("Window resize smoke test failed");
-    }
-    window.Minimize();
-    window.PumpEvents();
-    if (!window.GetState().minimized || window.GetState().minimizeEvents == 0)
-    {
-        throw std::runtime_error("Window minimize smoke test failed");
-    }
-    window.Restore();
-    window.PumpEvents();
-    if (window.GetState().minimized || window.GetState().width == 0 ||
-        window.GetState().height == 0)
-    {
-        throw std::runtime_error("Window restore smoke test failed");
-    }
-    logger.Write(LogLevel::Info, "Window smoke: resize=640x360, minimize and restore passed");
-}
-
-int Run(const sandbox::Options& options, Logger& logger)
+int Run(const sandbox::Options& options, const std::filesystem::path& shaderRoot, Logger& logger)
 {
     std::unique_ptr<platform::Window> window;
     if (!options.headless)
     {
-        window = std::make_unique<platform::Window>("RenderLab M0 - " + options.backend, 1280, 720);
+        window = std::make_unique<platform::Window>(
+            "RenderLab M1 - Triangle + Compute Noise - " + options.backend, 1280, 720);
         RENDERLAB_ASSERT(window->GetNativeSurface().window != nullptr);
     }
     rhi::DeviceOptions deviceOptions;
@@ -78,41 +52,13 @@ int Run(const sandbox::Options& options, Logger& logger)
         std::format("Supported: rayPipeline={}, rayQuery={}, descriptorIndexing={}, meshShader={}",
                     report.supported.rayTracingPipeline, report.supported.rayQuery,
                     report.supported.descriptorIndexing, report.supported.meshShader));
-    if (window)
+    if (window || options.rhiTest)
     {
-        if (options.windowTest)
-        {
-            CheckWindow(*window, logger);
-        }
-        const auto start = std::chrono::steady_clock::now();
-        const auto exitAfterMs = options.exitAfterMs.value_or(options.windowTest ? 250u : 0u);
-        const bool timed = options.exitAfterMs.has_value() || options.windowTest;
-        while (window->PumpEvents())
-        {
-            device->PollDiagnostics();
-            if (timed)
-            {
-                const auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
-                                         std::chrono::steady_clock::now() - start)
-                                         .count();
-                if (elapsed >= exitAfterMs)
-                {
-                    window->RequestClose();
-                    continue;
-                }
-                window->WaitForEvents(
-                    static_cast<uint32_t>(std::min<int64_t>(100, exitAfterMs - elapsed)));
-            }
-            else
-            {
-                window->WaitForEvents(100);
-            }
-        }
-        if (options.windowTest)
-        {
-            logger.Write(LogLevel::Info,
-                         "Window smoke: close request processed; device is released before HWND");
-        }
+        auto runtime = device->CreateRuntime();
+        sandbox::RunRendering(window.get(), *device, *runtime, options, shaderRoot, logger);
+        runtime->WaitIdle();
+        if (runtime->GetMemoryStats().used != 0)
+            throw std::runtime_error("GPU resources leaked after sample shutdown");
     }
     device->PollDiagnostics();
     // Include validation errors emitted during native device destruction in the final report.
@@ -173,7 +119,8 @@ int wmain(int argc, wchar_t** argv)
             std::filesystem::path(renderlab::platform::Utf8ToWide(options.logPath)));
         try
         {
-            return Run(options, logger);
+            const auto shaderRoot = std::filesystem::absolute(argv[0]).parent_path() / "shaders";
+            return Run(options, shaderRoot, logger);
         }
         catch (const std::exception& error)
         {

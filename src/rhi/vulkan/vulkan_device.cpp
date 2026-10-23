@@ -1,4 +1,5 @@
 #include "rhi/device.hpp"
+#include "rhi/vulkan/vulkan_runtime.hpp"
 
 #include <volk.h>
 
@@ -14,14 +15,7 @@ namespace renderlab::rhi
 {
 namespace
 {
-void Check(VkResult result, const char* operation)
-{
-    if (result != VK_SUCCESS)
-    {
-        throw std::runtime_error(
-            std::format("{} failed (VkResult {})", operation, static_cast<int>(result)));
-    }
-}
+using vulkan::Check;
 
 template <class T, class F> std::vector<T> Enumerate(F function)
 {
@@ -67,7 +61,6 @@ public:
 
     void Shutdown() noexcept override
     {
-        // M0 submits no GPU work; future submissions must retire before destruction.
         // Keep the messenger alive while destroying the device to capture cleanup diagnostics.
         if (device_ != VK_NULL_HANDLE)
         {
@@ -157,6 +150,27 @@ public:
                                 VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
         debugInfo.pfnUserCallback = DebugCallback;
         debugInfo.pUserData = this;
+        VkValidationFeaturesEXT validationFeatures{};
+        validationFeatures.sType = VK_STRUCTURE_TYPE_VALIDATION_FEATURES_EXT;
+        const VkValidationFeatureEnableEXT synchronization =
+            VK_VALIDATION_FEATURE_ENABLE_SYNCHRONIZATION_VALIDATION_EXT;
+        if (report_.validationEnabled)
+        {
+            const auto layerExtensions = Enumerate<VkExtensionProperties>(
+                [](uint32_t* count, auto* values)
+                {
+                    return vkEnumerateInstanceExtensionProperties("VK_LAYER_KHRONOS_validation",
+                                                                  count, values);
+                });
+            if (!HasExtension(layerExtensions, VK_EXT_VALIDATION_FEATURES_EXTENSION_NAME))
+                throw std::runtime_error(
+                    "Validation layer lacks synchronization validation settings");
+            enabledExtensions.push_back(VK_EXT_VALIDATION_FEATURES_EXTENSION_NAME);
+            validationFeatures.enabledValidationFeatureCount = 1;
+            validationFeatures.pEnabledValidationFeatures = &synchronization;
+            validationFeatures.pNext = &debugInfo;
+            report_.details.emplace_back("synchronizationValidation", "enabled");
+        }
         VkApplicationInfo application{};
         application.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
         application.pApplicationName = "RenderLab Sandbox";
@@ -171,7 +185,7 @@ public:
         instanceInfo.ppEnabledLayerNames = enabledLayers.data();
         // Also capture instance creation/destruction messages outside the explicit messenger's
         // lifetime.
-        instanceInfo.pNext = report_.validationEnabled ? &debugInfo : nullptr;
+        instanceInfo.pNext = report_.validationEnabled ? &validationFeatures : nullptr;
         Check(vkCreateInstance(&instanceInfo, nullptr, &instance_), "vkCreateInstance");
         volkLoadInstance(instance_);
         if (report_.validationEnabled)
@@ -281,6 +295,11 @@ public:
     {
         return report_;
     }
+    std::unique_ptr<Runtime> CreateRuntime() override
+    {
+        return CreateVulkanRuntime(instance_, physical_, device_, queue_, queueFamily_,
+                                   report_.validationEnabled);
+    }
     void PollDiagnostics() override {}
     uint32_t GetValidationErrorCount() const override
     {
@@ -370,7 +389,7 @@ private:
         physical_ = physical;
         queueFamily_ = *selectedQueue;
         report_.apiVersion = Version(props.apiVersion);
-        report_.shaderTarget = "SPIR-V 1.6 (Vulkan 1.3 target); DXC not configured in M0";
+        report_.shaderTarget = "SPIR-V 1.6 (Vulkan 1.3 target); M1 build-time DXC";
         VkPhysicalDeviceDriverProperties driver{};
         driver.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DRIVER_PROPERTIES;
         VkPhysicalDeviceProperties2 props2{};
