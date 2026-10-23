@@ -2,6 +2,8 @@
 
 #include "rhi/vulkan/vulkan_common.hpp"
 
+#include <array>
+
 #include <cstddef>
 #include <cstdint>
 #include <memory>
@@ -87,14 +89,15 @@ struct VkLayout : BindingLayout
 {
     using BindingLayout::BindingLayout;
     VkDevice device = VK_NULL_HANDLE;
-    VkDescriptorSetLayout set = VK_NULL_HANDLE;
+    std::array<VkDescriptorSetLayout, 4> sets{};
     VkPipelineLayout native = VK_NULL_HANDLE;
     ~VkLayout() override
     {
         if (native)
             vkDestroyPipelineLayout(device, native, nullptr);
-        if (set)
-            vkDestroyDescriptorSetLayout(device, set, nullptr);
+        for (auto set : sets)
+            if (set)
+                vkDestroyDescriptorSetLayout(device, set, nullptr);
     }
 };
 struct VkGroup : BindingGroup
@@ -102,7 +105,7 @@ struct VkGroup : BindingGroup
     using BindingGroup::BindingGroup;
     VkDevice device = VK_NULL_HANDLE;
     VkDescriptorPool pool = VK_NULL_HANDLE;
-    VkDescriptorSet native = VK_NULL_HANDLE;
+    std::array<VkDescriptorSet, 4> native{};
     ~VkGroup() override
     {
         if (pool)

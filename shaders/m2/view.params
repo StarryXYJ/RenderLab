@@ -1,0 +1,11 @@
+[scope(view)]
+cbuffer View
+{
+    float4x4 ViewProjection = (1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1);
+    float4 CameraPosition = (0, 0, 0, 1);
+}
+
+[scope(draw)] cbuffer Draw
+{
+    float4 Offset = (0, 0, 0, 0);
+}

@@ -58,6 +58,14 @@ Access NativeState(State state)
         return {VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
                 VK_ACCESS_2_SHADER_STORAGE_READ_BIT | VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
                 VK_IMAGE_LAYOUT_GENERAL};
+    case State::UniformRead:
+        return {VK_PIPELINE_STAGE_2_VERTEX_SHADER_BIT | VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT |
+                    VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+                VK_ACCESS_2_UNIFORM_READ_BIT, VK_IMAGE_LAYOUT_GENERAL};
+    case State::ShaderRead:
+        return {VK_PIPELINE_STAGE_2_VERTEX_SHADER_BIT | VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT |
+                    VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+                VK_ACCESS_2_SHADER_STORAGE_READ_BIT, VK_IMAGE_LAYOUT_GENERAL};
     case State::Sampled:
         return {VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT | VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
                 VK_ACCESS_2_SHADER_SAMPLED_READ_BIT, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL};
@@ -84,6 +92,11 @@ VkDescriptorType DescriptorType(BindingKind kind)
         return VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
     case BindingKind::Sampler:
         return VK_DESCRIPTOR_TYPE_SAMPLER;
+    case BindingKind::ConstantBuffer:
+        return VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+    case BindingKind::ReadOnlyBuffer:
+    case BindingKind::StorageBuffer:
+        return VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
     }
     throw std::invalid_argument("Unknown binding kind");
 }

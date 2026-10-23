@@ -14,16 +14,20 @@ std::shared_ptr<BindingLayout> DxRuntime::CreateLayout(std::vector<BindingDesc> 
     for (size_t i = 0; i < ranges.size(); ++i)
     {
         const auto& entry = layout->entries[i];
-        if (std::ranges::count_if(layout->entries, [&](auto e) { return e.slot == entry.slot; }) !=
-            1)
+        if (entry.space >= 4 || layout->entries.size() > 64 ||
+            std::ranges::count_if(layout->entries, [&](auto e)
+                                  { return e.slot == entry.slot && e.space == entry.space; }) != 1)
             throw std::invalid_argument("Duplicate binding slot");
         auto& range = ranges[i];
-        range.RangeType = entry.kind == BindingKind::Sampler ? D3D12_DESCRIPTOR_RANGE_TYPE_SAMPLER
-                          : entry.kind == BindingKind::StorageTexture
-                              ? D3D12_DESCRIPTOR_RANGE_TYPE_UAV
-                              : D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
+        range.RangeType =
+            entry.kind == BindingKind::Sampler ? D3D12_DESCRIPTOR_RANGE_TYPE_SAMPLER
+            : entry.kind == BindingKind::StorageTexture || entry.kind == BindingKind::StorageBuffer
+                ? D3D12_DESCRIPTOR_RANGE_TYPE_UAV
+            : entry.kind == BindingKind::ConstantBuffer ? D3D12_DESCRIPTOR_RANGE_TYPE_CBV
+                                                        : D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
         range.NumDescriptors = 1;
         range.BaseShaderRegister = entry.slot;
+        range.RegisterSpace = entry.space;
         auto& param = parameters[i];
         param.ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
         param.DescriptorTable = {1, &range};
@@ -65,8 +69,9 @@ std::shared_ptr<BindingGroup> DxRuntime::CreateGroup(std::shared_ptr<BindingLayo
     UINT resourceIndex = 0, samplerIndex = 0;
     for (auto entry : layout->entries)
     {
-        const auto& binding = *std::ranges::find_if(group->bindings, [&](const Binding& b)
-                                                    { return b.slot == entry.slot; });
+        const auto& binding =
+            *std::ranges::find_if(group->bindings, [&](const Binding& b)
+                                  { return b.slot == entry.slot && b.space == entry.space; });
         const bool sampler = entry.kind == BindingKind::Sampler;
         auto* heap = sampler ? group->samplers.Get() : group->resources.Get();
         const auto type =
@@ -86,6 +91,35 @@ std::shared_ptr<BindingGroup> DxRuntime::CreateGroup(std::shared_ptr<BindingLayo
             desc.MaxLOD = D3D12_FLOAT32_MAX;
             desc.ComparisonFunc = D3D12_COMPARISON_FUNC_NONE;
             device_->CreateSampler(&desc, cpu);
+        }
+        else if (entry.kind == BindingKind::ConstantBuffer)
+        {
+            D3D12_CONSTANT_BUFFER_VIEW_DESC desc{};
+            desc.BufferLocation =
+                As<DxBuffer>(binding.buffer).native->GetGPUVirtualAddress() + binding.offset;
+            desc.SizeInBytes = static_cast<UINT>(binding.size);
+            device_->CreateConstantBufferView(&desc, cpu);
+        }
+        else if (entry.kind == BindingKind::ReadOnlyBuffer)
+        {
+            D3D12_SHADER_RESOURCE_VIEW_DESC desc{};
+            desc.ViewDimension = D3D12_SRV_DIMENSION_BUFFER;
+            desc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+            desc.Buffer.FirstElement = binding.offset / binding.stride;
+            desc.Buffer.NumElements = static_cast<UINT>(binding.size / binding.stride);
+            desc.Buffer.StructureByteStride = binding.stride;
+            device_->CreateShaderResourceView(As<DxBuffer>(binding.buffer).native.Get(), &desc,
+                                              cpu);
+        }
+        else if (entry.kind == BindingKind::StorageBuffer)
+        {
+            D3D12_UNORDERED_ACCESS_VIEW_DESC desc{};
+            desc.ViewDimension = D3D12_UAV_DIMENSION_BUFFER;
+            desc.Buffer.FirstElement = binding.offset / binding.stride;
+            desc.Buffer.NumElements = static_cast<UINT>(binding.size / binding.stride);
+            desc.Buffer.StructureByteStride = binding.stride;
+            device_->CreateUnorderedAccessView(As<DxBuffer>(binding.buffer).native.Get(), nullptr,
+                                               &desc, cpu);
         }
         else if (entry.kind == BindingKind::StorageTexture)
         {
@@ -109,9 +143,8 @@ std::shared_ptr<BindingGroup> DxRuntime::CreateGroup(std::shared_ptr<BindingLayo
     return group;
 }
 
-std::shared_ptr<Pipeline> DxRuntime::CreatePipeline(PipelineDesc desc)
+std::shared_ptr<Pipeline> DxRuntime::CreatePipelineNative(PipelineDesc desc)
 {
-    Validate(desc);
     auto pipeline = std::make_shared<DxPipeline>(this, desc);
     const auto bytecode = [](const auto& module) -> D3D12_SHADER_BYTECODE
     { return {module->code.data(), module->code.size()}; };

@@ -1,0 +1,53 @@
+#pragma once
+
+#include "material/asset.hpp"
+#include "rhi/runtime.hpp"
+
+#include <cstdint>
+#include <functional>
+#include <map>
+#include <memory>
+#include <optional>
+#include <string>
+#include <thread>
+#include <vector>
+
+namespace renderlab::material
+{
+struct Preparation
+{
+    std::string pass;
+    rhi::Format color = rhi::Format::Rgba8Srgb;
+    uint32_t vertexStride = 0;
+    std::vector<rhi::VertexAttribute> attributes;
+    std::optional<bool> depth, blend, cull;
+    /// External resources or prepacked cbuffers, keyed by generated HLSL symbol.
+    std::map<std::string, rhi::Binding> bindings;
+    std::map<std::string, std::map<std::string, Value>> constants;
+};
+using ResourceResolver = std::function<rhi::Binding(const shader::Property&, const std::string&)>;
+struct GpuGeneration;
+/** @brief Immutable recording snapshot. Commands retain its pipeline, binding group and buffers. */
+struct Prepared
+{
+    std::shared_ptr<const GpuGeneration> generation;
+    std::shared_ptr<rhi::Pipeline> pipeline;
+    std::shared_ptr<rhi::BindingGroup> bindings;
+    /// Newly uploaded constants require HostWrite -> UniformRead before their first shader use.
+    std::vector<std::shared_ptr<rhi::Buffer>> constants;
+};
+/** @brief Owner-thread preparation; never compiles source and never records implicit barriers. */
+class Runtime final
+{
+public:
+    Runtime(rhi::Runtime& runtime, shader::Target target);
+    Prepared Prepare(std::shared_ptr<const shader::Package> package, const Asset& asset,
+                     const Preparation& preparation, const ResourceResolver& resolve = {});
+
+private:
+    rhi::Runtime& runtime_;
+    shader::Target target_;
+    std::thread::id owner_ = std::this_thread::get_id();
+    std::vector<std::weak_ptr<GpuGeneration>> generations_;
+};
+} // namespace renderlab::material

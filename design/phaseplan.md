@@ -4,15 +4,16 @@
 
 ## 当前状态
 
-- M1 及本轮维护性重构均已完成，状态 DONE；公共接口、双后端实现、样例验收与宿主展示按职责拆分并复验通过。
-- 当前没有进行中的实现工作项；下一计划阶段为 M2 Shader 与材质数据链路，尚未开始。
+- 当前实施阶段：M2 Shader 与材质数据链路，DONE。
+- 当前工作项：无。M2 已满足退出条件；M3 保持 NOT_STARTED，等待后续阶段授权。
+- 本次授权采用简洁声明语法作为唯一作者入口，HLSL 保留算法与工具代码；补齐常量/存储缓冲等所需 RHI 契约。
 - M1 已通过双后端三角形、固定种子 Compute 噪声及读回、同步、生命周期和 resize 验收，结果见下文。
 
 | 阶段 | 目标 | 前置依赖 | 状态 |
 | --- | --- | --- | --- |
 | M0 | 工程与设备基础 | 无 | DONE |
 | M1 | 最小双后端 RHI | M0 | DONE |
-| M2 | Shader 与材质数据链路 | M1 | NOT_STARTED |
+| M2 | Shader 与材质数据链路 | M1 | DONE |
 | M3 | 单队列 Render Graph | M2 | NOT_STARTED |
 | M4 | 场景资源与基础 Renderer | M3 | NOT_STARTED |
 | M5 | Deferred 与光追基础 | M4 | NOT_STARTED |
@@ -85,44 +86,25 @@
 
 文档：[最小 RHI API 与约束](../docs/m1-rhi.md)、[构建与验收命令](../manual/build.md)。
 
-限制与后续：最小分配采用 committed/dedicated，未做 VMA/D3D12MA 子分配；纹理限单 mip/layer，顶点限单流 float2/3/4，Storage 限 RGBA8_UNORM，只有 Graphics Queue。Vulkan Host 内存要求 coherent、Timestamp 要求 64 个有效位。CPU 矩阵上传/真实相机、其他 GPU 的 M1、设备丢失注入和 PIX/RenderDoc 人工 Capture 尚未验证；测试中的 Shader 常量矩阵和原始计时不能替代这些事项。正式 Shader 资产工具链、反射与材质由 M2 实现，本轮未进入 M2。
+限制与后续：最小分配采用 committed/dedicated，未做 VMA/D3D12MA 子分配；纹理限单 mip/layer，顶点限单流 float2/3/4，Storage 纹理限 RGBA8_UNORM，只有 Graphics Queue。Vulkan Host 内存要求 coherent、Timestamp 要求 64 个有效位。CPU 矩阵上传/真实相机、其他 GPU 的 M1、设备丢失注入和 PIX/RenderDoc 人工 Capture 尚未验证；测试中的 Shader 常量矩阵和原始计时不能替代这些事项。M1 交付时尚未进入 M2；现有 Shader 资产工具链、反射、材质与缓冲绑定扩展见 M2 完成记录。
 
 ## M2 Shader 与材质数据链路
 
-目标是从 ShaderDefinition 得到可直接创建材质的产物，暂用原生调试面板或代码驱动参数。
+状态：DONE，日期：2026 年 10 月 23 日。
 
-### M2.1 定义与编译
+结果：M2.1 `.shader` 唯一作者声明、`.params` 共享 cbuffer、普通 HLSL 工具 Include、独立 CPU DXC 双目标编译与内容缓存；M2.2 固定材质布局、完整参数元数据、PackingPlan 和双目标反射、Package 只读 Template；M2.3 逻辑材质创建/编辑/保存加载、有限具名变体、资源解析、不可变 GPU 快照与统一有界 PSO 缓存；M2.4 后台合并编译/丢弃旧代、事务准备、帧边界发布、失败保留旧代及完成点退休全部完成。RHI 补充 ConstantBuffer、ReadOnlyBuffer、StorageBuffer、四个逻辑 space 与显式 UniformRead/ShaderRead，不引入隐式资源状态管理。
 
-- [ ] JSON 元数据、HLSL、Include 依赖、入口点和诊断格式。
-- [ ] DXIL/SPIR-V 编译、目标能力与统一 Binding 映射。
-- [ ] 内容缓存和过期重建，覆盖 Include、宏、生成器和编译器版本变化。
+验证：MSVC 19.51、Windows SDK 10.0.26100、CMake 4.3.1、Ninja 1.13.2、DXC 1.9.0.5512；RTX 5060、NVIDIA 591.74 上，隔离构建 `windows-m2-debug` / `windows-m2-release` 完整 CTest 各 16/16 通过。最终热重载图像行为测试追加后，两配置双后端材质专项各 2/2 再次通过。DX12 Debug Layer 和 Vulkan synchronization validation 开启，错误为 0，材质验收日志无警告，样例退出的 GPU 资源占用归零。
 
-验收同一 Shader 的双目标编译和缓存命中/失效。缺失 Include、绑定冲突与编译错误都能定位到源文件。
+参数与编译：`shader.contracts` 覆盖源位置诊断、共享声明环、缺失 Include、未声明绑定、未使用字段保留、标量/向量/方阵/非方阵/数组、矩阵尾部接标量、单元素数组与矩阵数组、缓存命中/传递 Include 和模块失效/损坏恢复、材质值校验/保存加载/新增默认值与类型冲突、后台连续请求/失败恢复。`renderlab_shaderc` 实际导出 3 Pass、2 变体、5 项依赖的完整 Schema，第二次编译命中缓存。
 
-### M2.2 Template 与布局
+GPU 与热重载：`gpu.{dx12,vulkan}.material` 验证同一材质多 Pass、参数/纹理/变体/状态变化的 PSO 复用或失效、sRGB、四个 scope，以及非零 256 字节 offset 的外部 cbuffer、结构化 SRV/UAV 和纹理 UAV。Compute 读回 20 个分量检查 float/int/uint/bool、float3、数组、非方阵和共享数据，重复写入经过 Storage→Storage。热重载修改工具 Include 后新代输出颜色减半，已录制旧代仍输出原色；类型冲突、缺失 Pass、编译失败不发布，恢复后输出恢复，旧 PSO 完成后释放，运行中数值编辑复用 PSO。
 
-- [ ] 生成材质声明、Schema、固定 MaterialLayout 与 PackingPlan。
-- [ ] Reflection 校验跨 Pass、变体和后端的实际接口。
-- [ ] MaterialTemplate 作为 ShaderPackage 只读视图，不建立独立模板资产管理。
+工程与回归：声明解析/布局/编译/反射/Schema/热重载和材质值/打包/序列化/GPU 准备分别编译，自有 C++ 已格式化，40 个头文件逐一独立编译通过。手工文本通过 UTF-8 无 BOM/LF 和 `git diff --check`。M1 全部回归保持通过，双后端/配置四份 noise.rgba 的 SHA-256 仍为 `ed59cd2517b5c5c076a93c45fda5a61aa1f6f43ff52f96af600bec1059be9527`。已查看材质默认色读回图像，产物保存在构建树 `material/后端`、`shader-tests`、`Testing`，不提交本机生成物。
 
-验收标量、向量、矩阵、数组、纹理属性和被优化掉的字段；同一个材质记录能用于不同 Pass，无变体专属数据副本。
+文档：[Shader 与材质 API/语法/边界](../docs/m2-shader-material.md)、[构建与运行](../manual/build.md#shader-与材质工具)。
 
-### M2.3 材质与 Pipeline
-
-- [ ] MaterialAsset 保存 Shader 引用、属性值和纹理引用，加载时创建 MaterialRuntime。
-- [ ] 普通参数、静态功能与渲染状态分别处理，建立完整 PSO Key。
-- [ ] 有界变体清单与合法性规则，统一 Pipeline 缓存入口。
-- [ ] 缺失功能或角色有明确诊断，不在绘制回调中编译程序。
-
-交付为从 Shader 创建材质、修改与保存重载的最小样例。早期使用最小稳定 ID/路径解析，不提前建设整个 AssetDatabase。
-
-### M2.4 热重载
-
-- [ ] 后台编译带代际，丢弃过期结果，成功后成组准备相关运行时对象。
-- [ ] 帧边界替换，编译失败保留旧包；旧对象延迟释放。
-- [ ] 新增属性、类型冲突和布局变化有确定处理。
-
-退出条件：同一材质在双后端工作；连续编辑 Shader、失败恢复和在途重载通过验证。准备好的 Shader/PSO 在 Execute 中只读取。
+限制与后续：M2 为代码驱动的无窗口材质样例，不包含编辑器或操作系统文件监视器；变更侦测方通过依赖表请求重编译。仅 SM 6.0、Vulkan 1.3、16KiB 常量块、32 绑定、每 Shader 16 Pass/16 变体；纹理仍为单 mip/layer，Storage 纹理为 RGBA8_UNORM，结构化缓冲元素限数值标量或 2/4 分量向量。不支持资源数组、自定义结构体/三分量结构化元素、动态无界关键字组合、后台创建 GPU PSO 或强制中断正在执行的 DXC。当前缓存属于本机可重建产物；其他 GPU 和跨机器发行包尚未验证。M3 未开始。
 
 ## M3 单队列 Render Graph
 

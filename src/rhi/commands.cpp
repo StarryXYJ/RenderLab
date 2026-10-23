@@ -24,12 +24,16 @@ void CommandList::Barrier(std::shared_ptr<Buffer> buffer, State before, State af
     {
         return state == State::Undefined || state == State::CopySource ||
                state == State::CopyDest || state == State::Vertex || state == State::Index ||
-               state == State::Indirect || state == State::HostWrite || state == State::HostRead;
+               state == State::Indirect || state == State::HostWrite || state == State::HostRead ||
+               state == State::UniformRead || state == State::ShaderRead || state == State::Storage;
     };
     Require(valid(before) && valid(after) && after != State::Undefined, "Invalid M1 buffer state");
+    Require(after != State::Storage || buffer->desc.storage, "Buffer lacks storage usage");
     if (buffer->desc.memory == Memory::Upload)
-        Require(before == State::HostWrite && after == State::CopySource,
-                "Upload buffers remain in host-write/copy-source state");
+        Require(before == State::HostWrite &&
+                    (after == State::CopySource || after == State::UniformRead ||
+                     after == State::ShaderRead),
+                "Upload buffers require a host-write to GPU-read dependency");
     if (buffer->desc.memory == Memory::Readback)
         Require(before == State::CopyDest && after == State::HostRead,
                 "Readback buffers only transition CopyDest->HostRead");

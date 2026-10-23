@@ -38,13 +38,18 @@ enum class State
     DepthWrite,
     Present,
     HostRead,
-    HostWrite
+    HostWrite,
+    UniformRead,
+    ShaderRead
 };
 enum class BindingKind
 {
     StorageTexture,
     SampledTexture,
-    Sampler
+    Sampler,
+    ConstantBuffer,
+    ReadOnlyBuffer,
+    StorageBuffer
 };
 enum class ShaderStage
 {
@@ -64,6 +69,7 @@ struct VertexAttribute
     uint32_t location = 0;
     VertexFormat format = VertexFormat::Float3;
     uint32_t offset = 0;
+    bool operator==(const VertexAttribute&) const = default;
 };
 
 struct MemoryStats
@@ -94,6 +100,7 @@ struct BufferDesc
     uint64_t size = 0;
     Memory memory = Memory::Device;
     std::string name;
+    bool storage = false;
 };
 struct TextureDesc
 {
@@ -131,6 +138,7 @@ struct BindingDesc
 {
     uint32_t slot;
     BindingKind kind;
+    uint32_t space = 0;
 };
 struct BindingLayout : Object
 {
@@ -145,6 +153,11 @@ struct Binding
     uint32_t slot;
     std::shared_ptr<TextureView> view;
     std::shared_ptr<Sampler> sampler;
+    std::shared_ptr<Buffer> buffer;
+    uint64_t offset = 0;
+    uint64_t size = 0;
+    uint32_t stride = 0;
+    uint32_t space = 0;
 };
 struct BindingGroup : Object
 {

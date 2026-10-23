@@ -27,11 +27,11 @@ public:
     std::shared_ptr<BindingLayout> CreateLayout(std::vector<BindingDesc> entries) override;
     std::shared_ptr<BindingGroup> CreateGroup(std::shared_ptr<BindingLayout> layout,
                                               std::vector<Binding> bindings) override;
-    std::shared_ptr<Pipeline> CreatePipeline(PipelineDesc desc) override;
     std::unique_ptr<Swapchain> CreateSwapchain(platform::NativeSurface surface, uint32_t width,
                                                uint32_t height) override;
 
 protected:
+    std::shared_ptr<Pipeline> CreatePipelineNative(PipelineDesc desc) override;
     void WaitNative(uint64_t point) override;
     struct Work : Submission
     {

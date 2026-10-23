@@ -10,26 +10,31 @@ std::shared_ptr<BindingLayout> VulkanRuntime::CreateLayout(std::vector<BindingDe
 {
     auto layout = std::make_shared<VkLayout>(this, std::move(entries));
     layout->device = device_;
-    std::vector<VkDescriptorSetLayoutBinding> bindings;
+    std::array<std::vector<VkDescriptorSetLayoutBinding>, 4> bindings;
     for (auto entry : layout->entries)
     {
-        if (std::ranges::count_if(layout->entries, [&](auto e) { return e.slot == entry.slot; }) !=
-            1)
+        if (entry.space >= 4 ||
+            std::ranges::count_if(layout->entries, [&](auto e)
+                                  { return e.slot == entry.slot && e.space == entry.space; }) != 1)
             throw std::invalid_argument("Duplicate binding slot");
-        bindings.push_back({entry.slot, DescriptorType(entry.kind), 1,
-                            VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT |
-                                VK_SHADER_STAGE_COMPUTE_BIT,
-                            nullptr});
+        bindings[entry.space].push_back({entry.slot, DescriptorType(entry.kind), 1,
+                                         VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT |
+                                             VK_SHADER_STAGE_COMPUTE_BIT,
+                                         nullptr});
     }
     VkDescriptorSetLayoutCreateInfo set{};
     set.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-    set.bindingCount = static_cast<uint32_t>(bindings.size());
-    set.pBindings = bindings.data();
-    Check(vkCreateDescriptorSetLayout(device_, &set, nullptr, &layout->set), "DescriptorSetLayout");
+    for (uint32_t space = 0; space < 4; ++space)
+    {
+        set.bindingCount = static_cast<uint32_t>(bindings[space].size());
+        set.pBindings = bindings[space].data();
+        Check(vkCreateDescriptorSetLayout(device_, &set, nullptr, &layout->sets[space]),
+              "DescriptorSetLayout");
+    }
     VkPipelineLayoutCreateInfo info{};
     info.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-    info.setLayoutCount = 1;
-    info.pSetLayouts = &layout->set;
+    info.setLayoutCount = 4;
+    info.pSetLayouts = layout->sets.data();
     Check(vkCreatePipelineLayout(device_, &info, nullptr, &layout->native), "PipelineLayout");
     return layout;
 }
@@ -41,32 +46,42 @@ std::shared_ptr<BindingGroup> VulkanRuntime::CreateGroup(std::shared_ptr<Binding
     auto group = std::make_shared<VkGroup>(layout, std::move(bindings));
     group->device = device_;
     std::vector<VkDescriptorPoolSize> sizes;
-    for (auto kind :
-         {BindingKind::StorageTexture, BindingKind::SampledTexture, BindingKind::Sampler})
+    for (auto type : {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
+                      VK_DESCRIPTOR_TYPE_SAMPLER, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+                      VK_DESCRIPTOR_TYPE_STORAGE_BUFFER})
     {
-        const auto count = static_cast<uint32_t>(
-            std::ranges::count_if(layout->entries, [&](auto e) { return e.kind == kind; }));
+        const auto count = static_cast<uint32_t>(std::ranges::count_if(
+            layout->entries, [&](auto e) { return DescriptorType(e.kind) == type; }));
         if (count)
-            sizes.push_back({DescriptorType(kind), count});
+            sizes.push_back({type, count});
     }
     VkDescriptorPoolCreateInfo pool{};
     pool.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
-    pool.maxSets = 1;
+    pool.maxSets = 4;
     pool.poolSizeCount = static_cast<uint32_t>(sizes.size());
     pool.pPoolSizes = sizes.data();
     Check(vkCreateDescriptorPool(device_, &pool, nullptr, &group->pool), "DescriptorPool");
     VkDescriptorSetAllocateInfo allocate{};
     allocate.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
     allocate.descriptorPool = group->pool;
-    allocate.descriptorSetCount = 1;
-    allocate.pSetLayouts = &As<VkLayout>(layout).set;
-    Check(vkAllocateDescriptorSets(device_, &allocate, &group->native), "DescriptorSet");
+    allocate.descriptorSetCount = 4;
+    allocate.pSetLayouts = As<VkLayout>(layout).sets.data();
+    Check(vkAllocateDescriptorSets(device_, &allocate, group->native.data()), "DescriptorSet");
     for (auto entry : layout->entries)
     {
-        const auto& binding = *std::ranges::find_if(group->bindings, [&](const Binding& b)
-                                                    { return b.slot == entry.slot; });
+        const auto& binding =
+            *std::ranges::find_if(group->bindings, [&](const Binding& b)
+                                  { return b.slot == entry.slot && b.space == entry.space; });
         VkDescriptorImageInfo image{};
-        if (entry.kind == BindingKind::Sampler)
+        VkDescriptorBufferInfo buffer{};
+        const bool isBuffer = entry.kind == BindingKind::ConstantBuffer ||
+                              entry.kind == BindingKind::ReadOnlyBuffer ||
+                              entry.kind == BindingKind::StorageBuffer;
+        if (isBuffer)
+        {
+            buffer = {As<VkBufferObject>(binding.buffer).native, binding.offset, binding.size};
+        }
+        else if (entry.kind == BindingKind::Sampler)
             image.sampler = As<VkSamplerObject>(binding.sampler).native;
         else
         {
@@ -77,19 +92,19 @@ std::shared_ptr<BindingGroup> VulkanRuntime::CreateGroup(std::shared_ptr<Binding
         }
         VkWriteDescriptorSet write{};
         write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-        write.dstSet = group->native;
+        write.dstSet = group->native[entry.space];
         write.dstBinding = entry.slot;
         write.descriptorCount = 1;
         write.descriptorType = DescriptorType(entry.kind);
-        write.pImageInfo = &image;
+        write.pImageInfo = isBuffer ? nullptr : &image;
+        write.pBufferInfo = isBuffer ? &buffer : nullptr;
         vkUpdateDescriptorSets(device_, 1, &write, 0, nullptr);
     }
     return group;
 }
 
-std::shared_ptr<Pipeline> VulkanRuntime::CreatePipeline(PipelineDesc desc)
+std::shared_ptr<Pipeline> VulkanRuntime::CreatePipelineNative(PipelineDesc desc)
 {
-    Validate(desc);
     auto pipeline = std::make_shared<VkPipelineObject>(this, desc);
     pipeline->device = device_;
     struct Modules

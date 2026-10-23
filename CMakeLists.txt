@@ -24,9 +24,9 @@ else()
 endif()
 set(CMAKE_CXX_EXTENSIONS OFF)
 
-add_library(renderlab_core STATIC src/core/log.cpp)
+add_library(renderlab_core STATIC src/core/log.cpp src/core/hash.cpp src/core/file_io.cpp)
 target_include_directories(renderlab_core PUBLIC src)
-target_link_libraries(renderlab_core PRIVATE renderlab_options)
+target_link_libraries(renderlab_core PRIVATE renderlab_options bcrypt)
 
 add_library(renderlab_platform STATIC src/platform/window.cpp src/platform/text.cpp)
 target_include_directories(renderlab_platform PUBLIC src)
@@ -37,6 +37,7 @@ add_library(renderlab_rhi STATIC
     src/rhi/resources.cpp
     src/rhi/commands.cpp
     src/rhi/runtime.cpp
+    src/rhi/pipeline_cache.cpp
     src/rhi/upload.cpp
     src/rhi/dx12/dx12_device.cpp
     src/rhi/dx12/dx12_common.cpp
@@ -61,6 +62,44 @@ add_library(renderlab_sandbox_options STATIC src/apps/sandbox/options.cpp)
 target_include_directories(renderlab_sandbox_options PUBLIC src)
 target_link_libraries(renderlab_sandbox_options PRIVATE renderlab_options)
 
+add_library(renderlab_shader STATIC
+    src/shader/lexer.cpp
+    src/shader/types.cpp
+    src/shader/parameter_parser.cpp
+    src/shader/parser.cpp
+    src/shader/value.cpp
+    src/shader/layout.cpp
+    src/shader/dxc_compiler.cpp
+    src/shader/dxil_reflection.cpp
+    src/shader/schema.cpp
+    src/shader/spirv_reflection.cpp
+    src/shader/compiler.cpp
+    src/shader/reload.cpp)
+target_include_directories(renderlab_shader PUBLIC src)
+target_link_libraries(renderlab_shader PRIVATE renderlab_options renderlab_core renderlab_platform
+    renderlab_dxc renderlab_spirv_reflect nlohmann_json::nlohmann_json ole32 dxguid)
+add_executable(renderlab_shaderc src/tools/shaderc/main.cpp)
+target_link_libraries(renderlab_shaderc PRIVATE renderlab_options renderlab_shader renderlab_platform)
+add_custom_command(TARGET renderlab_shaderc POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_FILE:renderlab_dxc>
+        $<TARGET_FILE_DIR:renderlab_shaderc> VERBATIM)
+
+add_library(renderlab_material STATIC
+    src/material/asset.cpp src/material/packing.cpp src/material/serialization.cpp src/material/runtime.cpp src/material/live_material.cpp)
+target_include_directories(renderlab_material PUBLIC src)
+target_link_libraries(renderlab_material PRIVATE renderlab_options renderlab_shader renderlab_rhi
+    renderlab_platform renderlab_core nlohmann_json::nlohmann_json)
+
+add_executable(renderlab_material_demo src/tools/material_demo/main.cpp src/samples/material_demo.cpp
+    src/samples/material_readback.cpp src/samples/material_compute.cpp src/samples/material_reload.cpp)
+target_link_libraries(renderlab_material_demo PRIVATE renderlab_options renderlab_material
+    renderlab_shader renderlab_rhi renderlab_core renderlab_platform)
+add_custom_command(TARGET renderlab_material_demo POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_FILE:renderlab_dxc>
+        $<TARGET_FILE_DIR:renderlab_material_demo>
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_FILE:renderlab_pix>
+        $<TARGET_FILE_DIR:renderlab_material_demo> VERBATIM)
+
 add_executable(renderlab_sandbox src/apps/sandbox/main.cpp src/apps/sandbox/presentation.cpp)
 add_library(renderlab_samples STATIC
     src/samples/rhi_demo.cpp
@@ -77,6 +116,15 @@ target_link_libraries(renderlab_sandbox PRIVATE renderlab_options renderlab_core
     renderlab_platform renderlab_rhi renderlab_sandbox_options renderlab_samples)
 
 if(BUILD_TESTING)
+    add_executable(renderlab_shader_tests tests/shader_tests.cpp)
+    target_link_libraries(renderlab_shader_tests PRIVATE renderlab_options renderlab_material
+        renderlab_shader renderlab_rhi)
+    add_custom_command(TARGET renderlab_shader_tests POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_FILE:renderlab_dxc>
+            $<TARGET_FILE_DIR:renderlab_shader_tests> VERBATIM)
+    add_test(NAME shader.contracts COMMAND renderlab_shader_tests
+        ${CMAKE_SOURCE_DIR}/shaders/m2 ${CMAKE_BINARY_DIR}/shader-tests)
+    set_tests_properties(shader.contracts PROPERTIES TIMEOUT 90)
     add_executable(renderlab_core_tests tests/core_tests.cpp)
     target_link_libraries(renderlab_core_tests PRIVATE renderlab_options renderlab_core
         renderlab_sandbox_options renderlab_rhi)
@@ -92,6 +140,9 @@ if(BUILD_TESTING)
         PROPERTIES WILL_FAIL TRUE)
     if(RENDERLAB_GPU_TESTS)
         foreach(backend IN ITEMS dx12 vulkan)
+            add_test(NAME gpu.${backend}.material COMMAND renderlab_material_demo ${backend}
+                ${CMAKE_SOURCE_DIR}/shaders/m2/surface.shader ${CMAKE_BINARY_DIR}/material/${backend})
+            set_tests_properties(gpu.${backend}.material PROPERTIES LABELS gpu RUN_SERIAL TRUE TIMEOUT 90)
             add_test(NAME gpu.${backend}.init COMMAND renderlab_sandbox
                 --backend ${backend} --headless --validation on
                 --report ${CMAKE_BINARY_DIR}/reports/${backend}.json

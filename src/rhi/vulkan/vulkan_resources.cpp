@@ -16,7 +16,8 @@ std::shared_ptr<Buffer> VulkanRuntime::CreateBuffer(const BufferDesc& desc)
     info.size = desc.size;
     info.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT |
                  VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT |
-                 VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT;
+                 VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT | VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT |
+                 VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
     Check(vkCreateBuffer(device_, &info, nullptr, &buffer->native), "vkCreateBuffer");
     VkMemoryRequirements requirements{};
     vkGetBufferMemoryRequirements(device_, buffer->native, &requirements);

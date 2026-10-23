@@ -198,7 +198,11 @@ Hi-Z 使用跨帧历史时，规定首帧、相机跳变和分辨率变化下的
 
 ### Shader 工具链
 
-ShaderDefinition 是作者维护的 Shader 资产，包含 HLSL 来源、入口点、材质属性、合法变体、Pass 角色和状态选择。初期使用 JSON 元数据加 HLSL，后续可增加语法前端，内部描述保持统一。
+ShaderDefinition 是作者维护的 Shader 资产，包含 HLSL 来源、入口点、材质属性、合法变体、Pass 角色和状态选择。M2 采用简洁声明语法作为唯一作者入口，共享参数模块由 use 引入，HLSL 函数与工具仍由普通 Include 组织。内部描述统一，不并存另一份手写 JSON 元数据。
+
+普通 material 数值自动生成 Material 常量缓冲，显式 cbuffer 声明共享数据块及 frame/view/draw/pass 作用域。参数 Schema、绑定映射和 PackingPlan 从同一声明生成。Shader 编译层仅产生 CPU 程序/接口数据，不依赖 RHI Device；DXC 处理 HLSL 预处理、Include 和程序编译，反射验证保留字段与资源接口。生成头按编译任务隔离，缓存覆盖共享声明及传递 Include。后台编译成功后，由设备所有线程在准备阶段创建 GPU 对象并在帧边界整体切换，失败保留旧代。
+
+M2 的具体声明、布局和准备/发布接口见 [Shader 与材质](../docs/m2-shader-material.md)。RHI 的唯一 CreatePipeline 入口按不可变程序/布局身份、顶点布局、附件格式和完整状态查找有界弱引用缓存。数值/纹理修改创建不可变绑定快照，静态功能选择有限具名变体，新代编译包创建新的程序身份。热重载通过 LiveMaterial 成组 Stage，调用方在帧边界 Publish；依赖监视器只负责请求编译，不进入 RHI。
 
 元数据生成材质参数声明，再编译各后端和变体，Reflection 校验实际 GPU 布局。作者元数据负责默认值、显示语义、分组、范围、条件显示和资源用途，Reflection 负责实际绑定、布局和阶段接口。
 

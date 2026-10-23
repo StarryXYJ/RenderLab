@@ -22,6 +22,8 @@ std::shared_ptr<Buffer> DxRuntime::CreateBuffer(const BufferDesc& desc)
     resource.MipLevels = 1;
     resource.SampleDesc.Count = 1;
     resource.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+    if (desc.storage)
+        resource.Flags = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
     buffer->allocation.Set(ledger_,
                            device_->GetResourceAllocationInfo(0, 1, &resource).SizeInBytes);
     const auto initial = desc.memory == Memory::Upload     ? D3D12_RESOURCE_STATE_GENERIC_READ

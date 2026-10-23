@@ -20,6 +20,8 @@ void Runtime::CheckOwner(const std::shared_ptr<Object>& object) const
 void Runtime::Validate(const BufferDesc& desc) const
 {
     Require(desc.size > 0 && desc.size <= ledger_->stats.budget, "Invalid buffer size");
+    Require(!desc.storage || desc.memory == Memory::Device,
+            "Storage buffers require device memory");
 }
 void Runtime::Validate(const TextureDesc& desc) const
 {
@@ -73,11 +75,35 @@ void Runtime::Validate(const std::shared_ptr<BindingLayout>& layout,
     Require(bindings.size() == layout->entries.size(), "Binding count mismatch");
     for (const auto& entry : layout->entries)
     {
-        Require(std::ranges::count_if(bindings,
-                                      [&](const Binding& b) { return b.slot == entry.slot; }) == 1,
+        Require(entry.space < 4, "Binding space must be in [0,3]");
+        Require(std::ranges::count_if(bindings, [&](const Binding& b)
+                                      { return b.slot == entry.slot && b.space == entry.space; }) ==
+                    1,
                 "Missing or duplicate binding slot");
         const auto& b =
-            *std::ranges::find_if(bindings, [&](const Binding& b) { return b.slot == entry.slot; });
+            *std::ranges::find_if(bindings, [&](const Binding& b)
+                                  { return b.slot == entry.slot && b.space == entry.space; });
+        if (entry.kind == BindingKind::ConstantBuffer ||
+            entry.kind == BindingKind::ReadOnlyBuffer || entry.kind == BindingKind::StorageBuffer)
+        {
+            CheckOwner(b.buffer);
+            Require(!b.view && !b.sampler && b.size && b.offset <= b.buffer->desc.size &&
+                        b.size <= b.buffer->desc.size - b.offset,
+                    "Invalid buffer binding range");
+            Require(b.buffer->desc.memory != Memory::Readback,
+                    "Cannot bind a readback buffer to a shader");
+            if (entry.kind == BindingKind::ConstantBuffer)
+                Require(b.offset % 256 == 0 && b.size % 256 == 0 && b.size <= 65536,
+                        "Constant buffer range must be 256-byte aligned and <=64KiB");
+            else
+                Require(b.stride && b.stride % 4 == 0 && b.offset % b.stride == 0 &&
+                            b.offset % 256 == 0 && b.size % b.stride == 0,
+                        "Structured buffer requires aligned offset and whole elements");
+            Require(entry.kind != BindingKind::StorageBuffer || b.buffer->desc.storage,
+                    "Storage binding requires storage buffer usage");
+            continue;
+        }
+        Require(!b.buffer, "Texture/sampler slot contains a buffer");
         if (entry.kind == BindingKind::Sampler)
         {
             CheckOwner(b.sampler);

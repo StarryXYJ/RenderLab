@@ -9,6 +9,7 @@
 #include <deque>
 #include <memory>
 #include <string>
+#include <thread>
 #include <vector>
 
 namespace renderlab::rhi
@@ -28,7 +29,9 @@ public:
     virtual std::shared_ptr<BindingLayout> CreateLayout(std::vector<BindingDesc> entries) = 0;
     virtual std::shared_ptr<BindingGroup> CreateGroup(std::shared_ptr<BindingLayout> layout,
                                                       std::vector<Binding> bindings) = 0;
-    virtual std::shared_ptr<Pipeline> CreatePipeline(PipelineDesc desc) = 0;
+    /// Unified bounded weak cache; immutable shader/layout identities and every PSO state form the
+    /// key.
+    std::shared_ptr<Pipeline> CreatePipeline(PipelineDesc desc);
     virtual std::unique_ptr<Swapchain> CreateSwapchain(platform::NativeSurface surface,
                                                        uint32_t width, uint32_t height) = 0;
     std::shared_ptr<ShaderModule> CreateShader(ShaderStage stage, std::vector<std::byte> code,
@@ -55,6 +58,7 @@ public:
 
 protected:
     Runtime();
+    virtual std::shared_ptr<Pipeline> CreatePipelineNative(PipelineDesc desc) = 0;
     struct Submission
     {
         virtual ~Submission() = default;
@@ -79,5 +83,7 @@ private:
     };
     std::deque<Pending> pending_;
     uint64_t lastSubmitted_ = 0;
+    std::thread::id ownerThread_ = std::this_thread::get_id();
+    std::vector<std::weak_ptr<Pipeline>> pipelines_;
 };
 } // namespace renderlab::rhi

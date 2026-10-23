@@ -36,7 +36,7 @@ FrameContext 的索引由 CPU 帧序号选择，与交换链图像索引独立�
 
 ## 资源、内存与屏障
 
-M1 仅实现当前用到的 2D、单 mip、单 layer、单采样纹理：RGBA8/BGRA8 UNORM、对应 sRGB 格式和 D32。Storage 限定 RGBA8_UNORM。管线显式声明单顶点流的 stride、semantic、location、float2/3/4 和 offset，RHI 不依赖样例的顶点结构。样例在自身模块定义 36 字节 position/color/uv，索引为 uint32。绑定图形管线后再绑定 Geometry；切换管线后重新绑定 Group 和 Geometry。
+M1 仅实现当前用到的 2D、单 mip、单 layer、单采样纹理：RGBA8/BGRA8 UNORM、对应 sRGB 格式和 D32。Storage 纹理限定 RGBA8_UNORM；M2 补充常量缓冲、只读与可写结构化缓冲，Binding 使用固定 space 0..3。管线显式声明单顶点流的 stride、semantic、location、float2/3/4 和 offset，RHI 不依赖样例的顶点结构。样例在自身模块定义 36 字节 position/color/uv，索引为 uint32。绑定图形管线后再绑定 Geometry；切换管线后重新绑定 Group 和 Geometry。
 
 Buffer 的内存类别为 Device、Upload、Readback。仅后两类允许映射；读回前必须完成 CopyDest→HostRead 屏障并等待提交。Upload 的映射内容在消费它的提交完成前不得改写。Vulkan 首版要求 HostVisible + HostCoherent 内存类型，不引入隐藏的非一致内存刷新行为。设备资源初始状态为 Undefined，Upload 为 HostWrite，Readback 为 CopyDest。
 
@@ -46,11 +46,11 @@ Buffer 的内存类别为 Device、Upload、Readback。仅后两类允许映射�
 
 纹理 Copy 的公共对齐约定为行间距 256 字节、Buffer offset 512 字节。`TextureRowPitch(width)` 提供共同布局；Vulkan 把字节 pitch 转成 texel row length。有效像素外的行 padding 未定义，测试只对有效像素比对。
 
-`State` 是首版保守的用途、访问、阶段与布局预设，覆盖 Copy、Vertex、Index、Indirect、Compute Storage、Fragment/Compute Sampled、Color、Depth 和 Present。屏障由调用者明确录制，RHI 不推断前态、不替调用者自动切换。Storage→Storage 在 DX12 发出 UAV barrier，在 Vulkan 发出 Synchronization2 内存依赖，即使布局未变也不能省略。首版不实现子资源细分、Storage Buffer、多队列与 Ownership Transfer；后续图层应生成明确计划，而非依赖本层猜测。
+`State` 是首版保守的用途、访问、阶段与布局预设，覆盖 Copy、Vertex、Index、Indirect、Compute Storage、Fragment/Compute Sampled、Color、Depth 和 Present。屏障由调用者明确录制，RHI 不推断前态、不替调用者自动切换。Storage→Storage 在 DX12 发出 UAV barrier，在 Vulkan 发出 Synchronization2 内存依赖，即使布局未变也不能省略。M2 已补充 UniformRead、ShaderRead 和 Storage Buffer；HostWrite→UniformRead/ShaderRead 显式描述上传缓冲供 Shader 读取的依赖。仍不实现子资源细分、多队列与 Ownership Transfer；后续图层应生成明确计划，而非依赖本层猜测。
 
 ## 程序与绑定
 
-测试 Shader 在构建时由同一个 DXC 编译为 DXIL SM 6.0 和 Vulkan 1.3 SPIR-V。ShaderModule 持有已编译字节与显式入口名，不调用编译器；没有 M2 的元数据、反射、缓存或热重载。样例选择 VSMain/PSMain/CSMain，后端不写死这些名称。
+测试 Shader 在构建时由同一个 DXC 编译为 DXIL SM 6.0 和 Vulkan 1.3 SPIR-V。ShaderModule 持有已编译字节与显式入口名，不调用编译器；本层不实现元数据、反射、缓存或热重载，这些由 [M2 Shader 层](m2-shader-material.md) 负责。样例选择 VSMain/PSMain/CSMain，后端不写死这些名称。
 
 BindingLayout 显式列出 set/space 0 的逻辑 slot 和资源类型，Group 必须完全匹配且不可修改。DX12 为每项创建 descriptor table，并在 Group 中分配独立可见堆；Vulkan 使用 DescriptorSetLayout/DescriptorPool/DescriptorSet。Shader 通过 `vk::binding` 和相同编号的 HLSL register 明确映射，没有后端分支泄漏到样例命令中。首版绑定规模很小，未建立 Bindless、全局描述符索引或通用注册表。
 

@@ -43,6 +43,7 @@ D3D12_RESOURCE_STATES NativeState(State state)
     case State::CopySource:
         return D3D12_RESOURCE_STATE_COPY_SOURCE;
     case State::Vertex:
+    case State::UniformRead:
         return D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER;
     case State::Index:
         return D3D12_RESOURCE_STATE_INDEX_BUFFER;
@@ -51,6 +52,7 @@ D3D12_RESOURCE_STATES NativeState(State state)
     case State::Storage:
         return D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
     case State::Sampled:
+    case State::ShaderRead:
         return D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE |
                D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
     case State::ColorAttachment:

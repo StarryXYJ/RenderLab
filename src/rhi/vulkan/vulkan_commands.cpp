@@ -163,10 +163,10 @@ std::shared_ptr<Runtime::Submission> VulkanRuntime::Execute(const CommandList& c
                                       As<VkPipelineObject>(c.pipeline).native);
                 }
                 else if constexpr (std::is_same_v<T, SetBindings>)
-                    vkCmdBindDescriptorSets(list,
-                                            compute ? VK_PIPELINE_BIND_POINT_COMPUTE
-                                                    : VK_PIPELINE_BIND_POINT_GRAPHICS,
-                                            layout, 0, 1, &As<VkGroup>(c.group).native, 0, nullptr);
+                    vkCmdBindDescriptorSets(
+                        list,
+                        compute ? VK_PIPELINE_BIND_POINT_COMPUTE : VK_PIPELINE_BIND_POINT_GRAPHICS,
+                        layout, 0, 4, As<VkGroup>(c.group).native.data(), 0, nullptr);
                 else if constexpr (std::is_same_v<T, SetGeometry>)
                 {
                     VkDeviceSize offset = 0;

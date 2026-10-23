@@ -1,4 +1,4 @@
-# M1 test shaders only. M2 owns metadata, reflection, caching and diagnostics.
+# Locate the shared DXC runtime; the custom commands below remain M1 test shaders only.
 find_program(RENDERLAB_DXC NAMES dxc
     HINTS "$ENV{VULKAN_SDK}/Bin"
     DOC "DXC with DXIL and SPIR-V support")
@@ -10,7 +10,15 @@ execute_process(COMMAND "${RENDERLAB_DXC}" --version OUTPUT_VARIABLE dxc_version
 if(NOT dxc_result EQUAL 0)
     message(FATAL_ERROR "Cannot execute DXC: ${RENDERLAB_DXC}")
 endif()
-message(STATUS "M1 shader compiler: ${dxc_version}")
+message(STATUS "Shader compiler: ${dxc_version}")
+get_filename_component(dxc_bin "${RENDERLAB_DXC}" DIRECTORY)
+find_path(RENDERLAB_DXC_INCLUDE dxcapi.h HINTS "${dxc_bin}/../Include/dxc" REQUIRED)
+find_library(RENDERLAB_DXC_LIBRARY dxcompiler HINTS "${dxc_bin}/../Lib" REQUIRED)
+add_library(renderlab_dxc SHARED IMPORTED)
+set_target_properties(renderlab_dxc PROPERTIES
+    IMPORTED_IMPLIB "${RENDERLAB_DXC_LIBRARY}"
+    IMPORTED_LOCATION "${dxc_bin}/dxcompiler.dll"
+    INTERFACE_INCLUDE_DIRECTORIES "${RENDERLAB_DXC_INCLUDE}")
 set(shader_outputs)
 foreach(backend IN ITEMS dx12 vulkan)
     set(backend_flags)

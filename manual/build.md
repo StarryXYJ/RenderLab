@@ -36,10 +36,12 @@ chcp 65001
 | Vulkan-Headers | `2cd90f9d20df57eac214c148f3aed885372ddcfe` | Vulkan 头文件 |
 | volk | `a8da8ef3368482b0ee9b0ec0c6079a16a89c6924` | 从系统 Vulkan Loader 加载函数 |
 | WinPixEventRuntime | NuGet `1.0.240308001`，固定 SHA-256 见 `cmake/Dependencies.cmake` | DX12 GPU Marker |
+| SPIRV-Reflect | `e55086b044225f9b511ae44dbf9b079d3625943f` | SPIR-V 绑定与常量反射 |
+| nlohmann/json | `65ee68451d8eb2b5f3a30b410476ab83deb3289b`（v3.12.0） | 缓存、Schema 与材质序列化 |
 
-两者对应 Vulkan SDK 1.4.321.0 源码版本，实际运行最低要求 Vulkan 1.3。首次配置需要 Git 和 GitHub 网络访问。依赖来源与授权说明位于各依赖源码的 LICENSE 文件，不在引擎源码中复制或修改它们。
+Vulkan-Headers、volk 和 SPIRV-Reflect 对应 Vulkan SDK 1.4.321.0 源码版本，实际运行最低要求 Vulkan 1.3。首次配置需要 Git 和 GitHub 网络访问。依赖来源与授权说明位于各依赖源码的 LICENSE 文件，不在引擎源码中复制或修改它们。
 
-构建需要能同时输出 DXIL 和 SPIR-V 的 DXC。CMake 从 PATH、`VULKAN_SDK/Bin` 或显式 `RENDERLAB_DXC` 路径查找，不在共享配置中保存本机 SDK 路径。完整 Vulkan SDK 不是构建必需，但提供 DXC 与验证层更方便。运行需要显卡驱动提供的 Vulkan Loader；DX12 使用系统运行库和 Windows SDK。严格验证额外需要 Windows Graphics Tools 的 D3D12 Debug Layer，以及 Khronos Vulkan Validation Layer（含 synchronization validation 设置）。
+构建需要能同时输出 DXIL 和 SPIR-V 的 DXC。CMake 从 PATH、`VULKAN_SDK/Bin` 或显式 `RENDERLAB_DXC` 路径查找，不在共享配置中保存本机 SDK 路径。M2 同时需要 `dxcapi.h`、`dxcompiler.lib` 和 `dxcompiler.dll`；默认在 DXC 相邻的 Include/dxc、Lib 和 Bin 中定位，也可分别指定 `RENDERLAB_DXC_INCLUDE`、`RENDERLAB_DXC_LIBRARY`。运行库 DLL 随工具复制到输出目录。完整 Vulkan SDK 不是构建必需，但提供 DXC 与验证层更方便。运行需要显卡驱动提供的 Vulkan Loader；DX12 使用系统运行库和 Windows SDK。严格验证额外需要 Windows Graphics Tools 的 D3D12 Debug Layer，以及 Khronos Vulkan Validation Layer（含 synchronization validation 设置）。
 
 例如在本机安装 SDK 后，配置 `VULKAN_SDK`，或在配置命令后加 `-DRENDERLAB_DXC=C:/你的SDK/Bin/dxc.exe`。本机路径也可放入被忽略的 CMakeUserPresets.json。首次配置还会从 NuGet 下载带哈希校验的 PIX 包；构建会将其 DLL 复制到程序目录。不要仅复制 exe 后删掉同目录的 DLL 或 shaders。
 
@@ -55,9 +57,9 @@ cmake --build --preset windows-release --parallel 4
 ctest --preset windows-release
 ```
 
-输出分别在 `out/build/windows-debug` 和 `out/build/windows-release`。默认注册 5 项不需要创建设备的基础测试。预设与依赖版本纳入 Git，本机设置使用被忽略的 `CMakeUserPresets.json`。
+输出分别在 `out/build/windows-debug` 和 `out/build/windows-release`。默认注册 6 项不需要创建设备的测试，包含实际 DXC 双目标编译的 `shader.contracts`。预设与依赖版本纳入 Git，本机设置使用被忽略的 `CMakeUserPresets.json`。
 
-完整验收启用 GPU 测试，共 13 项。GPU 测试要求验证层和桌面会话，会短暂打开原生窗口：
+完整验收启用 GPU 测试，共 16 项。GPU 测试要求验证层和桌面会话，会短暂打开原生窗口：
 
 ```powershell
 cmake --preset windows-debug -DRENDERLAB_GPU_TESTS=ON
@@ -101,9 +103,35 @@ GPU 测试使用 `--validation on`，层不可用时失败，不静默降级。�
 
 `out/m1/dx12` 和 `out/m1/vulkan` 各包含 `triangle-noise.bmp`、`noise.bmp` 与去除行 padding 的 `noise.rgba`。CTest 使用各构建目录的 `acceptance/后端` 输出图像与原始数据，`logs` 输出日志，`Testing/Temporary/LastTest.log` 保留测试结果。Compute 噪声为固定种子、257×131 的两次 Dispatch，CPU 参考检查全部像素；屏幕样例另测深度、绕序、线性混合、sRGB 和采样坐标。
 
-应用从可执行文件同目录的 `shaders/dx12` 或 `shaders/vulkan` 读取构建产物，启动工作目录可以不同。修改 HLSL 后运行正常构建即可重编译，不需要在运行时寻找 DXC。M1 使用固定测试入口；M2 再引入正式 Shader 资产工具链。
+Sandbox 从可执行文件同目录的 `shaders/dx12` 或 `shaders/vulkan` 读取 M1 构建产物，启动工作目录可以不同。修改 M1 HLSL 后运行正常构建即可重编译；该底层样例保留固定入口，独立于 M2 资产工具链。
 
 日志默认写入当前工作目录的 `logs/renderlab.log`，可用 `--log PATH` 修改。JSON 报告通过 `--report PATH` 指定，父目录会自动创建。日志与报告均为 UTF-8 无 BOM、LF。返回码 0 表示成功，1 表示运行或验证错误，2 表示参数错误。
+
+## Shader 与材质工具
+
+```powershell
+./out/build/windows-debug/renderlab_shaderc.exe shaders/m2/surface.shader --cache out/shader-cache --schema out/surface-schema.json
+./out/build/windows-debug/renderlab_shaderc.exe shaders/m2/surface.shader --target spirv --schema out/spirv-schema.json
+
+./out/build/windows-debug/renderlab_material_demo.exe dx12 shaders/m2/surface.shader out/m2/dx12
+./out/build/windows-debug/renderlab_material_demo.exe vulkan shaders/m2/surface.shader out/m2/vulkan
+
+ctest --preset windows-debug -R 'shader.contracts|material' --output-on-failure
+```
+
+shaderc 默认编译两个目标，支持 `--target dxil|spirv|both`，省略 `--schema` 时向终端输出完整参数表、元数据、偏移和变体。开启 `--cache` 后，相同输入的第二次编译输出 cacheHit=true；修改声明、工具 Include、宏或共享模块会失效。清除缓存可直接重建。
+
+material_demo 是代码驱动的无窗口材质样例和 GPU 验收入口，始终启用严格验证。它创建材质、修改颜色/纹理/变体、保存与重载，渲染到 sRGB 目标并读回；还测试 Compute cbuffer/SRV/UAV 和后台重载。输出目录包含 `material-default.bmp`、`material-edited.bmp`、`material-reloaded.bmp`、`sample.material`、`material.log` 和可重建缓存。测试只修改输出目录中的 Shader 副本。源码语法与 API 见 [Shader 与材质](../docs/m2-shader-material.md)。
+
+若已有 Sandbox 实例占用输出 exe，可使用另一个构建目录：
+
+```powershell
+cmake -S . -B out/build/windows-m2-debug -G Ninja -DCMAKE_BUILD_TYPE=Debug -DRENDERLAB_GPU_TESTS=ON
+cmake --build out/build/windows-m2-debug --parallel 4
+ctest --test-dir out/build/windows-m2-debug --output-on-failure
+```
+
+仍须在 Developer PowerShell 中配置 DXC 环境。M2 本轮使用上述隔离 Debug 目录及相同方式配置的 `windows-m2-release`，避免覆盖已运行的 Sandbox。
 
 ## 验证结果与边界
 
