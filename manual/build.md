@@ -57,9 +57,9 @@ cmake --build --preset windows-release --parallel 4
 ctest --preset windows-release
 ```
 
-输出分别在 `out/build/windows-debug` 和 `out/build/windows-release`。默认注册 6 项不需要创建设备的测试，包含实际 DXC 双目标编译的 `shader.contracts`。预设与依赖版本纳入 Git，本机设置使用被忽略的 `CMakeUserPresets.json`。
+输出分别在 `out/build/windows-debug` 和 `out/build/windows-release`。默认注册 7 项不需要创建设备的测试，包含实际 DXC 双目标编译的 `shader.contracts`。预设与依赖版本纳入 Git，本机设置使用被忽略的 `CMakeUserPresets.json`。
 
-完整验收启用 GPU 测试，共 16 项。GPU 测试要求验证层和桌面会话，会短暂打开原生窗口：
+完整验收启用 GPU 测试，共 19 项。GPU 测试要求验证层和桌面会话，会短暂打开原生窗口：
 
 ```powershell
 cmake --preset windows-debug -DRENDERLAB_GPU_TESTS=ON
@@ -132,6 +132,26 @@ ctest --test-dir out/build/windows-m2-debug --output-on-failure
 ```
 
 仍须在 Developer PowerShell 中配置 DXC 环境。M2 本轮使用上述隔离 Debug 目录及相同方式配置的 `windows-m2-release`，避免覆盖已运行的 Sandbox。
+
+## Render Graph 与 Feature
+
+默认 Sandbox 窗口现在使用 M3 每帧 Feature/Graph 路径。`--rhi-test` 保留直接 RHI 验收，`--graph-test` 验证图路径与直接路径的图像一致性。
+
+```powershell
+./out/build/windows-m2-debug/renderlab_sandbox.exe --backend dx12 --validation on --graph-dump out/m3/frame.json
+./out/build/windows-m2-debug/renderlab_sandbox.exe --backend vulkan --validation on --graph-no-update
+./out/build/windows-m2-debug/renderlab_sandbox.exe --backend vulkan --validation on --graph-no-cull --frames 60
+
+./out/build/windows-m2-debug/renderlab_sandbox.exe --backend dx12 --headless --validation on --graph-test --output out/m3 --log out/m3/dx12.log
+./out/build/windows-m2-debug/renderlab_sandbox.exe --backend vulkan --headless --validation on --graph-test --output out/m3 --log out/m3/vulkan.log
+ctest --test-dir out/build/windows-m2-debug -R 'rendergraph.contracts|gpu.*.graph' --output-on-failure
+```
+
+这里沿用已有隔离构建目录，也可使用标准 windows-debug/windows-release 预设构建最新代码。M3 完整测试为 19 项：7 项 CPU/CLI 和 12 项 GPU。`--graph-no-update` 省略噪声更新 Pass，画面显示未经过 XOR 更新的噪声；`--graph-no-cull` 让无消费者的测试 Feature 也执行。两者用于确认功能与图编译选择，不改变执行器。
+
+`--graph-dump` 导出首个窗口帧的计划，包含 Pass 来源、存活/剔除原因、资源版本、依赖、屏障、生命周期和 CPU 编译/准备/录制耗时。GPU Capture 可以通过每个 Pass 的 Marker 定位工作；当前不提供每 Pass GPU Timestamp。
+
+`--graph-test` 输出 `后端/triangle-noise.bmp`、`noise.bmp`、`noise.rgba`、六帧的 `plan-N.json` 和 `buffer-plan.json`。正常更新时，全部颜色字节与直接 RHI 绘制比较；固定噪声保持既有 SHA-256。缓冲探针验证上传、复制、常量、结构化缓冲的两次 Compute 和读回。详细 API 与限制见 [Render Graph 与 Feature](../docs/m3-rendergraph.md)。
 
 ## 验证结果与边界
 

@@ -95,8 +95,9 @@ std::shared_ptr<Runtime::Submission> DxRuntime::Execute(const CommandList& comma
                     if (c.depth)
                         dsv = As<DxView>(c.depth).handle;
                     list->OMSetRenderTargets(1, &rtv, FALSE, c.depth ? &dsv : nullptr);
-                    list->ClearRenderTargetView(rtv, c.clear.data(), 0, nullptr);
-                    if (c.depth)
+                    if (c.colorLoad == LoadOp::Clear)
+                        list->ClearRenderTargetView(rtv, c.clear.data(), 0, nullptr);
+                    if (c.depth && c.depthLoad == LoadOp::Clear)
                         list->ClearDepthStencilView(dsv, D3D12_CLEAR_FLAG_DEPTH, 0, 0, 0, nullptr);
                     const auto& desc = c.color->texture->desc;
                     D3D12_VIEWPORT viewport{0, 0, float(desc.width), float(desc.height), 0, 1};

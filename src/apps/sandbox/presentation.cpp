@@ -7,6 +7,7 @@
 #include "rhi/commands.hpp"
 #include "rhi/device.hpp"
 #include "rhi/runtime.hpp"
+#include "samples/graph_demo.hpp"
 #include "samples/rhi_acceptance.hpp"
 #include "samples/rhi_demo.hpp"
 
@@ -55,29 +56,33 @@ void RunRendering(platform::Window* window, rhi::Device& device, rhi::Runtime& r
                   const sandbox::Options& options, const std::filesystem::path& shaderRoot,
                   Logger& logger)
 {
-    samples::RhiDemo demo(runtime, shaderRoot / options.backend, logger);
     if (options.rhiTest)
-        samples::VerifyRhi(runtime, demo, logger,
+    {
+        samples::RhiDemo direct(runtime, shaderRoot / options.backend, logger);
+        samples::VerifyRhi(runtime, direct, logger,
                            std::filesystem::path(platform::Utf8ToWide(options.outputPath)) /
                                options.backend);
+    }
+    if (options.graphTest)
+        samples::VerifyGraph(runtime, shaderRoot / options.backend,
+                             std::filesystem::path(platform::Utf8ToWide(options.outputPath)) /
+                                 options.backend,
+                             logger);
     if (!window)
         return;
     if (options.windowTest)
         CheckWindow(*window, logger);
+    samples::GraphDemo demo(runtime, shaderRoot / options.backend);
     auto swapchain = runtime.CreateSwapchain(window->GetNativeSurface(), window->GetState().width,
                                              window->GetState().height);
     demo.Prepare(swapchain->GetFormat());
     struct FrameContext
     {
         uint64_t completion = 0;
-        std::shared_ptr<rhi::Texture> depth;
-        std::shared_ptr<rhi::TextureView> depthView;
-        bool initialized = false;
     };
     std::array<FrameContext, 2> frames;
     uint32_t width = window->GetState().width, height = window->GetState().height;
     std::vector<bool> imageInitialized;
-    std::vector<std::shared_ptr<rhi::TextureView>> colorViews;
     const auto start = std::chrono::steady_clock::now();
     uint32_t frameNumber = 0, tick = 0, resizeCount = 0, suspendedTicks = 0;
     while (window->PumpEvents())
@@ -114,13 +119,6 @@ void RunRendering(platform::Window* window, rhi::Device& device, rhi::Runtime& r
         if (newWidth != width || newHeight != height)
         {
             runtime.WaitIdle();
-            for (auto& frame : frames)
-            {
-                frame.depthView.reset();
-                frame.depth.reset();
-                frame.initialized = false;
-            }
-            colorViews.clear();
             swapchain->Resize(newWidth, newHeight);
             width = newWidth;
             height = newHeight;
@@ -140,7 +138,6 @@ void RunRendering(platform::Window* window, rhi::Device& device, rhi::Runtime& r
         if (!acquired.texture)
         {
             runtime.WaitIdle();
-            colorViews.clear();
             swapchain->Resize(width, height);
             imageInitialized.clear();
             demo.Prepare(swapchain->GetFormat());
@@ -148,28 +145,15 @@ void RunRendering(platform::Window* window, rhi::Device& device, rhi::Runtime& r
         }
         if (imageInitialized.size() <= acquired.index)
             imageInitialized.resize(acquired.index + 1);
-        if (colorViews.size() <= acquired.index)
-            colorViews.resize(acquired.index + 1);
-        if (!colorViews[acquired.index])
-            colorViews[acquired.index] = runtime.CreateView(acquired.texture);
-        const auto& desc = acquired.texture->desc;
-        if (!frame.depth)
-            frame.depth = runtime.CreateTexture(
-                {desc.width, desc.height, rhi::Format::D32, false, true, "Frame.Depth"});
-        if (!frame.depthView)
-            frame.depthView = runtime.CreateView(frame.depth);
-        auto commands = runtime.CreateCommands();
-        commands->Barrier(acquired.texture,
-                          imageInitialized[acquired.index] ? rhi::State::Present
-                                                           : rhi::State::Undefined,
-                          rhi::State::ColorAttachment);
-        commands->Barrier(frame.depth,
-                          frame.initialized ? rhi::State::DepthWrite : rhi::State::Undefined,
-                          rhi::State::DepthWrite);
-        demo.Render(*commands, colorViews[acquired.index], frame.depthView);
-        commands->Barrier(acquired.texture, rhi::State::ColorAttachment, rhi::State::Present);
-        frame.completion = runtime.Submit(std::move(commands), swapchain.get());
-        frame.initialized = true;
+        const auto dump = frameNumber == 0
+                              ? std::filesystem::path(platform::Utf8ToWide(options.graphDumpPath))
+                              : std::filesystem::path{};
+        frame.completion = demo.Render(acquired.texture,
+                                       imageInitialized[acquired.index] ? rhi::State::Present
+                                                                        : rhi::State::Undefined,
+                                       swapchain.get(), false,
+                                       {!options.graphNoUpdate, true, !options.graphNoCull}, dump)
+                               .completion;
         imageInitialized[acquired.index] = true;
         swapchain->Present();
         ++frameNumber;

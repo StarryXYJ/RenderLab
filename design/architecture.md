@@ -268,6 +268,8 @@ Shader Pass 声明 Forward、GBuffer、Shadow 等角色，Renderer 按契约选�
 
 先每帧构建和编译逻辑图，测量 CPU 成本后再按结构与配置缓存执行计划；分辨率、功能、队列或接口改变时重新验证。
 
+M3 的具体接口见 [Render Graph 与 Feature](../docs/m3-rendergraph.md)。Setup 立即填充图拥有的 PassData，Prepare/Execute 要求无捕获回调；Prepare 在设备所有线程创建必要绑定，Execute 使用受限命令上下文。图句柄同时携带图身份和逻辑版本，资源池复用受图租约、资源引用及真实提交完成点共同保护。资源状态仅在成功提交后对外发布。
+
 PassData 由图拥有或复制到图执行周期的内存区，Execute 使用稳定快照和按值捕获。Setup 中的局部变量引用、临时 span 和局部容器不能被延迟回调持有。Pass 注册处记录名称和 std::source_location，错误可以回到声明位置。图内资源只在声明它的 Execute 中解析为 RHI 对象。这类生命周期约束也见于 Unreal RDG 的延迟执行设计。[Unreal RDG](https://dev.epicgames.com/documentation/en-us/unreal-engine/render-dependency-graph-in-unreal-engine)
 
 ### 访问声明
@@ -346,6 +348,8 @@ RenderPipeline 是组织渲染工作的 C++ 入口；RenderFeature 表示一组�
 候选 Feature 包括 Depth、Shadow、GBuffer、DeferredLighting、ForwardOpaque、ForwardTransparent、IBL、SSAO、Bloom、ToneMapping、GPUCulling、AccelerationStructureUpdate 和 RayTracedEffect。
 
 Feature 之间使用明确契约，例如 GBufferResources、ShadowResources、SceneData。资源格式、法线空间、运动矢量和深度语义属于契约的一部分。按相机与渲染功能传递本帧上下文，不通过任意字符串访问全局资源，也不把每个辅助函数拆成一个 Graph Pass。只有资源依赖、执行类型或独立调度确有需要时才增加 Pass。
+
+Feature 每帧根据配置决定资源和 Pass 数量。内置组合使用类型化输入输出直接连接；Before/After 是额外硬顺序，不替代资源版本，不自动保留无用工作，冲突时报环。M3 仅提供 PassHandle 顺序接口，场景阶段锚点由 M4 Renderer 根据实际流程定义；不把 Opaque/Shadow 等语义写进通用图编译器。
 
 一个后期混合示例是：
 

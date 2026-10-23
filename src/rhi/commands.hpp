@@ -38,6 +38,7 @@ struct BeginRendering
 {
     std::shared_ptr<TextureView> color, depth;
     std::array<float, 4> clear;
+    LoadOp colorLoad = LoadOp::Clear, depthLoad = LoadOp::Clear;
 };
 struct EndRendering
 {
@@ -102,7 +103,8 @@ public:
     void CopyTexture(std::shared_ptr<Buffer> buffer, std::shared_ptr<Texture> texture,
                      uint32_t rowPitch, bool upload, uint64_t offset = 0);
     void Begin(std::shared_ptr<TextureView> color, std::shared_ptr<TextureView> depth = {},
-               std::array<float, 4> clear = {0.02f, 0.02f, 0.02f, 1});
+               std::array<float, 4> clear = {0.02f, 0.02f, 0.02f, 1},
+               LoadOp colorLoad = LoadOp::Clear, LoadOp depthLoad = LoadOp::Clear);
     void End();
     void Bind(std::shared_ptr<Pipeline> pipeline);
     void Bind(std::shared_ptr<BindingGroup> group);

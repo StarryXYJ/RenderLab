@@ -124,7 +124,9 @@ std::shared_ptr<Runtime::Submission> VulkanRuntime::Execute(const CommandList& c
                     color.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
                     color.imageView = As<VkView>(c.color).native;
                     color.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-                    color.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+                    color.loadOp = c.colorLoad == LoadOp::Clear  ? VK_ATTACHMENT_LOAD_OP_CLEAR
+                                   : c.colorLoad == LoadOp::Load ? VK_ATTACHMENT_LOAD_OP_LOAD
+                                                                 : VK_ATTACHMENT_LOAD_OP_DONT_CARE;
                     color.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
                     std::copy(c.clear.begin(), c.clear.end(), color.clearValue.color.float32);
                     VkRenderingAttachmentInfo depth{};
@@ -133,7 +135,10 @@ std::shared_ptr<Runtime::Submission> VulkanRuntime::Execute(const CommandList& c
                     {
                         depth.imageView = As<VkView>(c.depth).native;
                         depth.imageLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL;
-                        depth.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+                        depth.loadOp = c.depthLoad == LoadOp::Clear ? VK_ATTACHMENT_LOAD_OP_CLEAR
+                                       : c.depthLoad == LoadOp::Load
+                                           ? VK_ATTACHMENT_LOAD_OP_LOAD
+                                           : VK_ATTACHMENT_LOAD_OP_DONT_CARE;
                         depth.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
                         depth.clearValue.depthStencil.depth = 0;
                     }

@@ -30,13 +30,16 @@ void CommandList::Barrier(std::shared_ptr<Buffer> buffer, State before, State af
     Require(valid(before) && valid(after) && after != State::Undefined, "Invalid M1 buffer state");
     Require(after != State::Storage || buffer->desc.storage, "Buffer lacks storage usage");
     if (buffer->desc.memory == Memory::Upload)
-        Require(before == State::HostWrite &&
+        Require((before == State::HostWrite || before == State::CopySource ||
+                 before == State::UniformRead || before == State::ShaderRead) &&
                     (after == State::CopySource || after == State::UniformRead ||
                      after == State::ShaderRead),
-                "Upload buffers require a host-write to GPU-read dependency");
+                "Upload buffers allow host-write to GPU-read or transitions between GPU-read uses");
     if (buffer->desc.memory == Memory::Readback)
-        Require(before == State::CopyDest && after == State::HostRead,
-                "Readback buffers only transition CopyDest->HostRead");
+        Require((before == State::CopyDest || before == State::HostRead) &&
+                    (after == State::CopyDest || after == State::HostRead) &&
+                    (before != after || after == State::CopyDest),
+                "Readback buffers allow CopyDest/HostRead dependencies and repeated copies");
     commands_.emplace_back(BufferBarrier{std::move(buffer), before, after});
 }
 void CommandList::Barrier(std::shared_ptr<Texture> texture, State before, State after)
@@ -84,7 +87,7 @@ void CommandList::CopyTexture(std::shared_ptr<Buffer> buffer, std::shared_ptr<Te
         TextureCopy{std::move(buffer), std::move(texture), offset, rowPitch, upload});
 }
 void CommandList::Begin(std::shared_ptr<TextureView> color, std::shared_ptr<TextureView> depth,
-                        std::array<float, 4> clear)
+                        std::array<float, 4> clear, LoadOp colorLoad, LoadOp depthLoad)
 {
     Check(color);
     Require(!rendering_ && color->texture->desc.attachment &&
@@ -101,7 +104,8 @@ void CommandList::Begin(std::shared_ptr<TextureView> color, std::shared_ptr<Text
     rendering_ = true;
     colorFormat_ = color->texture->desc.format;
     hasDepth_ = bool(depth);
-    commands_.emplace_back(BeginRendering{std::move(color), std::move(depth), clear});
+    commands_.emplace_back(
+        BeginRendering{std::move(color), std::move(depth), clear, colorLoad, depthLoad});
 }
 void CommandList::End()
 {

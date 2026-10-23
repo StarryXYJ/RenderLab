@@ -6,6 +6,7 @@
 #include "rhi/runtime.hpp"
 #include "rhi/upload.hpp"
 #include "samples/detail/check.hpp"
+#include "samples/detail/demo_geometry.hpp"
 #include "samples/shader_io.hpp"
 
 #include <array>
@@ -21,17 +22,6 @@ using detail::Require;
 namespace
 {
 constexpr uint32_t NoiseWidth = 257, NoiseHeight = 131;
-struct Vertex
-{
-    float position[3];
-    float color[4];
-    float uv[2];
-};
-static_assert(sizeof(Vertex) == 36);
-template <class T> std::span<const std::byte> Bytes(const T& value)
-{
-    return std::as_bytes(std::span{&value, size_t{1}});
-}
 } // namespace
 
 RhiDemo::RhiDemo(rhi::Runtime& runtime, const std::filesystem::path& shaderDirectory,
@@ -64,42 +54,11 @@ RhiDemo::RhiDemo(rhi::Runtime& runtime, const std::filesystem::path& shaderDirec
     auto initialize = runtime_.CreatePipeline(computeDesc);
     computeDesc.compute = shader(ShaderStage::Compute, "noise_update.bin");
     auto update = runtime_.CreatePipeline(computeDesc);
-    const std::array<Vertex, 18> vertices{{{{-.9f, -.65f, .75f}, {1, 0, 0, 1}, {0, 0}},
-                                           {{-.1f, -.65f, .75f}, {0, 1, 0, 1}, {0, 0}},
-                                           {{-.5f, .65f, .75f}, {0, 0, 1, 1}, {0, 0}},
-                                           {{.05f, -.75f, .5f}, {0, 0, 0, 0}, {0, 1}},
-                                           {{.9f, -.75f, .5f}, {0, 0, 0, 0}, {1, 1}},
-                                           {{.9f, .75f, .5f}, {0, 0, 0, 0}, {1, 0}},
-                                           {{.05f, -.75f, .5f}, {0, 0, 0, 0}, {0, 1}},
-                                           {{.9f, .75f, .5f}, {0, 0, 0, 0}, {1, 0}},
-                                           {{.05f, .75f, .5f}, {0, 0, 0, 0}, {0, 0}},
-                                           {{-.9f, -.65f, .25f}, {1, 0, 1, 1}, {0, 0}},
-                                           {{-.1f, -.65f, .25f}, {1, 0, 1, 1}, {0, 0}},
-                                           {{-.5f, .65f, .25f}, {1, 0, 1, 1}, {0, 0}},
-                                           {{-.9f, .75f, .5f}, {.25f, .25f, .25f, .5f}, {0, 0}},
-                                           {{-.1f, .75f, .5f}, {.25f, .25f, .25f, .5f}, {0, 0}},
-                                           {{-.1f, .9f, .5f}, {.25f, .25f, .25f, .5f}, {0, 0}},
-                                           {{-.9f, .75f, .5f}, {.25f, .25f, .25f, .5f}, {0, 0}},
-                                           {{-.1f, .9f, .5f}, {.25f, .25f, .25f, .5f}, {0, 0}},
-                                           {{-.9f, .9f, .5f}, {.25f, .25f, .25f, .5f}, {0, 0}}}};
-    const std::array<uint32_t, 3> indices{0, 1, 2};
-    const DrawArguments indirect{3, 1, 9, 0};
-    UploadArena upload(runtime_, 4096);
+    const auto geometry = detail::CreateDemoGeometry(runtime_);
+    vertices_ = geometry.vertices;
+    indices_ = geometry.indices;
+    indirect_ = geometry.indirect;
     auto commands = runtime_.CreateCommands();
-    const auto uploadBuffer =
-        [&](std::span<const std::byte> bytes, State finalState, const char* name)
-    {
-        auto buffer = runtime_.CreateBuffer({bytes.size(), Memory::Device, name});
-        auto slice = upload.Write(bytes);
-        commands->Barrier(slice.buffer, State::HostWrite, State::CopySource);
-        commands->Barrier(buffer, State::Undefined, State::CopyDest);
-        commands->Copy(slice.buffer, buffer, bytes.size(), slice.offset);
-        commands->Barrier(buffer, State::CopyDest, finalState);
-        return buffer;
-    };
-    vertices_ = uploadBuffer(Bytes(vertices), State::Vertex, "Demo.Vertices");
-    indices_ = uploadBuffer(Bytes(indices), State::Index, "Demo.Indices");
-    indirect_ = uploadBuffer(Bytes(indirect), State::Indirect, "Demo.IndirectArguments");
     commands->BeginMarker("Noise.Init -> UAV dependency -> Noise.Update");
     commands->Barrier(noise_, State::Undefined, State::Storage);
     commands->Bind(initialize);
@@ -139,7 +98,7 @@ std::shared_ptr<rhi::Pipeline> RhiDemo::Graphics(rhi::Format format)
         desc.color = format;
         desc.depth = true;
         desc.blend = true;
-        desc.vertexStride = sizeof(Vertex);
+        desc.vertexStride = sizeof(detail::DemoVertex);
         desc.attributes = {{"POSITION", 0, rhi::VertexFormat::Float3, 0},
                            {"COLOR", 1, rhi::VertexFormat::Float4, 12},
                            {"TEXCOORD", 2, rhi::VertexFormat::Float2, 28}};

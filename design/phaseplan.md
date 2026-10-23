@@ -4,9 +4,9 @@
 
 ## 当前状态
 
-- 当前实施阶段：M2 Shader 与材质数据链路，DONE。
-- 当前工作项：无。M2 已满足退出条件；M3 保持 NOT_STARTED，等待后续阶段授权。
-- 本次授权采用简洁声明语法作为唯一作者入口，HLSL 保留算法与工具代码；补齐常量/存储缓冲等所需 RHI 契约。
+- 当前实施阶段：M3 单队列 Render Graph，DONE。
+- 当前工作项：无。M3 已满足当前单 mip/layer RHI 范围内的退出条件；M4 保持 NOT_STARTED。
+- 本次授权完成每帧 Feature/Pass 构建、类型化资源依赖和单队列 Render Graph；并行录制、多队列与完整场景 Renderer 不在本次范围。
 - M1 已通过双后端三角形、固定种子 Compute 噪声及读回、同步、生命周期和 resize 验收，结果见下文。
 
 | 阶段 | 目标 | 前置依赖 | 状态 |
@@ -14,7 +14,7 @@
 | M0 | 工程与设备基础 | 无 | DONE |
 | M1 | 最小双后端 RHI | M0 | DONE |
 | M2 | Shader 与材质数据链路 | M1 | DONE |
-| M3 | 单队列 Render Graph | M2 | NOT_STARTED |
+| M3 | 单队列 Render Graph | M2 | DONE |
 | M4 | 场景资源与基础 Renderer | M3 | NOT_STARTED |
 | M5 | Deferred 与光追基础 | M4 | NOT_STARTED |
 | M6 | GPU Driven 与执行优化 | M4；光追调度测试另需 M5 | NOT_STARTED |
@@ -104,36 +104,27 @@ GPU 与热重载：`gpu.{dx12,vulkan}.material` 验证同一材质多 Pass、参
 
 文档：[Shader 与材质 API/语法/边界](../docs/m2-shader-material.md)、[构建与运行](../manual/build.md#shader-与材质工具)。
 
-限制与后续：M2 为代码驱动的无窗口材质样例，不包含编辑器或操作系统文件监视器；变更侦测方通过依赖表请求重编译。仅 SM 6.0、Vulkan 1.3、16KiB 常量块、32 绑定、每 Shader 16 Pass/16 变体；纹理仍为单 mip/layer，Storage 纹理为 RGBA8_UNORM，结构化缓冲元素限数值标量或 2/4 分量向量。不支持资源数组、自定义结构体/三分量结构化元素、动态无界关键字组合、后台创建 GPU PSO 或强制中断正在执行的 DXC。当前缓存属于本机可重建产物；其他 GPU 和跨机器发行包尚未验证。M3 未开始。
+限制与后续：M2 为代码驱动的无窗口材质样例，不包含编辑器或操作系统文件监视器；变更侦测方通过依赖表请求重编译。仅 SM 6.0、Vulkan 1.3、16KiB 常量块、32 绑定、每 Shader 16 Pass/16 变体；纹理仍为单 mip/layer，Storage 纹理为 RGBA8_UNORM，结构化缓冲元素限数值标量或 2/4 分量向量。不支持资源数组、自定义结构体/三分量结构化元素、动态无界关键字组合、后台创建 GPU PSO 或强制中断正在执行的 DXC。当前缓存属于本机可重建产物；其他 GPU 和跨机器发行包尚未验证。M3 的后续接入见下文。
 
 ## M3 单队列 Render Graph
 
-目标是让 Renderer 只声明工作和资源访问，由图统一管理同步。保持单队列和串行录制，先证明语义。
+状态：DONE，日期：2026 年 10 月 23 日。
 
-### M3.1 Pass 与资源契约
+结果：M3.1 类型化图/资源版本/Pass 句柄、图拥有的 PassData、立即 Setup 与无捕获 Prepare/Execute、受限命令上下文、Raster/Compute/Copy 以及附件 Clear/Load；M3.2 输出/副作用根剔除、Full/Preserve、RAW/WAR/WAW、Before/After 硬顺序和环诊断、稳定拓扑排序、自动屏障、Import/Export 状态/完成点交接与有界资源池；M3.3 每帧薄 Feature 组合、默认 Sandbox 图路径、计划诊断和禁用剔除开关全部完成。图不依赖具体 Shader/Material/Renderer，不引入全局按名称获取资源或 Unity 兼容层。
 
-- [ ] Raster、Compute、Copy Pass、Setup/Execute、类型化句柄和图拥有的 PassData。
-- [ ] Import/Export、资源版本、完整覆盖与 ReadWrite 的区分。
-- [ ] 明确资源解析范围和回调内存生命周期，保存声明位置。
+范围：开始实施时明确沿用当前 RHI 单 mip/layer 能力；TextureRange 校验 mip/layer/aspect，超出实际支持范围明确失败。没有实现或声称通过多 mip/layer 的原生执行。Buffer 依赖和屏障跟踪整资源，同时校验声明、拷贝和绑定的范围。
 
-验收能够诊断无生产者、过期句柄、错误用途和越过声明范围访问。禁止用 Setup 局部引用支撑延迟执行。
+验证：MSVC 19.51、Windows SDK 10.0.26100、CMake 4.3.1、Ninja 1.13.2、DXC 1.9.0.5512；RTX 5060、NVIDIA 591.74 上隔离构建 `windows-m2-debug` / `windows-m2-release` 完整 CTest 各 19/19 通过，DX12 Debug Layer 与 Vulkan synchronization validation 错误均为 0。M1/M2 原有验收全部保持通过。49 个自有头文件逐一独立编译、clang-format、UTF-8 无 BOM/LF 和 `git diff --check` 通过。
 
-### M3.2 图编译
+CPU 语义：`rendergraph.contracts` 验证无生产者读取、整覆盖剔除旧生产者、保留/部分写入依赖、只读共享、旧版本 WAR 重排、WAW、顺序与数据依赖冲突、跨图/旧写版本、单子资源边界/aspect、用途、附件 Load/Clear、未声明资源/版本、Buffer 越界、取消、未完成资源不复用、完成后复用、池容量淘汰和所有线程约束。顺序边不自动保留死 Pass，Import 不自动固定消费者。
 
-- [ ] RAW/WAR/WAW 依赖、拓扑顺序、输出与副作用根、Pass 剔除。
-- [ ] Texture mip/layer/aspect；Buffer 先整资源保守跟踪。
-- [ ] 生命周期、兼容资源池、屏障生成和图外状态交接。
-- [ ] Clear、部分写入和 Load 依赖正确；Import 不自动禁止剔除。
+GPU 与展示：`gpu.{dx12,vulkan}.graph` 每配置/后端构建六张图，包含可选噪声更新、无消费者 Feature、剔除开关和资源池复用；颜色、深度、混合、索引/间接绘制的全部颜色字节与直接 RHI 基线一致。单独缓冲图验证 Upload→Copy→两次依赖 Compute→Readback，64 个 uint 分量与 CPU 参考一致，覆盖 Uniform、Structured SRV/UAV。四份图路径 noise.rgba 的 SHA-256 均为 `ed59cd2517b5c5c076a93c45fda5a61aa1f6f43ff52f96af600bec1059be9527`。已查看图路径读回图像。默认窗口每后端/配置呈现 54 帧、重建/暂停变化 10 次、两次最小化恢复及单帧退出通过；正常帧不使用 QueueIdle/DeviceIdle。
 
-验收涵盖读未初始化资源、覆盖后旧值剔除、ReadWrite 保留前序、只读共享、子资源和副作用。RHI 不再对图内命令隐式补屏障。
+生命周期与诊断：资源池同时检查图租约、额外对象引用和真实完成点，提交成功后才发布状态；取消不更改池中状态。默认最多 64 项/64MiB 估算内容预算，RHI 原生分配预算独立有效。计划 JSON 包含来源、访问版本、依赖、存活原因、屏障、生命周期、估算大小和 CPU 编译/准备/录制时间，所有 Pass 有 GPU Marker。产物位于各构建树 `graph/后端`、`logs`、`Testing`，不提交本机生成物。
 
-### M3.3 接入与诊断
+文档：[Render Graph 与 Feature API/边界](../docs/m3-rendergraph.md)、[运行与验收](../manual/build.md#render-graph-与-feature)。
 
-- [ ] 将已有计算和绘制示例迁入图，保留图外小测试作为 RHI 验证入口。
-- [ ] 导出资源、Pass、状态转换、剔除原因和声明位置。
-- [ ] 串行和禁用剔除诊断开关，共用同一执行器。
-
-退出条件：图在双后端驱动同一画面，Validation 检查和 CPU 图语义测试通过。此阶段不实现 Alias、多队列或执行计划缓存。
+限制与后续：仍为单队列、串行录制、单视图、单 mip/layer、单颜色附件、固定 Store；不含 Alias、多队列、并行录制、执行计划缓存、跨设备完成点或每 Pass GPU Timestamp。Full 写入是作者承诺，不能静态证明任意 Shader 覆盖。资源池达到上限且全在用时明确失败，不隐藏等待；Pool/Runtime 必须比 Graph 活得更久。完整场景阶段锚点、资源导入和 Renderer 属于 M4，本次未开始。
 
 ## M4 场景资源与基础 Renderer
 

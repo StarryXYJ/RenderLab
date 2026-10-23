@@ -21,6 +21,8 @@ struct Options
     bool headless = false;
     bool windowTest = false;
     bool rhiTest = false;
+    bool graphTest = false, graphNoCull = false, graphNoUpdate = false;
+    std::string graphDumpPath;
     bool help = false;
 };
 

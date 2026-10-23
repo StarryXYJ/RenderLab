@@ -75,6 +75,18 @@ Options ParseOptions(std::span<const std::string_view> arguments)
         {
             options.rhiTest = true;
         }
+        else if (arg == "--graph-test")
+            options.graphTest = true;
+        else if (arg == "--graph-no-cull")
+            options.graphNoCull = true;
+        else if (arg == "--graph-no-update")
+            options.graphNoUpdate = true;
+        else if (arg == "--graph-dump")
+        {
+            options.graphDumpPath = value();
+            if (options.graphDumpPath.empty())
+                throw std::invalid_argument("--graph-dump cannot be empty");
+        }
         else if (arg == "--help" || arg == "-h")
         {
             options.help = true;
@@ -109,7 +121,7 @@ Options ParseOptions(std::span<const std::string_view> arguments)
 
 std::string_view Usage()
 {
-    return "RenderLab M1 Sandbox\n"
+    return "RenderLab M3 Sandbox\n"
            "  --backend dx12|vulkan       Backend (default: dx12)\n"
            "  --adapter N                 Index from this backend's adapter list\n"
            "  --validation auto|on|off    auto warns if validation is unavailable\n"
@@ -118,6 +130,11 @@ std::string_view Usage()
            "  --window-test               Exercise resize, minimize, restore and close\n"
            "  --frames N                  Present N frames then close\n"
            "  --rhi-test                  Verify transfers, lifetime, compute and raster readback\n"
+           "  --graph-test                Verify graph/direct image equivalence and resource "
+           "reuse\n"
+           "  --graph-no-cull             Disable graph pass culling in the window demo\n"
+           "  --graph-no-update           Omit the noise update Feature pass in the window demo\n"
+           "  --graph-dump PATH           Write the first window frame graph plan as JSON\n"
            "  --output PATH               Acceptance images and data (default: out/m1)\n"
            "  --report PATH               Write a JSON capability report\n"
            "  --log PATH                  UTF-8 log (default: logs/renderlab.log)\n"

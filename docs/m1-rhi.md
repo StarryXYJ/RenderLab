@@ -77,3 +77,7 @@ PSO 在样例准备阶段创建，录制只绑定。Direct Draw、Indexed Draw�
 `--window-test` 在实际呈现过程中测试十次交换链尺寸/暂停变化，含两轮最小化与恢复；`--frames 1` 测试提交后立即退出。CTest 对两个后端均执行上述路径。截图/报告/日志留在忽略的构建树，固定测试与 Shader 源码保留在仓库。
 
 这些结果验证最小 RHI，不代表已有通用 Renderer、Shader 材质系统、完整数学库或高级 GPU 功能。状态和实际构建/硬件结果只记录于 [阶段计划](../design/phaseplan.md)。
+
+## M3 接入补充
+
+默认 Sandbox 窗口已迁入 [Render Graph](m3-rendergraph.md)，`--rhi-test` 继续使用直接 RHI 路径作为独立基线。RHI BeginRendering 支持 Color/Depth 各自的 Clear、Load、Discard，Store 固定为 Store；M1 调用保持默认 Clear。上传缓冲支持 GPU 只读用途间转换，读回缓冲支持 CopyDest/HostRead 交接及重复复制，仍需调用方满足完成要求。图内屏障完全由 Graph 生成；直接 RHI 验收继续手工声明。

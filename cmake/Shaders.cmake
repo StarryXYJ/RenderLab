@@ -54,3 +54,19 @@ foreach(backend IN ITEMS dx12 vulkan)
     endforeach()
 endforeach()
 add_custom_target(renderlab_m1_shaders ALL DEPENDS ${shader_outputs})
+
+set(graph_shader_outputs)
+foreach(backend IN ITEMS dx12 vulkan)
+    set(flags)
+    if(backend STREQUAL vulkan)
+        list(APPEND flags -spirv -fspv-target-env=vulkan1.3)
+    endif()
+    set(output "${CMAKE_BINARY_DIR}/shaders/${backend}/graph_buffers.bin")
+    add_custom_command(OUTPUT "${output}"
+        COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_BINARY_DIR}/shaders/${backend}"
+        COMMAND "${RENDERLAB_DXC}" -nologo -WX -Ges -O3 -T cs_6_0 -E CSMain ${flags}
+            -Fo "${output}" "${CMAKE_SOURCE_DIR}/shaders/m3/buffers.hlsl"
+        DEPENDS "${CMAKE_SOURCE_DIR}/shaders/m3/buffers.hlsl" VERBATIM)
+    list(APPEND graph_shader_outputs "${output}")
+endforeach()
+add_custom_target(renderlab_m3_shaders ALL DEPENDS ${graph_shader_outputs})

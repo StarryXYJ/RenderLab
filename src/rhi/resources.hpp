@@ -63,6 +63,12 @@ enum class VertexFormat
     Float3,
     Float4
 };
+enum class LoadOp
+{
+    Clear,
+    Load,
+    Discard
+};
 struct VertexAttribute
 {
     std::string semantic;

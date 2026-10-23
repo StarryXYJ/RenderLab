@@ -26,7 +26,7 @@ int Run(const sandbox::Options& options, const std::filesystem::path& shaderRoot
     if (!options.headless)
     {
         window = std::make_unique<platform::Window>(
-            "RenderLab M1 - Triangle + Compute Noise - " + options.backend, 1280, 720);
+            "RenderLab M3 - Render Graph - " + options.backend, 1280, 720);
         RENDERLAB_ASSERT(window->GetNativeSurface().window != nullptr);
     }
     rhi::DeviceOptions deviceOptions;
@@ -52,7 +52,7 @@ int Run(const sandbox::Options& options, const std::filesystem::path& shaderRoot
         std::format("Supported: rayPipeline={}, rayQuery={}, descriptorIndexing={}, meshShader={}",
                     report.supported.rayTracingPipeline, report.supported.rayQuery,
                     report.supported.descriptorIndexing, report.supported.meshShader));
-    if (window || options.rhiTest)
+    if (window || options.rhiTest || options.graphTest)
     {
         auto runtime = device->CreateRuntime();
         sandbox::RunRendering(window.get(), *device, *runtime, options, shaderRoot, logger);
