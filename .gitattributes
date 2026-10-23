@@ -1,0 +1,74 @@
+# Normalize detected text to LF, regardless of local core.autocrlf.
+* text=auto eol=lf
+
+# Repository configuration and authored source assets are text.
+.editorconfig text
+.gitattributes text
+.gitignore text
+.clang-format text
+*.md text
+*.cpp text
+*.hpp text
+*.h text
+*.hlsl text
+*.hlsli text
+*.cmake text
+CMakeLists.txt text
+*.json text
+*.jsonc text
+*.yaml text
+*.yml text
+*.cs text
+*.csproj text
+*.props text
+*.targets text
+*.slnx text
+*.ps1 text
+*.sh text
+*.shader text
+*.material text
+*.scene text
+*.rlproject text
+*.meta text
+*.gltf text
+*.svg text
+
+# Windows batch scripts use CRLF in the working tree.
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+# Preserve binary assets and dependencies byte for byte.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.webp binary
+*.ico binary
+*.bmp binary
+*.dds binary
+*.ktx binary
+*.ktx2 binary
+*.hdr binary
+*.exr binary
+*.glb binary
+*.fbx binary
+*.blend binary
+*.pdf binary
+*.zip binary
+*.7z binary
+*.dll binary
+*.exe binary
+*.lib binary
+*.a binary
+*.so binary
+*.dylib binary
+*.pdb binary
+*.spv binary
+*.dxil binary
+*.cso binary
+*.rdc binary
+*.wpix binary
+*.bin binary
+
+# Do not force *.obj to text or binary: OBJ models and compiled objects share
+# this extension. The default content detection handles both.

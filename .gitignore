@@ -1,0 +1,64 @@
+# CMake build trees and generated files.
+/build/
+/build-*/
+/out/
+/cmake-build-*/
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+install_manifest.txt
+compile_commands.json
+CMakeUserPresets.json
+.ninja_deps
+.ninja_log
+
+# Local IDE state. Keep .vscode/, solution files and CMakePresets.json trackable.
+.vs/
+.idea/
+*.suo
+*.user
+*.rsuser
+*.userosscache
+*.sln.docstates
+*.VC.db
+*.VC.db-shm
+*.VC.db-wal
+*.VC.opendb
+ipch/
+
+# C# / MSBuild output, scoped to code and tests rather than asset directories.
+/src/**/[Bb]in/
+/src/**/[Oo]bj/
+/tests/**/[Bb]in/
+/tests/**/[Oo]bj/
+/tests/**/TestResults/
+/TestResults/
+
+# Rebuildable project data, including projects under sample/.
+/Library/
+/Builds/
+/UserSettings/
+/sample/**/Library/
+/sample/**/Builds/
+/sample/**/UserSettings/
+
+# Engine-local shader/pipeline caches, diagnostics and temporary output.
+/cache/
+/.cache/
+/logs/
+/captures/
+/artifacts/
+/tmp/
+imgui.ini
+
+# OS metadata and temporary editor files.
+.DS_Store
+Thumbs.db
+Desktop.ini
+*~
+*.swp
+*.swo
+
+# Keep source assets, .meta files, build presets and dependency lockfiles.
+# Do not globally ignore .obj models, native libraries or shader binaries:
+# generated binaries belong in the output/cache directories above.
