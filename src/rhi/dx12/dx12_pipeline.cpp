@@ -177,7 +177,7 @@ std::shared_ptr<Pipeline> DxRuntime::CreatePipelineNative(PipelineDesc desc)
         state.SampleMask = UINT_MAX;
         state.RasterizerState.FillMode = D3D12_FILL_MODE_SOLID;
         state.RasterizerState.CullMode = desc.cull ? D3D12_CULL_MODE_BACK : D3D12_CULL_MODE_NONE;
-        state.RasterizerState.FrontCounterClockwise = TRUE;
+        state.RasterizerState.FrontCounterClockwise = desc.frontCounterClockwise;
         state.RasterizerState.DepthClipEnable = TRUE;
         auto& blend = state.BlendState.RenderTarget[0];
         blend.BlendEnable = desc.blend;

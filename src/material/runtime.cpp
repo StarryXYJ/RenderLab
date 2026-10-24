@@ -55,6 +55,7 @@ Prepared Runtime::Prepare(std::shared_ptr<const shader::Package> package, const 
     desc.depth = preparation.depth.value_or(pass.depth);
     desc.blend = preparation.blend.value_or(pass.blend);
     desc.cull = preparation.cull.value_or(pass.cull);
+    desc.frontCounterClockwise = preparation.frontCounterClockwise.value_or(true);
     desc.vertexStride = preparation.vertexStride;
     desc.attributes = preparation.attributes;
     for (const auto& entry : pass.entries)
@@ -129,7 +130,7 @@ Prepared Runtime::Prepare(std::shared_ptr<const shader::Package> package, const 
         binding.space = uint32_t(resource.scope);
         bindings.push_back(std::move(binding));
     }
-    result.bindings = runtime_.CreateGroup(generation->layouts.at(pass.name), std::move(bindings));
+    result.resources = std::move(bindings);
     return result;
 }
 } // namespace renderlab::material

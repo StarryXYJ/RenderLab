@@ -52,7 +52,7 @@ BuildResult CompileShader(const std::filesystem::path& source, const CompileOpti
             throw std::runtime_error("Shader build needs a target");
         auto package = std::make_shared<Package>();
         package->generation = options.generation;
-        package->definition = ParseDefinition(source);
+        package->definition = ParseDefinition(source, options.includeDirectories);
         DxcCompiler dxc;
         std::string key = std::string(GeneratorVersion) + dxc.Version();
         std::set<std::filesystem::path> dependencies;

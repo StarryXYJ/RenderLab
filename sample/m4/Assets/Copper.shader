@@ -1,0 +1,21 @@
+shader "Project/Copper"
+{
+    use "RenderLab/Scene.params";
+    material
+    {
+        [id("base_color"), color] float4 BaseColor = (1, 1, 1, 1);
+        [id("specular_color"), color] float3 SpecularColor = (0.2, 0.2, 0.2);
+        [id("shininess"), range(1, 256)] float Shininess = 32;
+        [id("base_map"), srgb] Texture2D<float4> BaseMap = white;
+        SamplerState BaseSampler = point_clamp;
+    }
+    variant Default {}
+    pass Forward
+    {
+        vertex = "Copper.hlsl:VSMain";
+        pixel = "Copper.hlsl:PSMain";
+        depth = true;
+        blend = false;
+        cull = true;
+    }
+}

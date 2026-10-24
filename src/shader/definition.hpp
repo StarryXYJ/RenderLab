@@ -104,9 +104,11 @@ struct Definition
     std::vector<Dependency> declarations;
 };
 
-/// Parse the sole author format, resolving shared modules relative to the including declaration.
-/// Throws a source-positioned error for malformed declarations, cycles or conflicting identities.
-Definition ParseDefinition(const std::filesystem::path& path);
+/// Parse the sole author format, resolving shared modules relative to their declaration, then
+/// include roots. Throws a source-positioned error for malformed declarations, cycles or
+/// conflicting identities.
+Definition ParseDefinition(const std::filesystem::path& path,
+                           const std::vector<std::filesystem::path>& includeDirectories = {});
 Type ParseType(const std::string& name, const SourceLocation& source);
 uint32_t ElementBytes(const Type& type);
 std::string ReadText(const std::filesystem::path& path);

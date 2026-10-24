@@ -92,3 +92,7 @@ GPU Driven 和路径队列都保持动态数量在 GPU 上消费。射线 Payloa
 ## Feature 实例与 Create 依赖解析
 
 用户确认 Feature 基类和流式注册，并要求注册完成后 Create、注册顺序无关。采用稳定 Feature 名称及显式依赖，在 Create 进行一次拓扑排序和阶段冲突诊断；依赖不从执行回调或尚不存在的图资源猜测。Create 无 GPU 操作，冻结组合，后续每帧 Build 才解析名称、声明 Pass。Custom/Forward 只影响初始注入，使用同一个组合器。移除旧函数式 Feature 和闭包注册入口，避免双轨 API。
+
+## M4.1–M4.2 最小场景闭环
+
+采用值类型场景与静态 glTF 导入，UUID/子资源映射保存于 .meta，Library 只作可重建缓存。Blinn–Phong 先验证矩阵、法线、颜色、材质和 Forward，PBR/HDR/阴影后置。方向光作为场景组件，可有多个；按稳定 UUID 选一个，写入共享帧常量，Lighting 库读取，不增加 CPU 单例或 LightManager。项目 Shader 复用 Core/Lighting 与 .params 生成，Material 返回绑定值以消除与 Graph 的 BindingGroup 准备重复。导入子集和身份键限制见 M4 文档。

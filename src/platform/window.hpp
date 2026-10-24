@@ -12,6 +12,21 @@ struct NativeSurface
     void* instance = nullptr;
 };
 
+enum class Key
+{
+    Forward,
+    Backward,
+    Left,
+    Right,
+    Up,
+    Down,
+    TurnLeft,
+    TurnRight,
+    LookUp,
+    LookDown,
+    Count
+};
+
 struct WindowState
 {
     uint32_t width = 0;
@@ -47,6 +62,7 @@ public:
     bool PumpEvents();
     /// Wait for input or a timeout without dispatching messages; call PumpEvents afterwards.
     void WaitForEvents(uint32_t milliseconds) const;
+    bool KeyDown(Key key) const;
     void Resize(uint32_t width, uint32_t height);
     void Minimize();
     void Restore();

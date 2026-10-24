@@ -3,6 +3,7 @@
 #include "platform/text.hpp"
 
 #include <Windows.h>
+#include <array>
 #include <memory>
 #include <stdexcept>
 
@@ -13,6 +14,7 @@ struct Window::Impl
     HINSTANCE instance = GetModuleHandleW(nullptr);
     HWND window = nullptr;
     WindowState state;
+    std::array<bool, static_cast<size_t>(Key::Count)> keys{};
 
     static LRESULT CALLBACK Procedure(HWND window, UINT message, WPARAM wParam, LPARAM lParam)
     {
@@ -27,6 +29,19 @@ struct Window::Impl
         {
             switch (message)
             {
+            case WM_KEYDOWN:
+            case WM_KEYUP:
+            {
+                const std::array<WPARAM, 10> codes{'W', 'S',     'A',      'D',   'E',
+                                                   'Q', VK_LEFT, VK_RIGHT, VK_UP, VK_DOWN};
+                for (size_t i = 0; i < codes.size(); ++i)
+                    if (wParam == codes[i])
+                        self->keys[i] = message == WM_KEYDOWN;
+                break;
+            }
+            case WM_KILLFOCUS:
+                self->keys.fill(false);
+                break;
             case WM_CLOSE:
                 // Let the host retire the device while its HWND is still valid.
                 self->state.closeRequested = true;
@@ -61,6 +76,12 @@ struct Window::Impl
         }
     }
 };
+
+bool Window::KeyDown(Key key) const
+{
+    const auto index = static_cast<size_t>(key);
+    return index < impl_->keys.size() && impl_->keys[index];
+}
 
 Window::Window(std::string_view title, uint32_t width, uint32_t height)
 {

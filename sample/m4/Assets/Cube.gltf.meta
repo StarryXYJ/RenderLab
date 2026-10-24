@@ -1,0 +1,14 @@
+{
+  "version": 1,
+  "id": "b4748e75e72a5dba8d4439fa86854c92",
+  "dependencies": {
+    "Cube.bin": "f67be0e29ee55c89869a05d9e06a4ae4",
+    "Checker.png": "76162187b87d5c7181f1ff1c70e9f99c"
+  },
+  "subresources": {
+    "mesh:Cube/primitive:0": "a0712bbe170d5800b231054b445cddab",
+    "material:Checker": "724bed1a90285b9d933f9a5abbe5e9af",
+    "material:default": "ffadbeaa85445467b49e26ad6591f6a6",
+    "node:Cube": "795e98361ad25c78b3574338aadfa425"
+  }
+}

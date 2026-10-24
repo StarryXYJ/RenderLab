@@ -38,7 +38,7 @@ void VerifyMaterialCompute(rhi::Runtime& runtime, material::Runtime& materials,
     commands->Barrier(results, State::Undefined, State::Storage);
     commands->Barrier(outputTexture, State::Undefined, State::Storage);
     commands->Bind(compute.pipeline);
-    commands->Bind(compute.bindings);
+    commands->Bind(runtime.CreateGroup(compute.pipeline->desc.layout, compute.resources));
     commands->Compute(1, 1);
     commands->Barrier(results, State::Storage, State::Storage);
     commands->Barrier(outputTexture, State::Storage, State::Storage);

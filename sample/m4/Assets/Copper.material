@@ -1,0 +1,46 @@
+{
+  "version": 1,
+  "shader": "Project/Copper",
+  "variant": "Default",
+  "values": {
+    "base_color": {
+      "type": "float4",
+      "count": 1,
+      "array": false,
+      "value": [
+        0.55,
+        0.14,
+        0.06,
+        1
+      ]
+    },
+    "specular_color": {
+      "type": "float3",
+      "count": 1,
+      "array": false,
+      "value": [
+        0.4,
+        0.4,
+        0.4
+      ]
+    },
+    "shininess": {
+      "type": "float",
+      "count": 1,
+      "array": false,
+      "value": [
+        64
+      ]
+    }
+  },
+  "resources": {
+    "base_map": {
+      "type": "Texture2D<float4>",
+      "reference": "white"
+    },
+    "BaseSampler": {
+      "type": "SamplerState",
+      "reference": "point_clamp"
+    }
+  }
+}

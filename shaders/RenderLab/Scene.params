@@ -1,0 +1,16 @@
+[scope(frame)] cbuffer Frame
+{
+    float4x4 View = (1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1);
+    float4x4 Projection = (1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1);
+    float4x4 ViewProjection = (1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1);
+    float4 CameraPosition = (0, 0, 0, 1);
+    float4 MainLightDirection = (0, 0, 1, 0);
+    float4 MainLightColor = (0, 0, 0, 0);
+    float4 AmbientColor = (0.035, 0.035, 0.035, 0);
+}
+[scope(draw)] cbuffer Draw
+{
+    float4x4 ObjectToWorld = (1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1);
+    float4x4 NormalToWorld = (1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1);
+    float4x4 PreviousObjectToWorld = (1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1);
+}

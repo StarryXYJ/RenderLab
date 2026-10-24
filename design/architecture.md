@@ -194,13 +194,15 @@ DX12 与 Vulkan 的 DrawID、InstanceID、firstInstance 和间接 Count 能力�
 
 Hi-Z 使用跨帧历史时，规定首帧、相机跳变和分辨率变化下的失效策略。GPU Scene 的更新、剔除结果和间接参数全部进入 Render Graph 访问声明。
 
+M4 的首个场景闭环见 [项目、场景与 Blinn–Phong](../docs/m4-scene.md)。Scene 使用值类型组件和层级 Transform，不引入 ECS 管理器。DirectionalLight 可有多个，按稳定 UUID 选择一个启用对象，其世界旋转、颜色和强度提取到共享 Frame 常量。HLSL Lighting 读取全局主光，点光源和面光源后置。
+
 ## Shader 与材质
 
 ### Shader 工具链
 
 ShaderDefinition 是作者维护的 Shader 资产，包含 HLSL 来源、入口点、材质属性、合法变体、Pass 角色和状态选择。M2 采用简洁声明语法作为唯一作者入口，共享参数模块由 use 引入，HLSL 函数与工具仍由普通 Include 组织。内部描述统一，不并存另一份手写 JSON 元数据。
 
-普通 material 数值自动生成 Material 常量缓冲，显式 cbuffer 声明共享数据块及 frame/view/draw/pass 作用域。参数 Schema、绑定映射和 PackingPlan 从同一声明生成。Shader 编译层仅产生 CPU 程序/接口数据，不依赖 RHI Device；DXC 处理 HLSL 预处理、Include 和程序编译，反射验证保留字段与资源接口。生成头按编译任务隔离，缓存覆盖共享声明及传递 Include。后台编译成功后，由设备所有线程在准备阶段创建 GPU 对象并在帧边界整体切换，失败保留旧代。
+普通 material 数值自动生成 Material 常量缓冲，显式 cbuffer 声明共享数据块及 frame/view/draw/pass 作用域。参数 Schema、绑定映射和 PackingPlan 从同一声明生成。Shader 编译层仅产生 CPU 程序/接口数据，不依赖 RHI Device；DXC 处理 HLSL 预处理、Include 和程序编译，反射验证保留字段与资源接口。生成头按编译任务隔离，缓存覆盖共享声明及传递 Include。后台编译成功后，由设备所有线程在准备阶段创建 GPU 对象并在帧边界整体切换，失败保留旧代。Material 返回不可变绑定值：直接 RHI 建立绑定组，Graph 适配先导入并声明资源，由 Graph 录制时组装绑定，避免重复准备。
 
 M2 的具体声明、布局和准备/发布接口见 [Shader 与材质](../docs/m2-shader-material.md)。RHI 的唯一 CreatePipeline 入口按不可变程序/布局身份、顶点布局、附件格式和完整状态查找有界弱引用缓存。数值/纹理修改创建不可变绑定快照，静态功能选择有限具名变体，新代编译包创建新的程序身份。热重载通过 LiveMaterial 成组 Stage，调用方在帧边界 Publish；依赖监视器只负责请求编译，不进入 RHI。
 
@@ -403,7 +405,7 @@ Assets 和元数据、ProjectSettings、Source、项目文件纳入版本管理�
 
 投影、Viewport Y、屏幕 UV 和正面绕序统一在平台适配规则中处理，上层不分散添加 Vulkan 或 DX12 修正。纹理上传、渲染附件和屏幕采样的原点转换用测试图验证。深度重建、阴影和 Hi-Z 都遵守相同约定。
 
-光照在统一的线性工作空间计算，颜色纹理按声明进行 sRGB 解码，法线和普通数据纹理使用线性数据。HDR 中间结果在输出阶段进行曝光、Tone Mapping 和显示编码。
+光照在统一的线性工作空间计算，颜色纹理按声明进行 sRGB 解码，法线和普通数据纹理使用线性数据。M4.2 先用 Blinn–Phong/sRGB LDR 验证场景，Core/Lighting HLSL 库共用 .params Frame/Draw 声明，不重复手写 cbuffer。HDR 中间结果在输出阶段进行曝光、Tone Mapping 和显示编码。
 
 Object、View、Projection 的历史值、相机 jitter 和运动矢量采用明确语义。即使 TAA 后置，也避免在接口中混淆当前与历史变换。
 

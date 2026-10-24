@@ -175,7 +175,8 @@ std::shared_ptr<Pipeline> VulkanRuntime::CreatePipelineNative(PipelineDesc desc)
         raster.polygonMode = VK_POLYGON_MODE_FILL;
         raster.cullMode = desc.cull ? VK_CULL_MODE_BACK_BIT : VK_CULL_MODE_NONE;
         // Negative viewport height matches DX12's clip-space Y; CCW is expressed in clip space.
-        raster.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
+        raster.frontFace =
+            desc.frontCounterClockwise ? VK_FRONT_FACE_COUNTER_CLOCKWISE : VK_FRONT_FACE_CLOCKWISE;
         raster.lineWidth = 1;
         VkPipelineMultisampleStateCreateInfo sample{};
         sample.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;

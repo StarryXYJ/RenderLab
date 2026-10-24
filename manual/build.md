@@ -162,6 +162,27 @@ ctest --test-dir out/build/windows-debug -R 'rendergraph.contracts|gpu.*.graph' 
 
 `--graph-test` 输出 `后端/triangle-noise.bmp`、`noise.bmp`、`noise.rgba`、六帧的 `plan-N.json` 、`buffer-plan.json` 和 `forward-plan.json`。正常更新时，全部颜色字节与直接 RHI 绘制比较；固定噪声保持既有 SHA-256。缓冲探针验证上传、复制、常量、结构化缓冲的两次 Compute 和读回。普通 Forward 另检查透明混合、只读深度与独立阶段快照。CPU 合约检查 Create 的乱序注册、依赖缺失/重名/环和已创建组合隔离。详细 API 与限制见 [Render Graph 与 Feature](../docs/m3-rendergraph.md)。
 
+## M4 项目场景
+
+构建 Sandbox 会同步内置库到 exe 附近 shaders/RenderLab；修改 HLSL 后重新构建即可更新，不需要修改 C++ 来触发链接。
+
+```powershell
+./out/build/windows-debug/renderlab_sandbox.exe --backend dx12 --validation on --project sample/m4/RenderLab.rlproject
+./out/build/windows-debug/renderlab_sandbox.exe --backend vulkan --validation on --project sample/m4/RenderLab.rlproject
+./out/build/windows-debug/renderlab_sandbox.exe --backend dx12 --headless --validation on --project sample/m4/RenderLab.rlproject --output out/m4
+ctest --test-dir out/build/windows-debug -R 'content.contracts|gpu.*.scene' --output-on-failure
+```
+
+项目窗口用 WASD 移动，Q/E 下降/上升；上下方向键绕相机自身右轴俯仰，左右方向键绕父空间上轴转向。失焦时清空按键。无 --project 仍是 Custom Graph Demo。--project --headless 输出一帧及 scene-plan.json；--scene-test 在参考场景上增加行为验收，普通项目无需开启。
+
+参考项目包含原创 Cube/Sphere glTF、棋盘纹理、项目 Copper Shader/材质、父子对象和两个方向光；只选 UUID 最小的启用光。远处立方体用于剔除验证。数据格式与范围见 [M4 场景](../docs/m4-scene.md)。
+
+```powershell
+./out/build/windows-debug/renderlab_shaderc.exe sample/m4/Assets/Copper.shader --include shaders --cache out/m4/shader-cache --schema out/m4/copper-schema.json
+```
+
+Assets 与 .meta 纳入版本管理，Library 可以清除重建。不要原地改写命令正在使用的 Upload 数据。资产首次上传可等待，普通帧仍使用现有完成点与帧管理。
+
 ## 验证结果与边界
 
 M0 的设备初始化历史见 [M0 基础模块](../docs/m0-foundation.md)。M1 的 API、生命周期、分配预算和支持范围见 [最小 RHI](../docs/m1-rhi.md)，各阶段的实际验收配置与结论统一见 [阶段计划](../design/phaseplan.md)。
