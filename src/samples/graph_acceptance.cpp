@@ -13,6 +13,8 @@
 
 namespace renderlab::samples
 {
+void VerifyForward(rhi::Runtime&, const std::filesystem::path&, const std::filesystem::path&,
+                   Logger&, const std::shared_ptr<rhi::Buffer>&);
 namespace
 {
 using namespace rhi;
@@ -97,6 +99,7 @@ void VerifyGraph(rhi::Runtime& runtime, const std::filesystem::path& shaders,
         }
     }
     VerifyGraphBuffers(runtime, shaders, output);
+    VerifyForward(runtime, shaders, output, logger, baseline);
     const auto stats = demo.Stats();
     Require(stats.reuses > 0 && stats.allocations < 12,
             "Graph resource pool did not reuse completed frame resources");

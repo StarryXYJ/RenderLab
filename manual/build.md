@@ -135,23 +135,23 @@ ctest --test-dir out/build/windows-m2-debug --output-on-failure
 
 ## Render Graph 与 Feature
 
-默认 Sandbox 窗口现在使用 M3 每帧 Feature/Graph 路径。`--rhi-test` 保留直接 RHI 验收，`--graph-test` 验证图路径与直接路径的图像一致性。
+默认 Sandbox 窗口使用 Custom Feature 注册 → Create → 每帧 Graph 构图，不注入 Forward 内置流程。`--rhi-test` 保留直接 RHI 验收，`--graph-test` 验证图路径与直接路径的图像一致性。
 
 ```powershell
-./out/build/windows-m2-debug/renderlab_sandbox.exe --backend dx12 --validation on --graph-dump out/m3/frame.json
-./out/build/windows-m2-debug/renderlab_sandbox.exe --backend vulkan --validation on --graph-no-update
-./out/build/windows-m2-debug/renderlab_sandbox.exe --backend vulkan --validation on --graph-no-cull --frames 60
+./out/build/windows-debug/renderlab_sandbox.exe --backend dx12 --validation on --graph-dump out/m3/frame.json
+./out/build/windows-debug/renderlab_sandbox.exe --backend vulkan --validation on --graph-no-update
+./out/build/windows-debug/renderlab_sandbox.exe --backend vulkan --validation on --graph-no-cull --frames 60
 
-./out/build/windows-m2-debug/renderlab_sandbox.exe --backend dx12 --headless --validation on --graph-test --output out/m3 --log out/m3/dx12.log
-./out/build/windows-m2-debug/renderlab_sandbox.exe --backend vulkan --headless --validation on --graph-test --output out/m3 --log out/m3/vulkan.log
-ctest --test-dir out/build/windows-m2-debug -R 'rendergraph.contracts|gpu.*.graph' --output-on-failure
+./out/build/windows-debug/renderlab_sandbox.exe --backend dx12 --headless --validation on --graph-test --output out/m3 --log out/m3/dx12.log
+./out/build/windows-debug/renderlab_sandbox.exe --backend vulkan --headless --validation on --graph-test --output out/m3 --log out/m3/vulkan.log
+ctest --test-dir out/build/windows-debug -R 'rendergraph.contracts|gpu.*.graph' --output-on-failure
 ```
 
-这里沿用已有隔离构建目录，也可使用标准 windows-debug/windows-release 预设构建最新代码。M3 完整测试为 19 项：7 项 CPU/CLI 和 12 项 GPU。`--graph-no-update` 省略噪声更新 Pass，画面显示未经过 XOR 更新的噪声；`--graph-no-cull` 让无消费者的测试 Feature 也执行。两者用于确认功能与图编译选择，不改变执行器。
+示例使用标准 windows-debug 预设，也可使用已有隔离构建目录或 windows-release。M3 完整测试为 19 项：7 项 CPU/CLI 和 12 项 GPU。`--graph-no-update` 省略噪声更新 Pass，画面显示未经过 XOR 更新的噪声；`--graph-no-cull` 让无消费者的测试 Feature 也执行。两者用于确认功能与图编译选择，不改变执行器。
 
 `--graph-dump` 导出首个窗口帧的计划，包含 Pass 来源、存活/剔除原因、资源版本、依赖、屏障、生命周期和 CPU 编译/准备/录制耗时。GPU Capture 可以通过每个 Pass 的 Marker 定位工作；当前不提供每 Pass GPU Timestamp。
 
-`--graph-test` 输出 `后端/triangle-noise.bmp`、`noise.bmp`、`noise.rgba`、六帧的 `plan-N.json` 和 `buffer-plan.json`。正常更新时，全部颜色字节与直接 RHI 绘制比较；固定噪声保持既有 SHA-256。缓冲探针验证上传、复制、常量、结构化缓冲的两次 Compute 和读回。详细 API 与限制见 [Render Graph 与 Feature](../docs/m3-rendergraph.md)。
+`--graph-test` 输出 `后端/triangle-noise.bmp`、`noise.bmp`、`noise.rgba`、六帧的 `plan-N.json` 、`buffer-plan.json` 和 `forward-plan.json`。正常更新时，全部颜色字节与直接 RHI 绘制比较；固定噪声保持既有 SHA-256。缓冲探针验证上传、复制、常量、结构化缓冲的两次 Compute 和读回。普通 Forward 另检查透明混合、只读深度与独立阶段快照。CPU 合约检查 Create 的乱序注册、依赖缺失/重名/环和已创建组合隔离。详细 API 与限制见 [Render Graph 与 Feature](../docs/m3-rendergraph.md)。
 
 ## 验证结果与边界
 

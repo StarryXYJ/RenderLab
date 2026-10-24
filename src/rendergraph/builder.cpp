@@ -1,6 +1,7 @@
 #include "rendergraph/detail/graph_impl.hpp"
 
 #include <algorithm>
+#include <type_traits>
 
 namespace renderlab::rendergraph
 {
@@ -29,28 +30,41 @@ void Graph::Impl::AddAccess(uint32_t pass, detail::Access access)
     if (found != accesses.end())
     {
         Require(!access.write && !found->write && found->input == access.input &&
-                    found->use == access.use && found->bufferRange == access.bufferRange,
+                    found->use == access.use,
                 "Conflicting access in pass " + passes[pass].name +
                     "; declare one range/use or preserving write for ReadWrite");
+        if (!resources[access.resource].isTexture)
+        {
+            const auto end = std::max(found->bufferRange.offset + found->bufferRange.size,
+                                      access.bufferRange.offset + access.bufferRange.size);
+            found->bufferRange.offset =
+                std::min(found->bufferRange.offset, access.bufferRange.offset);
+            found->bufferRange.size = end - found->bufferRange.offset;
+        }
         return;
     }
     accesses.push_back(access);
 }
-void PassBuilder::Read(TextureHandle handle, Use use, TextureRange range)
+TextureHandle PassBuilder::ReadTexture(TextureHandle handle, std::optional<Use> requested,
+                                       TextureRange range)
 {
     auto& g = *graph_.impl_;
     g.Builder(pass_);
     auto& r = g.Validate(handle.graph, handle.resource, handle.version, true);
     Range(r, range);
+    const auto use = requested.value_or(DefaultRead(r.isTexture));
     g.ValidateUse(pass_, r, use, false);
     g.AddAccess(pass_, {handle.resource, handle.version, handle.version, use, true, false});
+    return handle;
 }
-void PassBuilder::Read(BufferHandle handle, Use use, BufferRange range)
+BufferHandle PassBuilder::ReadBuffer(BufferHandle handle, std::optional<Use> requested,
+                                     BufferRange range)
 {
     auto& g = *graph_.impl_;
     g.Builder(pass_);
     auto& r = g.Validate(handle.graph, handle.resource, handle.version, false);
     Range(r, range);
+    const auto use = requested.value_or(DefaultRead(r.isTexture));
     g.ValidateUse(pass_, r, use, false);
     if (!range.size)
         range.size = r.bufferDesc.size - range.offset;
@@ -58,6 +72,7 @@ void PassBuilder::Read(BufferHandle handle, Use use, BufferRange range)
                 (range.offset == 0 && range.size == r.bufferDesc.size),
             "Geometry bindings currently require whole-buffer declarations");
     g.AddAccess(pass_, {handle.resource, handle.version, handle.version, use, true, false, range});
+    return handle;
 }
 TextureHandle PassBuilder::Write(TextureHandle handle, Use use, Coverage coverage,
                                  TextureRange range)
@@ -104,12 +119,12 @@ TextureHandle PassBuilder::Color(TextureHandle handle, rhi::LoadOp load, std::ar
             "Raster pass supports one color attachment");
     Require(load != rhi::LoadOp::Discard,
             "Use Clear or Load; discard with partial raster coverage is not initialized");
-    auto next =
-        Write(handle, Use::Color, load == rhi::LoadOp::Load ? Coverage::Preserve : Coverage::Full);
+    auto next = Write(handle, Use::Color,
+                      load == rhi::LoadOp::Load ? Coverage::Preserve : Coverage::Full, {});
     pass.color = detail::Attachment{handle.resource, load, clear};
     return next;
 }
-TextureHandle PassBuilder::Depth(TextureHandle handle, rhi::LoadOp load)
+TextureHandle PassBuilder::Depth(TextureHandle handle, rhi::LoadOp load, DepthAccess access)
 {
     auto& g = *graph_.impl_;
     g.Builder(pass_);
@@ -117,8 +132,13 @@ TextureHandle PassBuilder::Depth(TextureHandle handle, rhi::LoadOp load)
     Require(pass.kind == PassKind::Raster && !pass.depth,
             "Raster pass supports one depth attachment");
     Require(load != rhi::LoadOp::Discard, "Depth attachment requires Clear or Load");
-    auto next =
-        Write(handle, Use::Depth, load == rhi::LoadOp::Load ? Coverage::Preserve : Coverage::Full);
+    const bool readOnly = access == DepthAccess::ReadOnly;
+    Require(!readOnly || load == rhi::LoadOp::Load, "Read-only depth requires Load");
+    auto next = readOnly
+                    ? ReadTexture(handle, Use::DepthRead)
+                    : Write(handle, Use::Depth,
+                            load == rhi::LoadOp::Load ? Coverage::Preserve : Coverage::Full, {});
+    pass.depthReadOnly = readOnly;
     pass.depth = detail::Attachment{handle.resource, load, {}};
     return next;
 }
@@ -127,5 +147,119 @@ void PassBuilder::SideEffect()
     auto& g = *graph_.impl_;
     g.Builder(pass_);
     g.passes[pass_].sideEffect = true;
+}
+
+Use PassBuilder::DefaultRead(bool texture) const
+{
+    auto& g = *graph_.impl_;
+    g.Builder(pass_);
+    return g.passes[pass_].kind == PassKind::Copy ? Use::CopySource
+           : texture                              ? Use::Sampled
+                                                  : Use::ShaderRead;
+}
+Use PassBuilder::DefaultWrite() const
+{
+    auto& g = *graph_.impl_;
+    g.Builder(pass_);
+    return g.passes[pass_].kind == PassKind::Copy ? Use::CopyDestination : Use::Storage;
+}
+TextureHandle PassBuilder::ReadTexture(std::string_view name, std::optional<Use> use,
+                                       TextureRange range)
+{
+    return ReadTexture(graph_.GetTexture(name), use, range);
+}
+BufferHandle PassBuilder::ReadBuffer(std::string_view name, std::optional<Use> use,
+                                     BufferRange range)
+{
+    return ReadBuffer(graph_.GetBuffer(name), use, range);
+}
+TextureHandle PassBuilder::WriteTexture(TextureHandle h, std::optional<Use> use, TextureRange range)
+{
+    return Write(h, use.value_or(DefaultWrite()), Coverage::Full, range);
+}
+TextureHandle PassBuilder::WriteTexture(std::string_view name, std::optional<Use> use,
+                                        TextureRange range)
+{
+    return WriteTexture(graph_.GetTexture(name), use, range);
+}
+BufferHandle PassBuilder::WriteBuffer(BufferHandle h, std::optional<Use> use, BufferRange range)
+{
+    return Write(h, use.value_or(DefaultWrite()), Coverage::Full, range);
+}
+BufferHandle PassBuilder::WriteBuffer(std::string_view name, std::optional<Use> use,
+                                      BufferRange range)
+{
+    return WriteBuffer(graph_.GetBuffer(name), use, range);
+}
+TextureHandle PassBuilder::ReadWriteTexture(TextureHandle h, TextureRange range)
+{
+    return Write(h, Use::Storage, Coverage::Preserve, range);
+}
+TextureHandle PassBuilder::ReadWriteTexture(std::string_view name, TextureRange range)
+{
+    return ReadWriteTexture(graph_.GetTexture(name), range);
+}
+BufferHandle PassBuilder::ReadWriteBuffer(BufferHandle h, BufferRange range)
+{
+    return Write(h, Use::Storage, Coverage::Preserve, range);
+}
+BufferHandle PassBuilder::ReadWriteBuffer(std::string_view name, BufferRange range)
+{
+    return ReadWriteBuffer(graph_.GetBuffer(name), range);
+}
+PassHandle PassBuilder::Handle() const
+{
+    return graph_.GetPass(pass_);
+}
+PassHandle PassBuilder::Finish(detail::Callback callback)
+{
+    auto& g = *graph_.impl_;
+    g.Builder(pass_);
+    Require(callback.index() == static_cast<size_t>(g.passes[pass_].kind) + 1,
+            "Callback kind does not match pass");
+    const bool valid = std::visit(
+        [](const auto& fn)
+        {
+            if constexpr (std::is_same_v<std::decay_t<decltype(fn)>, std::monostate>)
+                return false;
+            else
+                return bool(fn);
+        },
+        callback);
+    Require(valid, "Empty Execute callback");
+    g.passes[pass_].callback = std::move(callback);
+    g.active = UINT32_MAX;
+    return {g.id, pass_};
+}
+TextureHandle RasterPassBuilder::ColorTarget(TextureHandle h, rhi::LoadOp load,
+                                             std::array<float, 4> clear)
+{
+    return Color(h, load, clear);
+}
+TextureHandle RasterPassBuilder::ColorTarget(std::string_view name, rhi::LoadOp load,
+                                             std::array<float, 4> clear)
+{
+    return ColorTarget(graph_.GetTexture(name), load, clear);
+}
+TextureHandle RasterPassBuilder::DepthTarget(TextureHandle h, rhi::LoadOp load, DepthAccess access)
+{
+    return Depth(h, load, access);
+}
+TextureHandle RasterPassBuilder::DepthTarget(std::string_view name, rhi::LoadOp load,
+                                             DepthAccess access)
+{
+    return DepthTarget(graph_.GetTexture(name), load, access);
+}
+PassHandle RasterPassBuilder::Execute(std::function<void(RasterContext&)> fn)
+{
+    return Finish(std::move(fn));
+}
+PassHandle ComputePassBuilder::Execute(std::function<void(ComputeContext&)> fn)
+{
+    return Finish(std::move(fn));
+}
+PassHandle CopyPassBuilder::Execute(std::function<void(CopyContext&)> fn)
+{
+    return Finish(std::move(fn));
 }
 } // namespace renderlab::rendergraph

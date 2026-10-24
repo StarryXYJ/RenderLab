@@ -2,6 +2,7 @@
 
 #include "core/file_io.hpp"
 #include "platform/text.hpp"
+#include "renderer/pipeline.hpp"
 #include "rhi/upload.hpp"
 #include "samples/detail/graph_features.hpp"
 #include "samples/shader_io.hpp"
@@ -52,17 +53,19 @@ GraphReadback GraphDemo::Render(std::shared_ptr<rhi::Texture> target, rhi::State
 {
     Prepare(target->desc.format);
     rendergraph::Graph graph;
-    const detail::NoisePrograms noisePrograms{computeLayout_, initialize_, update_};
-    const auto noise =
-        detail::AddNoiseFeature(graph, noisePrograms, 257, 131, settings.updateNoise);
+    const detail::NoisePrograms noisePrograms{initialize_, update_};
+    graph.ImportTexture("CameraColor", target, {initial, initial != rhi::State::Undefined, 0});
+    graph.CreateTexture("CameraDepth",
+                        {target->desc.width, target->desc.height, rhi::Format::D32, false, true});
+    auto noise = std::make_shared<detail::NoiseFeature>(noisePrograms, "Noise", 257, 131,
+                                                        settings.updateNoise);
+    auto scene = std::make_shared<detail::DemoSceneFeature>(
+        detail::RasterPrograms{pipelines_.at(target->desc.format), sampler_}, geometry_);
+    auto pipeline = renderer::CreatePipeline(renderer::PipelineType::Custom);
+    pipeline.AddFeature(scene).AddFeature(noise);
     if (settings.unusedFeature)
-        detail::AddNoiseFeature(graph, noisePrograms, 8, 8, false);
-    auto color = graph.Import(target, {initial, initial != rhi::State::Undefined, 0});
-    const auto depth = graph.Create(rhi::TextureDesc{
-        target->desc.width, target->desc.height, rhi::Format::D32, false, true, "Feature.Depth"});
-    auto scene = detail::AddSceneFeature(
-        graph, {rasterLayout_, pipelines_.at(target->desc.format), sampler_}, noise, color, depth,
-        geometry_);
+        pipeline.AddFeature(
+            std::make_shared<detail::NoiseFeature>(noisePrograms, "UnusedNoise", 8, 8, false));
     GraphReadback result;
     if (readback)
     {
@@ -71,20 +74,21 @@ GraphReadback GraphDemo::Render(std::shared_ptr<rhi::Texture> target, rhi::State
         result.color = runtime_.CreateBuffer(
             {uint64_t(rhi::TextureRowPitch(target->desc.width)) * target->desc.height,
              rhi::Memory::Readback, "Graph.Color.Readback"});
-        detail::AddReadbackFeature(graph, noise, result.noise, rhi::TextureRowPitch(257));
-        detail::AddReadbackFeature(graph, scene.color, result.color,
-                                   rhi::TextureRowPitch(target->desc.width));
+        pipeline.AddFeature(std::make_shared<detail::ReadbackFeature>("Noise", result.noise,
+                                                                      rhi::TextureRowPitch(257)));
+        pipeline.AddFeature(std::make_shared<detail::ReadbackFeature>(
+            "CameraColor", result.color, rhi::TextureRowPitch(target->desc.width)));
     }
-    graph.Export(scene.color, presentation ? rhi::State::Present : rhi::State::CopySource);
+    const auto created = pipeline.Create();
+    created.Build(graph, {});
+    graph.Export("CameraColor", presentation ? rhi::State::Present : rhi::State::CopySource);
     graph.Compile({settings.cull});
-    graph.Prepare(pool_);
-    graph.Record();
+    result.completion = graph.Execute(pool_, presentation).completion;
     if (!dump.empty())
     {
         const auto text = graph.GetPlan().ToJson();
         WriteFileAtomically(dump, std::as_bytes(std::span{text.data(), text.size()}));
     }
-    result.completion = graph.Submit(presentation).completion;
     return result;
 }
 } // namespace renderlab::samples

@@ -2,13 +2,15 @@
 
 #include "rendergraph/context.hpp"
 
-#include <concepts>
+#include <array>
+#include <cstdint>
 #include <functional>
 #include <memory>
+#include <optional>
 #include <source_location>
 #include <string>
-#include <type_traits>
-#include <utility>
+#include <string_view>
+#include <variant>
 
 namespace renderlab::rhi
 {
@@ -16,60 +18,94 @@ class Swapchain;
 }
 namespace renderlab::rendergraph
 {
-class Pool;
 class Graph;
+class Pool;
+namespace detail
+{
+using Callback =
+    std::variant<std::monostate, std::function<void(RasterContext&)>,
+                 std::function<void(ComputeContext&)>, std::function<void(CopyContext&)>>;
+}
+/** @brief Immediate resource declarations. Execute seals the builder; never retain it across
+ * graphs. */
 class PassBuilder
 {
 public:
-    void Read(TextureHandle handle, Use use, TextureRange range = {});
-    void Read(BufferHandle handle, Use use, BufferRange range = {});
-    TextureHandle Write(TextureHandle previous, Use use, Coverage coverage = Coverage::Full,
-                        TextureRange range = {});
-    BufferHandle Write(BufferHandle previous, Use use, Coverage coverage = Coverage::Full,
-                       BufferRange range = {});
-    TextureHandle Color(TextureHandle previous, rhi::LoadOp load = rhi::LoadOp::Clear,
-                        std::array<float, 4> clear = {.02f, .02f, .02f, 1});
-    TextureHandle Depth(TextureHandle previous, rhi::LoadOp load = rhi::LoadOp::Clear);
+    PassBuilder(const PassBuilder&) = delete;
+    PassBuilder& operator=(const PassBuilder&) = delete;
+    PassBuilder(PassBuilder&&) = default;
+    TextureHandle ReadTexture(TextureHandle handle, std::optional<Use> use = {},
+                              TextureRange range = {});
+    TextureHandle ReadTexture(std::string_view name, std::optional<Use> use = {},
+                              TextureRange range = {});
+    BufferHandle ReadBuffer(BufferHandle handle, std::optional<Use> use = {},
+                            BufferRange range = {});
+    BufferHandle ReadBuffer(std::string_view name, std::optional<Use> use = {},
+                            BufferRange range = {});
+    TextureHandle WriteTexture(TextureHandle handle, std::optional<Use> use = {},
+                               TextureRange range = {});
+    TextureHandle WriteTexture(std::string_view name, std::optional<Use> use = {},
+                               TextureRange range = {});
+    BufferHandle WriteBuffer(BufferHandle handle, std::optional<Use> use = {},
+                             BufferRange range = {});
+    BufferHandle WriteBuffer(std::string_view name, std::optional<Use> use = {},
+                             BufferRange range = {});
+    TextureHandle ReadWriteTexture(TextureHandle handle, TextureRange range = {});
+    TextureHandle ReadWriteTexture(std::string_view name, TextureRange range = {});
+    BufferHandle ReadWriteBuffer(BufferHandle handle, BufferRange range = {});
+    BufferHandle ReadWriteBuffer(std::string_view name, BufferRange range = {});
     void SideEffect();
+    PassHandle Handle() const;
 
-private:
-    friend class Graph;
+protected:
     PassBuilder(Graph& graph, uint32_t pass) : graph_(graph), pass_(pass) {}
+    PassHandle Finish(detail::Callback callback);
+    TextureHandle Write(TextureHandle, Use, Coverage, TextureRange);
+    BufferHandle Write(BufferHandle, Use, Coverage, BufferRange);
+    Use DefaultRead(bool texture) const;
+    Use DefaultWrite() const;
+    TextureHandle Color(TextureHandle, rhi::LoadOp, std::array<float, 4>);
+    TextureHandle Depth(TextureHandle, rhi::LoadOp, DepthAccess);
     Graph& graph_;
     uint32_t pass_;
 };
-namespace detail
+class RasterPassBuilder final : public PassBuilder
 {
-struct Callbacks
-{
-    virtual ~Callbacks() = default;
-    virtual void Prepare(PrepareContext&) = 0;
-    virtual void Execute(ExecuteContext&) const = 0;
+public:
+    TextureHandle ColorTarget(TextureHandle handle, rhi::LoadOp load = rhi::LoadOp::Clear,
+                              std::array<float, 4> clear = {.02f, .02f, .02f, 1});
+    TextureHandle ColorTarget(std::string_view name, rhi::LoadOp load = rhi::LoadOp::Clear,
+                              std::array<float, 4> clear = {.02f, .02f, .02f, 1});
+    TextureHandle DepthTarget(TextureHandle handle, rhi::LoadOp load = rhi::LoadOp::Clear,
+                              DepthAccess access = DepthAccess::ReadWrite);
+    TextureHandle DepthTarget(std::string_view name, rhi::LoadOp load = rhi::LoadOp::Clear,
+                              DepthAccess access = DepthAccess::ReadWrite);
+    PassHandle Execute(std::function<void(RasterContext&)> callback);
+
+private:
+    friend class Graph;
+    RasterPassBuilder(Graph& g, uint32_t p) : PassBuilder(g, p) {}
 };
-struct NoPrepare
+class ComputePassBuilder final : public PassBuilder
 {
-    template <class Data> void operator()(Data&, PrepareContext&) const {}
+public:
+    PassHandle Execute(std::function<void(ComputeContext&)> callback);
+
+private:
+    friend class Graph;
+    ComputePassBuilder(Graph& g, uint32_t p) : PassBuilder(g, p) {}
 };
-template <class Data, class ExecuteFn, class PrepareFn> struct PassCallbacks final : Callbacks
+class CopyPassBuilder final : public PassBuilder
 {
-    Data data{};
-    ExecuteFn execute;
-    PrepareFn prepare;
-    PassCallbacks(ExecuteFn execute, PrepareFn prepare)
-        : execute(std::move(execute)), prepare(std::move(prepare))
-    {
-    }
-    void Prepare(PrepareContext& context) override
-    {
-        prepare(data, context);
-    }
-    void Execute(ExecuteContext& context) const override
-    {
-        execute(data, context);
-    }
+public:
+    PassHandle Execute(std::function<void(CopyContext&)> callback);
+
+private:
+    friend class Graph;
+    CopyPassBuilder(Graph& g, uint32_t p) : PassBuilder(g, p) {}
 };
-} // namespace detail
-/** @brief One frame, one queue, one-shot submission. Owns PassData; handles never cross graphs. */
+/** @brief One-frame resource graph. Names resolve during building; callbacks own captured values.
+ */
 class Graph final
 {
 public:
@@ -77,58 +113,50 @@ public:
     ~Graph();
     Graph(const Graph&) = delete;
     Graph& operator=(const Graph&) = delete;
-    TextureHandle Create(rhi::TextureDesc desc);
-    BufferHandle Create(rhi::BufferDesc desc);
-    TextureHandle Import(std::shared_ptr<rhi::Texture> texture, ImportInfo info);
-    BufferHandle Import(std::shared_ptr<rhi::Buffer> buffer, ImportInfo info);
-    void Export(TextureHandle handle, rhi::State state);
-    void Export(BufferHandle handle, rhi::State state);
-    template <class Data, class Setup, class ExecuteFn, class PrepareFn = detail::NoPrepare>
-    PassHandle AddPass(std::string name, PassKind kind, Setup setup, ExecuteFn execute,
-                       PrepareFn prepare = {},
-                       std::source_location source = std::source_location::current())
-    {
-        static_assert(std::default_initializable<Data> && !std::is_pointer_v<Data>);
-        static_assert(
-            std::is_empty_v<ExecuteFn> && std::is_empty_v<PrepareFn>,
-            "Deferred callbacks must be captureless; copy values into graph-owned PassData");
-        auto callbacks = std::make_unique<detail::PassCallbacks<Data, ExecuteFn, PrepareFn>>(
-            std::move(execute), std::move(prepare));
-        auto* data = &callbacks->data;
-        auto builder = BeginPass(std::move(name), kind, std::move(callbacks), source);
-        try
-        {
-            setup(builder, *data);
-        }
-        catch (...)
-        {
-            Poison();
-            throw;
-        }
-        return EndPass(builder);
-    }
-    /// Ordering only: does not retain an otherwise culled pass.
+    TextureHandle CreateTexture(std::string name, rhi::TextureDesc desc);
+    BufferHandle CreateBuffer(std::string name, rhi::BufferDesc desc);
+    TextureHandle ImportTexture(std::string name, std::shared_ptr<rhi::Texture>, ImportInfo);
+    BufferHandle ImportBuffer(std::string name, std::shared_ptr<rhi::Buffer>, ImportInfo);
+    TextureHandle GetTexture(std::string_view name) const;
+    BufferHandle GetBuffer(std::string_view name) const;
+    void SetTexture(std::string_view name, TextureHandle handle);
+    void SetBuffer(std::string_view name, BufferHandle handle);
+    rhi::TextureDesc GetTextureDesc(TextureHandle handle) const;
+    rhi::BufferDesc GetBufferDesc(BufferHandle handle) const;
+    void Export(TextureHandle, rhi::State);
+    void Export(BufferHandle, rhi::State);
+    void Export(std::string_view name, rhi::State);
+    RasterPassBuilder AddRasterPass(std::string name,
+                                    std::source_location source = std::source_location::current());
+    ComputePassBuilder
+    AddComputePass(std::string name, std::source_location source = std::source_location::current());
+    CopyPassBuilder AddCopyPass(std::string name,
+                                std::source_location source = std::source_location::current());
+    uint32_t PassCount() const;
+    PassHandle GetPass(uint32_t index) const;
+    /// Ordering only; never retains an otherwise dead pass.
     void After(PassHandle pass, PassHandle predecessor);
     void Before(PassHandle pass, PassHandle successor)
     {
         After(successor, pass);
     }
     const Plan& Compile(CompileOptions options = {});
-    void Prepare(Pool& pool);
-    void Record();
-    Submission Submit(rhi::Swapchain* presentation = nullptr);
+    Submission Execute(Pool& pool, rhi::Swapchain* presentation = nullptr);
     const Plan& GetPlan() const;
 
 private:
     friend class PassBuilder;
-    friend class PrepareContext;
-    friend class ExecuteContext;
+    friend class RasterPassBuilder;
+    friend class BindingContext;
+    friend class RasterContext;
+    friend class ComputeContext;
+    friend class CopyContext;
     struct Impl;
     std::unique_ptr<Impl> impl_;
-    PassBuilder BeginPass(std::string name, PassKind kind,
-                          std::unique_ptr<detail::Callbacks> callbacks,
-                          std::source_location source);
-    PassHandle EndPass(PassBuilder& builder);
+    uint32_t BeginPass(std::string name, PassKind, std::source_location);
+    void Prepare(Pool&);
+    void Record();
+    Submission Submit(rhi::Swapchain*);
     void Poison();
 };
 } // namespace renderlab::rendergraph

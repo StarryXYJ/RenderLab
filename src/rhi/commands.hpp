@@ -34,6 +34,10 @@ struct TextureCopy
     uint32_t rowPitch;
     bool upload;
 };
+struct TextureToTextureCopy
+{
+    std::shared_ptr<Texture> source, destination;
+};
 struct BeginRendering
 {
     std::shared_ptr<TextureView> color, depth;
@@ -82,9 +86,10 @@ struct ResolveTimestamps
 {
     std::shared_ptr<Buffer> destination;
 };
-using Command = std::variant<BufferBarrier, TextureBarrier, BufferCopy, TextureCopy, BeginRendering,
-                             EndRendering, SetPipeline, SetBindings, SetGeometry, Draw,
-                             DrawIndirect, Dispatch, Marker, Timestamp, ResolveTimestamps>;
+using Command =
+    std::variant<BufferBarrier, TextureBarrier, BufferCopy, TextureCopy, TextureToTextureCopy,
+                 BeginRendering, EndRendering, SetPipeline, SetBindings, SetGeometry, Draw,
+                 DrawIndirect, Dispatch, Marker, Timestamp, ResolveTimestamps>;
 
 /**
  * @brief Single-threaded, one-shot command recording. Packets own every referenced object.
@@ -102,6 +107,7 @@ public:
     /// RGBA8/BGRA8 only; rowPitch multiple of 256, offset multiple of 512 on both backends.
     void CopyTexture(std::shared_ptr<Buffer> buffer, std::shared_ptr<Texture> texture,
                      uint32_t rowPitch, bool upload, uint64_t offset = 0);
+    void CopyTexture(std::shared_ptr<Texture> source, std::shared_ptr<Texture> destination);
     void Begin(std::shared_ptr<TextureView> color, std::shared_ptr<TextureView> depth = {},
                std::array<float, 4> clear = {0.02f, 0.02f, 0.02f, 1},
                LoadOp colorLoad = LoadOp::Clear, LoadOp depthLoad = LoadOp::Clear);

@@ -190,7 +190,8 @@ std::shared_ptr<Pipeline> DxRuntime::CreatePipelineNative(PipelineDesc desc)
         blend.LogicOp = D3D12_LOGIC_OP_NOOP;
         blend.RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
         state.DepthStencilState.DepthEnable = desc.depth;
-        state.DepthStencilState.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ALL;
+        state.DepthStencilState.DepthWriteMask =
+            desc.depthWrite ? D3D12_DEPTH_WRITE_MASK_ALL : D3D12_DEPTH_WRITE_MASK_ZERO;
         state.DepthStencilState.DepthFunc = D3D12_COMPARISON_FUNC_GREATER_EQUAL;
         state.DepthStencilState.StencilReadMask = D3D12_DEFAULT_STENCIL_READ_MASK;
         state.DepthStencilState.StencilWriteMask = D3D12_DEFAULT_STENCIL_WRITE_MASK;

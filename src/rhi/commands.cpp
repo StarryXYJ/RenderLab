@@ -86,6 +86,18 @@ void CommandList::CopyTexture(std::shared_ptr<Buffer> buffer, std::shared_ptr<Te
     commands_.emplace_back(
         TextureCopy{std::move(buffer), std::move(texture), offset, rowPitch, upload});
 }
+void CommandList::CopyTexture(std::shared_ptr<Texture> source, std::shared_ptr<Texture> destination)
+{
+    Check(source);
+    Check(destination);
+    Require(!rendering_ && source != destination, "Invalid texture-to-texture copy");
+    const auto& a = source->desc;
+    const auto& b = destination->desc;
+    Require(a.format != Format::D32 && a.format == b.format && a.width == b.width &&
+                a.height == b.height,
+            "Texture copy dimensions/format mismatch");
+    commands_.emplace_back(TextureToTextureCopy{std::move(source), std::move(destination)});
+}
 void CommandList::Begin(std::shared_ptr<TextureView> color, std::shared_ptr<TextureView> depth,
                         std::array<float, 4> clear, LoadOp colorLoad, LoadOp depthLoad)
 {

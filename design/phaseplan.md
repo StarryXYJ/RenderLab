@@ -4,9 +4,9 @@
 
 ## 当前状态
 
-- 当前实施阶段：M3 单队列 Render Graph，DONE。
-- 当前工作项：无。M3 已满足当前单 mip/layer RHI 范围内的退出条件；M4 保持 NOT_STARTED。
-- 本次授权完成每帧 Feature/Pass 构建、类型化资源依赖和单队列 Render Graph；并行录制、多队列与完整场景 Renderer 不在本次范围。
+- 当前实施阶段：M3 DONE（含 M3.5 Feature 实例与 Create 依赖解析）；M4 保持 NOT_STARTED。
+- 当前工作项：Feature 实例、无序注册后 Create、Custom/Forward 统一组合与名称连接已交付。
+- 本次授权实现 Render Graph 简化 API 和普通 Forward 组合；Demo 使用空 Custom 组合，不注入 Forward 内置 Feature。Forward+、Deferred、光追、多队列及完整场景仍按后续计划推进。
 - M1 已通过双后端三角形、固定种子 Compute 噪声及读回、同步、生命周期和 resize 验收，结果见下文。
 
 | 阶段 | 目标 | 前置依赖 | 状态 |
@@ -108,23 +108,39 @@ GPU 与热重载：`gpu.{dx12,vulkan}.material` 验证同一材质多 Pass、参
 
 ## M3 单队列 Render Graph
 
-状态：DONE，日期：2026 年 10 月 23 日。
+状态：DONE，日期：2026 年 10 月 24 日（含 M3.5 复验）。
 
-结果：M3.1 类型化图/资源版本/Pass 句柄、图拥有的 PassData、立即 Setup 与无捕获 Prepare/Execute、受限命令上下文、Raster/Compute/Copy 以及附件 Clear/Load；M3.2 输出/副作用根剔除、Full/Preserve、RAW/WAR/WAW、Before/After 硬顺序和环诊断、稳定拓扑排序、自动屏障、Import/Export 状态/完成点交接与有界资源池；M3.3 每帧薄 Feature 组合、默认 Sandbox 图路径、计划诊断和禁用剔除开关全部完成。图不依赖具体 Shader/Material/Renderer，不引入全局按名称获取资源或 Unity 兼容层。
+结果：类型化图/资源/Pass 句柄、版本与初始化校验、RAW/WAR/WAW、根剔除、稳定拓扑排序、Before/After 和环诊断、自动屏障、Import/Export 完成点交接、有界资源池与计划诊断。公共 API 改为 Graph-local Create/Import/Get/Set/Export、直接 Raster/Compute/Copy Builder 和按值 Execute，内部统一分配、绑定、录制与提交。图不依赖具体 Shader/Material/Renderer。
 
-范围：开始实施时明确沿用当前 RHI 单 mip/layer 能力；TextureRange 校验 mip/layer/aspect，超出实际支持范围明确失败。没有实现或声称通过多 mip/layer 的原生执行。Buffer 依赖和屏障跟踪整资源，同时校验声明、拷贝和绑定的范围。
+### M3.4 简化 API 与普通 Forward 组合
 
-验证：MSVC 19.51、Windows SDK 10.0.26100、CMake 4.3.1、Ninja 1.13.2、DXC 1.9.0.5512；RTX 5060、NVIDIA 591.74 上隔离构建 `windows-m2-debug` / `windows-m2-release` 完整 CTest 各 19/19 通过，DX12 Debug Layer 与 Vulkan synchronization validation 错误均为 0。M1/M2 原有验收全部保持通过。49 个自有头文件逐一独立编译、clang-format、UTF-8 无 BOM/LF 和 `git diff --check` 通过。
+状态：DONE，日期：2026 年 10 月 24 日。
 
-CPU 语义：`rendergraph.contracts` 验证无生产者读取、整覆盖剔除旧生产者、保留/部分写入依赖、只读共享、旧版本 WAR 重排、WAW、顺序与数据依赖冲突、跨图/旧写版本、单子资源边界/aspect、用途、附件 Load/Clear、未声明资源/版本、Buffer 越界、取消、未完成资源不复用、完成后复用、池容量淘汰和所有线程约束。顺序边不自动保留死 Pass，Import 不自动固定消费者。
+结果：移除公共 PassData、PrepareContext 和多段执行组合；类型化 Context 按已声明 handle 绑定。名称只在建图时解析到最新版本，别名重定向不复制内容。Demo 继续直接组图。Renderer 新增独立 Opaque/Transparent Feature、普通 Forward 组合、阶段插入与可选真实颜色快照。Transparent 使用稳定距离排序、混合和只读深度；RHI 新增独立 depthWrite 与双后端纹理复制。
 
-GPU 与展示：`gpu.{dx12,vulkan}.graph` 每配置/后端构建六张图，包含可选噪声更新、无消费者 Feature、剔除开关和资源池复用；颜色、深度、混合、索引/间接绘制的全部颜色字节与直接 RHI 基线一致。单独缓冲图验证 Upload→Copy→两次依赖 Compute→Readback，64 个 uint 分量与 CPU 参考一致，覆盖 Uniform、Structured SRV/UAV。四份图路径 noise.rgba 的 SHA-256 均为 `ed59cd2517b5c5c076a93c45fda5a61aa1f6f43ff52f96af600bec1059be9527`。已查看图路径读回图像。默认窗口每后端/配置呈现 54 帧、重建/暂停变化 10 次、两次最小化恢复及单帧退出通过；正常帧不使用 QueueIdle/DeviceIdle。
+验证：MSVC 19.51、DXC 1.8，隔离 Debug 构建 graph-refactor-debug，NVIDIA GeForce RTX 4060 Laptop GPU；完整 CTest 19/19 通过，包括 CPU/CLI、双后端 Graph、Material、RHI、初始化、窗口 resize/minimize/restore 与单帧退出。DX12/Vulkan Graph 日志验证错误均为 0。普通 Forward 全部颜色字节与直接 RHI 基线一致，OpaqueColor 在透明后保持独立、AfterTransparentColor 与最终颜色一致。CPU 验证名称/版本、用途/范围、取消/完成保护、池复用，以及阶段构图、死 Feature 顺序、透明稳定排序、输入复制和只读深度拒绝写入。原 Noise SHA-256 和 Buffer 参考比较继续通过。
 
-生命周期与诊断：资源池同时检查图租约、额外对象引用和真实完成点，提交成功后才发布状态；取消不更改池中状态。默认最多 64 项/64MiB 估算内容预算，RHI 原生分配预算独立有效。计划 JSON 包含来源、访问版本、依赖、存活原因、屏障、生命周期、估算大小和 CPU 编译/准备/录制时间，所有 Pass 有 GPU Marker。产物位于各构建树 `graph/后端`、`logs`、`Testing`，不提交本机生成物。
+工程：完整自有目标 Debug 编译通过；27 个改动/新增 C++ 文件通过 clang-format，34 个改动/新增文本通过 UTF-8 无 BOM/LF 检查，git diff --check 通过。生成产物在该构建树 graph、logs、Testing，不提交本机路径配置。
 
-文档：[Render Graph 与 Feature API/边界](../docs/m3-rendergraph.md)、[运行与验收](../manual/build.md#render-graph-与-feature)。
+文档：[Graph API/边界](../docs/m3-rendergraph.md)、[普通 Forward](../docs/forward-pipeline.md)、[运行命令](../manual/build.md#render-graph-与-feature)。
 
-限制与后续：仍为单队列、串行录制、单视图、单 mip/layer、单颜色附件、固定 Store；不含 Alias、多队列、并行录制、执行计划缓存、跨设备完成点或每 Pass GPU Timestamp。Full 写入是作者承诺，不能静态证明任意 Shader 覆盖。资源池达到上限且全在用时明确失败，不隐藏等待；Pool/Runtime 必须比 Graph 活得更久。完整场景阶段锚点、资源导入和 Renderer 属于 M4，本次未开始。
+限制：当前仍为单队列、串行录制、单视图、单 mip/layer、单颜色附件和固定 Store；无 Alias、多队列、计划缓存或每 Pass GPU Timestamp。Full 覆盖是作者承诺。DepthRead 仍使用保守附件状态，实际写入由 PSO 禁止，不支持深度采样。普通 Forward 接收准备好的 DrawPacket，没有场景、Material 适配、光源或 PBR；这些属于 M4。此次未重跑 Release 或其他 GPU，不能沿用历史配置成功充当此次验收。
+
+历史：M3.1–M3.3 于 2026 年 10 月 23 日在 RTX 5060 上通过旧 API 的 Debug/Release 各 19/19；该历史结果不代表新 API 的 Release 已验证。
+
+### M3.5 Feature 实例与流式管线统一
+
+状态：DONE，日期：2026 年 10 月 24 日。
+
+结果：RenderFeature 保存稳定名称与显式 Feature 依赖，唯一 Build 负责声明 Pass。RenderPipelineBuilder 流式注册实例，Create 校验依赖、阶段并拓扑排序，不执行 Build/GPU 工作；注册顺序无关，无依赖时按名称确定顺序。生成的 RenderPipeline 固定持有实例组合，可跨帧 Build。Custom/Forward 仅预先注入不同 Feature，统一 Create/Build，没有独立执行逻辑。Feature 与 DrawPacket 都按资源名称连接，执行回调保存解析后的本帧 handle。
+
+Demo：先注册 Scene 再注册 Noise，Create 依赖解析后正确建图；可选 Noise、Readback 也使用实例，不再串传输出 handle。Demo 使用空 Custom；普通 Forward 内置 Opaque/Transparent/快照也都是同一 RenderFeature。旧函数式 Feature 和闭包注册接口已移除。
+
+验证：graph-refactor-debug 完整 Debug 构建和 CTest 19/19 通过；RTX 4060 Laptop GPU 上 DX12/Vulkan Graph 验证错误均为 0，Demo 与普通 Forward 图像、噪声、Buffer、快照和窗口回归保持通过。CPU 合约验证三 Feature 全部六种注册排列、Create 不提前 Build、缺失/重名/自依赖/循环、阶段冲突、Custom 与 Forward 同阶段语义及创建后的组合隔离。格式、UTF-8 无 BOM/LF 和 git diff --check 通过。
+
+文档：[Feature 与管线组合](../docs/forward-pipeline.md)、[Graph](../docs/m3-rendergraph.md)、[构建运行](../manual/build.md#render-graph-与-feature)。
+
+限制：依赖为显式 Feature 名称，不从资源或延迟回调自动反射；Graph 仍独立校验本帧资源访问。当前单线程 Build，Feature 的可变状态并发安全由调用方负责。本次未验证 Release 或其他 GPU。Forward+、Deferred、光追与完整场景仍在后续计划，没有提前实现。
 
 ## M4 场景资源与基础 Renderer
 
@@ -157,7 +173,7 @@ GPU 与展示：`gpu.{dx12,vulkan}.graph` 每配置/后端构建六张图，包�
 ### M4.4 阴影与透明
 
 - [ ] 先实现一种确定的方向光阴影；级联在需要时作为子任务增加。
-- [ ] Opaque、Masked 与 CPU 排序的透明路径，明确各自 Pass。
+- [ ] 将普通 Opaque/Transparent Feature 接入场景与材质，增加 Masked；按需加入独立 DepthPrepass/Sky Feature 和后处理阶段，定义快照位置。
 - [ ] 可选 Bloom 等基础后处理，按实际画面需求增加，不先堆齐所有效果。
 
 ### M4.5 可重复演示
@@ -172,7 +188,7 @@ GPU 与展示：`gpu.{dx12,vulkan}.graph` 每配置/后端构建六张图，包�
 
 每个子阶段独立验收。先共享数据和有限材质，避免同时开发任意 Shader 命中调度与完整积分器。
 
-### M5.1 Deferred
+### M5.1 Deferred（可选组合）
 
 - [ ] GBuffer 契约、深度重建、Deferred Lighting，透明继续 Forward。
 - [ ] 验证同一材质的 Forward/GBuffer/Shadow 角色与固定布局。
@@ -182,7 +198,7 @@ GPU 与展示：`gpu.{dx12,vulkan}.graph` 每配置/后端构建六张图，包�
 
 - [ ] BLAS/TLAS 尺寸查询、构建、scratch 与图访问声明。
 - [ ] 静态网格复用 BLAS，Transform 变化更新 TLAS，正确管理在途版本。
-- [ ] 用 Ray Query 实现一个简单阴影或 AO 样例，共用实例索引。
+- [ ] 用 Ray Query 实现独立 RayTracedShadow 或 AO Feature，共用实例索引，以 ShadowVisibility 等明确资源接入光栅照明。
 
 验收构建后查询、对象增删/移动、相机变化以及不支持能力时的诊断。动态顶点与蒙皮先报告不支持。
 
@@ -196,7 +212,8 @@ GPU 与展示：`gpu.{dx12,vulkan}.graph` 每配置/后端构建六张图，包�
 
 ### M5.4 混合效果
 
-- [ ] 选择一个基础光追反射或照明效果，接入 GBuffer 和合成。
+- [ ] 选择独立光追反射或 GI Feature，声明 Depth/Normal/Material/AS 输入和 Radiance 输出；按算法由 Forward 表面预通道或 GBuffer 提供输入。
+- [ ] GI 的追踪、时域重投影、空间过滤和照明合成按依赖分 Pass，保留无降噪参考，不作为照明内部隐式副作用。
 - [ ] 按 ViewID 管理历史与版本，定义相机/场景/材质/尺寸变化的失效规则。
 - [ ] 记录支持材质范围与真实 GPU 成本，保留纯光栅对照。
 
@@ -205,6 +222,12 @@ GPU 与展示：`gpu.{dx12,vulkan}.graph` 每配置/后端构建六张图，包�
 ## M6 GPU Driven 与执行优化
 
 按 CPU 基线、GPU 提交、并行录制、多队列、Alias 的顺序分别评估。M6.1 与 M6.2 完成可构成最小 GPU Driven 成果，后续优化不要求一定提升所有场景。
+
+### M6.0 Forward+（可选组合）
+
+- [ ] 在普通 Forward 与场景光源数据基础上增加 Tiled/Clustered 光源分类 Compute Feature，声明深度、光源 Buffer、索引表和容量。
+- [ ] Opaque/Transparent 显式读取分类结果，保留普通 Forward 基线；处理空光源、溢出、透明覆盖与不同分辨率。
+- [ ] 相同场景比较图像、显存和 GPU 成本，不预设一定更快。
 
 ### M6.1 可索引资源与间接提交
 
@@ -225,7 +248,7 @@ GPU 与展示：`gpu.{dx12,vulkan}.graph` 每配置/后端构建六张图，包�
 ### M6.3 CPU 并行录制
 
 - [ ] 固化编译后执行计划、线程独立 CommandContext 和分配上下文。
-- [ ] 录制只读 PassData，Shader、PSO 和绑定准备移到安全阶段。
+- [ ] 录制只读的冻结访问计划与闭包数据，Shader/PSO 事先准备，绑定分配使用线程安全上下文。
 - [ ] 保持单队列，比较串行/并行录制输出和 CPU 时间。
 
 ### M6.4 GPU 多队列
@@ -286,7 +309,7 @@ GPU 与展示：`gpu.{dx12,vulkan}.graph` 每配置/后端构建六张图，包�
 
 先选择一个主专题并写清目标、参考基线和必要输入，其他专题保持 DEFERRED，不默认全部实施。
 
-候选为 TAA 与运动矢量、进阶光追反射与降噪、基础路径追踪、Hi-Z/LOD GPU Driven。路径追踪先验证采样、BSDF/PDF、累积和收敛，再据测量决定是否建设 Wavefront 队列；降噪前保留原始结果作为正确性入口。
+候选为 TAA 与运动矢量、进阶光追反射与降噪、基础路径追踪、Hi-Z/LOD GPU Driven。Path Tracing 使用独立组合：场景/AS → Trace/采样 → History 累积 → 可选降噪 → ToneMapping；替代普通光栅主体，共用资源图和基础材质，不插在 Transparent 阶段。路径追踪先验证采样、BSDF/PDF、累积和收敛，再据测量决定是否建设 Wavefront 队列；降噪前保留原始结果作为正确性入口。
 
 - [ ] 明确选择、支持范围与对照条件，拆成可验收的小步。
 - [ ] 建立正确性参考，固定随机序列与相机并处理历史失效。
@@ -298,4 +321,4 @@ GPU 与展示：`gpu.{dx12,vulkan}.graph` 每配置/后端构建六张图，包�
 
 ## 已完成阶段
 
-已完成：M0 工程与设备基础、M1 最小双后端 RHI。摘要保留在对应章节，本节只维护索引。
+已完成：M0 工程与设备基础、M1 最小双后端 RHI、M2 Shader 与材质数据链路、M3 单队列 Render Graph 与普通 Forward。摘要保留在对应章节，本节只维护索引。

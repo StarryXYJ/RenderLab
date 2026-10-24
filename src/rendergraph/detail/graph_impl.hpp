@@ -6,6 +6,7 @@
 
 #include <optional>
 #include <stdexcept>
+#include <unordered_map>
 
 namespace renderlab::rendergraph
 {
@@ -65,7 +66,8 @@ struct Pass
     bool sideEffect = false;
     std::vector<Access> accesses;
     std::optional<Attachment> color, depth;
-    std::unique_ptr<Callbacks> callbacks;
+    Callback callback;
+    bool depthReadOnly = false;
 };
 inline void Require(bool condition, const std::string& message)
 {
@@ -81,6 +83,12 @@ struct Graph::Impl
     uint32_t active = UINT32_MAX;
     std::vector<detail::Resource> resources;
     std::vector<detail::Pass> passes;
+    struct NamedResource
+    {
+        uint32_t resource;
+        bool texture;
+    };
+    std::unordered_map<std::string, NamedResource> names;
     std::vector<Edge> order;
     Plan plan;
     Pool* pool = nullptr;
@@ -91,7 +99,7 @@ struct Graph::Impl
     void ValidateUse(uint32_t pass, const detail::Resource& resource, Use use, bool write) const;
     void ValidateState(const detail::Resource& resource, rhi::State state) const;
     void AddAccess(uint32_t pass, detail::Access access);
-    void Scope(uint32_t pass, bool preparation) const;
+    void Scope(uint32_t pass) const;
     detail::Resource& Resolve(uint32_t pass, uint64_t graph, uint32_t resource, uint32_t version,
                               bool texture, std::optional<Use> use = {});
     void Barriers();

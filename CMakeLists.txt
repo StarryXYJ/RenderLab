@@ -66,6 +66,10 @@ target_include_directories(renderlab_rendergraph PUBLIC src)
 target_link_libraries(renderlab_rendergraph PRIVATE renderlab_options renderlab_rhi
     nlohmann_json::nlohmann_json)
 
+add_library(renderlab_renderer STATIC src/renderer/forward.cpp src/renderer/pipeline.cpp)
+target_include_directories(renderlab_renderer PUBLIC src)
+target_link_libraries(renderlab_renderer PRIVATE renderlab_options renderlab_rendergraph renderlab_rhi)
+
 add_library(renderlab_sandbox_options STATIC src/apps/sandbox/options.cpp)
 target_include_directories(renderlab_sandbox_options PUBLIC src)
 target_link_libraries(renderlab_sandbox_options PRIVATE renderlab_options)
@@ -115,13 +119,14 @@ add_library(renderlab_samples STATIC
     src/samples/image_io.cpp
     src/samples/graph_demo.cpp
     src/samples/graph_features.cpp
+    src/samples/forward_acceptance.cpp
     src/samples/graph_acceptance.cpp
     src/samples/graph_buffer_checks.cpp
     src/samples/rhi_acceptance.cpp
     src/samples/rhi_contract_checks.cpp
     src/samples/shader_io.cpp)
 target_include_directories(renderlab_samples PUBLIC src)
-target_link_libraries(renderlab_samples PRIVATE renderlab_options renderlab_rhi renderlab_core renderlab_platform renderlab_rendergraph)
+target_link_libraries(renderlab_samples PRIVATE renderlab_options renderlab_rhi renderlab_core renderlab_platform renderlab_rendergraph renderlab_renderer)
 add_dependencies(renderlab_sandbox renderlab_m1_shaders renderlab_m3_shaders)
 add_custom_command(TARGET renderlab_sandbox POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_FILE:renderlab_pix>
@@ -131,7 +136,7 @@ target_link_libraries(renderlab_sandbox PRIVATE renderlab_options renderlab_core
 
 if(BUILD_TESTING)
     add_executable(renderlab_rendergraph_tests tests/rendergraph_tests.cpp)
-    target_link_libraries(renderlab_rendergraph_tests PRIVATE renderlab_options renderlab_rendergraph renderlab_rhi)
+    target_link_libraries(renderlab_rendergraph_tests PRIVATE renderlab_options renderlab_rendergraph renderlab_rhi renderlab_renderer)
     add_test(NAME rendergraph.contracts COMMAND renderlab_rendergraph_tests)
     add_executable(renderlab_shader_tests tests/shader_tests.cpp)
     target_link_libraries(renderlab_shader_tests PRIVATE renderlab_options renderlab_material

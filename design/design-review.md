@@ -2,14 +2,14 @@
 
 复查日期为 2026 年 10 月 23 日。本轮从实时与离线渲染系统的公开资料检查总体设计，重点是减少重复状态、隐式依赖和过早建设。结论是保留分层和双后端方向，收紧状态所有权、材质布局与高级功能边界。
 
-这里引用的是公开说明的机制与限制，不能据此断言相关项目存在未修复缺陷。以下取舍是 RenderLab 自己的设计决策；修订已并入 [总体设计](architecture.md)，实现验收进入 [阶段计划](phaseplan.md)。当前没有实现代码，本轮不作运行正确性或性能保证。
+这里引用的是公开说明的机制与限制，不能据此断言相关项目存在未修复缺陷。以下取舍是 RenderLab 自己的设计决策；修订已并入 [总体设计](architecture.md)，实现验收进入 [阶段计划](phaseplan.md)。运行正确性与性能结论以阶段计划的实际验收为准。
 
 ## 需要优先修订的设计
 
 | 问题 | 原设计的风险 | 本轮处理 | 验证位置 |
 | --- | --- | --- | --- |
 | 图和 RHI 状态管理责任含糊 | 两套状态机产生重复屏障或状态冲突 | 图生成同步计划，RHI 显式执行；图外任务通过状态与完成点交接 | M1、M3、M6.4 |
-| 延迟回调没有具体内存规则 | Setup 局部引用在 Execute 时失效 | 图拥有 PassData，稳定快照，记录声明位置，限制资源解析范围 | M3.1 |
+| 延迟回调没有具体内存规则 | Setup 局部引用在 Execute 时失效 | 图拥有 Execute 闭包值，稳定快照，记录声明位置，限制资源解析范围 | M3.1 |
 | 材质允许任意变体布局 | 每个 Pass 重打包、热重载和 GPU Driven 分支增多 | 每个 Shader 固定 MaterialLayout，生成 PackingPlan 并反射校验 | M2.2 |
 | Template 像独立资产系统 | 元数据、模板与编译包重复缓存和失效 | Template 是 ShaderPackage 内的只读 Schema 视图 | M2.2 |
 | Shader/PSO 准备时机不明确 | 在 Execute 中同步编译，妨碍并行且引入卡顿 | 准备阶段处理，发布时检查必需组合，统一 Pipeline 缓存 | M2.3、M2.4 |
@@ -79,3 +79,16 @@ GPU Driven 和路径队列都保持动态数量在 GPU 上消费。射线 Payloa
 | C# 原生视口与 Docking 集成 | M7.1 | 编辑器宿主方案，不影响渲染核心 |
 
 本轮没有发现必须取消既定方向的架构冲突。上述事项保留为有退出条件的实现验证，不以增加泛化框架提前解决。
+
+## 2026 年 10 月 24 日：Graph API 与普通 Forward
+
+- 名称只用于单图建图，执行使用类型化版本 handle；不增加全局资源管理器。
+- 一个 Builder 声明访问，一个 Execute 保存闭包；移除公开 PassData/PrepareContext 与多段调用，内部复用原编译器、资源池和 RHI 命令包。
+- Raster/Compute/Copy Context 表达不同命令；Material、场景与绘制策略留在 Renderer。
+- Opaque/Transparent 独立 Feature；最初的 ForwardPipeline 组合器已在下述实例化修订中统一为 RenderPipeline。硬顺序不代替内容依赖，中间 Feature 剔除后前后存活阶段仍有顺序。
+- 阶段快照真实复制；旧版本 handle 和别名不能替代独立图像。
+- Demo 无场景，直接组图。普通 Forward 接收已准备 DrawPacket；Forward+、Deferred、光追和 Path Tracing 仅维护后续计划。
+
+## Feature 实例与 Create 依赖解析
+
+用户确认 Feature 基类和流式注册，并要求注册完成后 Create、注册顺序无关。采用稳定 Feature 名称及显式依赖，在 Create 进行一次拓扑排序和阶段冲突诊断；依赖不从执行回调或尚不存在的图资源猜测。Create 无 GPU 操作，冻结组合，后续每帧 Build 才解析名称、声明 Pass。Custom/Forward 只影响初始注入，使用同一个组合器。移除旧函数式 Feature 和闭包注册入口，避免双轨 API。

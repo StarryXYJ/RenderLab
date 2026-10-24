@@ -182,7 +182,8 @@ std::shared_ptr<Pipeline> VulkanRuntime::CreatePipelineNative(PipelineDesc desc)
         sample.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
         VkPipelineDepthStencilStateCreateInfo depth{};
         depth.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
-        depth.depthTestEnable = depth.depthWriteEnable = desc.depth;
+        depth.depthTestEnable = desc.depth;
+        depth.depthWriteEnable = desc.depth && desc.depthWrite;
         depth.depthCompareOp = VK_COMPARE_OP_GREATER_OR_EQUAL;
         VkPipelineColorBlendAttachmentState attachment{};
         attachment.blendEnable = desc.blend;

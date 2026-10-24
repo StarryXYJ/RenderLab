@@ -88,6 +88,15 @@ std::shared_ptr<Runtime::Submission> DxRuntime::Execute(const CommandList& comma
                     list->CopyTextureRegion(c.upload ? &texture : &buffer, 0, 0, 0,
                                             c.upload ? &buffer : &texture, nullptr);
                 }
+                else if constexpr (std::is_same_v<T, TextureToTextureCopy>)
+                {
+                    D3D12_TEXTURE_COPY_LOCATION src{}, dst{};
+                    src.pResource = As<DxTexture>(c.source).native.Get();
+                    src.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
+                    dst.pResource = As<DxTexture>(c.destination).native.Get();
+                    dst.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
+                    list->CopyTextureRegion(&dst, 0, 0, 0, &src, nullptr);
+                }
                 else if constexpr (std::is_same_v<T, BeginRendering>)
                 {
                     const auto rtv = As<DxView>(c.color).handle;

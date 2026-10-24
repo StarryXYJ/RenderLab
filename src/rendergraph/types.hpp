@@ -45,11 +45,17 @@ enum class Use
     Storage,
     Color,
     Depth,
+    DepthRead,
     CopySource,
     CopyDestination,
     Vertex,
     Index,
     Indirect
+};
+enum class DepthAccess
+{
+    ReadWrite,
+    ReadOnly
 };
 enum class Coverage
 {

@@ -35,79 +35,46 @@ void VerifyGraphBuffers(rhi::Runtime& runtime, const std::filesystem::path& shad
     auto pipeline = runtime.CreatePipeline(std::move(desc));
     Pool pool(runtime);
     Graph graph;
-    auto source = graph.Import(upload, {rhi::State::HostWrite, true, 0});
-    auto constants = graph.Import(constant, {rhi::State::HostWrite, true, 0});
-    auto input = graph.Create(rhi::BufferDesc{256, rhi::Memory::Device, "Graph.Input"});
-    struct CopyData
-    {
-        BufferHandle source, destination;
-    };
-    graph.AddPass<CopyData>(
-        "Buffer.Upload", PassKind::Copy,
-        [&](PassBuilder& b, CopyData& d)
-        {
-            b.Read(source, Use::CopySource);
-            input = b.Write(input, Use::CopyDestination);
-            d.source = source;
-            d.destination = input;
-        },
-        [](const CopyData& d, ExecuteContext& c) { c.Copy(d.source, d.destination, 256); });
-    struct ComputeData
-    {
-        BufferHandle constants, input, output;
-        std::shared_ptr<rhi::Pipeline> pipeline;
-        std::shared_ptr<rhi::BindingGroup> bindings;
-    };
+    auto source = graph.ImportBuffer("Upload", upload, {rhi::State::HostWrite, true, 0});
+    auto constants = graph.ImportBuffer("Constants", constant, {rhi::State::HostWrite, true, 0});
+    graph.CreateBuffer("Input", {256, rhi::Memory::Device});
+    auto copy = graph.AddCopyPass("Buffer.Upload");
+    copy.ReadBuffer(source);
+    auto input = copy.WriteBuffer("Input");
+    copy.Execute([source, input](CopyContext& context) { context.Copy(source, input, 256); });
+
     for (uint32_t iteration = 0; iteration < 2; ++iteration)
     {
-        auto result =
-            graph.Create(rhi::BufferDesc{256, rhi::Memory::Device, "Graph.Transform", true});
-        graph.AddPass<ComputeData>(
-            "Buffer.Transform", PassKind::Compute,
-            [&](PassBuilder& b, ComputeData& d)
+        auto result = graph.CreateBuffer("Transform." + std::to_string(iteration),
+                                         {256, rhi::Memory::Device, {}, true});
+        auto pass = graph.AddComputePass("Buffer.Transform");
+        pass.ReadBuffer(constants, Use::Uniform);
+        pass.ReadBuffer(input);
+        result = pass.WriteBuffer(result);
+        pass.Execute(
+            [constants, input, result, pipeline](ComputeContext& context)
             {
-                b.Read(constants, Use::Uniform);
-                b.Read(input, Use::ShaderRead);
-                result = b.Write(result, Use::Storage);
-                d.constants = constants;
-                d.input = input;
-                d.output = result;
-                d.pipeline = pipeline;
-            },
-            [](const ComputeData& d, ExecuteContext& c)
-            {
-                c.Bind(d.pipeline);
-                c.Bind(d.bindings);
-                c.Dispatch(1, 1);
-            },
-            [](ComputeData& d, PrepareContext& c)
-            {
-                d.bindings = c.Device().CreateGroup(d.pipeline->desc.layout,
-                                                    {{0, {}, {}, c.Buffer(d.constants), 0, 256},
-                                                     {1, {}, {}, c.Buffer(d.input), 0, 256, 16},
-                                                     {2, {}, {}, c.Buffer(d.output), 0, 256, 16}});
+                context.Bind(pipeline);
+                context.BindBuffer(0, constants, 0, 256);
+                context.BindBuffer(1, input, 0, 256, 16);
+                context.BindBuffer(2, result, 0, 256, 16);
+                context.Dispatch(1, 1);
             });
         input = result;
     }
-    auto destination = graph.Import(readback, {rhi::State::CopyDest, false, 0});
-    graph.AddPass<CopyData>(
-        "Buffer.Readback", PassKind::Copy,
-        [&](PassBuilder& b, CopyData& d)
-        {
-            b.Read(input, Use::CopySource);
-            destination = b.Write(destination, Use::CopyDestination);
-            d.source = input;
-            d.destination = destination;
-        },
-        [](const CopyData& d, ExecuteContext& c) { c.Copy(d.source, d.destination, 256); });
+    auto destination = graph.ImportBuffer("Readback", readback, {rhi::State::CopyDest, false, 0});
+    auto read = graph.AddCopyPass("Buffer.Readback");
+    read.ReadBuffer(input);
+    destination = read.WriteBuffer(destination);
+    read.Execute([input, destination](CopyContext& context)
+                 { context.Copy(input, destination, 256); });
     graph.Export(destination, rhi::State::HostRead);
     graph.Compile();
-    graph.Prepare(pool);
-    graph.Record();
+    auto submission = graph.Execute(pool);
     const auto plan = graph.GetPlan().ToJson();
     WriteFileAtomically(output / "buffer-plan.json",
                         std::as_bytes(std::span{plan.data(), plan.size()}));
-    runtime.Wait(graph.Submit().completion);
+    runtime.Wait(submission.completion);
     std::array<uint32_t, 64> actual{};
     std::memcpy(actual.data(), readback->Map().data(), 256);
     for (uint32_t i = 0; i < actual.size(); ++i)
