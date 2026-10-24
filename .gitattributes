@@ -26,6 +26,7 @@ CMakeLists.txt text
 *.ps1 text
 *.sh text
 *.shader text
+*.params text
 *.material text
 *.scene text
 *.rlproject text

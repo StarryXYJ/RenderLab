@@ -4,16 +4,17 @@
 
 ## 当前状态
 
-- 当前阶段：M0 工程基础。
-- 下一工作项：M0.1 建立最小构建和依赖清单。
-- 已完成 M0.0 仓库规范初始化；M0.1 构建尚未开始，渲染和设备功能尚未实现。
+- 当前实施阶段：M3 单队列 Render Graph，DONE。
+- 当前工作项：无。M3 已满足当前单 mip/layer RHI 范围内的退出条件；M4 保持 NOT_STARTED。
+- 本次授权完成每帧 Feature/Pass 构建、类型化资源依赖和单队列 Render Graph；并行录制、多队列与完整场景 Renderer 不在本次范围。
+- M1 已通过双后端三角形、固定种子 Compute 噪声及读回、同步、生命周期和 resize 验收，结果见下文。
 
 | 阶段 | 目标 | 前置依赖 | 状态 |
 | --- | --- | --- | --- |
-| M0 | 工程与设备基础 | 无 | IN_PROGRESS |
-| M1 | 最小双后端 RHI | M0 | NOT_STARTED |
-| M2 | Shader 与材质数据链路 | M1 | NOT_STARTED |
-| M3 | 单队列 Render Graph | M2 | NOT_STARTED |
+| M0 | 工程与设备基础 | 无 | DONE |
+| M1 | 最小双后端 RHI | M0 | DONE |
+| M2 | Shader 与材质数据链路 | M1 | DONE |
+| M3 | 单队列 Render Graph | M2 | DONE |
 | M4 | 场景资源与基础 Renderer | M3 | NOT_STARTED |
 | M5 | Deferred 与光追基础 | M4 | NOT_STARTED |
 | M6 | GPU Driven 与执行优化 | M4；光追调度测试另需 M5 | NOT_STARTED |
@@ -59,148 +60,71 @@
 
 ## M0 工程与设备基础
 
-目标是让最小原生程序可复现构建并枚举两种后端。暂不渲染场景，不建设编辑器、插件系统或通用任务调度器。
-
-### M0.0 仓库规范初始化
-
 状态：DONE，日期：2026 年 10 月 23 日。
 
-结果：建立 Git 忽略与属性规则、EditorConfig、C++ 格式配置、README 及工程约定。统一手工维护文本的 UTF-8 无 BOM 和 LF，区分源资产、二进制与本机产物。
+结果：M0.0 仓库规范、M0.1 C++20/CMake 构建与固定依赖、M0.2 日志/断言/UTF-8/原生窗口和参数、M0.3 DX12/Vulkan 设备创建与 JSON 能力报告全部完成。core、platform、rhi 与 Sandbox 独立组织，尚未实现交换链或绘制。
 
-验证：仓库文本字节扫描、文档链接及 Git 属性/忽略规则检查通过。当前环境无可用的 CMake、clang-format 命令，尚未验证构建或执行 C++ 格式化。
+验证：MSVC 19.51、Windows SDK 10.0.26100、CMake 4.3.1、Ninja 1.13.2；RTX 5060 上 Debug/Release 完整 CTest 各 9/9 通过，双后端严格 Validation 开启且错误数为 0。另验证 Intel Graphics 显式选择、无效索引、窗口缩放/最小化/恢复/关闭、头文件增量构建和无变更构建。自有 C++ 通过 clang-format 22.1.3 检查。
 
-文档：[工程约定](../manual/conventions.md)、[项目入口](../README.md)。
+文档：[构建与运行](../manual/build.md)、[基础模块与验收](../docs/m0-foundation.md)、[工程约定](../manual/conventions.md)。原始报告与日志位于各构建树 reports、logs 和 Testing，不提交本机生成物。
 
-后续：M0.1 建立构建目标、固定实际工具链，并启用编译器 UTF-8 与警告选项。M0 整体尚未完成。
-
-### M0.1 构建和依赖
-
-- [ ] 建立 C++20、CMake Presets、Debug/Release 和统一警告配置。
-- [ ] 只接入当前所需依赖，固定版本，明确 SDK 与工具链要求。
-- [ ] 建立 core、platform、rhi 和 Sandbox 的最小目标依赖，避免循环引用。
-
-交付为可构建启动程序与 manual 中的构建说明。验收从干净构建目录完成配置和编译，缺失依赖有明确错误。
-
-### M0.2 日志和宿主
-
-- [ ] 日志、断言、错误传播和启动参数，支持选择 dx12/vulkan。
-- [ ] 原生窗口、消息循环、关闭和最小化状态，明确 NativeSurface 所有权。
-- [ ] 关闭程序能按既定顺序释放对象，避免后台线程残留。
-
-交付为不依赖 C# 的 Sandbox。验收窗口创建、最小化、恢复和关闭。
-
-### M0.3 设备和能力报告
-
-- [ ] DX12 与 Vulkan 的适配器枚举、设备创建和调试层接入。
-- [ ] 输出 GPU、驱动、API/Shader 目标、队列、格式及高级能力报告。
-- [ ] 确定基础功能要求；高级能力缺失时报告原因，保持基础路径独立。
-
-交付为双后端能力报告和设备选择规则。记录实际设备，不能仅依据编译头文件认定支持。
-
-退出条件：双后端设备初始化通过，构建和启动步骤可复现，明确光追及后续功能的硬件约束。
+限制与后续：M0 交付时不提交 GPU 工作，M1 已补齐完成点、在途回收与展示层；光追等高级能力仍仅查询。中文 MSVC 的首次配置需使用代码页一致的控制台，避免 CMake/Ninja 头文件依赖误解码；复现方式已写入构建说明。
 
 ## M1 最小双后端 RHI
 
-目标是验证资源、命令和在途生命周期。每个子阶段先完成 DX12 的最小功能，再用同一语义补齐 Vulkan；在本阶段内完成两后端验证。
+状态：DONE，日期：2026 年 10 月 23 日（含维护性重构复验）。
 
-### M1.1 展示与帧上下文
+结果：M1.1 交换链、两个独立 FrameContext、真实提交完成点、录制保活/取消/退休与原生命令上下文复用；M1.2 Buffer/Texture/View/Sampler、预算分配、两段上传环、显式屏障与读回；M1.3 不可变绑定、构建时双目标 Shader、顶点/索引绘制与 Compute；M1.4 坐标/矩阵/UV/绕序、Reversed-Z、线性混合/sRGB、资源名称、GPU Marker、Timestamp 和 16 字节 DrawIndirect 参数均已打通。RHI 不依赖样例顶点结构、固定入口名、材质或 Render Graph。
 
-- [ ] Swapchain 获取、清屏、提交和 Present。
-- [ ] FrameContext、提交完成点、命令分配器重置和延迟销毁。
-- [ ] 命令录制持有使用引用，提交转为完成点回收，取消时正确释放。
-- [ ] FrameContext 与交换链图像索引分离；处理零尺寸、resize、恢复与退出。
+验证：MSVC 19.51、Windows SDK 10.0.26100、CMake 4.3.1、Ninja 1.13.2、DXC 1.9.0.5512；RTX 5060、NVIDIA 591.74 上 Debug/Release 完整 CTest 各 13/13 通过。DX12 Debug Layer 与 Vulkan synchronization validation 开启，错误数均为 0。每后端/配置窗口测试呈现 54 帧、重建/暂停变化 10 次、两次最小化恢复和单帧立即退出通过；正常帧无 DeviceIdle/QueueIdle。
 
-验收连续呈现、反复 resize 和立即退出；覆盖录制后释放应用引用、延迟提交和取消命令，没有使用中资源被重置或提前销毁。正常帧不通过 DeviceIdle 串行化。
+读回与生命周期：宽 1/63/64/65/257、奇数行、非零 512 字节 offset 与 256 字节 pitch 的纹理/Buffer 往返通过；两段上传环跨六次提交正确；取消、提前释放应用引用、延迟提交、完成回收及场景退出占用归零通过。257×131 噪声的两次 Dispatch 经过 Storage→Storage 内存依赖，全部 33,667 个像素与 CPU 整数参考逐字节一致；四份双后端/配置 `noise.rgba` 的 SHA-256 均为 `ed59cd2517b5c5c076a93c45fda5a61aa1f6f43ff52f96af600bec1059be9527`。三角形、采样坐标、深度、混合、间接绘制与 Timestamp 探针通过；已查看读回图像。
 
-### M1.2 资源与上传
+工程验证：自有 C++ 通过 clang-format 22.1.3 检查，手工文本通过 UTF-8 无 BOM/LF 检查。WinPixEventRuntime 1.0.240308001 的 NuGet 正常下载、固定哈希和 CMake 集成已验证。原始图像/数据见各构建树 `acceptance/{dx12,vulkan}`，日志与 CTest 结果见 `logs` 和 `Testing`，不提交本机生成物。
 
-- [ ] Buffer、Texture、View、Sampler 和最小分配器集成。
-- [ ] 上传环、拷贝、Readback、纹理行间距和对齐处理。
-- [ ] 定义资源用途、显式屏障和状态交接；此时只使用 Graphics Queue。
+维护性重构：公共 RHI 分为 resources、commands、runtime、swapchain、upload；双后端实现分为设备/能力、资源、绑定/管线、命令、展示与完成点，仍由同一 Runtime 维护提交所有权。场景准备/录制、验收、Shader 文件读取与 Sandbox 展示循环分离，错误检查复用，未增加状态管理层。`runtime.hpp` 从 460 行降到 83 行，DX12/Vulkan 的 `runtime.cpp` 分别从 752/1119 行降到 66/76 行。上述相同工具链和 RTX 5060 上重新通过 Debug/Release 各 13/13，验证错误为 0，四份噪声数据保持相同 SHA-256；25 个自有头文件逐一独立编译通过，双配置增量构建通过。文件职责见 [M1 文档](../docs/m1-rhi.md#文件职责与依赖)。
 
-验收有已知数据的 Buffer 往返与纹理测试图。覆盖尺寸和行间距边界，记录临时内存占用。
+文档：[最小 RHI API 与约束](../docs/m1-rhi.md)、[构建与验收命令](../manual/build.md)。
 
-### M1.3 图形与计算
-
-- [ ] BindingLayout、BindingGroup、ShaderModule、Graphics/Compute Pipeline。
-- [ ] 顶点/索引绘制、深度、基础混合与计算 Dispatch。
-- [ ] 测试 Compute 写后采样和连续 Storage 写入间的内存依赖。
-
-此时可用最小构建时编译脚本提供测试 Shader，M2 再替换为正式工具链，避免 RHI 与 Shader 系统循环依赖。
-
-### M1.4 约定与诊断
-
-- [ ] 坐标、矩阵、UV、绕序、Reversed-Z 和颜色空间的测试场景。
-- [ ] 资源名称、GPU Marker、基础 Timestamp 与验证错误定位。
-- [ ] 冒烟验证未来需要的间接参数格式和能力入口，不实现 GPU 剔除系统。
-
-退出条件：相同绘制、计算和读回样例在双后端通过，资源生命周期及 resize 正确。提交最小 API 文档，不一次填满全部未来 RHI 接口。
+限制与后续：最小分配采用 committed/dedicated，未做 VMA/D3D12MA 子分配；纹理限单 mip/layer，顶点限单流 float2/3/4，Storage 纹理限 RGBA8_UNORM，只有 Graphics Queue。Vulkan Host 内存要求 coherent、Timestamp 要求 64 个有效位。CPU 矩阵上传/真实相机、其他 GPU 的 M1、设备丢失注入和 PIX/RenderDoc 人工 Capture 尚未验证；测试中的 Shader 常量矩阵和原始计时不能替代这些事项。M1 交付时尚未进入 M2；现有 Shader 资产工具链、反射、材质与缓冲绑定扩展见 M2 完成记录。
 
 ## M2 Shader 与材质数据链路
 
-目标是从 ShaderDefinition 得到可直接创建材质的产物，暂用原生调试面板或代码驱动参数。
+状态：DONE，日期：2026 年 10 月 23 日。
 
-### M2.1 定义与编译
+结果：M2.1 `.shader` 唯一作者声明、`.params` 共享 cbuffer、普通 HLSL 工具 Include、独立 CPU DXC 双目标编译与内容缓存；M2.2 固定材质布局、完整参数元数据、PackingPlan 和双目标反射、Package 只读 Template；M2.3 逻辑材质创建/编辑/保存加载、有限具名变体、资源解析、不可变 GPU 快照与统一有界 PSO 缓存；M2.4 后台合并编译/丢弃旧代、事务准备、帧边界发布、失败保留旧代及完成点退休全部完成。RHI 补充 ConstantBuffer、ReadOnlyBuffer、StorageBuffer、四个逻辑 space 与显式 UniformRead/ShaderRead，不引入隐式资源状态管理。
 
-- [ ] JSON 元数据、HLSL、Include 依赖、入口点和诊断格式。
-- [ ] DXIL/SPIR-V 编译、目标能力与统一 Binding 映射。
-- [ ] 内容缓存和过期重建，覆盖 Include、宏、生成器和编译器版本变化。
+验证：MSVC 19.51、Windows SDK 10.0.26100、CMake 4.3.1、Ninja 1.13.2、DXC 1.9.0.5512；RTX 5060、NVIDIA 591.74 上，隔离构建 `windows-m2-debug` / `windows-m2-release` 完整 CTest 各 16/16 通过。最终热重载图像行为测试追加后，两配置双后端材质专项各 2/2 再次通过。DX12 Debug Layer 和 Vulkan synchronization validation 开启，错误为 0，材质验收日志无警告，样例退出的 GPU 资源占用归零。
 
-验收同一 Shader 的双目标编译和缓存命中/失效。缺失 Include、绑定冲突与编译错误都能定位到源文件。
+参数与编译：`shader.contracts` 覆盖源位置诊断、共享声明环、缺失 Include、未声明绑定、未使用字段保留、标量/向量/方阵/非方阵/数组、矩阵尾部接标量、单元素数组与矩阵数组、缓存命中/传递 Include 和模块失效/损坏恢复、材质值校验/保存加载/新增默认值与类型冲突、后台连续请求/失败恢复。`renderlab_shaderc` 实际导出 3 Pass、2 变体、5 项依赖的完整 Schema，第二次编译命中缓存。
 
-### M2.2 Template 与布局
+GPU 与热重载：`gpu.{dx12,vulkan}.material` 验证同一材质多 Pass、参数/纹理/变体/状态变化的 PSO 复用或失效、sRGB、四个 scope，以及非零 256 字节 offset 的外部 cbuffer、结构化 SRV/UAV 和纹理 UAV。Compute 读回 20 个分量检查 float/int/uint/bool、float3、数组、非方阵和共享数据，重复写入经过 Storage→Storage。热重载修改工具 Include 后新代输出颜色减半，已录制旧代仍输出原色；类型冲突、缺失 Pass、编译失败不发布，恢复后输出恢复，旧 PSO 完成后释放，运行中数值编辑复用 PSO。
 
-- [ ] 生成材质声明、Schema、固定 MaterialLayout 与 PackingPlan。
-- [ ] Reflection 校验跨 Pass、变体和后端的实际接口。
-- [ ] MaterialTemplate 作为 ShaderPackage 只读视图，不建立独立模板资产管理。
+工程与回归：声明解析/布局/编译/反射/Schema/热重载和材质值/打包/序列化/GPU 准备分别编译，自有 C++ 已格式化，40 个头文件逐一独立编译通过。手工文本通过 UTF-8 无 BOM/LF 和 `git diff --check`。M1 全部回归保持通过，双后端/配置四份 noise.rgba 的 SHA-256 仍为 `ed59cd2517b5c5c076a93c45fda5a61aa1f6f43ff52f96af600bec1059be9527`。已查看材质默认色读回图像，产物保存在构建树 `material/后端`、`shader-tests`、`Testing`，不提交本机生成物。
 
-验收标量、向量、矩阵、数组、纹理属性和被优化掉的字段；同一个材质记录能用于不同 Pass，无变体专属数据副本。
+文档：[Shader 与材质 API/语法/边界](../docs/m2-shader-material.md)、[构建与运行](../manual/build.md#shader-与材质工具)。
 
-### M2.3 材质与 Pipeline
-
-- [ ] MaterialAsset 保存 Shader 引用、属性值和纹理引用，加载时创建 MaterialRuntime。
-- [ ] 普通参数、静态功能与渲染状态分别处理，建立完整 PSO Key。
-- [ ] 有界变体清单与合法性规则，统一 Pipeline 缓存入口。
-- [ ] 缺失功能或角色有明确诊断，不在绘制回调中编译程序。
-
-交付为从 Shader 创建材质、修改与保存重载的最小样例。早期使用最小稳定 ID/路径解析，不提前建设整个 AssetDatabase。
-
-### M2.4 热重载
-
-- [ ] 后台编译带代际，丢弃过期结果，成功后成组准备相关运行时对象。
-- [ ] 帧边界替换，编译失败保留旧包；旧对象延迟释放。
-- [ ] 新增属性、类型冲突和布局变化有确定处理。
-
-退出条件：同一材质在双后端工作；连续编辑 Shader、失败恢复和在途重载通过验证。准备好的 Shader/PSO 在 Execute 中只读取。
+限制与后续：M2 为代码驱动的无窗口材质样例，不包含编辑器或操作系统文件监视器；变更侦测方通过依赖表请求重编译。仅 SM 6.0、Vulkan 1.3、16KiB 常量块、32 绑定、每 Shader 16 Pass/16 变体；纹理仍为单 mip/layer，Storage 纹理为 RGBA8_UNORM，结构化缓冲元素限数值标量或 2/4 分量向量。不支持资源数组、自定义结构体/三分量结构化元素、动态无界关键字组合、后台创建 GPU PSO 或强制中断正在执行的 DXC。当前缓存属于本机可重建产物；其他 GPU 和跨机器发行包尚未验证。M3 的后续接入见下文。
 
 ## M3 单队列 Render Graph
 
-目标是让 Renderer 只声明工作和资源访问，由图统一管理同步。保持单队列和串行录制，先证明语义。
+状态：DONE，日期：2026 年 10 月 23 日。
 
-### M3.1 Pass 与资源契约
+结果：M3.1 类型化图/资源版本/Pass 句柄、图拥有的 PassData、立即 Setup 与无捕获 Prepare/Execute、受限命令上下文、Raster/Compute/Copy 以及附件 Clear/Load；M3.2 输出/副作用根剔除、Full/Preserve、RAW/WAR/WAW、Before/After 硬顺序和环诊断、稳定拓扑排序、自动屏障、Import/Export 状态/完成点交接与有界资源池；M3.3 每帧薄 Feature 组合、默认 Sandbox 图路径、计划诊断和禁用剔除开关全部完成。图不依赖具体 Shader/Material/Renderer，不引入全局按名称获取资源或 Unity 兼容层。
 
-- [ ] Raster、Compute、Copy Pass、Setup/Execute、类型化句柄和图拥有的 PassData。
-- [ ] Import/Export、资源版本、完整覆盖与 ReadWrite 的区分。
-- [ ] 明确资源解析范围和回调内存生命周期，保存声明位置。
+范围：开始实施时明确沿用当前 RHI 单 mip/layer 能力；TextureRange 校验 mip/layer/aspect，超出实际支持范围明确失败。没有实现或声称通过多 mip/layer 的原生执行。Buffer 依赖和屏障跟踪整资源，同时校验声明、拷贝和绑定的范围。
 
-验收能够诊断无生产者、过期句柄、错误用途和越过声明范围访问。禁止用 Setup 局部引用支撑延迟执行。
+验证：MSVC 19.51、Windows SDK 10.0.26100、CMake 4.3.1、Ninja 1.13.2、DXC 1.9.0.5512；RTX 5060、NVIDIA 591.74 上隔离构建 `windows-m2-debug` / `windows-m2-release` 完整 CTest 各 19/19 通过，DX12 Debug Layer 与 Vulkan synchronization validation 错误均为 0。M1/M2 原有验收全部保持通过。49 个自有头文件逐一独立编译、clang-format、UTF-8 无 BOM/LF 和 `git diff --check` 通过。
 
-### M3.2 图编译
+CPU 语义：`rendergraph.contracts` 验证无生产者读取、整覆盖剔除旧生产者、保留/部分写入依赖、只读共享、旧版本 WAR 重排、WAW、顺序与数据依赖冲突、跨图/旧写版本、单子资源边界/aspect、用途、附件 Load/Clear、未声明资源/版本、Buffer 越界、取消、未完成资源不复用、完成后复用、池容量淘汰和所有线程约束。顺序边不自动保留死 Pass，Import 不自动固定消费者。
 
-- [ ] RAW/WAR/WAW 依赖、拓扑顺序、输出与副作用根、Pass 剔除。
-- [ ] Texture mip/layer/aspect；Buffer 先整资源保守跟踪。
-- [ ] 生命周期、兼容资源池、屏障生成和图外状态交接。
-- [ ] Clear、部分写入和 Load 依赖正确；Import 不自动禁止剔除。
+GPU 与展示：`gpu.{dx12,vulkan}.graph` 每配置/后端构建六张图，包含可选噪声更新、无消费者 Feature、剔除开关和资源池复用；颜色、深度、混合、索引/间接绘制的全部颜色字节与直接 RHI 基线一致。单独缓冲图验证 Upload→Copy→两次依赖 Compute→Readback，64 个 uint 分量与 CPU 参考一致，覆盖 Uniform、Structured SRV/UAV。四份图路径 noise.rgba 的 SHA-256 均为 `ed59cd2517b5c5c076a93c45fda5a61aa1f6f43ff52f96af600bec1059be9527`。已查看图路径读回图像。默认窗口每后端/配置呈现 54 帧、重建/暂停变化 10 次、两次最小化恢复及单帧退出通过；正常帧不使用 QueueIdle/DeviceIdle。
 
-验收涵盖读未初始化资源、覆盖后旧值剔除、ReadWrite 保留前序、只读共享、子资源和副作用。RHI 不再对图内命令隐式补屏障。
+生命周期与诊断：资源池同时检查图租约、额外对象引用和真实完成点，提交成功后才发布状态；取消不更改池中状态。默认最多 64 项/64MiB 估算内容预算，RHI 原生分配预算独立有效。计划 JSON 包含来源、访问版本、依赖、存活原因、屏障、生命周期、估算大小和 CPU 编译/准备/录制时间，所有 Pass 有 GPU Marker。产物位于各构建树 `graph/后端`、`logs`、`Testing`，不提交本机生成物。
 
-### M3.3 接入与诊断
+文档：[Render Graph 与 Feature API/边界](../docs/m3-rendergraph.md)、[运行与验收](../manual/build.md#render-graph-与-feature)。
 
-- [ ] 将已有计算和绘制示例迁入图，保留图外小测试作为 RHI 验证入口。
-- [ ] 导出资源、Pass、状态转换、剔除原因和声明位置。
-- [ ] 串行和禁用剔除诊断开关，共用同一执行器。
-
-退出条件：图在双后端驱动同一画面，Validation 检查和 CPU 图语义测试通过。此阶段不实现 Alias、多队列或执行计划缓存。
+限制与后续：仍为单队列、串行录制、单视图、单 mip/layer、单颜色附件、固定 Store；不含 Alias、多队列、并行录制、执行计划缓存、跨设备完成点或每 Pass GPU Timestamp。Full 写入是作者承诺，不能静态证明任意 Shader 覆盖。资源池达到上限且全在用时明确失败，不隐藏等待；Pool/Runtime 必须比 Graph 活得更久。完整场景阶段锚点、资源导入和 Renderer 属于 M4，本次未开始。
 
 ## M4 场景资源与基础 Renderer
 
@@ -374,4 +298,4 @@
 
 ## 已完成阶段
 
-已完成子阶段：M0.0 仓库规范初始化。尚无完整主阶段完成；摘要保留在对应章节，本节只维护索引。
+已完成：M0 工程与设备基础、M1 最小双后端 RHI。摘要保留在对应章节，本节只维护索引。

@@ -2,7 +2,7 @@
 
 RenderLab 是面向引擎与渲染开发的 C++20 渲染引擎项目，目标包括 DX12/Vulkan 双后端、统一 Shader 编译、Shader 驱动材质、声明式 Render Graph、光栅与光追，以及可选 GPU Driven。后期编辑器采用 C#，渲染运行时保持独立。
 
-当前已完成架构设计和仓库规范初始化，尚未创建 CMake 构建目标或渲染程序。实际实施进度以阶段计划为准。
+当前提供 Windows 原生 Sandbox、C++20 构建、DX12/Vulkan 设备初始化和能力报告。M0 尚不绘制画面，实际实施进度以阶段计划为准。
 
 ## 项目入口
 
@@ -10,6 +10,8 @@ RenderLab 是面向引擎与渲染开发的 C++20 渲染引擎项目，目标包
 - [阶段计划](design/phaseplan.md)：当前阶段、工作项、依赖和验收标准。
 - [设计复查](design/design-review.md)：参考项目、设计风险与取舍。
 - [工程约定](manual/conventions.md)：编码、换行、格式、命名和文件管理。
+- [构建与运行](manual/build.md)：工具链、CMake 预设、测试和启动参数。
+- [M0 基础模块](docs/m0-foundation.md)：模块接口、能力报告与验收记录。
 - [协作约定](AGENTS.md)：后续修改与阶段维护要求。
 
 ## 仓库配置
@@ -37,4 +39,14 @@ RenderLab 是面向引擎与渲染开发的 C++20 渲染引擎项目，目标包
 | `cmake` | 构建模块 |
 | `external` | 已固定版本的第三方集成 |
 
-目录随对应功能加入版本管理，不以占位代码或空构建目标表示功能已实现。下一步是 M0.1 的最小构建、工具链与依赖配置。
+目录随对应功能加入版本管理，不以占位代码或空构建目标表示功能已实现。使用 x64 Developer PowerShell，在仓库根目录运行：
+
+```powershell
+chcp 65001
+cmake --preset windows-debug
+cmake --build --preset windows-debug --parallel 4
+ctest --preset windows-debug
+./out/build/windows-debug/renderlab_sandbox.exe --backend dx12
+```
+
+完整双后端 GPU 验证及环境要求见构建说明，后续工作由阶段计划维护。
