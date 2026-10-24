@@ -4,8 +4,8 @@
 
 ## 当前状态
 
-- 当前实施阶段：M3 DONE（含 M3.5 Feature 实例与 Create 依赖解析）；M4 保持 NOT_STARTED。
-- 当前工作项：Feature 实例、无序注册后 Create、Custom/Forward 统一组合与名称连接已交付。
+- 当前实施阶段：M3 DONE（含 M3.6 标准构建依赖修复）；M4 保持 NOT_STARTED。
+- 当前工作项：标准 windows-debug 启动访问冲突已修复，头文件依赖检测和完整重编译已验证。
 - 本次授权实现 Render Graph 简化 API 和普通 Forward 组合；Demo 使用空 Custom 组合，不注入 Forward 内置 Feature。Forward+、Deferred、光追、多队列及完整场景仍按后续计划推进。
 - M1 已通过双后端三角形、固定种子 Compute 噪声及读回、同步、生命周期和 resize 验收，结果见下文。
 
@@ -108,7 +108,7 @@ GPU 与热重载：`gpu.{dx12,vulkan}.material` 验证同一材质多 Pass、参
 
 ## M3 单队列 Render Graph
 
-状态：DONE，日期：2026 年 10 月 24 日（含 M3.5 复验）。
+状态：DONE，日期：2026 年 10 月 24 日（含 M3.6 标准构建修复复验）。
 
 结果：类型化图/资源/Pass 句柄、版本与初始化校验、RAW/WAR/WAW、根剔除、稳定拓扑排序、Before/After 和环诊断、自动屏障、Import/Export 完成点交接、有界资源池与计划诊断。公共 API 改为 Graph-local Create/Import/Get/Set/Export、直接 Raster/Compute/Copy Builder 和按值 Execute，内部统一分配、绑定、录制与提交。图不依赖具体 Shader/Material/Renderer。
 
@@ -141,6 +141,18 @@ Demo：先注册 Scene 再注册 Noise，Create 依赖解析后正确建图；�
 文档：[Feature 与管线组合](../docs/forward-pipeline.md)、[Graph](../docs/m3-rendergraph.md)、[构建运行](../manual/build.md#render-graph-与-feature)。
 
 限制：依赖为显式 Feature 名称，不从资源或延迟回调自动反射；Graph 仍独立校验本帧资源访问。当前单线程 Build，Feature 的可变状态并发安全由调用方负责。本次未验证 Release 或其他 GPU。Forward+、Deferred、光追与完整场景仍在后续计划，没有提前实现。
+
+### M3.6 既有构建树依赖修复
+
+状态：DONE，日期：2026 年 10 月 24 日。
+
+原因：标准 windows-debug 原 exe 启动四帧时复现 0xC0000005。旧 rules.ninja 的 showIncludes 前缀为 CP936，当前编译器输出 UTF-8，导致头文件依赖漏记；runtime.cpp.obj 早于 commands.hpp，但 commands.cpp.obj 已更新。新旧 Command variant 类型布局混用，在 shared_ptr 析构时访问错误内存。
+
+修复：配置时由 cmake/MsvcIncludes.cmake 调用当前 MSVC 并以 UTF-8 解析实际依赖前缀，应用到 Ninja，不硬编码语言和前缀；修正前缀后对标准构建做完整重编译。已确认 Runtime、DemoGeometry、Graph Executor 的 Ninja 依赖记录包含 commands.hpp。旧 exe 曾被 VS 调试会话占用，停止调试后完成替换。
+
+验证：标准 windows-debug、MSVC 19.51、DXC 1.8、RTX 4060 Laptop GPU；Visual Studio 自带 CMake 4.3 与独立 CMake 4.4 均配置成功。最终标准目录 Debug CTest 19/19 通过，DX12/Vulkan 各直接启动四帧正常退出且验证错误为 0。该结果验证用户实际启动目录，未以之前隔离构建替代。文本与差异检查通过。
+
+本地限制：标准目录遇到 PDB 管理器 C1902，使用 Embedded 调试信息（/Z7）并清除缓存中的旧 /Zi 参数完成重编译；这些仅为本机构建缓存，未硬编码共享预设。未复验 Release 或其他 GPU。构建依赖与一遍完整重编译的恢复方式见 [构建手册](../manual/build.md#工具链)。
 
 ## M4 场景资源与基础 Renderer
 

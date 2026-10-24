@@ -9,6 +9,7 @@ if(CMAKE_SOURCE_DIR STREQUAL CMAKE_BINARY_DIR)
     message(FATAL_ERROR "Use an out-of-source build: cmake --preset windows-debug")
 endif()
 
+include(cmake/MsvcIncludes.cmake)
 include(CTest)
 include(cmake/Dependencies.cmake)
 include(cmake/Shaders.cmake)

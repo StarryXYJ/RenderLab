@@ -27,7 +27,16 @@ $vsPath = & $vswhere -latest -products '*' -requires Microsoft.VisualStudio.Comp
 chcp 65001
 ```
 
-使用正常的 UTF-8 控制台进行首次配置。中文 MSVC 在无控制台、输出代码页不一致的环境下可能让 CMake 错误解码 `/showIncludes`，导致 Ninja 丢失头文件依赖。遇到这一情况，应在上述控制台中执行 `cmake --preset windows-debug --fresh` 重新检测。不要只隐藏输出或手工编辑生成的 Ninja 文件。
+配置时由 cmake/MsvcIncludes.cmake 调用当前 MSVC，按 UTF-8 读取实际 /showIncludes 输出并设置 Ninja 的依赖前缀，不依赖旧缓存中的本地化编码。检测失败会中止配置，避免悄悄丢失头文件依赖。
+
+旧构建目录可能已经混入不同头文件版本的目标文件。头文件中的 Command variant 等共享类型变化后，这会表现为 shared_ptr 析构访问冲突，即使增量构建报告成功。修正检测后必须完整重编译一次：
+
+```powershell
+cmake --preset windows-debug
+cmake --build --preset windows-debug --clean-first
+```
+
+不要手工修改生成的 Ninja 文件，也不要仅重新链接 exe。以后配置仍需使用同一开发环境；更换编译器时用 --fresh 重新检测工具链，并完整重编译。
 
 ## 依赖
 
