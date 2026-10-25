@@ -25,7 +25,7 @@ MaterialReadback RecordMaterial(Runtime& runtime, const material::Prepared& prep
     commands->Barrier(color, State::Undefined, State::ColorAttachment);
     commands->Begin(runtime.CreateView(color));
     commands->Bind(prepared.pipeline);
-    commands->Bind(prepared.bindings);
+    commands->Bind(runtime.CreateGroup(prepared.pipeline->desc.layout, prepared.resources));
     commands->Geometry(vertices);
     commands->DrawVertices(3);
     commands->End();

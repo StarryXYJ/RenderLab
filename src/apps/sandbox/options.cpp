@@ -59,6 +59,12 @@ Options ParseOptions(std::span<const std::string_view> arguments)
         {
             options.outputPath = value();
         }
+        else if (arg == "--project")
+        {
+            options.projectPath = value();
+            if (options.projectPath.empty())
+                throw std::invalid_argument("--project cannot be empty");
+        }
         else if (arg == "--report")
         {
             options.reportPath = value();
@@ -75,6 +81,8 @@ Options ParseOptions(std::span<const std::string_view> arguments)
         {
             options.rhiTest = true;
         }
+        else if (arg == "--scene-test")
+            options.sceneTest = true;
         else if (arg == "--graph-test")
             options.graphTest = true;
         else if (arg == "--graph-no-cull")
@@ -116,12 +124,14 @@ Options ParseOptions(std::span<const std::string_view> arguments)
         throw std::invalid_argument("--output cannot be empty");
     if (options.headless && options.frames)
         throw std::invalid_argument("--frames requires a window");
+    if (options.sceneTest && options.projectPath.empty())
+        throw std::invalid_argument("--scene-test requires --project");
     return options;
 }
 
 std::string_view Usage()
 {
-    return "RenderLab M3 Sandbox\n"
+    return "RenderLab Sandbox\n"
            "  --backend dx12|vulkan       Backend (default: dx12)\n"
            "  --adapter N                 Index from this backend's adapter list\n"
            "  --validation auto|on|off    auto warns if validation is unavailable\n"
@@ -136,6 +146,8 @@ std::string_view Usage()
            "  --graph-no-update           Omit the noise update Feature pass in the window demo\n"
            "  --graph-dump PATH           Write the first window frame graph plan as JSON\n"
            "  --output PATH               Acceptance images and data (default: out/m1)\n"
+           "  --scene-test               Check the M4 reference scene (--project required)\n"
+           "  --project FILE             Load a project scene using Forward Blinn-Phong\n"
            "  --report PATH               Write a JSON capability report\n"
            "  --log PATH                  UTF-8 log (default: logs/renderlab.log)\n"
            "  --help                      Show this help\n";

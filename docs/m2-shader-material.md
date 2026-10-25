@@ -135,11 +135,11 @@ auto snapshot = materials.Prepare(build.package, asset, prepare, resolveResource
 
 `Preparation.constants` 按块名提供 View/Draw/Pass 数值，字段按稳定 id 索引，缺省使用声明默认值。`Preparation.bindings` 按生成的 HLSL symbol 提供 Pass 资源，也可提供已经打包的外部 cbuffer。结构化缓冲必须提供匹配元素的 stride；sRGB 属性必须解析到 sRGB 纹理。
 
-Prepare 必须在 Runtime 创建线程执行。它复用当前代的 ShaderModule/BindingLayout，通过 RHI 唯一 `CreatePipeline` 缓存入口准备 PSO，打包数值并创建不可变 BindingGroup。Prepared 持有代际、PSO、绑定和新常量缓冲；数值或纹理修改产生新快照，正在执行的快照不原地改写。
+Prepare 必须在 Runtime 创建线程执行。它复用当前代的 ShaderModule/BindingLayout，通过 RHI 唯一 `CreatePipeline` 缓存入口准备 PSO，打包数值并返回不可变绑定数据。Prepared 持有代际、PSO、resources 绑定值和新常量缓冲；数值或纹理修改产生新快照，正在执行的快照不原地改写。
 
 普通参数改变只更新常量/绑定，静态功能通过 variant 选择程序，depth/blend/cull 等渲染状态来自 Pass 或 Preparation 显式覆盖。PSO key 包含不可变 Shader/布局身份、全部顶点属性/stride、颜色格式和全部当前渲染状态。新代创建新模块身份，不能命中旧代 PSO；数值变化不进入 key。缓存最多 256 个弱引用，GPU 代查找最多 64 个弱引用，淘汰查找项不影响仍被命令保活的对象。超限后再次请求可能重建，不保证永久命中。
 
-调用方显式录制 `snapshot.constants` 的 HostWrite → UniformRead 屏障，再绑定 Pipeline/BindingGroup。外部上传常量、只读缓冲、UAV 和纹理状态也由调用方负责；Prepare 不插入屏障，不维护第二套资源状态机。Execute 只使用准备好的对象录制命令。完整样例见 `src/samples/material_demo.cpp`。
+调用方显式录制 `snapshot.constants` 的 HostWrite → UniformRead 屏障，直接 RHI 路径使用 runtime.CreateGroup(snapshot.pipeline->desc.layout, snapshot.resources) 建立 BindingGroup，再绑定 Pipeline/BindingGroup。外部上传常量、只读缓冲、UAV 和纹理状态也由调用方负责；Prepare 不插入屏障，不维护第二套资源状态机。Execute 只使用准备好的对象录制命令。完整样例见 `src/samples/material_demo.cpp`。
 
 ## 热重载事务
 
@@ -168,3 +168,5 @@ M2 提供编译请求与帧边界接口，不附带操作系统文件监视器�
 `shader.contracts` 测声明、元数据保留、数组/矩阵布局、双目标反射、缓存失效/损坏、材质保存与迁移、连续后台请求和编译失败恢复。`gpu.{dx12,vulkan}.material` 测同一材质多 Pass、参数/纹理编辑、sRGB、variant/状态缓存，以及带非零 offset 的 cbuffer/SRV/UAV、Compute 实际矩阵值、写后写同步、录制/在途热重载和回收。
 
 验收样例输出 default/edited/reloaded BMP、sample.material、日志和临时重载副本。源码不被测试修改；双后端验证开启，Shutdown 后检查验证错误及显存占用。M1 的固定噪声和窗口测试继续独立运行，避免材质层掩盖底层回归。
+
+Graph 路径将 Prepared.resources 导入并声明用途，由 Graph 录制时建立绑定组，避免重复准备绑定；见 [M4 场景](m4-scene.md)。参数模块 use 先查询声明文件目录，再查询 CompileOptions.includeDirectories；shaderc 对应可重复的 --include DIRECTORY。

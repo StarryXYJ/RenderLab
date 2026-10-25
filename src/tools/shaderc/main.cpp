@@ -15,7 +15,7 @@ int wmain(int argc, wchar_t** argv)
         if (argc < 2)
         {
             std::cout << "renderlab_shaderc FILE.shader [--cache DIRECTORY] [--schema FILE] "
-                         "[--target dxil|spirv|both]\n";
+                         "[--target dxil|spirv|both] [--include DIRECTORY]\n";
             return 2;
         }
         renderlab::shader::CompileOptions options;
@@ -28,6 +28,8 @@ int wmain(int argc, wchar_t** argv)
                 throw std::invalid_argument("Missing option value");
             if (option == L"--cache")
                 options.cacheDirectory = argv[i];
+            else if (option == L"--include")
+                options.includeDirectories.emplace_back(argv[i]);
             else if (option == L"--schema")
                 output = argv[i];
             else if (option == L"--target")

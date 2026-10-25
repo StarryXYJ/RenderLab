@@ -17,10 +17,12 @@ struct Options
     std::optional<uint32_t> frames;
     std::string logPath = "logs/renderlab.log";
     std::string reportPath;
+    std::string projectPath;
     std::string outputPath = "out/m1";
     bool headless = false;
     bool windowTest = false;
     bool rhiTest = false;
+    bool sceneTest = false;
     bool graphTest = false, graphNoCull = false, graphNoUpdate = false;
     std::string graphDumpPath;
     bool help = false;

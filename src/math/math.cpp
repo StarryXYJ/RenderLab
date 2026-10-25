@@ -1,0 +1,211 @@
+#include "math/math.hpp"
+
+#include <algorithm>
+#include <cmath>
+#include <limits>
+#include <numbers>
+#include <stdexcept>
+
+namespace renderlab::math
+{
+Vec3 operator+(Vec3 a, Vec3 b)
+{
+    return {a.x + b.x, a.y + b.y, a.z + b.z};
+}
+Vec3 operator-(Vec3 a, Vec3 b)
+{
+    return {a.x - b.x, a.y - b.y, a.z - b.z};
+}
+Vec3 operator*(Vec3 a, float b)
+{
+    return {a.x * b, a.y * b, a.z * b};
+}
+float Dot(Vec3 a, Vec3 b)
+{
+    return a.x * b.x + a.y * b.y + a.z * b.z;
+}
+Vec3 Cross(Vec3 a, Vec3 b)
+{
+    return {a.y * b.z - a.z * b.y, a.z * b.x - a.x * b.z, a.x * b.y - a.y * b.x};
+}
+float Length(Vec3 a)
+{
+    return std::sqrt(Dot(a, a));
+}
+Vec3 Normalize(Vec3 a)
+{
+    const float length = Length(a);
+    if (!std::isfinite(length) || length < 1e-8f)
+        throw std::invalid_argument("Cannot normalize zero/nonfinite vector");
+    return a * (1 / length);
+}
+Quaternion Quaternion::EulerDegrees(Vec3 angles)
+{
+    const auto factor = std::numbers::pi_v<float> / 360;
+    const auto x = angles.x * factor, y = angles.y * factor, z = angles.z * factor;
+    const auto cx = std::cos(x), sx = std::sin(x), cy = std::cos(y), sy = std::sin(y),
+               cz = std::cos(z), sz = std::sin(z);
+    return {sx * cy * cz - cx * sy * sz, cx * sy * cz + sx * cy * sz, cx * cy * sz - sx * sy * cz,
+            cx * cy * cz + sx * sy * sz};
+}
+Quaternion operator*(Quaternion a, Quaternion b)
+{
+    return {a.w * b.x + a.x * b.w + a.y * b.z - a.z * b.y,
+            a.w * b.y - a.x * b.z + a.y * b.w + a.z * b.x,
+            a.w * b.z + a.x * b.y - a.y * b.x + a.z * b.w,
+            a.w * b.w - a.x * b.x - a.y * b.y - a.z * b.z};
+}
+Mat4 Mat4::Identity()
+{
+    Mat4 result;
+    for (size_t i = 0; i < 4; ++i)
+        result.At(i, i) = 1;
+    return result;
+}
+Mat4 operator*(const Mat4& a, const Mat4& b)
+{
+    Mat4 result;
+    for (size_t r = 0; r < 4; ++r)
+        for (size_t c = 0; c < 4; ++c)
+            for (size_t k = 0; k < 4; ++k)
+                result.At(r, c) += a.At(r, k) * b.At(k, c);
+    return result;
+}
+Mat4 Inverse(const Mat4& a)
+{
+    float values[4][8]{};
+    for (size_t r = 0; r < 4; ++r)
+        for (size_t c = 0; c < 4; ++c)
+        {
+            if (!std::isfinite(a.At(r, c)))
+                throw std::invalid_argument("Nonfinite matrix");
+            values[r][c] = a.At(r, c);
+            values[r][c + 4] = r == c ? 1.f : 0.f;
+        }
+    for (size_t c = 0; c < 4; ++c)
+    {
+        size_t pivot = c;
+        for (size_t r = c + 1; r < 4; ++r)
+            if (std::abs(values[r][c]) > std::abs(values[pivot][c]))
+                pivot = r;
+        if (std::abs(values[pivot][c]) < 1e-10f)
+            throw std::invalid_argument("Singular transform");
+        for (size_t k = 0; k < 8; ++k)
+            std::swap(values[c][k], values[pivot][k]);
+        const auto divisor = values[c][c];
+        for (auto& value : values[c])
+            value /= divisor;
+        for (size_t r = 0; r < 4; ++r)
+            if (r != c)
+            {
+                const auto factor = values[r][c];
+                for (size_t k = 0; k < 8; ++k)
+                    values[r][k] -= factor * values[c][k];
+            }
+    }
+    Mat4 result;
+    for (size_t r = 0; r < 4; ++r)
+        for (size_t c = 0; c < 4; ++c)
+            result.At(r, c) = values[r][c + 4];
+    return result;
+}
+Mat4 Transpose(const Mat4& a)
+{
+    Mat4 result;
+    for (size_t r = 0; r < 4; ++r)
+        for (size_t c = 0; c < 4; ++c)
+            result.At(r, c) = a.At(c, r);
+    return result;
+}
+Mat4 Compose(Vec3 t, Quaternion q, Vec3 scale)
+{
+    const auto norm = std::sqrt(q.x * q.x + q.y * q.y + q.z * q.z + q.w * q.w);
+    if (!std::isfinite(norm) || norm < 1e-8f)
+        throw std::invalid_argument("Invalid quaternion");
+    q.x /= norm;
+    q.y /= norm;
+    q.z /= norm;
+    q.w /= norm;
+    Mat4 r = Mat4::Identity();
+    r.At(0, 0) = 1 - 2 * (q.y * q.y + q.z * q.z);
+    r.At(0, 1) = 2 * (q.x * q.y - q.z * q.w);
+    r.At(0, 2) = 2 * (q.x * q.z + q.y * q.w);
+    r.At(1, 0) = 2 * (q.x * q.y + q.z * q.w);
+    r.At(1, 1) = 1 - 2 * (q.x * q.x + q.z * q.z);
+    r.At(1, 2) = 2 * (q.y * q.z - q.x * q.w);
+    r.At(2, 0) = 2 * (q.x * q.z - q.y * q.w);
+    r.At(2, 1) = 2 * (q.y * q.z + q.x * q.w);
+    r.At(2, 2) = 1 - 2 * (q.x * q.x + q.y * q.y);
+    for (size_t row = 0; row < 3; ++row)
+    {
+        r.At(row, 0) *= scale.x;
+        r.At(row, 1) *= scale.y;
+        r.At(row, 2) *= scale.z;
+    }
+    r.At(0, 3) = t.x;
+    r.At(1, 3) = t.y;
+    r.At(2, 3) = t.z;
+    Inverse(r);
+    return r;
+}
+Mat4 Perspective(float fov, float aspect, float nearPlane, float farPlane)
+{
+    if (!std::isfinite(fov) || !std::isfinite(aspect) || !std::isfinite(nearPlane) ||
+        !std::isfinite(farPlane) || fov <= 0 || fov >= 179 || aspect <= 0 || nearPlane <= 0 ||
+        farPlane <= nearPlane)
+        throw std::invalid_argument("Invalid camera projection");
+    const float y = 1 / std::tan(fov * std::numbers::pi_v<float> / 360);
+    Mat4 result;
+    result.At(0, 0) = y / aspect;
+    result.At(1, 1) = y;
+    result.At(2, 2) = nearPlane / (farPlane - nearPlane);
+    result.At(2, 3) = farPlane * nearPlane / (farPlane - nearPlane);
+    result.At(3, 2) = -1;
+    return result;
+}
+Vec3 Point(const Mat4& m, Vec3 p)
+{
+    return {m.At(0, 0) * p.x + m.At(0, 1) * p.y + m.At(0, 2) * p.z + m.At(0, 3),
+            m.At(1, 0) * p.x + m.At(1, 1) * p.y + m.At(1, 2) * p.z + m.At(1, 3),
+            m.At(2, 0) * p.x + m.At(2, 1) * p.y + m.At(2, 2) * p.z + m.At(2, 3)};
+}
+Vec3 Direction(const Mat4& m, Vec3 p)
+{
+    return {m.At(0, 0) * p.x + m.At(0, 1) * p.y + m.At(0, 2) * p.z,
+            m.At(1, 0) * p.x + m.At(1, 1) * p.y + m.At(1, 2) * p.z,
+            m.At(2, 0) * p.x + m.At(2, 1) * p.y + m.At(2, 2) * p.z};
+}
+Bounds TransformBounds(const Mat4& m, Bounds b)
+{
+    Bounds result{{INFINITY, INFINITY, INFINITY}, {-INFINITY, -INFINITY, -INFINITY}};
+    for (unsigned i = 0; i < 8; ++i)
+    {
+        const auto p =
+            Point(m, {i & 1 ? b.maximum.x : b.minimum.x, i & 2 ? b.maximum.y : b.minimum.y,
+                      i & 4 ? b.maximum.z : b.minimum.z});
+        result.minimum = {std::min(result.minimum.x, p.x), std::min(result.minimum.y, p.y),
+                          std::min(result.minimum.z, p.z)};
+        result.maximum = {std::max(result.maximum.x, p.x), std::max(result.maximum.y, p.y),
+                          std::max(result.maximum.z, p.z)};
+    }
+    return result;
+}
+bool Visible(const Mat4& m, Bounds b)
+{
+    std::array<bool, 6> outside{true, true, true, true, true, true};
+    for (unsigned i = 0; i < 8; ++i)
+    {
+        const Vec3 p{i & 1 ? b.maximum.x : b.minimum.x, i & 2 ? b.maximum.y : b.minimum.y,
+                     i & 4 ? b.maximum.z : b.minimum.z};
+        const auto v = Point(m, p);
+        const auto w = m.At(3, 0) * p.x + m.At(3, 1) * p.y + m.At(3, 2) * p.z + m.At(3, 3);
+        outside[0] = outside[0] && v.x < -w;
+        outside[1] = outside[1] && v.x > w;
+        outside[2] = outside[2] && v.y < -w;
+        outside[3] = outside[3] && v.y > w;
+        outside[4] = outside[4] && v.z < 0;
+        outside[5] = outside[5] && v.z > w;
+    }
+    return std::ranges::none_of(outside, [](bool value) { return value; });
+}
+} // namespace renderlab::math

@@ -19,6 +19,7 @@ rhi::State StateFor(Use use)
         return rhi::State::Storage;
     case Use::Color:
         return rhi::State::ColorAttachment;
+    case Use::DepthRead:
     case Use::Depth:
         return rhi::State::DepthWrite;
     case Use::CopySource:
@@ -77,20 +78,21 @@ void Graph::Impl::ValidateUse(uint32_t index, const detail::Resource& r, Use use
     Require(pass.kind != PassKind::Copy || use == Use::CopySource || use == Use::CopyDestination,
             "Copy pass contains shader/raster access" + suffix);
     Require(pass.kind != PassKind::Compute ||
-                (use != Use::Color && use != Use::Depth && use != Use::Vertex &&
-                 use != Use::Index && use != Use::Indirect),
+                (use != Use::Color && use != Use::Depth && use != Use::DepthRead &&
+                 use != Use::Vertex && use != Use::Index && use != Use::Indirect),
             "Compute pass contains raster access" + suffix);
     if (r.isTexture)
     {
         Require(use == Use::Sampled || use == Use::Storage || use == Use::Color ||
-                    use == Use::Depth || use == Use::CopySource || use == Use::CopyDestination,
+                    use == Use::Depth || use == Use::DepthRead || use == Use::CopySource ||
+                    use == Use::CopyDestination,
                 "Buffer usage on texture" + suffix);
         Require(use != Use::Storage || r.textureDesc.storage,
                 "Texture lacks storage usage" + suffix);
         Require(use != Use::Color ||
                     (r.textureDesc.attachment && r.textureDesc.format != rhi::Format::D32),
                 "Invalid color attachment" + suffix);
-        Require(use != Use::Depth ||
+        Require((use != Use::Depth && use != Use::DepthRead) ||
                     (r.textureDesc.attachment && r.textureDesc.format == rhi::Format::D32),
                 "Invalid depth attachment" + suffix);
         Require(use != Use::Sampled || r.textureDesc.format != rhi::Format::D32,
@@ -98,7 +100,8 @@ void Graph::Impl::ValidateUse(uint32_t index, const detail::Resource& r, Use use
     }
     else
     {
-        Require(use != Use::Sampled && use != Use::Color && use != Use::Depth,
+        Require(use != Use::Sampled && use != Use::Color && use != Use::Depth &&
+                    use != Use::DepthRead,
                 "Texture usage on buffer" + suffix);
         Require(use != Use::Storage || r.bufferDesc.storage, "Buffer lacks storage usage" + suffix);
         Require(r.bufferDesc.memory != rhi::Memory::Readback ||
@@ -110,10 +113,9 @@ void Graph::Impl::ValidateUse(uint32_t index, const detail::Resource& r, Use use
                 "Upload buffer is a GPU read source only" + suffix);
     }
 }
-void Graph::Impl::Scope(uint32_t pass, bool preparation) const
+void Graph::Impl::Scope(uint32_t pass) const
 {
-    Require(active == pass &&
-                phase == (preparation ? detail::Phase::Preparing : detail::Phase::Recording),
+    Require(active == pass && phase == detail::Phase::Recording,
             "Resource context escaped its callback scope");
 }
 detail::Resource& Graph::Impl::Resolve(uint32_t pass, uint64_t graph, uint32_t resource,

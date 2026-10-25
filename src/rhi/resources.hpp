@@ -193,8 +193,10 @@ struct PipelineDesc
     std::shared_ptr<ShaderModule> compute;
     Format color = Format::Rgba8;
     bool depth = false;
+    bool depthWrite = true;
     bool blend = false;
     bool cull = true;
+    bool frontCounterClockwise = true;
     uint32_t vertexStride = 0;
     std::vector<VertexAttribute> attributes;
 };

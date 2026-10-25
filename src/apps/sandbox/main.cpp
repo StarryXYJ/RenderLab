@@ -52,7 +52,7 @@ int Run(const sandbox::Options& options, const std::filesystem::path& shaderRoot
         std::format("Supported: rayPipeline={}, rayQuery={}, descriptorIndexing={}, meshShader={}",
                     report.supported.rayTracingPipeline, report.supported.rayQuery,
                     report.supported.descriptorIndexing, report.supported.meshShader));
-    if (window || options.rhiTest || options.graphTest)
+    if (window || options.rhiTest || options.graphTest || !options.projectPath.empty())
     {
         auto runtime = device->CreateRuntime();
         sandbox::RunRendering(window.get(), *device, *runtime, options, shaderRoot, logger);

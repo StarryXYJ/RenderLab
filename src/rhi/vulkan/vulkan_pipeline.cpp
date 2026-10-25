@@ -175,14 +175,16 @@ std::shared_ptr<Pipeline> VulkanRuntime::CreatePipelineNative(PipelineDesc desc)
         raster.polygonMode = VK_POLYGON_MODE_FILL;
         raster.cullMode = desc.cull ? VK_CULL_MODE_BACK_BIT : VK_CULL_MODE_NONE;
         // Negative viewport height matches DX12's clip-space Y; CCW is expressed in clip space.
-        raster.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
+        raster.frontFace =
+            desc.frontCounterClockwise ? VK_FRONT_FACE_COUNTER_CLOCKWISE : VK_FRONT_FACE_CLOCKWISE;
         raster.lineWidth = 1;
         VkPipelineMultisampleStateCreateInfo sample{};
         sample.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
         sample.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
         VkPipelineDepthStencilStateCreateInfo depth{};
         depth.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
-        depth.depthTestEnable = depth.depthWriteEnable = desc.depth;
+        depth.depthTestEnable = desc.depth;
+        depth.depthWriteEnable = desc.depth && desc.depthWrite;
         depth.depthCompareOp = VK_COMPARE_OP_GREATER_OR_EQUAL;
         VkPipelineColorBlendAttachmentState attachment{};
         attachment.blendEnable = desc.blend;

@@ -54,7 +54,18 @@ void detail::DeclarationParser::Load(const std::filesystem::path& input, bool mo
         {
             auto include = lexer.String();
             lexer.Expect(";");
-            Load(path.parent_path() / platform::Utf8ToWide(include), true);
+            auto modulePath = path.parent_path() / platform::Utf8ToWide(include);
+            if (!std::filesystem::is_regular_file(modulePath))
+                for (const auto& directory : includeDirectories)
+                {
+                    const auto candidate = directory / platform::Utf8ToWide(include);
+                    if (std::filesystem::is_regular_file(candidate))
+                    {
+                        modulePath = candidate;
+                        break;
+                    }
+                }
+            Load(modulePath, true);
         }
         else if (lexer.Accept("material"))
         {
@@ -180,9 +191,11 @@ void detail::DeclarationParser::Load(const std::filesystem::path& input, bool mo
     active.erase(path);
     loaded.insert(path);
 }
-Definition ParseDefinition(const std::filesystem::path& path)
+Definition ParseDefinition(const std::filesystem::path& path,
+                           const std::vector<std::filesystem::path>& includeDirectories)
 {
     detail::DeclarationParser parser;
+    parser.includeDirectories = includeDirectories;
     parser.definition.source = std::filesystem::weakly_canonical(path);
     parser.Load(path, false);
     if (parser.definition.passes.empty())

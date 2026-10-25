@@ -27,7 +27,16 @@ $vsPath = & $vswhere -latest -products '*' -requires Microsoft.VisualStudio.Comp
 chcp 65001
 ```
 
-使用正常的 UTF-8 控制台进行首次配置。中文 MSVC 在无控制台、输出代码页不一致的环境下可能让 CMake 错误解码 `/showIncludes`，导致 Ninja 丢失头文件依赖。遇到这一情况，应在上述控制台中执行 `cmake --preset windows-debug --fresh` 重新检测。不要只隐藏输出或手工编辑生成的 Ninja 文件。
+配置时由 cmake/MsvcIncludes.cmake 调用当前 MSVC，按 UTF-8 读取实际 /showIncludes 输出并设置 Ninja 的依赖前缀，不依赖旧缓存中的本地化编码。检测失败会中止配置，避免悄悄丢失头文件依赖。
+
+旧构建目录可能已经混入不同头文件版本的目标文件。头文件中的 Command variant 等共享类型变化后，这会表现为 shared_ptr 析构访问冲突，即使增量构建报告成功。修正检测后必须完整重编译一次：
+
+```powershell
+cmake --preset windows-debug
+cmake --build --preset windows-debug --clean-first
+```
+
+不要手工修改生成的 Ninja 文件，也不要仅重新链接 exe。以后配置仍需使用同一开发环境；更换编译器时用 --fresh 重新检测工具链，并完整重编译。
 
 ## 依赖
 
@@ -135,23 +144,44 @@ ctest --test-dir out/build/windows-m2-debug --output-on-failure
 
 ## Render Graph 与 Feature
 
-默认 Sandbox 窗口现在使用 M3 每帧 Feature/Graph 路径。`--rhi-test` 保留直接 RHI 验收，`--graph-test` 验证图路径与直接路径的图像一致性。
+默认 Sandbox 窗口使用 Custom Feature 注册 → Create → 每帧 Graph 构图，不注入 Forward 内置流程。`--rhi-test` 保留直接 RHI 验收，`--graph-test` 验证图路径与直接路径的图像一致性。
 
 ```powershell
-./out/build/windows-m2-debug/renderlab_sandbox.exe --backend dx12 --validation on --graph-dump out/m3/frame.json
-./out/build/windows-m2-debug/renderlab_sandbox.exe --backend vulkan --validation on --graph-no-update
-./out/build/windows-m2-debug/renderlab_sandbox.exe --backend vulkan --validation on --graph-no-cull --frames 60
+./out/build/windows-debug/renderlab_sandbox.exe --backend dx12 --validation on --graph-dump out/m3/frame.json
+./out/build/windows-debug/renderlab_sandbox.exe --backend vulkan --validation on --graph-no-update
+./out/build/windows-debug/renderlab_sandbox.exe --backend vulkan --validation on --graph-no-cull --frames 60
 
-./out/build/windows-m2-debug/renderlab_sandbox.exe --backend dx12 --headless --validation on --graph-test --output out/m3 --log out/m3/dx12.log
-./out/build/windows-m2-debug/renderlab_sandbox.exe --backend vulkan --headless --validation on --graph-test --output out/m3 --log out/m3/vulkan.log
-ctest --test-dir out/build/windows-m2-debug -R 'rendergraph.contracts|gpu.*.graph' --output-on-failure
+./out/build/windows-debug/renderlab_sandbox.exe --backend dx12 --headless --validation on --graph-test --output out/m3 --log out/m3/dx12.log
+./out/build/windows-debug/renderlab_sandbox.exe --backend vulkan --headless --validation on --graph-test --output out/m3 --log out/m3/vulkan.log
+ctest --test-dir out/build/windows-debug -R 'rendergraph.contracts|gpu.*.graph' --output-on-failure
 ```
 
-这里沿用已有隔离构建目录，也可使用标准 windows-debug/windows-release 预设构建最新代码。M3 完整测试为 19 项：7 项 CPU/CLI 和 12 项 GPU。`--graph-no-update` 省略噪声更新 Pass，画面显示未经过 XOR 更新的噪声；`--graph-no-cull` 让无消费者的测试 Feature 也执行。两者用于确认功能与图编译选择，不改变执行器。
+示例使用标准 windows-debug 预设，也可使用已有隔离构建目录或 windows-release。M3 完整测试为 19 项：7 项 CPU/CLI 和 12 项 GPU。`--graph-no-update` 省略噪声更新 Pass，画面显示未经过 XOR 更新的噪声；`--graph-no-cull` 让无消费者的测试 Feature 也执行。两者用于确认功能与图编译选择，不改变执行器。
 
 `--graph-dump` 导出首个窗口帧的计划，包含 Pass 来源、存活/剔除原因、资源版本、依赖、屏障、生命周期和 CPU 编译/准备/录制耗时。GPU Capture 可以通过每个 Pass 的 Marker 定位工作；当前不提供每 Pass GPU Timestamp。
 
-`--graph-test` 输出 `后端/triangle-noise.bmp`、`noise.bmp`、`noise.rgba`、六帧的 `plan-N.json` 和 `buffer-plan.json`。正常更新时，全部颜色字节与直接 RHI 绘制比较；固定噪声保持既有 SHA-256。缓冲探针验证上传、复制、常量、结构化缓冲的两次 Compute 和读回。详细 API 与限制见 [Render Graph 与 Feature](../docs/m3-rendergraph.md)。
+`--graph-test` 输出 `后端/triangle-noise.bmp`、`noise.bmp`、`noise.rgba`、六帧的 `plan-N.json` 、`buffer-plan.json` 和 `forward-plan.json`。正常更新时，全部颜色字节与直接 RHI 绘制比较；固定噪声保持既有 SHA-256。缓冲探针验证上传、复制、常量、结构化缓冲的两次 Compute 和读回。普通 Forward 另检查透明混合、只读深度与独立阶段快照。CPU 合约检查 Create 的乱序注册、依赖缺失/重名/环和已创建组合隔离。详细 API 与限制见 [Render Graph 与 Feature](../docs/m3-rendergraph.md)。
+
+## M4 项目场景
+
+构建 Sandbox 会同步内置库到 exe 附近 shaders/RenderLab；修改 HLSL 后重新构建即可更新，不需要修改 C++ 来触发链接。
+
+```powershell
+./out/build/windows-debug/renderlab_sandbox.exe --backend dx12 --validation on --project sample/m4/RenderLab.rlproject
+./out/build/windows-debug/renderlab_sandbox.exe --backend vulkan --validation on --project sample/m4/RenderLab.rlproject
+./out/build/windows-debug/renderlab_sandbox.exe --backend dx12 --headless --validation on --project sample/m4/RenderLab.rlproject --output out/m4
+ctest --test-dir out/build/windows-debug -R 'content.contracts|gpu.*.scene' --output-on-failure
+```
+
+项目窗口用 WASD 移动，Q/E 下降/上升；上下方向键绕相机自身右轴俯仰，左右方向键绕父空间上轴转向。失焦时清空按键。无 --project 仍是 Custom Graph Demo。--project --headless 输出一帧及 scene-plan.json；--scene-test 在参考场景上增加行为验收，普通项目无需开启。
+
+参考项目包含原创 Cube/Sphere glTF、棋盘纹理、项目 Copper Shader/材质、父子对象和两个方向光；只选 UUID 最小的启用光。远处立方体用于剔除验证。数据格式与范围见 [M4 场景](../docs/m4-scene.md)。
+
+```powershell
+./out/build/windows-debug/renderlab_shaderc.exe sample/m4/Assets/Copper.shader --include shaders --cache out/m4/shader-cache --schema out/m4/copper-schema.json
+```
+
+Assets 与 .meta 纳入版本管理，Library 可以清除重建。不要原地改写命令正在使用的 Upload 数据。资产首次上传可等待，普通帧仍使用现有完成点与帧管理。
 
 ## 验证结果与边界
 

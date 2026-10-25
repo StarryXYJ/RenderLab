@@ -34,7 +34,7 @@ RenderLab 是面向引擎岗和渲染岗求职的渲染引擎项目。核心采�
 - 首期一个 Device、一个项目、一个主视口和一条 Graphics Queue。多视图历史数据仍按 ViewID 命名，避免未来改成全局单例。
 - Render Graph 是图内同步计划的唯一生成者；RHI 执行计划并验证，不另做隐式自动状态切换。
 - Schema 是材质属性的权威描述，Template 是 ShaderPackage 的只读视图，GPU 数据是可重建投影。
-- 基础前向渲染先使用普通函数添加 Pass；Feature 注册表和动态模块等到实际需要时再引入。
+- Feature 使用薄基类表达实例化需求；组合器按显式依赖创建固定顺序，不引入全局注册表或动态模块。
 - 不提前实现执行计划缓存、通用属性表达式语言、跨进程编辑协议、通用资源流送或通用 Job System。
 
 ## 总体分层
@@ -194,13 +194,15 @@ DX12 与 Vulkan 的 DrawID、InstanceID、firstInstance 和间接 Count 能力�
 
 Hi-Z 使用跨帧历史时，规定首帧、相机跳变和分辨率变化下的失效策略。GPU Scene 的更新、剔除结果和间接参数全部进入 Render Graph 访问声明。
 
+M4 的首个场景闭环见 [项目、场景与 Blinn–Phong](../docs/m4-scene.md)。Scene 使用值类型组件和层级 Transform，不引入 ECS 管理器。DirectionalLight 可有多个，按稳定 UUID 选择一个启用对象，其世界旋转、颜色和强度提取到共享 Frame 常量。HLSL Lighting 读取全局主光，点光源和面光源后置。
+
 ## Shader 与材质
 
 ### Shader 工具链
 
 ShaderDefinition 是作者维护的 Shader 资产，包含 HLSL 来源、入口点、材质属性、合法变体、Pass 角色和状态选择。M2 采用简洁声明语法作为唯一作者入口，共享参数模块由 use 引入，HLSL 函数与工具仍由普通 Include 组织。内部描述统一，不并存另一份手写 JSON 元数据。
 
-普通 material 数值自动生成 Material 常量缓冲，显式 cbuffer 声明共享数据块及 frame/view/draw/pass 作用域。参数 Schema、绑定映射和 PackingPlan 从同一声明生成。Shader 编译层仅产生 CPU 程序/接口数据，不依赖 RHI Device；DXC 处理 HLSL 预处理、Include 和程序编译，反射验证保留字段与资源接口。生成头按编译任务隔离，缓存覆盖共享声明及传递 Include。后台编译成功后，由设备所有线程在准备阶段创建 GPU 对象并在帧边界整体切换，失败保留旧代。
+普通 material 数值自动生成 Material 常量缓冲，显式 cbuffer 声明共享数据块及 frame/view/draw/pass 作用域。参数 Schema、绑定映射和 PackingPlan 从同一声明生成。Shader 编译层仅产生 CPU 程序/接口数据，不依赖 RHI Device；DXC 处理 HLSL 预处理、Include 和程序编译，反射验证保留字段与资源接口。生成头按编译任务隔离，缓存覆盖共享声明及传递 Include。后台编译成功后，由设备所有线程在准备阶段创建 GPU 对象并在帧边界整体切换，失败保留旧代。Material 返回不可变绑定值：直接 RHI 建立绑定组，Graph 适配先导入并声明资源，由 Graph 录制时组装绑定，避免重复准备。
 
 M2 的具体声明、布局和准备/发布接口见 [Shader 与材质](../docs/m2-shader-material.md)。RHI 的唯一 CreatePipeline 入口按不可变程序/布局身份、顶点布局、附件格式和完整状态查找有界弱引用缓存。数值/纹理修改创建不可变绑定快照，静态功能选择有限具名变体，新代编译包创建新的程序身份。热重载通过 LiveMaterial 成组 Stage，调用方在帧边界 Publish；依赖监视器只负责请求编译，不进入 RHI。
 
@@ -262,15 +264,13 @@ Shader Pass 声明 Forward、GBuffer、Shadow 等角色，Renderer 按契约选�
 
 ### 定义与每帧实例
 
-参考 Unity 的声明式资源访问方式，Pass 通过 Setup 声明所使用的资源，通过 Execute 录制命令。Unity 的图系统也以资源声明组织生命周期和同步，RenderLab 采用自己的 C++ 接口与能力范围。[Unity Render Graph 介绍](https://docs.unity3d.com/6000.0/Documentation/Manual/urp/render-graph-introduction.html)
+Pass 通过 Raster/Compute/Copy Builder 立即声明资源，用一个 Execute 保存延迟录制闭包。具体 API 见 [Render Graph](../docs/m3-rendergraph.md)。每帧创建图，Create/Import/Get/Set/Export 区分声明、查询、名称重定向和输出。名称仅在单图建图时解析为类型化版本 handle，不存在运行时全局资源查找。
 
-“定义一次”指 Pass 的实现和访问规则编写一次。每帧仍需绑定当前交换链图像、历史资源、分辨率和实际功能分支，得到本帧图实例。图句柄仅在对应构建和执行周期内有效，不能保存在跨帧对象中复用。
+Compile 仅 CPU 分析；Execute(pool) 内部完成物理准备、受限录制与提交。绑定组按已声明 handle 组装。Shader/PSO 事先准备，Material/Draw 适配属于 Renderer。公共 API 不暴露 PassData 或 Prepare/Record/Submit 多段调用。
 
-先每帧构建和编译逻辑图，测量 CPU 成本后再按结构与配置缓存执行计划；分辨率、功能、队列或接口改变时重新验证。
+Graph 拥有闭包值，调用者保证嵌套指针、引用和 span 生命周期。handle 仅属于本图；写入产生版本，名称查询返回最新版本，旧 handle 不保存历史图像。真实快照必须复制。Pass 记录源位置，Context 仅能访问已声明版本、用途与范围。资源池复用受图租约、资源引用及真实完成点保护，状态只在成功提交后发布。
 
-M3 的具体接口见 [Render Graph 与 Feature](../docs/m3-rendergraph.md)。Setup 立即填充图拥有的 PassData，Prepare/Execute 要求无捕获回调；Prepare 在设备所有线程创建必要绑定，Execute 使用受限命令上下文。图句柄同时携带图身份和逻辑版本，资源池复用受图租约、资源引用及真实提交完成点共同保护。资源状态仅在成功提交后对外发布。
-
-PassData 由图拥有或复制到图执行周期的内存区，Execute 使用稳定快照和按值捕获。Setup 中的局部变量引用、临时 span 和局部容器不能被延迟回调持有。Pass 注册处记录名称和 std::source_location，错误可以回到声明位置。图内资源只在声明它的 Execute 中解析为 RHI 对象。这类生命周期约束也见于 Unreal RDG 的延迟执行设计。[Unreal RDG](https://dev.epicgames.com/documentation/en-us/unreal-engine/render-dependency-graph-in-unreal-engine)
+先每帧构建和编译，测量后决定是否缓存计划；分辨率、功能、队列或接口改变时重新验证。
 
 ### 访问声明
 
@@ -347,9 +347,13 @@ RenderPipeline 是组织渲染工作的 C++ 入口；RenderFeature 表示一组�
 
 候选 Feature 包括 Depth、Shadow、GBuffer、DeferredLighting、ForwardOpaque、ForwardTransparent、IBL、SSAO、Bloom、ToneMapping、GPUCulling、AccelerationStructureUpdate 和 RayTracedEffect。
 
-Feature 之间使用明确契约，例如 GBufferResources、ShadowResources、SceneData。资源格式、法线空间、运动矢量和深度语义属于契约的一部分。按相机与渲染功能传递本帧上下文，不通过任意字符串访问全局资源，也不把每个辅助函数拆成一个 Graph Pass。只有资源依赖、执行类型或独立调度确有需要时才增加 Pass。
+Feature 之间使用明确契约，例如 GBufferResources、ShadowResources、SceneData。资源格式、法线空间、运动矢量和深度语义属于契约的一部分。按相机与渲染功能传递本帧上下文，名称查询限制在本帧 Graph 内，也不把每个辅助函数拆成一个 Graph Pass。只有资源依赖、执行类型或独立调度确有需要时才增加 Pass。
 
-Feature 每帧根据配置决定资源和 Pass 数量。内置组合使用类型化输入输出直接连接；Before/After 是额外硬顺序，不替代资源版本，不自动保留无用工作，冲突时报环。M3 仅提供 PassHandle 顺序接口，场景阶段锚点由 M4 Renderer 根据实际流程定义；不把 Opaque/Shadow 等语义写进通用图编译器。
+Feature 使用 RenderFeature 基类，构造时声明稳定名称、Feature 依赖与长期配置，唯一 Build 方法声明本帧 Graph。RenderPipelineBuilder 流式收集实例；Create 根据依赖与阶段检查缺失、重名和环，按名称打破无关工作平局，注册顺序不影响结果。Create 不执行 Build 或 GPU 工作，返回组合固定的可复用 RenderPipeline；每帧 Build 再创建资源与 Pass。
+
+Custom 与 Forward 仅是预先注入 Feature 的不同组合，共用 Create 和 Build。Forward 注入 Opaque、Transparent 与可选颜色快照；用户 Feature 可指定阶段。Feature 名称依赖解决构图先后，Graph 资源名称与读写声明解决本帧数据依赖，两者不混为一个全局资源表。执行回调仅保存本帧解析的 handle 与数据副本。
+
+CameraColor/CameraDepth 由宿主创建或导入，可选 OpaqueColor/AfterTransparentColor 使用真实复制。Demo 使用空 Custom 组合注册 Noise、Scene 和 Readback，不传递 Feature 返回 handle，也不使用 Forward 内置流程。具体接口见 [Feature 与管线组合](../docs/forward-pipeline.md)。完整场景、PBR 和高级组合按计划推进。
 
 一个后期混合示例是：
 
@@ -401,7 +405,7 @@ Assets 和元数据、ProjectSettings、Source、项目文件纳入版本管理�
 
 投影、Viewport Y、屏幕 UV 和正面绕序统一在平台适配规则中处理，上层不分散添加 Vulkan 或 DX12 修正。纹理上传、渲染附件和屏幕采样的原点转换用测试图验证。深度重建、阴影和 Hi-Z 都遵守相同约定。
 
-光照在统一的线性工作空间计算，颜色纹理按声明进行 sRGB 解码，法线和普通数据纹理使用线性数据。HDR 中间结果在输出阶段进行曝光、Tone Mapping 和显示编码。
+光照在统一的线性工作空间计算，颜色纹理按声明进行 sRGB 解码，法线和普通数据纹理使用线性数据。M4.2 先用 Blinn–Phong/sRGB LDR 验证场景，Core/Lighting HLSL 库共用 .params Frame/Draw 声明，不重复手写 cbuffer。HDR 中间结果在输出阶段进行曝光、Tone Mapping 和显示编码。
 
 Object、View、Projection 的历史值、相机 jitter 和运动矢量采用明确语义。即使 TAA 后置，也避免在接口中混淆当前与历史变换。
 

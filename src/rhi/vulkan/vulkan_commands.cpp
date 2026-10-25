@@ -118,6 +118,17 @@ std::shared_ptr<Runtime::Submission> VulkanRuntime::Execute(const CommandList& c
                                                VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
                                                As<VkBufferObject>(c.buffer).native, 1, &copy);
                 }
+                else if constexpr (std::is_same_v<T, TextureToTextureCopy>)
+                {
+                    VkImageCopy copy{};
+                    copy.srcSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
+                    copy.dstSubresource = copy.srcSubresource;
+                    copy.extent = {c.source->desc.width, c.source->desc.height, 1};
+                    vkCmdCopyImage(list, As<VkTexture>(c.source).native,
+                                   VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                                   As<VkTexture>(c.destination).native,
+                                   VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &copy);
+                }
                 else if constexpr (std::is_same_v<T, BeginRendering>)
                 {
                     VkRenderingAttachmentInfo color{};

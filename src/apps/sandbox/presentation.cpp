@@ -4,13 +4,16 @@
 #include "core/log.hpp"
 #include "platform/text.hpp"
 #include "platform/window.hpp"
+#include "renderer/scene_renderer.hpp"
 #include "rhi/commands.hpp"
 #include "rhi/device.hpp"
 #include "rhi/runtime.hpp"
 #include "samples/graph_demo.hpp"
 #include "samples/rhi_acceptance.hpp"
 #include "samples/rhi_demo.hpp"
+#include "samples/scene_acceptance.hpp"
 
+#include <algorithm>
 #include <array>
 #include <chrono>
 #include <cstdint>
@@ -68,14 +71,28 @@ void RunRendering(platform::Window* window, rhi::Device& device, rhi::Runtime& r
                              std::filesystem::path(platform::Utf8ToWide(options.outputPath)) /
                                  options.backend,
                              logger);
+    if (!window && !options.projectPath.empty())
+        samples::VerifyScene(
+            runtime, options.backend == "dx12" ? shader::Target::Dxil : shader::Target::Spirv,
+            std::filesystem::path(platform::Utf8ToWide(options.projectPath)), shaderRoot,
+            std::filesystem::path(platform::Utf8ToWide(options.outputPath)) / options.backend,
+            logger, options.sceneTest);
     if (!window)
         return;
     if (options.windowTest)
         CheckWindow(*window, logger);
-    samples::GraphDemo demo(runtime, shaderRoot / options.backend);
+    std::unique_ptr<samples::GraphDemo> demo;
+    std::unique_ptr<renderer::SceneRenderer> scene;
+    if (options.projectPath.empty())
+        demo = std::make_unique<samples::GraphDemo>(runtime, shaderRoot / options.backend);
+    else
+        scene = std::make_unique<renderer::SceneRenderer>(
+            runtime, options.backend == "dx12" ? shader::Target::Dxil : shader::Target::Spirv,
+            std::filesystem::path(platform::Utf8ToWide(options.projectPath)), shaderRoot);
     auto swapchain = runtime.CreateSwapchain(window->GetNativeSurface(), window->GetState().width,
                                              window->GetState().height);
-    demo.Prepare(swapchain->GetFormat());
+    if (demo)
+        demo->Prepare(swapchain->GetFormat());
     struct FrameContext
     {
         uint64_t completion = 0;
@@ -85,6 +102,7 @@ void RunRendering(platform::Window* window, rhi::Device& device, rhi::Runtime& r
     std::vector<bool> imageInitialized;
     const auto start = std::chrono::steady_clock::now();
     uint32_t frameNumber = 0, tick = 0, resizeCount = 0, suspendedTicks = 0;
+    auto previousTime = start;
     while (window->PumpEvents())
     {
         device.PollDiagnostics();
@@ -124,7 +142,8 @@ void RunRendering(platform::Window* window, rhi::Device& device, rhi::Runtime& r
             height = newHeight;
             imageInitialized.clear();
             ++resizeCount;
-            demo.Prepare(swapchain->GetFormat());
+            if (demo)
+                demo->Prepare(swapchain->GetFormat());
         }
         if (!width || !height)
         {
@@ -140,7 +159,8 @@ void RunRendering(platform::Window* window, rhi::Device& device, rhi::Runtime& r
             runtime.WaitIdle();
             swapchain->Resize(width, height);
             imageInitialized.clear();
-            demo.Prepare(swapchain->GetFormat());
+            if (demo)
+                demo->Prepare(swapchain->GetFormat());
             continue;
         }
         if (imageInitialized.size() <= acquired.index)
@@ -148,12 +168,29 @@ void RunRendering(platform::Window* window, rhi::Device& device, rhi::Runtime& r
         const auto dump = frameNumber == 0
                               ? std::filesystem::path(platform::Utf8ToWide(options.graphDumpPath))
                               : std::filesystem::path{};
-        frame.completion = demo.Render(acquired.texture,
-                                       imageInitialized[acquired.index] ? rhi::State::Present
-                                                                        : rhi::State::Undefined,
-                                       swapchain.get(), false,
-                                       {!options.graphNoUpdate, true, !options.graphNoCull}, dump)
-                               .completion;
+        const auto initial =
+            imageInitialized[acquired.index] ? rhi::State::Present : rhi::State::Undefined;
+        if (scene)
+        {
+            const auto now = std::chrono::steady_clock::now();
+            const auto dt = std::min(.1f, std::chrono::duration<float>(now - previousTime).count());
+            previousTime = now;
+            const auto axis = [&](platform::Key positive, platform::Key negative)
+            { return float(window->KeyDown(positive)) - float(window->KeyDown(negative)); };
+            scene->Document().MoveCamera(
+                {3 * dt * axis(platform::Key::Right, platform::Key::Left),
+                 3 * dt * axis(platform::Key::Up, platform::Key::Down),
+                 3 * dt * axis(platform::Key::Backward, platform::Key::Forward)},
+                {60 * dt * axis(platform::Key::LookUp, platform::Key::LookDown),
+                 60 * dt * axis(platform::Key::TurnLeft, platform::Key::TurnRight), 0});
+            frame.completion =
+                scene->Render(acquired.texture, initial, swapchain.get(), false, dump).completion;
+        }
+        else
+            frame.completion =
+                demo->Render(acquired.texture, initial, swapchain.get(), false,
+                             {!options.graphNoUpdate, true, !options.graphNoCull}, dump)
+                    .completion;
         imageInitialized[acquired.index] = true;
         swapchain->Present();
         ++frameNumber;

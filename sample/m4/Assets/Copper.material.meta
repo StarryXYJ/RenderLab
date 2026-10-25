@@ -1,0 +1,8 @@
+{
+  "version": 1,
+  "id": "e79a920be31151048751c27afa2ad476",
+  "dependencies": {
+    "shader": "b471049240f159c58236261d87d237d6"
+  },
+  "subresources": {}
+}

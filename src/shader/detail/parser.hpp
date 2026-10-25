@@ -9,6 +9,7 @@ namespace renderlab::shader::detail
 struct DeclarationParser
 {
     Definition definition;
+    std::vector<std::filesystem::path> includeDirectories;
     std::set<std::filesystem::path> active, loaded;
     Property Attributes(Lexer& lexer);
     void Values(Lexer& lexer, std::vector<double>& values, uint32_t depth = 0);

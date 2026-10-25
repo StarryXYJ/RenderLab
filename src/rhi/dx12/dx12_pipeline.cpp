@@ -177,7 +177,7 @@ std::shared_ptr<Pipeline> DxRuntime::CreatePipelineNative(PipelineDesc desc)
         state.SampleMask = UINT_MAX;
         state.RasterizerState.FillMode = D3D12_FILL_MODE_SOLID;
         state.RasterizerState.CullMode = desc.cull ? D3D12_CULL_MODE_BACK : D3D12_CULL_MODE_NONE;
-        state.RasterizerState.FrontCounterClockwise = TRUE;
+        state.RasterizerState.FrontCounterClockwise = desc.frontCounterClockwise;
         state.RasterizerState.DepthClipEnable = TRUE;
         auto& blend = state.BlendState.RenderTarget[0];
         blend.BlendEnable = desc.blend;
@@ -190,7 +190,8 @@ std::shared_ptr<Pipeline> DxRuntime::CreatePipelineNative(PipelineDesc desc)
         blend.LogicOp = D3D12_LOGIC_OP_NOOP;
         blend.RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
         state.DepthStencilState.DepthEnable = desc.depth;
-        state.DepthStencilState.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ALL;
+        state.DepthStencilState.DepthWriteMask =
+            desc.depthWrite ? D3D12_DEPTH_WRITE_MASK_ALL : D3D12_DEPTH_WRITE_MASK_ZERO;
         state.DepthStencilState.DepthFunc = D3D12_COMPARISON_FUNC_GREATER_EQUAL;
         state.DepthStencilState.StencilReadMask = D3D12_DEFAULT_STENCIL_READ_MASK;
         state.DepthStencilState.StencilWriteMask = D3D12_DEFAULT_STENCIL_WRITE_MASK;

@@ -1,0 +1,13 @@
+{
+  "version": 1,
+  "id": "8cb75671f1c7525abe1c98eeede99855",
+  "dependencies": {
+    "Sphere.bin": "e1dc06cae8115e6f92f98e536943bb79"
+  },
+  "subresources": {
+    "mesh:Sphere/primitive:0": "e9fd8658c3aa5d009dfa77dfc16a5685",
+    "material:Sphere": "18609d7bc4b25b3094ca40a95c490f5a",
+    "material:default": "b5793683696851cea795625b00d929b8",
+    "node:Sphere": "5089d36fc30e5d7c8b23c79fdc0c289d"
+  }
+}

@@ -9,6 +9,7 @@ void Graph::Prepare(Pool& pool)
     const auto started = std::chrono::steady_clock::now();
     auto& g = *impl_;
     Require(g.phase == detail::Phase::Compiled, "Prepare requires a compiled graph");
+    pool.Device();
     g.pool = &pool;
     g.phase = detail::Phase::Preparing;
     try
@@ -37,12 +38,6 @@ void Graph::Prepare(Pool& pool)
                 r.view = pool.Device().CreateView(r.texture);
         }
         g.Barriers();
-        for (auto& scheduled : g.plan.schedule)
-        {
-            g.active = scheduled.pass;
-            PrepareContext context(*this, g.active);
-            g.passes[g.active].callbacks->Prepare(context);
-        }
         g.active = UINT32_MAX;
         g.phase = detail::Phase::Prepared;
         g.plan.prepareNs = std::chrono::duration_cast<std::chrono::nanoseconds>(
@@ -87,8 +82,21 @@ void Graph::Record()
                                   pass.depth ? pass.depth->load : rhi::LoadOp::Clear);
             }
             g.active = scheduled.pass;
-            ExecuteContext context(*this, g.active, *g.commands);
-            pass.callbacks->Execute(context);
+            if (pass.kind == PassKind::Raster)
+            {
+                RasterContext context(*this, g.active, *g.commands);
+                std::get<std::function<void(RasterContext&)>>(pass.callback)(context);
+            }
+            else if (pass.kind == PassKind::Compute)
+            {
+                ComputeContext context(*this, g.active, *g.commands);
+                std::get<std::function<void(ComputeContext&)>>(pass.callback)(context);
+            }
+            else
+            {
+                CopyContext context(*this, g.active, *g.commands);
+                std::get<std::function<void(CopyContext&)>>(pass.callback)(context);
+            }
             if (pass.color)
                 g.commands->End();
             g.commands->EndMarker();
@@ -111,8 +119,6 @@ void Graph::Record()
 Submission Graph::Submit(rhi::Swapchain* presentation)
 {
     auto& g = *impl_;
-    if (g.phase == detail::Phase::Prepared)
-        Record();
     Require(g.phase == detail::Phase::Recorded, "Graph submits once, after preparation/recording");
     // Allocate the result before native submission; publication below cannot lose completion
     // ownership.
@@ -141,5 +147,20 @@ Submission Graph::Submit(rhi::Swapchain* presentation)
         }
     g.phase = detail::Phase::Submitted;
     return result;
+}
+Submission Graph::Execute(Pool& pool, rhi::Swapchain* presentation)
+{
+    Require(impl_->phase == detail::Phase::Compiled, "Graph executes once, after Compile");
+    try
+    {
+        Prepare(pool);
+        Record();
+        return Submit(presentation);
+    }
+    catch (...)
+    {
+        Poison();
+        throw;
+    }
 }
 } // namespace renderlab::rendergraph
