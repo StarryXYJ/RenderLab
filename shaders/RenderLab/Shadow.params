@@ -1,0 +1,5 @@
+[scope(view), schema("renderlab.shadow", 1), type(SceneShadowData)] cbuffer SceneShadow
+{
+    [id("MainLightShadowMatrix")] float4x4 MainLightShadowMatrix = (1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1);
+    [id("MainLightShadowParameters")] float4 MainLightShadowParameters = (1, 0.001, 0.01, 0);
+}

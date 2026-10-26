@@ -9,13 +9,15 @@ shader "Project/Copper"
         [id("base_map"), srgb] Texture2D<float4> BaseMap = white;
         SamplerState BaseSampler = point_clamp;
     }
-    variant Default {}
     pass Forward
     {
+        role = Forward;
         vertex = "Copper.hlsl:VSMain";
         pixel = "Copper.hlsl:PSMain";
-        depth = true;
-        blend = false;
-        cull = true;
+        state {
+            depth { test = true; write = true; }
+            blend { enabled = false; }
+            cull = Back;
+        }
     }
 }

@@ -11,6 +11,7 @@
 
 namespace renderlab::rhi
 {
+inline constexpr uint32_t MaxTimestampSlots = 64;
 struct BufferBarrier
 {
     std::shared_ptr<Buffer> buffer;
@@ -40,9 +41,11 @@ struct TextureToTextureCopy
 };
 struct BeginRendering
 {
-    std::shared_ptr<TextureView> color, depth;
+    std::vector<std::shared_ptr<TextureView>> colors;
+    std::shared_ptr<TextureView> depth;
     std::array<float, 4> clear;
-    LoadOp colorLoad = LoadOp::Clear, depthLoad = LoadOp::Clear;
+    LoadOp colorLoad = LoadOp::Clear, depthLoad = LoadOp::Clear, stencilLoad = LoadOp::Clear;
+    uint32_t clearStencil = 0;
 };
 struct EndRendering
 {
@@ -50,6 +53,10 @@ struct EndRendering
 struct SetPipeline
 {
     std::shared_ptr<Pipeline> pipeline;
+};
+struct SetStencilReference
+{
+    uint32_t reference;
 };
 struct SetBindings
 {
@@ -85,11 +92,12 @@ struct Timestamp
 struct ResolveTimestamps
 {
     std::shared_ptr<Buffer> destination;
+    uint32_t count;
 };
 using Command =
     std::variant<BufferBarrier, TextureBarrier, BufferCopy, TextureCopy, TextureToTextureCopy,
-                 BeginRendering, EndRendering, SetPipeline, SetBindings, SetGeometry, Draw,
-                 DrawIndirect, Dispatch, Marker, Timestamp, ResolveTimestamps>;
+                 BeginRendering, EndRendering, SetPipeline, SetStencilReference, SetBindings,
+                 SetGeometry, Draw, DrawIndirect, Dispatch, Marker, Timestamp, ResolveTimestamps>;
 
 /**
  * @brief Single-threaded, one-shot command recording. Packets own every referenced object.
@@ -104,14 +112,21 @@ public:
     void Barrier(std::shared_ptr<Texture> texture, State before, State after);
     void Copy(std::shared_ptr<Buffer> source, std::shared_ptr<Buffer> destination, uint64_t size,
               uint64_t sourceOffset = 0, uint64_t destinationOffset = 0);
-    /// RGBA8/BGRA8 only; rowPitch multiple of 256, offset multiple of 512 on both backends.
+    /// Color formats only; rowPitch multiple of 256, offset multiple of 512 on both backends.
     void CopyTexture(std::shared_ptr<Buffer> buffer, std::shared_ptr<Texture> texture,
                      uint32_t rowPitch, bool upload, uint64_t offset = 0);
     void CopyTexture(std::shared_ptr<Texture> source, std::shared_ptr<Texture> destination);
+    void Begin(std::vector<std::shared_ptr<TextureView>> colors,
+               std::shared_ptr<TextureView> depth = {},
+               std::array<float, 4> clear = {0.02f, 0.02f, 0.02f, 1},
+               LoadOp colorLoad = LoadOp::Clear, LoadOp depthLoad = LoadOp::Clear,
+               LoadOp stencilLoad = LoadOp::Clear, uint32_t clearStencil = 0);
     void Begin(std::shared_ptr<TextureView> color, std::shared_ptr<TextureView> depth = {},
                std::array<float, 4> clear = {0.02f, 0.02f, 0.02f, 1},
-               LoadOp colorLoad = LoadOp::Clear, LoadOp depthLoad = LoadOp::Clear);
+               LoadOp colorLoad = LoadOp::Clear, LoadOp depthLoad = LoadOp::Clear,
+               LoadOp stencilLoad = LoadOp::Clear, uint32_t clearStencil = 0);
     void End();
+    void StencilReference(uint32_t reference);
     void Bind(std::shared_ptr<Pipeline> pipeline);
     void Bind(std::shared_ptr<BindingGroup> group);
     void Geometry(std::shared_ptr<Buffer> vertex, std::shared_ptr<Buffer> index = {});
@@ -122,7 +137,7 @@ public:
     void BeginMarker(std::string name);
     void EndMarker();
     void WriteTimestamp(uint32_t index);
-    void ReadTimestamps(std::shared_ptr<Buffer> destination);
+    void ReadTimestamps(std::shared_ptr<Buffer> destination, uint32_t count = 2);
     void Cancel();
     const std::vector<Command>& GetCommands() const
     {
@@ -139,10 +154,10 @@ private:
     bool consumed_ = false;
     bool rendering_ = false;
     bool compute_ = false;
-    Format colorFormat_ = Format::Rgba8;
-    bool hasDepth_ = false;
+    std::vector<Format> colorFormats_;
+    std::optional<Format> depthStencilFormat_;
     uint32_t markers_ = 0;
-    uint32_t timestampMask_ = 0;
+    uint64_t timestampMask_ = 0;
     std::shared_ptr<Pipeline> pipeline_;
     std::shared_ptr<BindingGroup> group_;
     std::shared_ptr<Buffer> vertex_, index_;

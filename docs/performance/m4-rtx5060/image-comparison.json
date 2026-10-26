@@ -1,0 +1,18 @@
+[
+  {
+    "scene": "pbr",
+    "width": 1280,
+    "height": 720,
+    "maxCodeDifference": 1,
+    "differentChannels": 2,
+    "differentPixels": 2
+  },
+  {
+    "scene": "shadow",
+    "width": 1280,
+    "height": 720,
+    "maxCodeDifference": 16,
+    "differentChannels": 30,
+    "differentPixels": 19
+  }
+]

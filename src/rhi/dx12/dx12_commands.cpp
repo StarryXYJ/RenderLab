@@ -32,7 +32,7 @@ std::shared_ptr<Runtime::Submission> DxRuntime::Execute(const CommandList& comma
               "CommandList");
         D3D12_QUERY_HEAP_DESC queryDesc{};
         queryDesc.Type = D3D12_QUERY_HEAP_TYPE_TIMESTAMP;
-        queryDesc.Count = 2;
+        queryDesc.Count = MaxTimestampSlots;
         Check(device_->CreateQueryHeap(&queryDesc, IID_PPV_ARGS(&work->queries)),
               "Timestamp QueryHeap");
         contexts_.push_back(work);
@@ -40,6 +40,8 @@ std::shared_ptr<Runtime::Submission> DxRuntime::Execute(const CommandList& comma
     auto* list = work->list.Get();
     bool compute = false;
     uint32_t vertexStride = 0;
+    ID3D12DescriptorHeap* resourceHeap = nullptr;
+    ID3D12DescriptorHeap* samplerHeap = nullptr;
     const auto barrier = [&](ID3D12Resource* resource, State before, State after)
     {
         D3D12_RESOURCE_BARRIER b{};
@@ -99,16 +101,30 @@ std::shared_ptr<Runtime::Submission> DxRuntime::Execute(const CommandList& comma
                 }
                 else if constexpr (std::is_same_v<T, BeginRendering>)
                 {
-                    const auto rtv = As<DxView>(c.color).handle;
+                    std::vector<D3D12_CPU_DESCRIPTOR_HANDLE> rtvs;
+                    rtvs.reserve(c.colors.size());
+                    for (const auto& color : c.colors)
+                        rtvs.push_back(As<DxView>(color).handle);
                     D3D12_CPU_DESCRIPTOR_HANDLE dsv{};
                     if (c.depth)
                         dsv = As<DxView>(c.depth).handle;
-                    list->OMSetRenderTargets(1, &rtv, FALSE, c.depth ? &dsv : nullptr);
+                    list->OMSetRenderTargets(static_cast<UINT>(rtvs.size()), rtvs.data(), FALSE,
+                                             c.depth ? &dsv : nullptr);
                     if (c.colorLoad == LoadOp::Clear)
-                        list->ClearRenderTargetView(rtv, c.clear.data(), 0, nullptr);
-                    if (c.depth && c.depthLoad == LoadOp::Clear)
-                        list->ClearDepthStencilView(dsv, D3D12_CLEAR_FLAG_DEPTH, 0, 0, 0, nullptr);
-                    const auto& desc = c.color->texture->desc;
+                        for (const auto& rtv : rtvs)
+                            list->ClearRenderTargetView(rtv, c.clear.data(), 0, nullptr);
+                    if (c.depth)
+                    {
+                        UINT flags = c.depthLoad == LoadOp::Clear ? D3D12_CLEAR_FLAG_DEPTH : 0;
+                        if (HasStencil(c.depth->texture->desc.format) &&
+                            c.stencilLoad == LoadOp::Clear)
+                            flags |= D3D12_CLEAR_FLAG_STENCIL;
+                        if (flags)
+                            list->ClearDepthStencilView(dsv, static_cast<D3D12_CLEAR_FLAGS>(flags),
+                                                        0, static_cast<UINT8>(c.clearStencil), 0,
+                                                        nullptr);
+                    }
+                    const auto& desc = c.colors.front()->texture->desc;
                     D3D12_VIEWPORT viewport{0, 0, float(desc.width), float(desc.height), 0, 1};
                     D3D12_RECT scissor{0, 0, static_cast<LONG>(desc.width),
                                        static_cast<LONG>(desc.height)};
@@ -124,8 +140,13 @@ std::shared_ptr<Runtime::Submission> DxRuntime::Execute(const CommandList& comma
                     if (compute)
                         list->SetComputeRootSignature(root);
                     else
+                    {
                         list->SetGraphicsRootSignature(root);
+                        list->OMSetStencilRef(0);
+                    }
                 }
+                else if constexpr (std::is_same_v<T, SetStencilReference>)
+                    list->OMSetStencilRef(c.reference);
                 else if constexpr (std::is_same_v<T, SetBindings>)
                 {
                     auto& group = As<DxGroup>(c.group);
@@ -135,7 +156,14 @@ std::shared_ptr<Runtime::Submission> DxRuntime::Execute(const CommandList& comma
                         heaps[count++] = group.resources.Get();
                     if (group.samplers)
                         heaps[count++] = group.samplers.Get();
-                    list->SetDescriptorHeaps(count, heaps);
+                    if (resourceHeap != group.resources.Get() ||
+                        samplerHeap != group.samplers.Get())
+                    {
+                        auto cpuTimer = ProfileCpu(CpuOperation::DescriptorHeapBind);
+                        list->SetDescriptorHeaps(count, heaps);
+                        resourceHeap = group.resources.Get();
+                        samplerHeap = group.samplers.Get();
+                    }
                     for (UINT i = 0; i < group.handles.size(); ++i)
                         if (compute)
                             list->SetComputeRootDescriptorTable(i, group.handles[i]);
@@ -180,8 +208,8 @@ std::shared_ptr<Runtime::Submission> DxRuntime::Execute(const CommandList& comma
                 else if constexpr (std::is_same_v<T, Timestamp>)
                     list->EndQuery(work->queries.Get(), D3D12_QUERY_TYPE_TIMESTAMP, c.index);
                 else if constexpr (std::is_same_v<T, ResolveTimestamps>)
-                    list->ResolveQueryData(work->queries.Get(), D3D12_QUERY_TYPE_TIMESTAMP, 0, 2,
-                                           As<DxBuffer>(c.destination).native.Get(), 0);
+                    list->ResolveQueryData(work->queries.Get(), D3D12_QUERY_TYPE_TIMESTAMP, 0,
+                                           c.count, As<DxBuffer>(c.destination).native.Get(), 0);
             },
             command);
     Check(list->Close(), "Close command list");

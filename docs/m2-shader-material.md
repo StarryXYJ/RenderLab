@@ -1,6 +1,6 @@
 # Shader 与材质
 
-M2 提供从声明、编译、反射、材质值到 GPU 快照的最小链路。阶段结果以 [phaseplan](../design/phaseplan.md) 为准，命令见 [构建手册](../manual/build.md#shader-与材质工具)。示例源文件位于 `shaders/m2`。
+M2 提供从声明、编译、反射、材质值到 GPU 快照的最小链路，本页接口已随 R1 更新。阶段结果以 [phaseplan](../design/phaseplan.md) 为准，命令见 [构建手册](../manual/build.md#shader-与材质工具)。示例源文件位于 `shaders/m2`。完整状态、静态轴、参数与资产契约分别见 [渲染状态](render-states.md)、[Shader 特性](shader-features.md)、[参数接口](shader-parameters.md)、[Shader 资产](shader-assets.md)。
 
 ## 声明与 HLSL
 
@@ -17,15 +17,14 @@ shader "Example/Surface"
         [range(0, 1)] float Roughness = 0.5;
         [srgb] Texture2D<float4> BaseMap = white;
         SamplerState BaseSampler = point_clamp;
+        [id("detail"), keyword("DETAIL")] bool Detail = false;
     }
-    variant Default { DETAIL = 0; }
-    variant Detail { DETAIL = 1; }
     pass Forward
     {
+        features = { Detail };
         vertex = "surface.hlsl:VSMain";
         pixel = "surface.hlsl:PSMain";
-        depth = false;
-        cull = false;
+        state { cull = None; depth { test = false; write = false; } }
     }
 }
 ```
@@ -110,11 +109,11 @@ DXIL 通过 DXC 容器反射，SPIR-V 通过固定版本 SPIRV-Reflect 验证绑
 
 缓存 key 包含声明和模块内容、实际 Include 内容、预处理源码快照、宏、入口/目标、生成头、生成器/固定编译选项及 DXC 版本/提交号。编译使用同一预处理快照；读写期间变更磁盘源文件不会让某个程序的缓存键对应另一份程序内容。缓存命中仍预处理并校验反射，跳过目标编译；清单和每个二进制的 SHA-256 不一致时重建。临时文件在同目录完成写入后替换发布。
 
-变体是最多 16 个具名有限宏集合，每个 Shader 最多 16 个 Pass。没有隐式 keyword 笛卡尔积，也不在 Draw/Execute 中编译缺少的组合。新增编译选项需同步更新编译器参数与缓存版本。缓存内容包含本机路径，因此属于本机可重建产物，不是跨机器发行包。
+每个 Shader 最多 16 个 Pass，每 Pass 通过 features 显式消费 keyword bool/enum，最多 64 个组合。选择键为排序后的稳定 PropertyId/数值，label 仅供诊断；旧具名宏集合已删除。Draw/Execute 不编译缺少的组合。新增编译选项需同步更新编译器参数与缓存版本。缓存内容包含本机路径，因此属于本机可重建产物，不是跨机器发行包。
 
 ## 材质准备与 Pipeline
 
-`material::Asset` 只包含 Shader 逻辑引用、variant、按稳定 id 保存的类型/数组形状/数值以及资源逻辑引用。Save/Load 不保存物理 offset、描述符或 GPU 指针。资源引用必须为非空逻辑名或相对路径；资源查找交给调用方 ResourceResolver，M2 不建立 AssetDatabase。
+`material::Asset` 只包含 Shader 资产 ID、按稳定 id 保存的类型/数组形状/数值以及资源逻辑引用，保存格式为 v2。静态值也在 values 中，无独立 variant 字符串。Save/Load 不保存物理 offset、描述符或 GPU 指针。资源引用必须为非空逻辑名或相对路径；资源查找交给调用方 ResourceResolver。
 
 ```cpp
 auto build = shader::CompileShader(path, options);
@@ -133,13 +132,15 @@ prepare.attributes = {{"POSITION", 0, rhi::VertexFormat::Float3, 0},
 auto snapshot = materials.Prepare(build.package, asset, prepare, resolveResource);
 ```
 
-`Preparation.constants` 按块名提供 View/Draw/Pass 数值，字段按稳定 id 索引，缺省使用声明默认值。`Preparation.bindings` 按生成的 HLSL symbol 提供 Pass 资源，也可提供已经打包的外部 cbuffer。结构化缓冲必须提供匹配元素的 stride；sRGB 属性必须解析到 sRGB 纹理。
+`Preparation.constants/bindings` 按本包/Pass 的 BindingHandle 提供外部数据。constants 字段按稳定 id 索引，无 Schema 的块可使用声明默认值；带 Schema 的接口必须显式提供。bindings 也可提供已经打包的外部 cbuffer。结构化缓冲必须提供匹配元素的 stride；sRGB 属性必须解析到 sRGB 纹理。使用 SchemaBinding/SemanticBinding 或显式局部 BlockBinding/ResourceBinding 解析 handle，重载后重新解析。
 
 Prepare 必须在 Runtime 创建线程执行。它复用当前代的 ShaderModule/BindingLayout，通过 RHI 唯一 `CreatePipeline` 缓存入口准备 PSO，打包数值并返回不可变绑定数据。Prepared 持有代际、PSO、resources 绑定值和新常量缓冲；数值或纹理修改产生新快照，正在执行的快照不原地改写。
 
-普通参数改变只更新常量/绑定，静态功能通过 variant 选择程序，depth/blend/cull 等渲染状态来自 Pass 或 Preparation 显式覆盖。PSO key 包含不可变 Shader/布局身份、全部顶点属性/stride、颜色格式和全部当前渲染状态。新代创建新模块身份，不能命中旧代 PSO；数值变化不进入 key。缓存最多 256 个弱引用，GPU 代查找最多 64 个弱引用，淘汰查找项不影响仍被命令保活的对象。超限后再次请求可能重建，不保证永久命中。
+材质 GPU generation 按完整状态组合最多持有 64 个 PSO，沿用 RHI 的唯一 CreatePipeline 弱缓存查找。活动 generation 跨帧存续时，即使上一帧提交已完全退休，下一次 Prepare 也复用相同 PSO；淘汰只释放驻留引用，命令快照继续保活 GPU 使用，generation 释放后不保留永久 PSO。
 
-调用方显式录制 `snapshot.constants` 的 HostWrite → UniformRead 屏障，直接 RHI 路径使用 runtime.CreateGroup(snapshot.pipeline->desc.layout, snapshot.resources) 建立 BindingGroup，再绑定 Pipeline/BindingGroup。外部上传常量、只读缓冲、UAV 和纹理状态也由调用方负责；Prepare 不插入屏障，不维护第二套资源状态机。Execute 只使用准备好的对象录制命令。完整样例见 `src/samples/material_demo.cpp`。
+普通参数改变只更新常量/绑定，静态属性按 Pass 的 VariantKey 选择程序，depth/blend/cull/stencil 来自 Pass 配方和字段覆盖。Preparation 指定真实附件格式与镜像绕序修正。PSO key 包含不可变 Shader/布局身份、全部顶点属性/stride、附件格式和完整不可变状态；动态 StencilRef 不进入 key。新代创建新模块身份，不能命中旧代 PSO；普通数值变化不进入 key。缓存最多 256 个弱引用，GPU 代查找最多 64 个弱引用，淘汰查找项不影响仍被命令保活的对象。超限后再次请求可能重建，不保证永久命中。
+
+调用方显式录制 `snapshot.constants` 的 HostWrite → UniformRead 屏障，直接 RHI 路径使用 runtime.CreateGroup(snapshot.pipeline->desc.layout, snapshot.resources) 建立 BindingGroup，再绑定 Pipeline/BindingGroup。外部上传常量、只读缓冲、UAV 和纹理状态也由调用方负责；Prepare 不插入屏障，不维护第二套资源状态机。Execute 只使用准备好的对象录制命令。完整样例见 `src/samples/material/material_demo.cpp`。
 
 ## 热重载事务
 
@@ -149,7 +150,7 @@ Prepare 必须在 Runtime 创建线程执行。它复用当前代的 ShaderModul
 4. 在调用方选择的帧边界调用 PublishFrameBoundary，整体换入新包、Asset 和快照。也可以 Stage 同一代与编辑后的 Asset，沿用相同的发布规则。
 5. 旧命令保活其中的 PSO、Shader、布局、BindingGroup 和资源。录制未提交的命令可以继续提交，实际完成后由 RHI 退休；没有热重载时强制 DeviceIdle。
 
-稳定 id、类型、数组形状一致时保留旧值；新增属性采用默认值，删除属性移除。类型变化（含数值/资源转换和资源元素类型）、值不满足新 range 或 variant 删除会报告冲突。失败继续使用旧包，不静默丢弃用户值。Stage 失败保留已存在的有效待发布状态；应用可以选择继续发布它或等待下一次成功 Stage。显式旧 generation 不能覆盖较新 active/staged generation。
+稳定 id、类型、数组形状一致时保留旧值；新增属性采用默认值，删除属性移除。Shader ID/类型变化（含数值/资源转换和资源元素类型）、值不满足新 range 或 enum 数值被删除会报告冲突。失败继续使用旧包，不静默丢弃用户值。Stage 失败保留已存在的有效待发布状态；应用可以选择继续发布它或等待下一次成功 Stage。显式旧 generation 不能覆盖较新 active/staged generation。
 
 M2 提供编译请求与帧边界接口，不附带操作系统文件监视器、UI 编辑器、GPU PSO 后台创建或旧代编译的中途强制取消。退出会等待当前 CPU 编译结束；不会先销毁工作线程仍在访问的数据。
 
@@ -170,3 +171,5 @@ M2 提供编译请求与帧边界接口，不附带操作系统文件监视器�
 验收样例输出 default/edited/reloaded BMP、sample.material、日志和临时重载副本。源码不被测试修改；双后端验证开启，Shutdown 后检查验证错误及显存占用。M1 的固定噪声和窗口测试继续独立运行，避免材质层掩盖底层回归。
 
 Graph 路径将 Prepared.resources 导入并声明用途，由 Graph 录制时建立绑定组，避免重复准备绑定；见 [M4 场景](m4-scene.md)。参数模块 use 先查询声明文件目录，再查询 CompileOptions.includeDirectories；shaderc 对应可重复的 --include DIRECTORY。
+
+Preparation.deferredResources 对尚未分配的 Graph 外部资源按 BindingHandle 延后绑定，只允许已声明的非材质资源，禁止与 preparation.bindings 重复。Prepare 返回 PSO、常量和其余绑定，Graph 录制时补齐实际资源；补齐前不能直接 CreateGroup。具体显示 Pass 见 [Forward PBR](m4-forward-pbr.md)。

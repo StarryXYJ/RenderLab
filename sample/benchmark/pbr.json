@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "executable": "../../out/build/windows-release/renderlab_player.exe",
+  "backends": ["dx12", "vulkan"],
+  "repeats": 3,
+  "defaults": {
+    "seconds": 10,
+    "warmupSeconds": 2,
+    "warmupFrames": 5,
+    "width": 1280,
+    "height": 720,
+    "quality": "medium",
+    "view": "final",
+    "validation": "off"
+  },
+  "cases": [
+    {"name": "pbr", "project": "../m4/Pbr.rlproject"}
+  ]
+}

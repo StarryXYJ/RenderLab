@@ -1,7 +1,9 @@
 #include "material/asset.hpp"
+#include "material/render_state.hpp"
 #include "shader/compiler.hpp"
 #include "shader/reload.hpp"
 
+#include <algorithm>
 #include <array>
 #include <chrono>
 #include <cstring>
@@ -54,6 +56,259 @@ shader::BuildResult Await(shader::ReloadCompiler& worker)
     }
     throw std::runtime_error("Background compilation timed out");
 }
+void FeatureContracts(const std::filesystem::path& root)
+{
+    const auto source = root / "features.shader";
+    const std::string text = R"(shader "Test/Features"
+{
+    enum NormalMode { Off = 0; Tangent = 3; Detail = 7; }
+    material
+    {
+        [id("clip"), keyword("ALPHA_CLIP")] bool Clip = false;
+        [id("normal"), keyword("NORMAL_MODE")] NormalMode Normal = Tangent;
+        NormalMode DynamicMode = Detail;
+        bool Enabled = true;
+        [id("arbitrary_color_id"), semantic(BaseColor)] float4 Tint = (1, 1, 1, 1);
+    }
+    pass Beauty
+    {
+        features = { Normal, Clip };
+        vertex = "features.hlsl:VSMain";
+        pixel = "features.hlsl:PSMain";
+        state {
+            depth { test = false; write = false; }
+        }
+    }
+    pass Sun
+    {
+        features = { Clip };
+        vertex = "features.hlsl:VSMain";
+        pixel = "features.hlsl:PSMain";
+        state {
+            depth { test = false; write = false; }
+        }
+    }
+})";
+    Write(source, text);
+    const std::string assetId = "1234567890abcdef1234567890abcdef";
+    Write(root / "features.shader.meta", "{\"version\":1,\"id\":\"" + assetId + "\"}");
+    Write(root / "features.hlsl", R"(#include <renderlab/generated/parameters.hlsli>
+struct P { float4 position : SV_Position; };
+P VSMain(float3 p : POSITION) { P v; v.position = float4(p, 1); return v; }
+float4 PSMain(P p) : SV_Target
+{
+#ifdef NORMAL_MODE
+    return Material.Tint + float4(NORMAL_MODE, Material.DynamicMode, ALPHA_CLIP, Material.Enabled);
+#else
+    return Material.Tint * (1 + ALPHA_CLIP);
+#endif
+})");
+    shader::CompileOptions options;
+    options.cacheDirectory = root / "feature-cache";
+    auto built = shader::CompileShader(source, options);
+    Require(bool(built), built.diagnostics);
+    Require(built.package->definition.assetId == assetId &&
+                std::ranges::find(built.package->dependencies, root / "features.shader.meta") !=
+                    built.package->dependencies.end(),
+            "Shader sidecar identity must be tracked as a compilation dependency");
+    auto mismatched = options;
+    mismatched.assetId = "abcdef1234567890abcdef1234567890";
+    const auto mismatch = shader::CompileShader(source, mismatched);
+    Require(!mismatch && mismatch.diagnostics.find("identity mismatch") != std::string::npos,
+            "Explicit and sidecar asset identities must agree");
+    Require(shader::SchemaToJson(*built.package).find("\"materialSemantic\": \"BaseColor\"") !=
+                std::string::npos,
+            "Schema must expose material import semantics independently of symbols");
+    const auto& definition = built.package->definition;
+    Require(built.package->programs.size() == 32,
+            "Forward 6 + Shadow 2 combinations, each with two stages and two targets");
+    const shader::MaterialTemplate materialTemplate(built.package);
+    Require(materialTemplate.Properties().size() == 5 && materialTemplate.Fields().size() == 3,
+            "Static properties remain in logical schema without occupying GPU fields");
+    Require(built.package->interfaces[0].Material()->size ==
+                built.package->interfaces[1].Material()->size,
+            "Different pass feature sets must preserve material layout");
+    auto asset = material::Create(materialTemplate);
+    material::Set(asset, materialTemplate, shader::MaterialSemantic::BaseColor,
+                  std::array<double, 4>{.5, .4, .3, 1});
+    Require(asset.values.at("arbitrary_color_id").numbers.front() == .5,
+            "Material semantics must map to arbitrary stable property IDs");
+    material::Set(asset, materialTemplate, "clip", std::array<double, 1>{1});
+    material::Set(asset, materialTemplate, "normal", std::array<double, 1>{7});
+    const auto selected =
+        shader::SelectVariantKey(definition, definition.passes[0], {{"clip", 1}, {"normal", 7}});
+    Require(selected == shader::VariantKey{{"clip", 1}, {"normal", 7}},
+            "Variant keys must sort stable property IDs");
+    Require(built.package->Find("Beauty", selected, rhi::ShaderStage::Pixel, shader::Target::Dxil)
+                    .axes == selected,
+            "Program lookup must select the exact static key");
+    Fails(
+        [&]
+        {
+            built.package->Find("Beauty", shader::VariantKey{{"normal", 7}},
+                                rhi::ShaderStage::Pixel, shader::Target::Dxil);
+        },
+        "Missing prepared");
+    Fails([&] { material::Set(asset, materialTemplate, "normal", std::array<double, 1>{2}); },
+          "enum value");
+    Fails([&] { shader::SelectVariantKey(definition, definition.passes[0], {{"clip", 1}}); },
+          "feature value");
+    material::Save(asset, root / "features.material");
+    auto legacy = shader::ReadText(root / "features.material");
+    Replace(legacy, "\"version\": 2", "\"version\": 1");
+    Write(root / "legacy.material", legacy);
+    Fails([&] { material::Load(root / "legacy.material", materialTemplate); }, "migrate v1");
+    Require(
+        material::Load(root / "features.material", materialTemplate).values.at("normal").numbers ==
+            std::vector<double>{7},
+        "Static properties must round trip as ordinary logical values");
+    auto renamed = text;
+    Replace(renamed, "bool Clip", "bool RenamedClip");
+    Replace(renamed, "{ Normal, Clip }", "{ Normal, RenamedClip }");
+    Replace(renamed, "{ Clip }", "{ RenamedClip }");
+    Write(source, renamed);
+    auto next = shader::CompileShader(source, options);
+    Require(bool(next), next.diagnostics);
+    auto migrated = material::Migrate(asset, shader::MaterialTemplate(next.package));
+    Require(migrated.values.at("clip").numbers == std::vector<double>{1} &&
+                shader::SelectVariantKey(next.package->definition,
+                                         next.package->definition.passes[0],
+                                         {{"clip", 1}, {"normal", 7}}) == selected,
+            "Renaming a static symbol must preserve values and program selection IDs");
+    auto removedValue = text;
+    Replace(removedValue, "Detail = 7", "Detail = 9");
+    Write(source, removedValue);
+    auto incompatible = shader::CompileShader(source, options);
+    Require(bool(incompatible), incompatible.diagnostics);
+    Fails([&] { material::Migrate(asset, shader::MaterialTemplate(incompatible.package)); },
+          "enum value");
+    const auto rejected = [&](std::string invalid, const char* diagnostic)
+    {
+        Write(source, invalid);
+        const auto result = shader::CompileShader(source, options);
+        Require(!result && result.diagnostics.find(diagnostic) != std::string::npos,
+                "Expected static feature diagnostic: " + std::string(diagnostic) + ": " +
+                    result.diagnostics);
+    };
+    auto invalid = text;
+    Replace(invalid, "    pass Beauty", "    variant Legacy {}\n    pass Beauty");
+    rejected(invalid, "obsolete");
+    invalid = text;
+    Replace(invalid, "semantic(BaseColor)", "semantic(NormalMap)");
+    rejected(invalid, "exact type");
+    invalid = text;
+    Replace(invalid, "bool Enabled = true;",
+            "bool Enabled = true; [semantic(BaseColor)] float4 AnotherTint = (1, 1, 1, 1);");
+    rejected(invalid, "unique mapping");
+    invalid = text;
+    Replace(invalid, "bool Clip", "float Clip");
+    rejected(invalid, "material bool/enum");
+    invalid = text;
+    Replace(invalid, "features = { Normal, Clip }", "features = { Enabled }");
+    rejected(invalid, "keyword properties");
+    invalid = text;
+    Replace(invalid, "Tangent = 3", "Tangent = 0");
+    rejected(invalid, "unique names");
+    std::string budget = "shader \"Budget\" { material { ";
+    for (int i = 0; i < 7; ++i)
+        budget +=
+            "[keyword(\"K" + std::to_string(i) + "\")] bool B" + std::to_string(i) + " = false;";
+    budget += "} pass Test { features = { B0, B1, B2, B3, B4, B5, B6 }; vertex = "
+              "\"features.hlsl:VSMain\"; pixel = \"features.hlsl:PSMain\"; } }";
+    rejected(budget, "limit (64)");
+    Write(source, text);
+}
+void StateContracts(const std::filesystem::path& root)
+{
+    const auto source = root / "policy.shader";
+    const std::string text = R"(shader "Test/Policy"
+{
+    material
+    {
+        [id("surface")] SurfaceType Surface = Transparent;
+        [id("blend")] BlendMode Blend = Alpha;
+        [id("face")] CullMode Face = Front;
+        [id("reference"), range(0, 255)] uint Reference = 7;
+        [id("test")] bool Test = false;
+        [id("write")] bool Write = true;
+    }
+    render { surface = $Surface; blend = $Blend; }
+    pass "ArbitraryBeautyLabel"
+    {
+        role = Forward;
+        state
+        {
+            preset = SurfaceForward;
+            cull = $Face;
+            depth { test = $Test; write = $Write; compare = Less; }
+            stencil
+            {
+                enabled = true; reference = $Reference;
+                front { compare = Less; pass = Invert; }
+                compare = Equal; pass = Replace;
+            }
+        }
+        vertex = "policy.hlsl:VSMain";
+        pixel = "policy.hlsl:PSMain";
+    }
+})";
+    Write(source, text);
+    Write(root / "policy.hlsl", R"(#include <renderlab/generated/parameters.hlsli>
+float4 VSMain(float3 p : POSITION) : SV_Position { return float4(p, 1); }
+float4 PSMain() : SV_Target { return float4(Material.Surface, Material.Blend, 0, 1); }
+)");
+    shader::CompileOptions options;
+    options.cacheDirectory = root / "policy-cache";
+    auto built = shader::CompileShader(source, options);
+    Require(bool(built), built.diagnostics);
+    const auto handle = built.package->ResolvePass(shader::PassRole::Forward);
+    const auto& pass = built.package->GetPass(handle);
+    const shader::MaterialTemplate schema(built.package);
+    auto asset = material::Create(schema);
+    Require(pass.name == "ArbitraryBeautyLabel" &&
+                built.package->HasRole(shader::PassRole::Forward),
+            "Pass role must be independent of the author's label");
+    Fails([&] { built.package->ResolvePass(shader::PassRole::ShadowCaster); }, "required role");
+    auto ambiguous = *built.package;
+    ambiguous.definition.passes.push_back(pass);
+    ambiguous.definition.passes.back().name = "SecondBeauty";
+    Fails([&] { ambiguous.ResolvePass(shader::PassRole::Forward); }, "Ambiguous");
+    const auto policy = material::ResolvePolicy(built.package->definition, asset);
+    const auto state = material::ResolveState(built.package->definition, pass, asset);
+    Require(
+        policy.queue == 3000 && policy.surface == shader::SurfaceType::Transparent &&
+            state.blend.enabled && state.depth.writeEnabled && !state.depth.testEnabled &&
+            state.depth.compare == rhi::CompareOp::Less &&
+            state.raster.cull == rhi::CullMode::Front && state.stencilReference == 7,
+        "State property references and overrides must be independent of surface classification");
+    Require(state.stencil.front.compare == rhi::CompareOp::Less &&
+                state.stencil.back.compare == rhi::CompareOp::Equal &&
+                state.stencil.front.pass == rhi::StencilOp::Invert &&
+                state.stencil.back.pass == rhi::StencilOp::Replace,
+            "Explicit per-face state must override common fields regardless of source order");
+    material::Set(asset, schema, "blend", std::array<double, 1>{2});
+    const auto additive = material::ResolveState(built.package->definition, pass, asset);
+    Require(additive.blend.dstColor == rhi::BlendFactor::One &&
+                additive.blend.srcAlpha == rhi::BlendFactor::Zero &&
+                additive.blend.dstAlpha == rhi::BlendFactor::One,
+            "Additive preset must preserve target alpha");
+    auto renamed = text;
+    Replace(renamed, "ArbitraryBeautyLabel", "RenamedBeauty");
+    Write(source, renamed);
+    auto next = shader::CompileShader(source, options);
+    Require(bool(next), next.diagnostics);
+    Require(next.package->GetPass(next.package->ResolvePass(shader::PassRole::Forward)).name ==
+                "RenamedBeauty",
+            "Renamed pass must retain its role");
+    Fails([&] { next.package->GetPass(handle); }, "Stale or foreign");
+    auto invalid = text;
+    Replace(invalid, "cull = $Face", "cull = $Surface");
+    Write(source, invalid);
+    auto rejected = shader::CompileShader(source, options);
+    Require(!rejected && rejected.diagnostics.find("type mismatch") != std::string::npos,
+            "State references must enforce nominal enum types");
+    Write(source, text);
+}
 } // namespace
 int wmain(int argc, wchar_t** argv)
 {
@@ -75,7 +330,7 @@ int wmain(int argc, wchar_t** argv)
         auto result = shader::CompileShader(source, options);
         Require(bool(result), result.diagnostics);
         const auto package = result.package;
-        Require(!package->cacheHit && package->programs.size() == 20,
+        Require(!package->cacheHit && package->programs.size() == 18,
                 "Expected complete finite pass/variant/target combinations");
         auto cached = shader::CompileShader(source, options);
         Require(bool(cached) && cached.package->cacheHit && cached.package->key == package->key,
@@ -85,7 +340,7 @@ int wmain(int argc, wchar_t** argv)
         Require(bool(repaired) && !repaired.package->cacheHit, "Corrupt cache must rebuild");
         const shader::MaterialTemplate materialTemplate(package);
         auto asset = material::Create(materialTemplate);
-        Require(asset.values.contains("unused") && materialTemplate.Fields().size() == 9,
+        Require(asset.values.contains("unused") && materialTemplate.Fields().size() == 10,
                 "Unused declared fields must remain in schema");
         const std::array<double, 4> color{.5, .25, .125, 1};
         material::Set(asset, materialTemplate, "base_color", color);
@@ -98,7 +353,8 @@ int wmain(int argc, wchar_t** argv)
               "range");
         Fails([&] { material::SetResource(asset, materialTemplate, "base_map", "C:/invalid.png"); },
               "relative");
-        Fails([&] { material::SelectVariant(asset, materialTemplate, "Unknown"); }, "variant");
+        Fails([&] { material::Set(asset, materialTemplate, "detail", std::array<double, 1>{2}); },
+              "bool");
         const auto& block = *package->Layout("Forward").Material();
         const auto bytes = material::Pack(block, asset.values);
         for (const auto& field : block.fields)
@@ -210,6 +466,8 @@ int wmain(int argc, wchar_t** argv)
         Write(hlsl, hlslOriginal);
         worker.Request(source, options);
         Require(bool(Await(worker)), "Background failure recovery");
+        FeatureContracts(root);
+        StateContracts(root);
         std::cout << "M2 CPU acceptance passed: declarations, metadata, packing, dual reflection, "
                      "cache invalidation/corruption, material round trip/migration, background "
                      "coalescing/failure/recovery\n";

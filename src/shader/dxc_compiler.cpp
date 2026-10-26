@@ -27,8 +27,8 @@ void Check(HRESULT result, const char* operation)
 class Includes final : public IDxcIncludeHandler
 {
 public:
-    Includes(IDxcUtils* utils, std::string generated)
-        : utils_(utils), generated_(std::move(generated))
+    Includes(IDxcUtils* utils, std::string generated, std::string types)
+        : utils_(utils), generated_(std::move(generated)), types_(std::move(types))
     {
     }
     HRESULT STDMETHODCALLTYPE QueryInterface(REFIID id, void** result) override
@@ -63,6 +63,8 @@ public:
             std::string text;
             if (logical.ends_with("renderlab/generated/parameters.hlsli"))
                 text = generated_;
+            else if (logical.ends_with("renderlab/generated/types.hlsli"))
+                text = types_;
             else
             {
                 path = std::filesystem::weakly_canonical(path);
@@ -89,7 +91,7 @@ public:
 private:
     std::atomic<ULONG> references_{1};
     ComPtr<IDxcUtils> utils_;
-    std::string generated_;
+    std::string generated_, types_;
 };
 std::vector<std::wstring> Arguments(const ProgramRequest& request, bool preprocess)
 {
@@ -189,7 +191,7 @@ std::string DxcCompiler::Version() const
 Preprocessed DxcCompiler::Preprocess(const ProgramRequest& request)
 {
     ComPtr<Includes> includes;
-    includes.Attach(new Includes(impl_->utils.Get(), request.generated));
+    includes.Attach(new Includes(impl_->utils.Get(), request.generated, request.generatedTypes));
     auto result = impl_->Run(request, true, *includes.Get());
     ComPtr<IDxcBlobUtf8> text;
     Check(result->GetOutput(DXC_OUT_HLSL, IID_PPV_ARGS(&text), nullptr), "Preprocess output");
@@ -205,7 +207,7 @@ Preprocessed DxcCompiler::Preprocess(const ProgramRequest& request)
 std::vector<std::byte> DxcCompiler::Compile(const ProgramRequest& request)
 {
     ComPtr<Includes> includes;
-    includes.Attach(new Includes(impl_->utils.Get(), request.generated));
+    includes.Attach(new Includes(impl_->utils.Get(), request.generated, request.generatedTypes));
     auto result = impl_->Run(request, false, *includes.Get());
     ComPtr<IDxcBlob> object;
     Check(result->GetOutput(DXC_OUT_OBJECT, IID_PPV_ARGS(&object), nullptr), "DXC object");

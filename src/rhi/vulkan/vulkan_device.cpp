@@ -250,11 +250,10 @@ public:
         if (physical_ == VK_NULL_HANDLE)
         {
             throw std::runtime_error(
-                "No selected GPU meets Vulkan 1.3, dynamic rendering, synchronization2, timeline "
-                "semaphore and Win32 presentation requirements");
+                "No selected GPU meets Vulkan 1.3, dynamic rendering, synchronization2, shader "
+                "demote, timeline semaphore and Win32 presentation requirements");
         }
-        // Support does not imply enablement: request only M0 features, not the queried feature
-        // chain.
+        // Request the base runtime features, including DXC clip/discard helper invocations.
         VkPhysicalDeviceVulkan12Features enabled12{};
         enabled12.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES;
         enabled12.timelineSemaphore = VK_TRUE;
@@ -262,6 +261,7 @@ public:
         enabled13.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES;
         enabled13.dynamicRendering = VK_TRUE;
         enabled13.synchronization2 = VK_TRUE;
+        enabled13.shaderDemoteToHelperInvocation = VK_TRUE;
         enabled13.pNext = &enabled12;
         const float queuePriority = 1.0f;
         VkDeviceQueueCreateInfo queueInfo{};
@@ -287,7 +287,8 @@ public:
             throw std::runtime_error("vkGetDeviceQueue returned a null queue");
         }
         report_.details.emplace_back("enabledFeatures",
-                                     "dynamicRendering, synchronization2, timelineSemaphore; one "
+                                     "dynamicRendering, synchronization2, "
+                                     "shaderDemoteToHelperInvocation, timelineSemaphore; one "
                                      "graphics queue; no advanced rendering features enabled");
     }
 
@@ -361,7 +362,7 @@ private:
         }
         vkGetPhysicalDeviceFeatures2(physical, &features);
         if (!features12.timelineSemaphore || !features13.dynamicRendering ||
-            !features13.synchronization2)
+            !features13.synchronization2 || !features13.shaderDemoteToHelperInvocation)
         {
             return false;
         }
@@ -432,9 +433,12 @@ private:
                                      std::to_string(props.limits.maxPushConstantsSize));
         report_.details.emplace_back("bufferDeviceAddressSupported",
                                      features12.bufferDeviceAddress ? "true" : "false");
-        for (const auto& [name, format] : {std::pair{"RGBA8_UNORM", VK_FORMAT_R8G8B8A8_UNORM},
-                                           std::pair{"RGBA16_FLOAT", VK_FORMAT_R16G16B16A16_SFLOAT},
-                                           std::pair{"D32_FLOAT", VK_FORMAT_D32_SFLOAT}})
+        for (const auto& [name, format] :
+             {std::pair{"RGBA8_UNORM", VK_FORMAT_R8G8B8A8_UNORM},
+              std::pair{"RGBA16_FLOAT", VK_FORMAT_R16G16B16A16_SFLOAT},
+              std::pair{"RGBA32_FLOAT", VK_FORMAT_R32G32B32A32_SFLOAT},
+              std::pair{"D32_FLOAT", VK_FORMAT_D32_SFLOAT},
+              std::pair{"D32_FLOAT_S8X24_UINT", VK_FORMAT_D32_SFLOAT_S8_UINT}})
         {
             VkFormatProperties support{};
             vkGetPhysicalDeviceFormatProperties(physical, format, &support);

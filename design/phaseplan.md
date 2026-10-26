@@ -4,10 +4,9 @@
 
 ## 当前状态
 
-- 当前实施阶段：M0–M3 DONE；M4 IN_PROGRESS，M4.1–M4.2 DONE；本轮授权范围已完成。
-- 当前工作项：相机俯仰轴修正已完成；下一计划项为 M4.3，等待后续授权。
-- 本轮授权实施上限为 M4.2，包含最小 Blinn–Phong 着色接入；M4.3 PBR/HDR/IBL、阴影、编辑器与高级管线继续保留计划。
-- Demo 的 Custom 示例作为回归入口保留；M4 场景示例使用 Forward 组合与现有 Shader/Material 链路。
+- 当前实施阶段：M0–M4、R1、B1–B3 DONE；M5 IN_PROGRESS。
+- 当前工作项：M5.2 加速结构与 Ray Query。
+- 用户约定：每个子阶段验收完成即提交 Git，无阻塞时在当前授权范围内继续推进。
 
 | 阶段 | 目标 | 前置依赖 | 状态 |
 | --- | --- | --- | --- |
@@ -15,13 +14,19 @@
 | M1 | 最小双后端 RHI | M0 | DONE |
 | M2 | Shader 与材质数据链路 | M1 | DONE |
 | M3 | 单队列 Render Graph | M2 | DONE |
-| M4 | 场景资源与基础 Renderer | M3 | IN_PROGRESS |
-| M5 | Deferred 与光追基础 | M4 | NOT_STARTED |
+| M4 | 场景资源与基础 Renderer | M3 | DONE |
+| R1 | Shader/Material 契约修订 | M4 | DONE |
+| B1 | 样例整理与可扩展 Benchmark | M4、R1 | DONE |
+| B2 | 双后端性能差异调查 | B1 | DONE |
+| B3 | 逐帧资源复用优化 | B2 | DONE |
+| M5 | Deferred 与光追基础 | M4 | IN_PROGRESS |
 | M6 | GPU Driven 与执行优化 | M4；光追调度测试另需 M5 | NOT_STARTED |
 | M7 | C# 编辑器与完整项目工作流 | M4；默认在 M5、M6 的核心目标后开展 | NOT_STARTED |
 | M8 | 一个深入的渲染专题与作品交付 | 所选专题依赖已满足 | NOT_STARTED |
 
 默认顺序为 M0 到 M8。M5 和 M6 在 M4 后可以独立推进；单阶段内按下列子阶段顺序执行，不同时建设多个高级系统。完整编辑器后置，M4 只实现运行内容所需的最小项目与资源能力。
+
+R1 契约修订、B1 样例整理/Benchmark、B2 调查和 B3 资源复用已完成，均按子阶段验证与提交。
 
 ## 状态与维护规则
 
@@ -34,7 +39,7 @@
 1. 核对该子阶段的交付和验收，记下实际使用的构建配置、后端和设备。
 2. 把已完成子阶段的详细待办替换为简短完成记录，保留结果、验证入口及限制。未完成的后续部分继续保留详细计划。
 3. 将长期接口说明放入 docs，构建运行步骤放入 manual；计划只链接入口，不复制整份说明或测试日志。
-4. 更新主阶段状态和下一工作项。整个主阶段验收后，把全部详细步骤压缩为一个完成摘要，保留稳定的阶段标题与编号。
+4. 更新主阶段状态和下一工作项。整个主阶段验收后，只保留一个简短完成摘要及主阶段标题；删除子阶段清单、提交列表和逐轮数据，细节通过 docs、manual 与 Git 历史追溯。
 
 完成摘要格式如下，尖括号仅为模板占位，不能作为真实验证结果：
 
@@ -62,9 +67,9 @@
 
 状态：DONE，日期：2026 年 10 月 23 日。
 
-结果：工程规范、C++20/CMake 固定依赖、日志/断言/原生窗口/参数，以及 DX12/Vulkan 设备与能力报告。
+结果：C++20/CMake 固定依赖、日志/断言/原生窗口/参数，以及 DX12/Vulkan 设备与能力报告。
 
-验证：RTX 5060 上 Debug/Release 各 9/9，双后端 Validation 错误为 0；Intel 显式设备选择和窗口生命周期通过。后续头文件依赖修复见 M3.6；光追仍仅查询能力。
+验证：RTX 5060 上 Debug/Release 各 9/9，双后端 Validation 错误为 0；Intel 设备选择和窗口生命周期通过。光追当时仅查询能力，后续工具链修复见 M3。
 
 入口：[基础模块](../docs/m0-foundation.md)、[构建运行](../manual/build.md)、[工程约定](../manual/conventions.md)。
 
@@ -72,97 +77,83 @@
 
 状态：DONE，日期：2026 年 10 月 23 日。
 
-结果：交换链与两帧上下文、真实完成点与录制保活、资源/上传/读回、不可变绑定与 PSO、光栅/Compute/间接绘制、Reversed-Z/sRGB、Marker/Timestamp。
+结果：交换链与两帧上下文、完成点与录制保活、资源/上传/读回、不可变绑定与 PSO、光栅/Compute/间接绘制、Reversed-Z/sRGB、Marker/Timestamp。
 
-验证：RTX 5060 上 Debug/Release 各 13/13，双后端 Validation 错误为 0；固定噪声逐字节参考、取消/退休、池与上传复用、resize/minimize/restore 和退出通过。后续标准目录回归见 M3。
+验证：RTX 5060 上 Debug/Release 各 13/13，双后端 Validation 错误为 0；固定参考、取消/退休、上传复用和窗口生命周期通过，后续全量回归见 B3。
 
-边界：单 Graphics Queue、单 mip/layer、单流顶点、有限纹理格式、committed/dedicated 分配；没有 Alias、Bindless、设备丢失恢复或其他 GPU 的完整验收。完整约束见 [RHI](../docs/m1-rhi.md)，运行入口见 [构建手册](../manual/build.md)。
+边界：单 Graphics Queue、单 mip/layer、单流顶点与有限格式；无 Alias、Bindless 或设备丢失恢复。入口：[RHI](../docs/m1-rhi.md)、[构建运行](../manual/build.md)。
 
 ## M2 Shader 与材质数据链路
 
 状态：DONE，日期：2026 年 10 月 23 日。
 
-结果：.shader/.params 声明、DXIL/SPIR-V 编译和内容缓存、固定布局/反射/Schema、材质编辑保存与不可变 GPU 快照、有界 PSO 缓存及后台热重载/帧边界发布。
+结果：Shader 声明、DXIL/SPIR-V 编译与缓存、固定布局/反射/Schema、材质保存与不可变 GPU 快照、有界 PSO 缓存及后台热重载/帧边界发布。
 
-验证：RTX 5060 上 Debug/Release 各 16/16；最终追加的材质热重载专项双后端均通过，Validation 错误为 0。后续完整回归见 M3。
+验证：RTX 5060 上 Debug/Release 各 16/16，追加的双后端热重载专项通过，Validation 错误为 0；后续契约修订见 R1。
 
-边界：无编辑器/文件监视器；SM 6.0/Vulkan 1.3、有限绑定/变体和数值布局；无资源数组、任意结构化元素或跨机器发行验收。入口：[Shader/材质契约](../docs/m2-shader-material.md)、[构建运行](../manual/build.md#shader-与材质工具)。
+边界：有限绑定/变体与数值布局，无编辑器/文件监视器或资源数组。入口：[Shader/材质](../docs/m2-shader-material.md)、[工具运行](../manual/build.md#shader-与材质工具)。
 
 ## M3 单队列 Render Graph
 
-状态：DONE，日期：2026 年 10 月 24 日（含标准构建修复复验）。
+状态：DONE，日期：2026 年 10 月 24 日。
 
-结果：类型化版本句柄、名称资源声明、Raster/Compute/Copy Builder 与受限 Execute、RAW/WAR/WAW/剔除/拓扑排序/屏障、Import/Export、有界池；RenderFeature 实例、注册后 Create 依赖解析、Custom/Forward 组合及真实阶段快照。
+结果：类型化资源版本、Builder/受限 Execute、依赖/剔除/屏障、Import/Export、有界池，以及 Feature/Create/Custom/Forward 组合与真实快照；标准构建依赖修复完成。
 
-验证：RTX 4060 Laptop GPU、MSVC 19.51、DXC 1.8，最终标准 windows-debug 完整 CTest 19/19；DX12/Vulkan 窗口直接启动与图像/噪声/Buffer/快照参考通过，验证错误为 0。原接口曾在 RTX 5060 上通过 Debug/Release 各 19/19；新接口未复验 Release 或其他 GPU，历史结果不替代新配置验收。
+验证：RTX 4060 Laptop GPU 上 Debug 完整 CTest 19/19，双后端图像/噪声/Buffer/快照和窗口启动通过，Validation 错误为 0；后续 RTX 5060 双配置全量回归见 B3。
 
-边界：单队列/单线程/单视图、单 mip/layer、单颜色附件与固定 Store；无 Alias、多队列、计划缓存、深度采样或每 Pass GPU Timestamp。Feature 依赖显式声明，Full 写覆盖由作者保证；普通 Forward 目前消费已准备 DrawPacket，场景、Material 适配和光照属于 M4。
-
-入口：[Graph API](../docs/m3-rendergraph.md)、[Feature/Create/Forward](../docs/forward-pipeline.md)、[构建与恢复](../manual/build.md#render-graph-与-feature)。产物位于构建树 graph、logs、Testing，不纳入源码。
-
-### M3.4 简化 API 与普通 Forward 组合
-
-已完成：名称查询、直接 Builder 与统一 Execute；Opaque/Transparent、只读深度和真实快照。接口与验收汇总见上述入口。
-
-### M3.5 Feature 实例与流式管线统一
-
-已完成：Feature 实例及名称连接、无序注册后 Create；依赖缺失/重名/环/阶段冲突与固定组合隔离均验证。
-
-### M3.6 既有构建树依赖修复
-
-已完成：定位 showIncludes 编码导致旧目标文件混用，自动检测前缀并完整重编译标准目录；依赖表与双后端启动已验证。本地 PDB C1902 用缓存中的 /Z7 处理，未写死共享预设；恢复方法见 [工具链](../manual/build.md#工具链)。
+边界：单队列/线程/视图、单颜色附件，无 Alias、计划缓存或深度采样。入口：[Graph](../docs/m3-rendergraph.md)、[Feature/Forward](../docs/forward-pipeline.md)、[构建与恢复](../manual/build.md#render-graph-与-feature)。
 
 ## M4 场景资源与基础 Renderer
 
-状态：IN_PROGRESS。
+状态：DONE，日期：2026 年 10 月 26 日。
 
-目标是形成可展示画面和可保存内容，完整工程 UI 仍后置。本轮完成范围为 M4.1–M4.2，先用 Blinn–Phong 打通资产 → 场景 → 材质 → Forward → 显示的闭环；不因此将 M4.3 或整个 M4 标记完成。
+结果：Project/UUID/资源缓存、静态 glTF/Scene/Material、层级变换/相机/方向光/CPU 剔除；Lit/Unlit PBR、HDR/ACES/IBL、阴影/Masked/排序透明，以及原生调试面板、纹理查看、GPU 计时和独立 Player。
 
-### M4.1 最小项目与资源
+验证：RTX 5060 上 Debug/Release 各 37/37，双后端 Validation 错误为 0；参考像素、保存重载、窗口/COM、独立安装运行通过。用户确认原始 PBR Debug DX12 交互恢复；高分辨率后端差异见基线记录。
 
-状态：DONE，日期：2026 年 10 月 24 日。
+边界：静态几何、单视图/mip/layer、低分辨率 CPU IBL/LDR 环境、单张阴影和排序透明；无级联/OIT，其他 GPU 与新面板手动操作未完整验收。
 
-结果：Manifest/挂载根、UUID/.meta 索引、稳定子资源与依赖映射、重命名；静态 glTF/GLB、WIC 图像、内容/Importer 版本化 CBOR 缓存。用户材质覆盖与导入产物分离。
+入口：[场景](../docs/m4-scene.md)、[PBR](../docs/m4-forward-pbr.md)、[阴影/Alpha](../docs/m4-shadows-alpha.md)、[工具/Player](../docs/m4-tools.md)、[基线](../docs/performance/m4-rtx5060.md)。
 
-验证：标准 windows-debug 的 content.contracts 通过，覆盖缓存命中/损坏重建、依赖失效、清缓存后移动资源及外部依赖、重名 UUID、稳定子资源、glTF/GLB 和用户材质保留；DX12/Vulkan 场景专项已通过首轮导入与显示。
+## R1 Shader/Material 契约修订
 
-入口：[数据契约与导入范围](../docs/m4-scene.md)、[启动与资源使用](../manual/build.md#m4-项目场景)。范围限静态三角形、float32 顶点和 Opaque，完整 glTF 外观、任意结构变化后的身份推断、实时重导入与流送均不在本阶段。
+状态：DONE，日期：2026 年 10 月 26 日。
 
-### M4.2 场景与 GPU 数据
+结果：类型化 Pass/渲染状态、类型化属性与显式静态轴、Schema 生成 CPU/HLSL 参数契约、代际绑定、HLSL 显式传参，以及 Shader UUID/材质 v2/导入语义统一迁移。
 
-状态：DONE，日期：2026 年 10 月 24 日。
+验证：RTX 5060 上 Debug/Release 各 40/40，双后端 Validation 错误为 0；真实状态/改名像素、生成契约、材质迁移/热重载、M4 和独立安装运行通过。
 
-结果：层级 Scene/保存加载、Camera、MeshRenderer、方向光组件与确定性主光选择；值快照、CPU 视锥剔除、历史变换、法线/镜像处理；Material 资源适配到既有 Forward/Graph。内置 Core/Lighting HLSL 和 Blinn–Phong，项目 Shader 可引用引擎参数与变换/光照辅助；Sandbox 项目加载及相机控制。
+边界：每 Pass 最多 64 个静态组合、固定 Material 布局；旧格式明确拒绝，无编辑器、深度模板采样或独立平面调度，其他 GPU 未完整验收。入口：[设计与接口索引](shader-material-v2.md)、[参数契约](../docs/shader-parameters.md)、[资产与迁移](../docs/shader-assets.md)。
 
-验证：RTX 4060 Laptop GPU、MSVC 19.51、DXC 1.8，标准 windows-debug 完整构建及 CTest 22/22 通过。场景专项双后端覆盖选光/旋转/强度、相机、实例增删、材质替换、镜像和保存重开；固定参考图像逐字节一致。另以 --project 加 --window-test 验证 DX12/Vulkan 各 54 帧、resize/minimize/restore，Validation 错误为 0。矩阵、层级、非均匀缩放、缓存与剔除的 CPU 合约同时通过。
+## B1 样例整理与可扩展 Benchmark
 
-入口：[场景、资源与 HLSL 契约](../docs/m4-scene.md)、[启动与控制](../manual/build.md#m4-项目场景)；参考项目 sample/m4/RenderLab.rlproject，图像与日志保留在构建树 scene、logs、Testing。
+状态：DONE，日期：2026 年 10 月 26 日。
 
-边界：本轮只验收 Debug 与该 NVIDIA 设备；Release、其他 GPU 和实际键盘手动操作未验收。单视图、静态 Opaque、point-clamp、LDR；模型/Shader 无实时重导入，常量按帧创建，历史指上次提取。PBR/HDR/IBL、阴影与高级透明仍在后续；整个 M4 保持 IN_PROGRESS。
+结果：清理一次性脚本并分类样例；固定场景按帧/时长测量、独立预热、流式 JSONL/版本化报告，以及 Python 配置批量运行、聚合与图表。
 
-补充修正（2026 年 10 月 24 日）：相机俯仰改为右乘局部旋转，绕自身右轴；转向保留父空间上轴。windows-debug Sandbox 重建通过；本次未运行测试或手动键盘验收。
+验证：RTX 5060 上 Debug/Release 各 41/41，双后端 Validation 错误为 0，Python 12/12；双后端按时长测量、独立安装及六次 Release 基线通过。
 
-### M4.3 Forward PBR
+边界：串行 headless，不等同窗口流水吞吐；精确分位数分析加载样本，Matplotlib 可选。入口：[接口](../docs/benchmark.md)、[手册](../manual/build.md#benchmark-与双后端分析)、[实测](../docs/performance/b1-pbr-rtx5060.md)。
 
-- [ ] 内置 Lit/Unlit，基本纹理、Normal Map、Metallic-Roughness 与 IBL。
-- [ ] 线性 HDR、曝光、Tone Mapping 和显示编码。
-- [ ] MaterialSurface 与材质求值代码隔离照明，明确导数和纹理采样上下文。
+## B2 双后端性能差异调查
 
-用受控光源、材质球和测试纹理验证，建立后续光追共用的基础参数模型。
+状态：DONE，日期：2026 年 10 月 26 日。
 
-### M4.4 阴影与透明
+结果：扩大 PBR 基线与诊断场景，增加可选 RHI CPU 计时/调用计数，定位主要差距为逐帧 Buffer、描述符创建及回收；优化由 B3 完成。
 
-- [ ] 先实现一种确定的方向光阴影；级联在需要时作为子任务增加。
-- [ ] 在 M4.2 场景接入基础上增加 Masked 与透明材质角色；按需加入独立 DepthPrepass/Sky Feature 和后处理阶段，定义快照位置。
-- [ ] 可选 Bloom 等基础后处理，按实际画面需求增加，不先堆齐所有效果。
+验证：RTX 5060 上 Debug/Release 各 41/41，双后端 Validation 错误为 0，Python 13/13；40 次、60,624 帧测量保留全部样本并复现差距。
 
-### M4.5 可重复演示
+边界：墙钟探针非完整 CPU profile，不能确定全部系统/驱动停顿原因或归因于 API 固有差异。入口：[定位证据](../docs/performance/b2-pbr-rtx5060.md)、[探针](../docs/benchmark.md#可选-rhi-cpu-分解)。
 
-- [ ] 相机控制、原生调试面板、Texture Viewer 与 Pass Timestamp。
-- [ ] 固定相机参考场景，支持运行参数选择后端和画质配置。
-- [ ] 最小独立 Player 读取同一项目内容，不依赖 C#。
+## B3 逐帧资源复用优化
 
-退出条件：同一项目在双后端得到合理一致的画面；场景与材质能保存重载；有初步 CPU/GPU 和内存基线。
+状态：DONE，日期：2026 年 10 月 26 日。
+
+结果：帧上传页、不可变材质常量、双后端描述符、timestamp 读回和默认 View 有界复用；CPU 引用与完成点保护旧快照/在途资源，稳定 PBR 预热后目标原生创建归零。
+
+验证：RTX 5060 上 Debug/Release 各 41/41，双后端 Validation 错误为 0，Python 13/13；32 次配对长测共 360,600 帧，32 张同后端参考图逐字节一致。DX12/Vulkan 串行帧均值由 14.36/5.71ms 降至 1.04/0.93ms。
+
+边界：仍有偶发长尾，其他 GPU 与窗口性能未验收；不把串行延迟当窗口 FPS。入口：[设计](resource-reuse.md)、[接口](../docs/resource-reuse.md)、[结果与完整统计](../docs/performance/b3-resource-reuse.md)。
 
 ## M5 Deferred 与光追基础
 
@@ -170,9 +161,13 @@
 
 ### M5.1 Deferred（可选组合）
 
-- [ ] GBuffer 契约、深度重建、Deferred Lighting，透明继续 Forward。
-- [ ] 验证同一材质的 Forward/GBuffer/Shadow 角色与固定布局。
-- [ ] 比较同一受控场景的 Forward 和 Deferred，解释预期差异。
+状态：DONE，日期：2026 年 10 月 26 日。
+
+结果：RHI/Graph 支持最多八个 MRT 与 D32/D32S8 采样视图；SceneRenderer 提供三张 RGBA32F GBuffer、逆 ViewProjection 深度重建、PBR Deferred Lighting，透明仍走 Forward。Lit/Unlit 增加 GBuffer 角色；样例调节面板与 CLI 可选 Forward/Deferred，菜单选项表可扩展。接口见 [Deferred Pipeline](../docs/deferred-pipeline.md)，架构限制见 [Feature 与管线组合](../docs/forward-pipeline.md)。
+
+验证：MSVC Debug/NMake 构建 `renderlab_sandbox` 成功。RTX 5060 上 CTest `gpu.{dx12,vulkan}.{deferred,tools_window}` 4/4；固定 PBR 640×360 下 Forward/Deferred 两后端均运行，validation errors=0。同后端 RGB 平均绝对差为 0.09/255，每帧有 742/230400 个像素不同。Shadow 场景 Deferred 窗口 DX12/Vulkan 各 54 帧、10 次重建，validation errors=0。DX12 清除值优化及 Vulkan 未消费顶点属性仍有非错误警告。
+
+边界：三张全分辨率 RGBA32F 目标带宽较高；自定义不透明 Shader 必须提供 GBuffer 角色。Path Tracing 与 Forward+ 尚未实现，菜单只显示已实现组合；其他 GPU 未验证。
 
 ### M5.2 加速结构与 Ray Query
 
@@ -298,7 +293,3 @@
 - [ ] 发布可运行演示、构建说明、操作说明、录屏和技术文章。
 
 退出条件：所选专题完成且可复现，作品能由他人运行，讲解能从画面追踪到程序、资源和 GPU 执行。
-
-## 已完成阶段
-
-已完成：M0 工程与设备基础、M1 最小双后端 RHI、M2 Shader 与材质数据链路、M3 单队列 Render Graph 与普通 Forward。摘要保留在对应章节，本节只维护索引。

@@ -1,12 +1,16 @@
 #pragma once
 
 #include "rhi/resources.hpp"
+#include "shader/render_state.hpp"
 
 #include <cstdint>
 #include <filesystem>
 #include <map>
 #include <optional>
+#include <span>
 #include <string>
+#include <string_view>
+#include <utility>
 #include <vector>
 
 namespace renderlab::shader
@@ -43,6 +47,7 @@ struct Type
     Scalar scalar = Scalar::Float;
     uint32_t rows = 1, columns = 1, count = 1;
     bool array = false;
+    bool enumType = false;
     std::optional<rhi::BindingKind> resource;
     std::string element = "float4";
     bool operator==(const Type&) const = default;
@@ -51,6 +56,42 @@ struct Type
         return !resource;
     }
 };
+struct EnumItem
+{
+    std::string name;
+    uint32_t value;
+    bool operator==(const EnumItem&) const = default;
+};
+struct EnumDefinition
+{
+    std::string name;
+    std::vector<EnumItem> items;
+};
+enum class MaterialSemantic
+{
+    None,
+    BaseColor,
+    Metallic,
+    Roughness,
+    NormalScale,
+    OcclusionStrength,
+    Emission,
+    AlphaCutoff,
+    Surface,
+    Cull,
+    AlphaClip,
+    BaseMap,
+    MetallicRoughnessMap,
+    NormalMap,
+    OcclusionMap,
+    EmissionMap
+};
+struct MaterialSemanticInfo
+{
+    MaterialSemantic semantic;
+    std::string_view name, type;
+};
+std::span<const MaterialSemanticInfo> MaterialSemantics();
 struct Property
 {
     std::string id, symbol;
@@ -61,6 +102,17 @@ struct Property
     bool color = false, srgb = false, hdr = false;
     std::optional<double> minimum, maximum;
     std::vector<std::string> enumeration;
+    std::vector<EnumItem> enumItems;
+    std::string keyword;
+    enum class BindingSemantic
+    {
+        None,
+        EnvironmentAtlas,
+        BrdfLut,
+        MainLightShadow
+    };
+    BindingSemantic binding = BindingSemantic::None;
+    MaterialSemantic semantic = MaterialSemantic::None;
     SourceLocation source;
 };
 struct ParameterBlock
@@ -69,6 +121,8 @@ struct ParameterBlock
     Scope scope = Scope::Pass;
     std::vector<Property> properties;
     SourceLocation source;
+    std::string schemaId, typeName;
+    uint32_t schemaVersion = 0;
 };
 struct Entry
 {
@@ -81,14 +135,21 @@ struct Pass
     std::string name;
     std::vector<Entry> entries;
     std::vector<ParameterBlock> blocks;
-    bool depth = true, blend = false, cull = true;
+    PassRole role = PassRole::Custom;
+    StateDefinition state;
+    PassEnable enabled = PassEnable::Always;
+    StateValue castShadows{1, {}};
+    std::vector<std::string> features;
     SourceLocation source;
 };
 struct Variant
 {
     std::string name;
     std::map<std::string, std::string> defines;
+    std::vector<std::pair<std::string, uint32_t>> axes;
 };
+/** @brief Canonical pass-local selection, sorted by stable material PropertyId. */
+using VariantKey = std::vector<std::pair<std::string, uint32_t>>;
 struct Dependency
 {
     std::filesystem::path path;
@@ -96,13 +157,19 @@ struct Dependency
 };
 struct Definition
 {
-    std::string name;
+    std::string name, assetId;
     std::filesystem::path source;
     std::vector<ParameterBlock> blocks;
     std::vector<Pass> passes;
-    std::vector<Variant> variants;
+    std::vector<EnumDefinition> enums;
     std::vector<Dependency> declarations;
+    RenderPolicy render;
 };
+std::vector<EnumDefinition> BuiltinEnums();
+std::string VariantLabel(const VariantKey& key);
+std::vector<Variant> EnumerateVariants(const Definition& definition, const Pass& pass);
+VariantKey SelectVariantKey(const Definition& definition, const Pass& pass,
+                            const std::map<std::string, uint32_t>& values);
 
 /// Parse the sole author format, resolving shared modules relative to their declaration, then
 /// include roots. Throws a source-positioned error for malformed declarations, cycles or

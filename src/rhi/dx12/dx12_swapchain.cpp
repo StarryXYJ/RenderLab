@@ -8,10 +8,10 @@ namespace
 class DxSwapchain final : public Swapchain
 {
 public:
-    DxSwapchain(const void* owner, ID3D12Device* device, ID3D12CommandQueue* queue,
+    DxSwapchain(DxRuntime& runtime, ID3D12Device* device, ID3D12CommandQueue* queue,
                 IDXGIFactory6* factory, platform::NativeSurface surface, uint32_t width,
                 uint32_t height)
-        : Swapchain(owner), queue_(queue)
+        : Swapchain(&runtime), runtime_(runtime), queue_(queue)
     {
         Check(device->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&presentFence_)),
               "Presentation fence");
@@ -57,6 +57,7 @@ public:
     void Resize(uint32_t width, uint32_t height) override
     {
         WaitPresentation();
+        views_.clear();
         images_.clear();
         if (!width || !height)
             return;
@@ -88,20 +89,23 @@ private:
                                                                false, true, "Swapchain.Image"});
             Check(native_->GetBuffer(i, IID_PPV_ARGS(&image->native)), "Swapchain GetBuffer");
             Check(image->native->SetName(L"Swapchain.Image"), "SetName");
+            views_.push_back(runtime_.CreateView(image, TextureViewUsage::Default));
             images_.push_back(std::move(image));
         }
     }
+    DxRuntime& runtime_;
     ID3D12CommandQueue* queue_;
     ComPtr<ID3D12Fence> presentFence_;
     uint64_t presentPoint_ = 0;
     ComPtr<IDXGISwapChain3> native_;
     std::vector<std::shared_ptr<Texture>> images_;
+    std::vector<std::shared_ptr<TextureView>> views_;
 };
 } // namespace
 
 std::unique_ptr<Swapchain> DxRuntime::CreateSwapchain(platform::NativeSurface surface,
                                                       uint32_t width, uint32_t height)
 {
-    return std::make_unique<DxSwapchain>(this, device_, queue_, factory_, surface, width, height);
+    return std::make_unique<DxSwapchain>(*this, device_, queue_, factory_, surface, width, height);
 }
 } // namespace renderlab::rhi::dx12

@@ -4,6 +4,10 @@ RenderLab 支持 Windows x64，使用 C++20、MSVC、Windows SDK、CMake 和 Nin
 
 ## 工具链
 
+固定功能状态与模板附件的独立 GPU 回归可运行 `ctest --preset windows-debug -R 'render_state|rendergraph.contracts' --output-on-failure`，需配置 `RENDERLAB_GPU_TESTS=ON`；状态与逐面访问接口见 [渲染状态](../docs/render-states.md)。
+
+参数 ABI 生成回归为 `ctest --preset windows-debug -R 'parameters.contracts|shader.contracts' --output-on-failure`。Shader 工具新增 `--cpp OUTPUT.hpp`，为带 Schema 的 `.params` 输出 C++ 数据/打包代码；参数声明、类型头与 handle 见 [参数接口](../docs/shader-parameters.md)。
+
 本轮验证环境如下，第三方源码按提交固定，构建时自动下载到各构建树的 `_deps`。
 
 | 工具 | 实测版本 |
@@ -66,9 +70,9 @@ cmake --build --preset windows-release --parallel 4
 ctest --preset windows-release
 ```
 
-输出分别在 `out/build/windows-debug` 和 `out/build/windows-release`。默认注册 7 项不需要创建设备的测试，包含实际 DXC 双目标编译的 `shader.contracts`。预设与依赖版本纳入 Git，本机设置使用被忽略的 `CMakeUserPresets.json`。
+输出分别在 `out/build/windows-debug` 和 `out/build/windows-release`。默认注册 13 项不需要创建设备的测试，包含实际 DXC 双目标编译的 `shader.contracts`、生成 C++ 契约的 `parameters.contracts` 和流式计时数据的 `benchmark.contracts`。预设与依赖版本纳入 Git，本机设置使用被忽略的 `CMakeUserPresets.json`。
 
-完整验收启用 GPU 测试，共 19 项。GPU 测试要求验证层和桌面会话，会短暂打开原生窗口：
+完整验收启用 GPU 测试，当前共 41 项（13 项 CPU/CLI、28 项 GPU）。GPU 测试要求验证层和桌面会话，会短暂打开原生窗口：
 
 ```powershell
 cmake --preset windows-debug -DRENDERLAB_GPU_TESTS=ON
@@ -100,6 +104,7 @@ GPU 测试使用 `--validation on`，层不可用时失败，不静默降级。�
 默认使用 `--validation auto`，验证层缺失会给出警告并在报告中标记禁用；`on` 要求可用，`off` 明确关闭。能力表表示硬件支持，不代表引擎已启用光追、Mesh Shader 或 GPU Driven。
 
 `--adapter N` 使用当前后端报告中的索引，默认优先硬件高性能适配器，不自动选择软件适配器。两种 API 的枚举顺序可能不同。`--exit-after-ms N` 或 `--frames N` 自动关闭窗口。`--window-test` 在呈现中执行十次尺寸/暂停变化与两次最小化恢复，不要用过短的退出时间截断它。不提供 `--headless` 时才运行窗口循环；`--headless` 单独使用仍只输出设备报告。
+
 
 验收并保存读回图像：
 
@@ -175,6 +180,20 @@ ctest --test-dir out/build/windows-debug -R 'content.contracts|gpu.*.scene' --ou
 
 项目窗口用 WASD 移动，Q/E 下降/上升；上下方向键绕相机自身右轴俯仰，左右方向键绕父空间上轴转向。失焦时清空按键。无 --project 仍是 Custom Graph Demo。--project --headless 输出一帧及 scene-plan.json；--scene-test 在参考场景上增加行为验收，普通项目无需开启。
 
+### Deferred Pipeline
+
+Deferred 与 Forward 可用同一 Scene 项目切换；窗口内启动 `--debug-panel` 后，在调节面板首项选择 Pipeline。Forward 是默认项。CLI 可在 `--pipeline forward|deferred` 中指定离线输出：
+
+```powershell
+cmake --build --preset windows-debug --target renderlab_sandbox
+out/build/windows-debug/renderlab_sandbox.exe --backend dx12 --headless --validation on `
+  --pipeline deferred --project sample/m4/Pbr.rlproject --width 640 --height 360
+out/build/windows-debug/renderlab_sandbox.exe --backend vulkan --headless --validation on `
+  --pipeline deferred --project sample/m4/Pbr.rlproject --width 640 --height 360
+```
+
+GBuffer 格式、深度重建、透明材质路径和限制见 [Deferred Pipeline](../docs/deferred-pipeline.md)。菜单只列出当前已实现的组合；Path Tracing 与 Forward+ 在各自阶段完成后再加入。
+
 参考项目包含原创 Cube/Sphere glTF、棋盘纹理、项目 Copper Shader/材质、父子对象和两个方向光；只选 UUID 最小的启用光。远处立方体用于剔除验证。数据格式与范围见 [M4 场景](../docs/m4-scene.md)。
 
 ```powershell
@@ -182,6 +201,97 @@ ctest --test-dir out/build/windows-debug -R 'content.contracts|gpu.*.scene' --ou
 ```
 
 Assets 与 .meta 纳入版本管理，Library 可以清除重建。不要原地改写命令正在使用的 Upload 数据。资产首次上传可等待，普通帧仍使用现有完成点与帧管理。
+
+## M4.3 PBR 参考场景
+
+Pbr.rlproject 与原场景共用 Assets，独立选择固定材质球场景。上排从左至右是粗糙度 0.08/0.3/0.65/1 的金属，下排是对应非金属；下排第三个含 Normal Map，第四个含 Metallic-Roughness 图，底部小球演示 Unlit HDR。Studio、Normal 与 MR 图是原创程序测试纹理。
+
+```powershell
+./out/build/windows-debug/renderlab_sandbox.exe --backend dx12 --validation on --project sample/m4/Pbr.rlproject
+./out/build/windows-debug/renderlab_sandbox.exe --backend vulkan --validation on --project sample/m4/Pbr.rlproject
+./out/build/windows-debug/renderlab_sandbox.exe --backend dx12 --headless --validation on --project sample/m4/Pbr.rlproject --output out/m4-pbr
+ctest --preset windows-debug -R 'pbr|content.contracts|gpu.*.scene' --output-on-failure
+```
+
+场景文件可保存 exposure（stops）及 environment 的 image UUID、intensity、rotation（度）。空环境图使用 ambient 均匀 radiance；环境源为 sRGB lat-long 图，尚无 .hdr/.exr 导入。材质使用普通 .material，可指定 RenderLab/Lit 或 RenderLab/Unlit；项目 Copper Shader 继续保留。运行中改材质值会按文件时间重新读取；场景文件修改后需重启项目。WASD/QE/方向键控制不变。
+
+新增 pbr.contracts、gpu.{dx12,vulkan}.pbr 与 gpu.{dx12,vulkan}.pbr_window；输出在各构建树 pbr/后端，包含材质球与单项参考 BMP、Graph JSON、日志和隔离测试资产。测试不会修改 sample。双后端图像对照需相同配置，物理模型与支持限制见 [Forward PBR 契约](../docs/m4-forward-pbr.md)。
+
+## M4.4 阴影与透明场景
+
+Shadow.rlproject 选择带实体、网格裁剪和透明薄片的固定场景，地面用于观察阴影。内置 Lit/Unlit 使用 Surface/Blend/AlphaClip 属性：Opaque、Opaque+AlphaClip、Transparent+Alpha 分别对应不透明、alpha 裁剪和 straight alpha 混合；alpha_cutoff 默认 0.5。方向光组件保存 shadows、shadowResolution、shadowBias、shadowNormalBias；旧场景默认关闭阴影。材质为 v2 并引用 Shader UUID，旧资产迁移见 [Shader 资产](../docs/shader-assets.md)。
+
+```powershell
+./out/build/windows-debug/renderlab_sandbox.exe --backend dx12 --validation on --project sample/m4/Shadow.rlproject
+./out/build/windows-debug/renderlab_sandbox.exe --backend vulkan --validation on --project sample/m4/Shadow.rlproject
+ctest --preset windows-debug -R 'surface|content.contracts' --output-on-failure
+```
+
+专项参考图与 Graph JSON 在构建树 surface/后端；原始场景不会被测试修改。透明在 HDR 空间混合后统一显示变换，按物体中心从远到近排序，不支持相交面的正确排序。单张阴影、alpha 导入和硬件要求见 [契约](../docs/m4-shadows-alpha.md)。
+
+## M4.5 演示与 Player
+
+`--debug-panel` 打开原生调试面板，也可在场景窗口按 F1 显示/隐藏。面板可切换最终画面/HDR/阴影图/环境图集/BRDF LUT、阴影质量、主光阴影、曝光、冻结/重置相机；改动只作用于当前运行。WASD/QE 和方向键使用有焦点的渲染窗口。
+
+```powershell
+./out/build/windows-debug/renderlab_sandbox.exe --backend dx12 --validation on --project sample/m4/Shadow.rlproject --debug-panel --quality medium --width 1280 --height 720
+./out/build/windows-debug/renderlab_sandbox.exe --backend vulkan --validation on --project sample/m4/Shadow.rlproject --view shadow --fixed-camera
+ctest --preset windows-debug -R 'tools_window|player|surface|rendergraph.contracts|core.contracts' --output-on-failure
+```
+
+固定基线用 Release、关闭验证层并保留 profiling。`--benchmark 120` 先预热 5 帧再记录 120 帧，最后额外截图，输出 scene.bmp 和 scene-plan.json；JSON 包含 CPU、逐 Pass GPU、RHI 分配和进程内存。相同命令将 backend 改为 vulkan 可对照。
+
+```powershell
+./out/build/windows-release/renderlab_player.exe --backend dx12 --validation off --headless --project sample/m4/Shadow.rlproject --quality medium --width 1280 --height 720 --benchmark 120 --profile out/m4-baseline/shadow-dx12.json --output out/m4-baseline/shadow
+```
+
+Player 必须指定 --project，不运行 Sandbox 的 RHI/Graph 验收示例。安装为独立目录后，进入该目录运行同样的项目格式；无需 C# 或源码树，机器仍需当前 MSVC x64 运行库和图形驱动。
+
+```powershell
+cmake --install out/build/windows-release --prefix out/player
+cd out/player
+./renderlab_player.exe --backend dx12 --validation on --project project/Shadow.rlproject --debug-panel
+```
+
+安装包含 Player、DXC/PIX DLL、shaders/RenderLab 和示例项目 Assets/.meta/清单；不复制 Library，首次启动会重建。基线与边界见 [性能记录](../docs/performance/m4-rtx5060.md)，接口与计时范围见 [工具契约](../docs/m4-tools.md)。
+
+## Benchmark 与双后端分析
+
+先构建 windows-release。单次按时长运行（预热至少 5 帧且至少 2 秒，再测至少 10 秒）：
+
+```powershell
+./out/build/windows-release/renderlab_player.exe --headless --backend dx12 --validation off --project sample/m4/Pbr.rlproject --width 1280 --height 720 --quality medium --benchmark-seconds 10 --warmup-seconds 2 --profile out/benchmarks/single/report.json --samples out/benchmarks/single/frames.jsonl --output out/benchmarks/single/capture
+```
+
+报告为 v2 JSON，逐帧原始数据为 JSONL；不指定 profile/samples 时自动放到 OUTPUT/BACKEND。旧 `--benchmark N` 继续支持并使用同一数据导出链路。计时与 FPS 含义见 [Benchmark 契约](../docs/benchmark.md)。
+
+批量样例按 DX12/Vulkan 交替顺序分别执行 PBR，默认各 3 次，每次预热 2 秒、测量 10 秒。工具默认自动创建 out/benchmarks/UTC时间戳；指定 `--output DIR` 时要求目录尚不存在。核心运行/分析只需 Python 3.10+，可选图表使用已验证的 Python 3.12 依赖环境：
+
+```powershell
+python -m venv out/benchmark-env
+./out/benchmark-env/Scripts/python.exe -m pip install -r tools/benchmark/requirements.txt
+./out/benchmark-env/Scripts/python.exe tools/benchmark/run.py sample/benchmark/pbr.json --plots
+```
+
+可用 `--seconds`、`--warmup-seconds`、`--repeats`、`--backends`、`--validation on|off` 或 `--exe PATH` 覆盖样例；新增场景在配置 cases 中登记，相对项目路径以配置文件目录为基准。完整参数可运行 `run.py --help`。
+
+扩大样本或定位 CPU/驱动差距：
+
+```powershell
+python tools/benchmark/run.py sample/benchmark/pbr.json --seconds 20 --warmup-seconds 5 --repeats 8
+python tools/benchmark/run.py sample/benchmark/pbr-diagnostics.json
+```
+
+诊断配置开启 `cpuProfiling`，也可用 CLI `--cpu-profile`/`--no-cpu-profile` 覆盖；直接 Player 对应 `--cpu-profile`。这组数据额外包含 RHI 创建、提交、Fence 与回收区间/调用计数，计时定义见 Benchmark 文档。
+
+每组输出 manifest.json，各运行目录含原始样本、report/device JSON、日志与测量外截图；analysis 目录含逐指标 CSV、分析 JSON、Markdown 报告及可选 PNG/SVG 图表。报告给出每次 P50/P95/P99、各后端重复均值与重复间标准差。示例独立分析已有数据（替换路径为实际组目录）：
+
+```powershell
+./out/benchmark-env/Scripts/python.exe tools/benchmark/analyze.py out/benchmarks/RUN/manifest.json --output out/benchmarks/RUN/reanalysis --plots
+python -m unittest discover -s tools/benchmark -p "test_*.py"
+```
+
+分析可接受多个完成 manifest 或单次 v2 report，支持独立重画图/新增统计。比较器拒绝截断、失败或配置/设备不匹配的结果；它不会把 Debug/Validation 测试标为正式性能基线。当前为逐帧 GPU 完成点等待的 headless 测量，不代表窗口 Present 的流水吞吐。样例源码按 src/samples/common、rhi、graph、material、scene 分类；一次性迁移脚本已清理，tools/benchmark 为正式维护工具。
 
 ## 验证结果与边界
 

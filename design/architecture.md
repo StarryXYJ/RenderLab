@@ -83,6 +83,8 @@ RHI 定义 GPU 对象与命令语义。Render Graph 编译一帧工作的资源�
 
 完整编辑器阶段再处理 Docking、DPI、输入焦点、鼠标捕获和原生视口托管。Windows 首选 NativeControlHost 托管子 HWND，C++ 使用该窗口创建 Surface；视口内 Gizmo 和调试覆盖由原生编辑器渲染层绘制。独立 Sandbox 使用自己的原生窗口。视口宿主明确窗口所有权和销毁协议，避免窗口销毁后仍提交渲染。
 
+Windows Sandbox 在窗口和设备创建前为窗口线程初始化 COM STA，持有至宿主对象销毁后；headless 使用 MTA。WIC 资源解码复用已有 apartment，仅无宿主初始化的导入线程临时持有 MTA，避免首帧纹理解码结束时卸载展示线程的 COM。具体契约见 [场景资源](../docs/m4-scene.md#静态-gltf-与缓存)。
+
 ## 渲染方式与能力模型
 
 ### 正交的配置维度
@@ -103,6 +105,8 @@ RHI 定义 GPU 对象与命令语义。Render Graph 编译一帧工作的资源�
 
 基础目标是 Windows x64、DX12 和 Vulkan 1.3。Vulkan 基础路径使用 Dynamic Rendering、Synchronization2 和 Timeline Semaphore，并检查具体特性、格式和限制。DX12 的 Shader Model 与可选功能按实际能力验证。
 
+Masked 材质的 HLSL clip 在 DXC SPIR-V 中使用 helper invocation demote；Vulkan 基础设备同时检查并启用 shaderDemoteToHelperInvocation，不只查询支持而遗漏启用。
+
 DeviceCapabilities 至少区分：
 
 - 基础图形与计算能力、格式和附件限制。
@@ -117,6 +121,8 @@ DeviceCapabilities 至少区分：
 ## RHI
 
 ### 对象与命令
+
+固定功能状态采用类型化 Raster/Depth/Blend/Stencil，附件格式独立于测试/写开关；StencilRef 为每 Draw 动态命令。D32S8 及 Graph 的逐面 Load/Clear/写权限已接入双后端，资源版本暂保守跟踪整个组合附件；接口见 [渲染状态](../docs/render-states.md)。Shader 作者层的完整配方与静态轴仍在后续修订中。
 
 | 分类 | 主要对象与操作 |
 | --- | --- |
@@ -165,6 +171,8 @@ M1 采用拥有资源引用的命令包序列，在 Submit 时由后端生成原
 
 显存分配可以采用 VMA 和 D3D12 Memory Allocator；上传、描述符分配、驻留策略、资源池和图内复用仍由引擎管理。帧内临时分配器避免零散堆分配，按实际用途选择 std::pmr。上传、光追 scratch 和资源池记录当前占用与高水位，设置容量上限，并在相关提交完成后按预算或显式请求清理闲置分配。容量不足时明确扩容、分批处理或报错，避免无限增长及每帧缩扩容。
 
+B2 实测发现常量、描述符与读回存在逐帧原生分配。[B3 复用方案](resource-reuse.md) 按帧数据、不可变材质和结果持有期分别管理。帧上传使用有界 UploadPool，以 CPU Buffer 引用、活动批次和实际提交完成共同保护整页复用；材质在包代际内有界缓存不可变常量版本。DX12 描述符从持久 heap 页分配不可变区间，Vulkan 复用无外部引用的同布局 pool/set 块；逻辑组与命令保活分配，缓存页/块不持有场景资源，容量与高水位独立统计。Timestamp 读回进入现有 Graph Pool，CPU profiling 结果继续保活读回；默认 View 由 Texture 弱缓存、物理分配/宿主/交换链分别持有，交换链在 resize 前清除自己的 View。接口见 [资源复用](../docs/resource-reuse.md)，实际验收与性能以阶段计划和测量结果为准。
+
 ## 场景数据与 GPU Driven
 
 Scene Document 使用稳定对象 ID，运行时使用类型明确的 Handle。每帧提取 RenderSceneSnapshot，Renderer 不在录制期间遍历可被 UI 修改的场景文档。
@@ -194,17 +202,25 @@ DX12 与 Vulkan 的 DrawID、InstanceID、firstInstance 和间接 Count 能力�
 
 Hi-Z 使用跨帧历史时，规定首帧、相机跳变和分辨率变化下的失效策略。GPU Scene 的更新、剔除结果和间接参数全部进入 Render Graph 访问声明。
 
-M4 的首个场景闭环见 [项目、场景与 Blinn–Phong](../docs/m4-scene.md)。Scene 使用值类型组件和层级 Transform，不引入 ECS 管理器。DirectionalLight 可有多个，按稳定 UUID 选择一个启用对象，其世界旋转、颜色和强度提取到共享 Frame 常量。HLSL Lighting 读取全局主光，点光源和面光源后置。
+M4 的首个场景闭环见 [项目、场景](../docs/m4-scene.md)，Forward PBR/HDR 见 [M4.3](../docs/m4-forward-pbr.md)。Scene 使用值类型组件和层级 Transform，不引入 ECS 管理器。DirectionalLight 可有多个，按稳定 UUID 选择一个启用对象，其世界旋转、颜色和强度提取到显式 Lighting 数据；View/Object/Shadow 分块，入口把数据传给 HLSL 库。点光源和面光源后置。
 
 ## Shader 与材质
 
+### M4 后契约修订
+
+[Shader 与材质 v2](shader-material-v2.md) 将 Pass role、队列分类、固定功能状态和静态属性轴分别声明。类型化 role 解析代际 PassHandle，Surface/Blend/AlphaClip 分离，有限状态配方支持显式覆盖；bool/enum 仅在带 keyword 特性时产生局部变体。绑定 handle、生成参数契约与 HLSL 显式传参贯穿同一链路。Shader 以资产 ID 引用，glTF 按类型化属性语义映射；旧具名变体和独立 variant 字符串已删除。接口见 [渲染状态](../docs/render-states.md)、[静态轴](../docs/shader-features.md)、[资产身份与迁移](../docs/shader-assets.md)，实际验收以阶段计划为准。
+
 ### Shader 工具链
+
+参数块声明稳定 Schema ID、版本和数据类型名，布局 hash 排除绑定别名与槽；同一声明生成 C++ 数据/打包代码及独立 HLSL 类型头。Package 解析代际 BindingHandle，按 Schema 或固定资源语义验证接口。Material 准备使用 handle，Scene 按包/Pass 缓存适配并绑定分块数据；共享 HLSL 库通过显式参数求值。契约见 [参数接口](../docs/shader-parameters.md)。
 
 ShaderDefinition 是作者维护的 Shader 资产，包含 HLSL 来源、入口点、材质属性、合法变体、Pass 角色和状态选择。M2 采用简洁声明语法作为唯一作者入口，共享参数模块由 use 引入，HLSL 函数与工具仍由普通 Include 组织。内部描述统一，不并存另一份手写 JSON 元数据。
 
 普通 material 数值自动生成 Material 常量缓冲，显式 cbuffer 声明共享数据块及 frame/view/draw/pass 作用域。参数 Schema、绑定映射和 PackingPlan 从同一声明生成。Shader 编译层仅产生 CPU 程序/接口数据，不依赖 RHI Device；DXC 处理 HLSL 预处理、Include 和程序编译，反射验证保留字段与资源接口。生成头按编译任务隔离，缓存覆盖共享声明及传递 Include。后台编译成功后，由设备所有线程在准备阶段创建 GPU 对象并在帧边界整体切换，失败保留旧代。Material 返回不可变绑定值：直接 RHI 建立绑定组，Graph 适配先导入并声明资源，由 Graph 录制时组装绑定，避免重复准备。
 
-M2 的具体声明、布局和准备/发布接口见 [Shader 与材质](../docs/m2-shader-material.md)。RHI 的唯一 CreatePipeline 入口按不可变程序/布局身份、顶点布局、附件格式和完整状态查找有界弱引用缓存。数值/纹理修改创建不可变绑定快照，静态功能选择有限具名变体，新代编译包创建新的程序身份。热重载通过 LiveMaterial 成组 Stage，调用方在帧边界 Publish；依赖监视器只负责请求编译，不进入 RHI。
+M2 的具体声明、布局和准备/发布接口见 [Shader 与材质](../docs/m2-shader-material.md)。RHI 的唯一 CreatePipeline 入口按不可变程序/布局身份、顶点布局、附件格式和完整状态查找有界弱引用缓存。数值/纹理修改创建不可变绑定快照，静态属性选择每 Pass 的有限 VariantKey，新代编译包创建新的程序身份。热重载通过 LiveMaterial 成组 Stage，调用方在帧边界 Publish；依赖监视器只负责请求编译，不进入 RHI。
+
+材质 GPU generation 最多驻留 64 个 PSO，跨帧保活以避免提交退休后重复创建；PSO 查找仍统一走 RHI 弱缓存。驻留淘汰或 generation 释放不影响命令快照对在途对象的保活。
 
 元数据生成材质参数声明，再编译各后端和变体，Reflection 校验实际 GPU 布局。作者元数据负责默认值、显示语义、分组、范围、条件显示和资源用途，Reflection 负责实际绑定、布局和阶段接口。
 
@@ -326,6 +342,12 @@ Execute 只读取声明的数据并录制命令，使用预先准备的 View、�
 
 至少能导出 Pass 依赖、资源版本、用途、生命周期、队列分配、屏障、等待点、剔除原因、内存分配与耗时。早期先使用日志和文件导出，后期接入可视化面板。增加单队列串行、禁用剔除、禁用 Alias 等诊断开关，共用同一套编译与执行代码，不长期保留第二套立即渲染实现。
 
+Graph 的可选 profiling 在存活 Pass 两端录制 Timestamp，由提交结果持有读回和完成点，宿主在退休后读取；每命令列表 64 个 slot，单图最多 32 个已计时 Pass，默认关闭。Sandbox 与独立原生 Player 共用宿主循环；Win32 modeless 调试面板只在帧间修改 CPU 控制值，纹理查看仍通过 Graph 声明和普通显示 Shader。固定场景/质量/尺寸与预热测量导出 CPU/GPU/内存数据，交互统计和关闭验证层的性能基线分开。接口见 [M4 工具](../docs/m4-tools.md)。
+
+离线 Benchmark 复用同一场景 Capture 路径，支持帧数/时长及独立预热预算。src/benchmark 以动态指标映射流式记录完成帧，不依赖 Renderer 或 RHI；宿主负责定义计时边界与版本化报告。CPU render、GPU wait、串行帧延迟和 GPU Pass 范围分别保存，单帧 GPU 等待模式不冒充窗口流水吞吐。Python 工具按配置顺序运行和核对源内容，聚合/绘图独立消费 JSON/JSONL；扩展指标无需修改 Renderer 核心。接口见 [Benchmark](../docs/benchmark.md)。
+
+性能诊断可显式启用 RHI owner-thread CPU scopes，累计创建 Buffer/View/BindingGroup、原生 Execute/Signal、Collect 与 Fence 等待的调用次数和时间。默认关闭且不读计时钟，宿主按测量帧取增量并复用已有指标导出。该诊断不引入第二套执行路径，也不改变资源复用或队列策略；区间定义与基线分开。
+
 ## 光追路线
 
 BLAS 管理几何，TLAS 管理场景实例；通过统一的 InstanceID、MeshID、MaterialID 找到 GPU Scene 数据。BLAS 和 TLAS 在跨帧管理器中持有，构建与更新通过图声明，不能每帧无条件重建全部结构。
@@ -353,7 +375,9 @@ Feature 使用 RenderFeature 基类，构造时声明稳定名称、Feature 依�
 
 Custom 与 Forward 仅是预先注入 Feature 的不同组合，共用 Create 和 Build。Forward 注入 Opaque、Transparent 与可选颜色快照；用户 Feature 可指定阶段。Feature 名称依赖解决构图先后，Graph 资源名称与读写声明解决本帧数据依赖，两者不混为一个全局资源表。执行回调仅保存本帧解析的 handle 与数据副本。
 
-CameraColor/CameraDepth 由宿主创建或导入，可选 OpaqueColor/AfterTransparentColor 使用真实复制。Demo 使用空 Custom 组合注册 Noise、Scene 和 Readback，不传递 Feature 返回 handle，也不使用 Forward 内置流程。具体接口见 [Feature 与管线组合](../docs/forward-pipeline.md)。完整场景、PBR 和高级组合按计划推进。
+CameraColor/CameraDepth 由宿主创建或导入，可选 OpaqueColor/AfterTransparentColor 使用真实复制。M4.3 场景宿主使用 RGBA32F CameraColor，Forward 结束后显式添加 Display.ToneMapping，写入导入的 sRGB DisplayColor；快照保留 HDR 值。Demo 使用空 Custom 组合注册 Noise、Scene 和 Readback，不传递 Feature 返回 handle，也不使用 Forward 内置流程。Deferred 是第二个内置组合：三个 RGBA32F GBuffer 目标、可采样 Reversed-Z 深度和全屏 Deferred Lighting，透明仍在其后走 Forward。普通 Forward、Deferred、以及未来路径通过类型化 Pipeline 选项选择，不把未实现的管线暴露为可运行模式。接口见 [Feature 与管线组合](../docs/forward-pipeline.md) 与 [Deferred](../docs/deferred-pipeline.md)。
+
+M4.4 的 ShadowFeature 以 BeforeOpaque 生成单张方向光图，RGBA32F 记录 Reversed-Z 片元深度。该阶段的 RHI 仅有单颜色附件且深度不可采样。M5.1 扩展至最多八个颜色附件并增加 D32/D32S8 的采样视图；阴影图仍用颜色存深度，CameraDepth 可用于 Deferred 世界位置重建。Extractor 保留相机视野外的启用实例，Renderer 按材质 ShadowCaster 角色筛选投影。Masked 在主绘制/阴影中复用同一 alpha 裁剪；标准 Transparent 配方不投影、关闭深度写入，同队列按 view 深度排序，Pass 可显式覆盖状态。Lit 的 PCF 仅调制直接光。数据与限制见 [阴影与 Alpha](../docs/m4-shadows-alpha.md)。
 
 一个后期混合示例是：
 
@@ -405,7 +429,7 @@ Assets 和元数据、ProjectSettings、Source、项目文件纳入版本管理�
 
 投影、Viewport Y、屏幕 UV 和正面绕序统一在平台适配规则中处理，上层不分散添加 Vulkan 或 DX12 修正。纹理上传、渲染附件和屏幕采样的原点转换用测试图验证。深度重建、阴影和 Hi-Z 都遵守相同约定。
 
-光照在统一的线性工作空间计算，颜色纹理按声明进行 sRGB 解码，法线和普通数据纹理使用线性数据。M4.2 先用 Blinn–Phong/sRGB LDR 验证场景，Core/Lighting HLSL 库共用 .params Frame/Draw 声明，不重复手写 cbuffer。HDR 中间结果在输出阶段进行曝光、Tone Mapping 和显示编码。
+光照在统一的线性工作空间计算，颜色纹理按声明进行 sRGB 解码，法线和普通数据纹理使用线性数据。M4.2 先用 Blinn–Phong/sRGB LDR 验证场景，M4.3 改为 Shader/Material 驱动的 Lit/Unlit 与 RGBA32F HDR；View/Object/Lighting/Shadow 从 .params 生成 CPU/HLSL 数据，Core/Lighting 等库接受显式参数，不重复手写 cbuffer。Surface/BRDF 与光栅采样上下文分开，环境采用 CPU 准备的低分辨率 2D 预滤波图集和 split-sum LUT。HDR 中间结果在输出阶段执行曝光、ACES fitted Tone Mapping，最后由 sRGB 附件编码。此阶段环境输入是 sRGB 图像加线性强度，原生 HDR 图像、cubemap/mip 和高级 IBL 后置。
 
 Object、View、Projection 的历史值、相机 jitter 和运动矢量采用明确语义。即使 TAA 后置，也避免在接口中混淆当前与历史变换。
 

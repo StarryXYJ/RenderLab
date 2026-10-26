@@ -62,7 +62,7 @@ Feature 名称与 Graph 资源名称是两个命名空间。样例通常用主�
 
 ## Preset 与阶段
 
-Custom 预先注入零个 Feature；Forward 注入 OpaqueFeature、TransparentFeature，以及配置启用的 ColorSnapshotFeature。两者使用相同 Builder、Create、阶段与 Build，不存在独立 ForwardPipeline 继承树或专用执行路径。
+Custom 预先注入零个 Feature；Forward 注入 OpaqueFeature、TransparentFeature，以及配置启用的 ColorSnapshotFeature。Deferred 注入 GBufferFeature、DeferredLightingFeature 和 Forward TransparentFeature。各组合使用相同 Builder、Create、阶段与 Build，不存在独立 ForwardPipeline 继承树或专用执行路径。
 
 ```cpp
 auto builder = renderer::CreatePipeline(
@@ -87,18 +87,18 @@ auto pipeline = builder.Create();
 | 8 | 可选 AfterTransparentColor 快照，依赖 Forward.Transparent |
 | 9 | 用户 AfterRendering，例如阶段快照读回 |
 
-内置与用户 Feature 都由同一 Create 处理。Opaque 无 Draw 时仍 Clear；Transparent 无 Draw 时不建 Pass，但该 Feature 的组合依赖仍存在。Forward+、Deferred 等尚未实现，不提供伪可用枚举或空实现，后续按同样机制注入 Feature。
+内置与用户 Feature 都由同一 Create 处理。Opaque 无 Draw 时仍 Clear；Transparent 无 Draw 时不建 Pass，但该 Feature 的组合依赖仍存在。Deferred 的资源契约、材质 Pass 角色和使用入口见 [Deferred Pipeline](deferred-pipeline.md)。Forward+ 与 Path Tracing 尚未实现；实现后再将对应组合加入 Pipeline 类型和选择列表。
 
 ## 名称连接与普通 Forward
 
 Feature 之间按名称连接资源。DrawPacket 的 vertices/indices/indirect、TextureBinding.texture 和 BufferBinding.buffer 也都为本帧资源名称。Feature 内部在建图时解析成类型化 handle，执行回调保存解析结果和数据副本，不再查名称，也不依赖 Feature 裸 this 或临时 Frame 引用。
 
-Opaque 需要关闭混合、开启深度测试和写入；Transparent 需要开启混合和深度测试、关闭深度写入。distance 是有限非负视空间距离，按从远到近稳定排序；不处理相交透明面或 OIT。支持普通、索引和间接绘制，Shader Buffer 绑定为 Uniform/ShaderRead；存储写入通过独立 Pass 声明。
+Opaque/Transparent 按已解析的材质策略分类，标准配方分别给出不透明与混合/只读深度的默认值；Pass 可独立覆盖 Depth/Blend/Stencil，Forward 按实际状态汇总附件权限。先按队列排序，再在同队列按不透明近到远、透明远到近稳定排序；distance 是有限非负视空间距离。不处理相交透明面或 OIT。支持普通、索引和间接绘制，Shader Buffer 绑定为 Uniform/ShaderRead；存储写入通过独立 Pass 声明。状态细节见 [渲染状态](render-states.md)。
 
 | 资源名称 | 契约 |
 | --- | --- |
 | CameraColor | 调用者创建或导入的当前颜色附件，可用 SetTexture 重定向 |
-| CameraDepth | 调用者创建或导入的同尺寸 D32 |
+| CameraDepth | 调用者创建或导入的同尺寸 D32/D32S8，与已准备 PSO 的附件格式一致 |
 | OpaqueColor | AfterOpaque 用户 Feature 之后的独立真实颜色复制 |
 | AfterTransparentColor | AfterTransparent 用户 Feature 之后的独立真实颜色复制 |
 
@@ -110,4 +110,4 @@ GraphDemo 使用空 Custom 组合，注册 NoiseFeature、DemoSceneFeature、可
 
 内置与样例回调按值拥有本帧解析结果，Pipeline/Feature 可以在建图后释放。自定义 Feature 同样必须按值保存必要输入，不能让延迟回调依赖已释放的 this。Feature 本身可保存长期配置；并发复用须由调用方保证 Build 与其状态的线程安全，当前仍为单线程单队列。
 
-普通 Forward 接收准备好的绘制数据。场景、Material 适配和主方向光由 [M4 SceneRenderer](m4-scene.md) 提供；PBR/HDR 仍在后续阶段。DepthPrepass、Shadow、Sky、后处理将按需成为独立 Feature；高级管线、AS、TraceRays 与历史管理见 [阶段计划](../design/phaseplan.md)。
+普通 Forward 接收准备好的绘制数据。场景、Material 适配和主方向光由 [M4 SceneRenderer](m4-scene.md) 提供；[PBR/HDR](m4-forward-pbr.md) 与 [ShadowFeature、Masked/透明](m4-shadows-alpha.md) 沿用该组合。ShadowFeature 由场景宿主显式注册于 BeforeOpaque，接收 RenderFrame.shadowCasters 并生成 MainLightShadow；普通 Forward preset 不自动注入阴影。DepthPrepass、Sky 与更多后处理按需增加；高级管线、AS、TraceRays 与历史管理见 [阶段计划](../design/phaseplan.md)。

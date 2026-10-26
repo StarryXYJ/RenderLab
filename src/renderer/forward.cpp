@@ -26,14 +26,10 @@ struct ResolvedDraw
     std::vector<TextureHandle> textures;
     std::vector<BufferHandle> buffers;
 };
-ResolvedDraw Declare(RasterPassBuilder& pass, const DrawPacket& draw, bool transparent)
+ResolvedDraw Declare(RasterPassBuilder& pass, const DrawPacket& draw)
 {
-    Require(draw.pipeline && !draw.pipeline->desc.compute && draw.pipeline->desc.depth,
-            "Forward draws require a raster pipeline with depth testing");
-    Require(transparent ? draw.pipeline->desc.blend && !draw.pipeline->desc.depthWrite
-                        : !draw.pipeline->desc.blend && draw.pipeline->desc.depthWrite,
-            "Forward opaque requires depth writes without blend; transparent requires blend "
-            "without depth writes");
+    Require(draw.pipeline && !draw.pipeline->desc.compute,
+            "Forward draws require a raster pipeline");
     Require(draw.kind == DrawKind::Vertices || draw.kind == DrawKind::Indexed ||
                 draw.kind == DrawKind::Indirect,
             "Unknown forward draw kind");
@@ -59,6 +55,7 @@ void Record(RasterContext& context, const ResolvedDraw& resolved)
 {
     const auto& draw = resolved.draw;
     context.Bind(draw.pipeline);
+    context.StencilReference(draw.stencilReference);
     for (size_t i = 0; i < draw.textures.size(); ++i)
         context.BindTexture(draw.textures[i].slot, resolved.textures[i], draw.textures[i].space);
     for (size_t i = 0; i < draw.buffers.size(); ++i)
@@ -84,20 +81,44 @@ void Record(RasterContext& context, const ResolvedDraw& resolved)
     }
 }
 } // namespace
+void ShadowFeature::Build(rendergraph::Graph& graph, const RenderFrame& frame)
+{
+    const auto size = frame.shadowResolution;
+    graph.CreateTexture("MainLightShadow", {size, size, rhi::Format::Rgba32Float, false, true});
+    graph.CreateTexture("MainLightShadowDepth", {size, size, frame.shadowDepthFormat, false, true});
+    auto pass = graph.AddRasterPass("MainLight.Shadow");
+    pass.ColorTarget("MainLightShadow", rhi::LoadOp::Clear, {0, 0, 0, 0});
+    pass.DepthTarget("MainLightShadowDepth");
+    std::vector<ResolvedDraw> draws;
+    for (const auto& draw : frame.shadowCasters)
+        draws.push_back(Declare(pass, draw));
+    pass.Execute(
+        [draws = std::move(draws)](RasterContext& context)
+        {
+            for (const auto& draw : draws)
+                Record(context, draw);
+        });
+}
 void OpaqueFeature::Build(rendergraph::Graph& graph, const RenderFrame& frame)
 {
     const auto color = graph.GetTextureDesc(graph.GetTexture("CameraColor"));
     const auto depth = graph.GetTextureDesc(graph.GetTexture("CameraDepth"));
-    Require(color.attachment && color.format != rhi::Format::D32 && depth.attachment &&
-                depth.format == rhi::Format::D32 && color.width == depth.width &&
+    Require(color.attachment && !rhi::IsDepthFormat(color.format) && depth.attachment &&
+                rhi::IsDepthFormat(depth.format) && color.width == depth.width &&
                 color.height == depth.height,
-            "Forward requires matching color and D32 attachments");
+            "Forward requires matching color and depth/stencil attachments");
     auto pass = graph.AddRasterPass("Forward.Opaque");
     pass.ColorTarget("CameraColor", rhi::LoadOp::Clear, frame.clearColor);
     pass.DepthTarget("CameraDepth");
     std::vector<ResolvedDraw> draws;
-    for (const auto& draw : frame.opaque)
-        draws.push_back(Declare(pass, draw, false));
+    auto input = frame.opaque;
+    for (const auto& draw : input)
+        Require(std::isfinite(draw.distance) && draw.distance >= 0,
+                "Opaque draw distance must be finite and nonnegative");
+    std::stable_sort(input.begin(), input.end(), [](const auto& a, const auto& b)
+                     { return a.queue == b.queue ? a.distance < b.distance : a.queue < b.queue; });
+    for (const auto& draw : input)
+        draws.push_back(Declare(pass, draw));
     pass.Execute(
         [draws = std::move(draws)](RasterContext& context)
         {
@@ -113,14 +134,29 @@ void TransparentFeature::Build(rendergraph::Graph& graph, const RenderFrame& fra
     for (const auto& draw : input)
         Require(std::isfinite(draw.distance) && draw.distance >= 0,
                 "Transparent draw distance must be finite and nonnegative");
-    std::stable_sort(input.begin(), input.end(),
-                     [](const auto& a, const auto& b) { return a.distance > b.distance; });
+    std::stable_sort(input.begin(), input.end(), [](const auto& a, const auto& b)
+                     { return a.queue == b.queue ? a.distance > b.distance : a.queue < b.queue; });
     auto pass = graph.AddRasterPass("Forward.Transparent");
     pass.ColorTarget("CameraColor", rhi::LoadOp::Load);
-    pass.DepthTarget("CameraDepth", rhi::LoadOp::Load, DepthAccess::ReadOnly);
+    const auto depthAccess =
+        std::ranges::any_of(input, [](const auto& draw)
+                            { return draw.pipeline && draw.pipeline->desc.depth.writeEnabled; })
+            ? AttachmentAccess::ReadWrite
+            : AttachmentAccess::ReadOnly;
+    const auto stencilAccess =
+        std::ranges::any_of(input, [](const auto& draw)
+                            { return draw.pipeline && draw.pipeline->desc.stencil.Writes(); })
+            ? AttachmentAccess::ReadWrite
+            : AttachmentAccess::ReadOnly;
+    const auto depth = graph.GetTexture("CameraDepth");
+    if (rhi::HasStencil(graph.GetTextureDesc(depth).format))
+        pass.DepthStencilTarget(depth, {rhi::LoadOp::Load, depthAccess},
+                                {rhi::LoadOp::Load, stencilAccess});
+    else
+        pass.DepthTarget(depth, rhi::LoadOp::Load, depthAccess);
     std::vector<ResolvedDraw> draws;
     for (const auto& draw : input)
-        draws.push_back(Declare(pass, draw, true));
+        draws.push_back(Declare(pass, draw));
     pass.Execute(
         [draws = std::move(draws)](RasterContext& context)
         {
@@ -132,7 +168,7 @@ void ColorSnapshotFeature::Build(rendergraph::Graph& graph, const RenderFrame&)
 {
     const auto source = graph.GetTexture(source_);
     auto desc = graph.GetTextureDesc(source);
-    Require(desc.format != rhi::Format::D32, "Color snapshot cannot copy depth");
+    Require(!rhi::IsDepthFormat(desc.format), "Color snapshot cannot copy depth");
     desc.attachment = false;
     desc.storage = false;
     auto destination = graph.CreateTexture(destination_, desc);

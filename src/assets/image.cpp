@@ -21,7 +21,12 @@ Image DecodeImage(const std::vector<std::byte>& bytes)
 {
     if (bytes.empty() || bytes.size() > std::numeric_limits<DWORD>::max())
         throw std::invalid_argument("Invalid image bytes");
-    const auto initialized = CoInitializeEx(nullptr, COINIT_MULTITHREADED);
+    APTTYPE apartment;
+    APTTYPEQUALIFIER qualifier;
+    const auto existing = CoGetApartmentType(&apartment, &qualifier);
+    // Reuse a host-owned STA/MTA. Only standalone import threads own a temporary apartment.
+    const auto initialized =
+        existing == CO_E_NOTINITIALIZED ? CoInitializeEx(nullptr, COINIT_MULTITHREADED) : existing;
     struct Cleanup
     {
         bool release;
@@ -30,9 +35,8 @@ Image DecodeImage(const std::vector<std::byte>& bytes)
             if (release)
                 CoUninitialize();
         }
-    } cleanup{SUCCEEDED(initialized)};
-    if (FAILED(initialized) && initialized != RPC_E_CHANGED_MODE)
-        Check(initialized);
+    } cleanup{existing == CO_E_NOTINITIALIZED && SUCCEEDED(initialized)};
+    Check(initialized);
     using Microsoft::WRL::ComPtr;
     ComPtr<IWICImagingFactory> factory;
     Check(CoCreateInstance(CLSID_WICImagingFactory, nullptr, CLSCTX_INPROC_SERVER,

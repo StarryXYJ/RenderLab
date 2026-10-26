@@ -19,6 +19,16 @@ struct Options
     std::string reportPath;
     std::string projectPath;
     std::string outputPath = "out/m1";
+    std::string quality = "scene", view = "final", pipeline = "forward", profilePath;
+    uint32_t width = 1280, height = 720, benchmarkFrames = 0;
+    double benchmarkSeconds = 0, warmupSeconds = 0;
+    uint32_t warmupFrames = 5;
+    std::string samplesPath;
+    bool Benchmark() const
+    {
+        return benchmarkFrames > 0 || benchmarkSeconds > 0;
+    }
+    bool debugPanel = false, fixedCamera = false, cpuProfile = false;
     bool headless = false;
     bool windowTest = false;
     bool rhiTest = false;

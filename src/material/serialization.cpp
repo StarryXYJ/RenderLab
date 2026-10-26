@@ -16,9 +16,8 @@ void ValidateResourceReference(const std::string& value)
 void Save(const Asset& asset, const std::filesystem::path& path)
 {
     using Json = nlohmann::json;
-    Json document{{"version", 1},
+    Json document{{"version", 2},
                   {"shader", asset.shader},
-                  {"variant", asset.variant},
                   {"values", Json::object()},
                   {"resources", Json::object()}};
     for (const auto& [id, value] : asset.values)
@@ -37,11 +36,11 @@ void Save(const Asset& asset, const std::filesystem::path& path)
 Asset Load(const std::filesystem::path& path, const shader::MaterialTemplate& materialTemplate)
 {
     const auto document = nlohmann::json::parse(shader::ReadText(path));
-    if (document.at("version") != 1)
-        throw std::runtime_error("Unsupported material format version");
+    if (document.at("version") != 2)
+        throw std::runtime_error(
+            "Unsupported material format version; migrate v1 shader/variant data to v2");
     Asset result;
     result.shader = document.at("shader");
-    result.variant = document.at("variant");
     for (const auto& [id, value] : document.at("values").items())
         result.values.emplace(id, Value{value.at("type"), value.at("count"),
                                         value.at("value").get<std::vector<double>>(),

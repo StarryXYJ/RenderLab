@@ -1,4 +1,5 @@
 #include "material/runtime.hpp"
+#include "material/render_state.hpp"
 
 #include <algorithm>
 #include <cstring>
@@ -8,9 +9,20 @@ namespace renderlab::material
 {
 struct GpuGeneration
 {
+    struct ConstantVersion
+    {
+        std::string layoutHash;
+        std::vector<std::byte> bytes;
+        std::shared_ptr<rhi::Buffer> buffer;
+    };
     std::shared_ptr<const shader::Package> package;
     std::map<std::string, std::shared_ptr<rhi::BindingLayout>> layouts;
     std::map<const shader::Program*, std::shared_ptr<rhi::ShaderModule>> modules;
+    // RHI lookups are weak. Keep active state combinations resident even when all submitted
+    // frames have retired before the next Prepare; otherwise owner-thread driver work repeats.
+    std::vector<std::shared_ptr<rhi::Pipeline>> pipelines;
+    // Bounded strong ownership survives serial frame retirement. Eviction never mutates snapshots.
+    std::vector<ConstantVersion> constants;
 };
 Runtime::Runtime(rhi::Runtime& runtime, shader::Target target) : runtime_(runtime), target_(target)
 {
@@ -23,7 +35,55 @@ Prepared Runtime::Prepare(std::shared_ptr<const shader::Package> package, const 
     if (!package)
         throw std::invalid_argument("Material preparation needs a shader package");
     const auto validated = Migrate(asset, shader::MaterialTemplate(package));
-    const auto& interface = package->Layout(preparation.pass);
+    const auto passHandle = package->ResolvePass(preparation.pass);
+    const auto& pass = package->GetPass(passHandle);
+    if (!PassEnabled(package->definition, pass, validated))
+        throw std::invalid_argument("Cannot prepare disabled shader pass " + pass.name);
+    const auto& interface = package->Layout(pass.name);
+    const auto check = [&](shader::BindingHandle handle)
+    {
+        if (handle.pass != passHandle)
+            throw std::invalid_argument("Foreign or stale material preparation binding");
+        const auto scope =
+            handle.constant ? package->GetBlock(handle).scope : package->GetResource(handle).scope;
+        if (scope == shader::Scope::Material)
+            throw std::invalid_argument(
+                "Material preparation cannot override saved property bindings");
+    };
+    for (const auto& [handle, binding] : preparation.bindings)
+    {
+        check(handle);
+        if (preparation.constants.contains(handle))
+            throw std::invalid_argument("Duplicate external constant source");
+    }
+    for (const auto& [handle, values] : preparation.constants)
+    {
+        check(handle);
+        if (!handle.constant)
+            throw std::invalid_argument("Constants require a block handle");
+    }
+    for (const auto& handle : preparation.deferredResources)
+    {
+        check(handle);
+        if (handle.constant || preparation.bindings.contains(handle))
+            throw std::invalid_argument("Invalid or already bound deferred resource");
+    }
+    for (uint32_t index = 0; index < interface.blocks.size(); ++index)
+    {
+        const auto& block = interface.blocks[index];
+        const shader::BindingHandle handle{passHandle, index, true};
+        if (!block.schemaId.empty() && !preparation.bindings.contains(handle) &&
+            !preparation.constants.contains(handle))
+            throw std::invalid_argument("Missing required parameter schema: " + block.schemaId);
+    }
+    for (uint32_t index = 0; index < interface.resources.size(); ++index)
+    {
+        const auto& resource = interface.resources[index];
+        const shader::BindingHandle handle{passHandle, index, false};
+        if (resource.scope != shader::Scope::Material && !preparation.bindings.contains(handle) &&
+            !preparation.deferredResources.contains(handle))
+            throw std::invalid_argument("Missing external resource: " + resource.property.id);
+    }
     std::erase_if(generations_, [](const auto& generation) { return generation.expired(); });
     std::shared_ptr<GpuGeneration> generation;
     for (const auto& weak : generations_)
@@ -36,9 +96,10 @@ Prepared Runtime::Prepare(std::shared_ptr<const shader::Package> package, const 
     {
         generation = std::make_shared<GpuGeneration>();
         generation->package = package;
-        for (const auto& pass : package->definition.passes)
+        for (const auto& declaredPass : package->definition.passes)
             generation->layouts.emplace(
-                pass.name, runtime_.CreateLayout(package->Layout(pass.name).Bindings()));
+                declaredPass.name,
+                runtime_.CreateLayout(package->Layout(declaredPass.name).Bindings()));
         for (const auto& program : package->programs)
             if (program.target == target_)
                 generation->modules.emplace(
@@ -47,21 +108,31 @@ Prepared Runtime::Prepare(std::shared_ptr<const shader::Package> package, const 
             generations_.erase(generations_.begin());
         generations_.push_back(generation);
     }
-    const auto& pass =
-        *std::ranges::find(package->definition.passes, preparation.pass, &shader::Pass::name);
+    const auto state = ResolveState(package->definition, pass, validated);
     rhi::PipelineDesc desc;
     desc.layout = generation->layouts.at(pass.name);
-    desc.color = preparation.color;
-    desc.depth = preparation.depth.value_or(pass.depth);
-    desc.blend = preparation.blend.value_or(pass.blend);
-    desc.cull = preparation.cull.value_or(pass.cull);
-    desc.frontCounterClockwise = preparation.frontCounterClockwise.value_or(true);
+    desc.colorFormats = preparation.colorFormats;
+    desc.raster = state.raster;
+    desc.depth = state.depth;
+    desc.blend = state.blend;
+    desc.stencil = state.stencil;
+    desc.depthStencilFormat = preparation.depthStencilFormat;
+    if (!desc.depthStencilFormat &&
+        (state.depth.testEnabled || state.depth.writeEnabled || state.stencil.enabled))
+        desc.depthStencilFormat = state.stencil.enabled ? rhi::Format::D32S8 : rhi::Format::D32;
+    if (preparation.mirrored)
+        desc.raster.frontFace = desc.raster.frontFace == rhi::FrontFace::CounterClockwise
+                                    ? rhi::FrontFace::Clockwise
+                                    : rhi::FrontFace::CounterClockwise;
     desc.vertexStride = preparation.vertexStride;
     desc.attributes = preparation.attributes;
+    std::map<std::string, uint32_t> featureValues;
+    for (const auto& id : pass.features)
+        featureValues.emplace(id, static_cast<uint32_t>(validated.values.at(id).numbers.at(0)));
+    const auto key = shader::SelectVariantKey(package->definition, pass, featureValues);
     for (const auto& entry : pass.entries)
     {
-        auto module = generation->modules.at(
-            &package->Find(pass.name, validated.variant, entry.stage, target_));
+        auto module = generation->modules.at(&package->Find(pass.name, key, entry.stage, target_));
         if (entry.stage == rhi::ShaderStage::Vertex)
             desc.vertex = module;
         else if (entry.stage == rhi::ShaderStage::Pixel)
@@ -70,25 +141,51 @@ Prepared Runtime::Prepare(std::shared_ptr<const shader::Package> package, const 
             desc.compute = module;
     }
     Prepared result;
+    result.stencilReference = state.stencilReference;
     result.generation = generation;
     result.pipeline = runtime_.CreatePipeline(std::move(desc));
-    std::vector<rhi::Binding> bindings;
-    for (const auto& block : interface.blocks)
+    if (std::ranges::find(generation->pipelines, result.pipeline) == generation->pipelines.end())
     {
+        if (generation->pipelines.size() == 64)
+            generation->pipelines.erase(generation->pipelines.begin());
+        generation->pipelines.push_back(result.pipeline);
+    }
+    std::vector<rhi::Binding> bindings;
+    for (uint32_t index = 0; index < interface.blocks.size(); ++index)
+    {
+        const auto& block = interface.blocks[index];
+        const shader::BindingHandle handle{passHandle, index, true};
         rhi::Binding binding{};
-        if (block.scope != shader::Scope::Material && preparation.bindings.contains(block.name))
-            binding = preparation.bindings.at(block.name);
+        if (block.scope != shader::Scope::Material && preparation.bindings.contains(handle))
+            binding = preparation.bindings.at(handle);
         else
         {
             static const std::map<std::string, Value> empty;
             const auto& values = block.scope == shader::Scope::Material ? validated.values
-                                 : preparation.constants.contains(block.name)
-                                     ? preparation.constants.at(block.name)
+                                 : preparation.constants.contains(handle)
+                                     ? preparation.constants.at(handle)
                                      : empty;
             const auto bytes = Pack(block, values);
-            binding.buffer = runtime_.CreateBuffer(
-                {bytes.size(), rhi::Memory::Upload, "Constants." + block.name});
-            std::memcpy(binding.buffer->Map().data(), bytes.data(), bytes.size());
+            if (block.scope == shader::Scope::Material)
+            {
+                const auto found = std::ranges::find_if(
+                    generation->constants, [&](const auto& item)
+                    { return item.layoutHash == block.layoutHash && item.bytes == bytes; });
+                if (found != generation->constants.end())
+                    binding.buffer = found->buffer;
+            }
+            if (!binding.buffer)
+            {
+                binding.buffer = runtime_.CreateBuffer(
+                    {bytes.size(), rhi::Memory::Upload, "Constants." + block.name});
+                std::memcpy(binding.buffer->Map().data(), bytes.data(), bytes.size());
+                if (block.scope == shader::Scope::Material)
+                {
+                    if (generation->constants.size() == 64)
+                        generation->constants.erase(generation->constants.begin());
+                    generation->constants.push_back({block.layoutHash, bytes, binding.buffer});
+                }
+            }
             binding.size = bytes.size();
             result.constants.push_back(binding.buffer);
         }
@@ -96,8 +193,10 @@ Prepared Runtime::Prepare(std::shared_ptr<const shader::Package> package, const 
         binding.space = uint32_t(block.scope);
         bindings.push_back(std::move(binding));
     }
-    for (const auto& resource : interface.resources)
+    for (uint32_t index = 0; index < interface.resources.size(); ++index)
     {
+        const auto& resource = interface.resources[index];
+        const shader::BindingHandle handle{passHandle, index, false};
         const auto& property = resource.property;
         rhi::Binding binding{};
         if (resource.scope == shader::Scope::Material)
@@ -109,7 +208,12 @@ Prepared Runtime::Prepare(std::shared_ptr<const shader::Package> package, const 
         }
         else
         {
-            const auto found = preparation.bindings.find(property.symbol);
+            if (preparation.deferredResources.contains(handle))
+            {
+                result.deferredResources.push_back(handle);
+                continue;
+            }
+            const auto found = preparation.bindings.find(handle);
             if (found == preparation.bindings.end())
                 throw std::invalid_argument("Missing pass resource: " + property.symbol);
             binding = found->second;

@@ -9,13 +9,15 @@ shader "RenderLab/BlinnPhong"
         [id("base_map"), srgb] Texture2D<float4> BaseMap = white;
         SamplerState BaseSampler = point_clamp;
     }
-    variant Default {}
     pass Forward
     {
+        role = Forward;
         vertex = "BlinnPhong.hlsl:VSMain";
         pixel = "BlinnPhong.hlsl:PSMain";
-        depth = true;
-        blend = false;
-        cull = true;
+        state {
+            depth { test = true; write = true; }
+            blend { enabled = false; }
+            cull = Back;
+        }
     }
 }

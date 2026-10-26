@@ -20,9 +20,9 @@ std::shared_ptr<Pipeline> Runtime::CreatePipeline(PipelineDesc desc)
             continue;
         const auto& key = pipeline->desc;
         if (key.layout == desc.layout && key.vertex == desc.vertex && key.pixel == desc.pixel &&
-            key.compute == desc.compute && key.color == desc.color && key.depth == desc.depth &&
-            key.depthWrite == desc.depthWrite && key.blend == desc.blend && key.cull == desc.cull &&
-            key.frontCounterClockwise == desc.frontCounterClockwise &&
+            key.compute == desc.compute && key.colorFormats == desc.colorFormats &&
+            key.depthStencilFormat == desc.depthStencilFormat && key.depth == desc.depth &&
+            key.blend == desc.blend && key.raster == desc.raster && key.stencil == desc.stencil &&
             key.vertexStride == desc.vertexStride && key.attributes == desc.attributes)
             return pipeline;
     }

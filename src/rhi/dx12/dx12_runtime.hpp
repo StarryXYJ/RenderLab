@@ -9,6 +9,8 @@
 
 namespace renderlab::rhi::dx12
 {
+struct DxDescriptorPage;
+struct DxDescriptorRange;
 /** @brief Backend device services; owns queue completion and native command contexts. */
 class DxRuntime final : public Runtime
 {
@@ -19,7 +21,8 @@ public:
     double TimestampPeriodNs() const override;
     std::shared_ptr<Buffer> CreateBuffer(const BufferDesc& desc) override;
     std::shared_ptr<Texture> CreateTexture(const TextureDesc& desc) override;
-    std::shared_ptr<TextureView> CreateView(std::shared_ptr<Texture> texture) override;
+    std::shared_ptr<TextureView> CreateView(std::shared_ptr<Texture> texture,
+                                            TextureViewUsage usage) override;
     std::shared_ptr<Sampler> CreateSampler() override;
     std::shared_ptr<BindingLayout> CreateLayout(std::vector<BindingDesc> entries) override;
     std::shared_ptr<BindingGroup> CreateGroup(std::shared_ptr<BindingLayout> layout,
@@ -40,6 +43,9 @@ protected:
                                         Swapchain*) override;
 
 private:
+    std::shared_ptr<DxDescriptorRange> AllocateDescriptors(D3D12_DESCRIPTOR_HEAP_TYPE type,
+                                                           uint32_t count);
+    std::vector<std::shared_ptr<DxDescriptorPage>> descriptorPages_;
     ID3D12Device* device_;
     ID3D12CommandQueue* queue_;
     IDXGIFactory6* factory_;

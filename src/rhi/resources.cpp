@@ -5,6 +5,23 @@
 
 namespace renderlab::rhi
 {
+uint32_t FormatBytes(Format format)
+{
+    switch (format)
+    {
+    case Format::D32S8:
+        return 8;
+    case Format::Rgba32Float:
+        return 16;
+    case Format::Rgba8:
+    case Format::Bgra8:
+    case Format::Rgba8Srgb:
+    case Format::Bgra8Srgb:
+    case Format::D32:
+        return 4;
+    }
+    throw std::invalid_argument("Unknown texture format");
+}
 void AllocationLedger::Add(uint64_t bytes)
 {
     if (bytes > stats.budget - stats.used)

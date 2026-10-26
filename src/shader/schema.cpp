@@ -5,28 +5,75 @@
 namespace renderlab::shader
 {
 using Json = nlohmann::json;
+namespace
+{
+std::string_view SemanticName(MaterialSemantic semantic)
+{
+    for (const auto& info : MaterialSemantics())
+        if (info.semantic == semantic)
+            return info.name;
+    return "";
+}
+} // namespace
 std::string SchemaToJson(const Package& package)
 {
     Json output{{"shader", package.definition.name},
+                {"assetId", package.definition.assetId},
                 {"key", package.key},
                 {"generation", package.generation},
                 {"cacheHit", package.cacheHit}};
     output["dependencies"] = Json::array();
     for (const auto& dependency : package.dependencies)
         output["dependencies"].push_back(ToUtf8(dependency));
-    output["variants"] = Json::array();
-    for (const auto& variant : package.definition.variants)
-        output["variants"].push_back(Json{{"name", variant.name}, {"defines", variant.defines}});
+    output["properties"] = Json::array();
+    for (const auto& block : package.definition.blocks)
+        if (block.scope == Scope::Material)
+            for (const auto& property : block.properties)
+            {
+                Json choices = Json::array();
+                for (const auto& item : property.enumItems)
+                    choices.push_back({{"name", item.name}, {"value", item.value}});
+                output["properties"].push_back(
+                    {{"id", property.id},
+                     {"symbol", property.symbol},
+                     {"type", property.type.name},
+                     {"materialSemantic", SemanticName(property.semantic)},
+                     {"keyword", property.keyword},
+                     {"choices", choices},
+                     {"default", property.defaults},
+                     {"label", property.label},
+                     {"group", property.group}});
+            }
     output["passes"] = Json::array();
     for (size_t i = 0; i < package.interfaces.size(); ++i)
     {
         const auto& interface = package.interfaces[i];
         Json pass{{"name", package.definition.passes[i].name}};
+        const auto& definition = package.definition.passes[i];
+        pass["role"] = definition.role == PassRole::Forward        ? "Forward"
+                       : definition.role == PassRole::GBuffer       ? "GBuffer"
+                       : definition.role == PassRole::ShadowCaster ? "ShadowCaster"
+                                                                   : "Custom";
+        pass["statePreset"] = static_cast<int>(definition.state.preset);
+        pass["state"] = Json::array();
+        for (const auto& field : definition.state.overrides)
+            pass["state"].push_back({{"field", StateFields()[field.field].path},
+                                     {"property", field.value.property},
+                                     {"literal", field.value.literal}});
+        pass["features"] = definition.features;
+        pass["variants"] = Json::array();
+        for (const auto& variant : EnumerateVariants(package.definition, definition))
+            pass["variants"].push_back(
+                {{"label", variant.name}, {"axes", variant.axes}, {"defines", variant.defines}});
         pass["blocks"] = Json::array();
         pass["resources"] = Json::array();
         for (const auto& b : interface.blocks)
         {
             Json block{{"name", b.name},
+                       {"schema", b.schemaId},
+                       {"schemaVersion", b.schemaVersion},
+                       {"type", b.typeName},
+                       {"layoutHash", b.layoutHash},
                        {"space", uint32_t(b.scope)},
                        {"slot", b.slot},
                        {"size", b.size},
@@ -36,6 +83,7 @@ std::string SchemaToJson(const Package& package)
                 Json field{{"id", f.property.id},
                            {"symbol", f.property.symbol},
                            {"type", f.property.type.name},
+                           {"materialSemantic", SemanticName(f.property.semantic)},
                            {"count", f.property.type.count},
                            {"array", f.property.type.array},
                            {"default", f.property.defaults},
@@ -60,6 +108,8 @@ std::string SchemaToJson(const Package& package)
         }
         for (const auto& r : interface.resources)
             pass["resources"].push_back({{"id", r.property.id},
+                                         {"bindingSemantic", static_cast<int>(r.property.binding)},
+                                         {"materialSemantic", SemanticName(r.property.semantic)},
                                          {"symbol", r.property.symbol},
                                          {"type", r.property.type.name},
                                          {"element", r.property.type.element},

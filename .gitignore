@@ -49,6 +49,8 @@ ipch/
 /captures/
 /artifacts/
 /tmp/
+/tools/**/__pycache__/
+/tools/**/*.pyc
 imgui.ini
 
 # OS metadata and temporary editor files.

@@ -1,0 +1,66 @@
+{
+  "adapter": "NVIDIA GeForce RTX 5060",
+  "backend": "vulkan",
+  "configurationMayChange": false,
+  "cpuRender": {
+    "maxMs": 2.9869,
+    "meanMs": 1.9459349999999997,
+    "minMs": 1.362,
+    "samples": 120
+  },
+  "driver": "NVIDIA; 591.74 (raw 0x93D28000)",
+  "fixedCamera": true,
+  "gpuPasses": {
+    "Display.ToneMapping": {
+      "maxMs": 0.028032,
+      "meanMs": 0.011741333333333328,
+      "minMs": 0.011104,
+      "samples": 120
+    },
+    "Forward.Opaque": {
+      "maxMs": 0.16128,
+      "meanMs": 0.02229813333333334,
+      "minMs": 0.018144,
+      "samples": 120
+    },
+    "MainLight.Shadow": {
+      "maxMs": 0.004224,
+      "meanMs": 0.002639466666666667,
+      "minMs": 0.001728,
+      "samples": 120
+    }
+  },
+  "graphCompile": {
+    "maxMs": 0.0831,
+    "meanMs": 0.02102666666666667,
+    "minMs": 0.0174,
+    "samples": 120
+  },
+  "graphPrepare": {
+    "maxMs": 0.2299,
+    "meanMs": 0.10041666666666667,
+    "minMs": 0.0427,
+    "samples": 120
+  },
+  "graphRecord": {
+    "maxMs": 0.8615,
+    "meanMs": 0.10503916666666663,
+    "minMs": 0.0826,
+    "samples": 120
+  },
+  "height": 720,
+  "memory": {
+    "budgetBytes": 268435456,
+    "highWaterBytes": 23997632,
+    "processPrivateBytes": 148819968,
+    "processWorkingSetBytes": 113479680,
+    "usedBytes": 23992192
+  },
+  "project": "sample/m4/Pbr.rlproject",
+  "quality": "medium",
+  "schemaVersion": 1,
+  "validation": false,
+  "view": "final",
+  "warmupFrames": 5,
+  "width": 1280
+}

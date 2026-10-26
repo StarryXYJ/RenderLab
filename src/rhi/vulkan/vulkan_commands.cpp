@@ -38,7 +38,7 @@ std::shared_ptr<Runtime::Submission> VulkanRuntime::Execute(const CommandList& c
         VkQueryPoolCreateInfo query{};
         query.sType = VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO;
         query.queryType = VK_QUERY_TYPE_TIMESTAMP;
-        query.queryCount = 2;
+        query.queryCount = MaxTimestampSlots;
         Check(vkCreateQueryPool(device_, &query, nullptr, &work->queries), "Timestamp QueryPool");
         contexts_.push_back(work);
     }
@@ -47,7 +47,7 @@ std::shared_ptr<Runtime::Submission> VulkanRuntime::Execute(const CommandList& c
     begin.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
     begin.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
     Check(vkBeginCommandBuffer(list, &begin), "BeginCommandBuffer");
-    vkCmdResetQueryPool(list, work->queries, 0, 2);
+    vkCmdResetQueryPool(list, work->queries, 0, MaxTimestampSlots);
     bool compute = false;
     VkPipelineLayout layout = VK_NULL_HANDLE;
     for (const auto& command : commands.GetCommands())
@@ -86,10 +86,14 @@ std::shared_ptr<Runtime::Submission> VulkanRuntime::Execute(const CommandList& c
                     b.newLayout = after.layout;
                     b.srcQueueFamilyIndex = b.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
                     b.image = As<VkTexture>(c.texture).native;
-                    b.subresourceRange = {VkImageAspectFlags(c.texture->desc.format == Format::D32
-                                                                 ? VK_IMAGE_ASPECT_DEPTH_BIT
-                                                                 : VK_IMAGE_ASPECT_COLOR_BIT),
-                                          0, 1, 0, 1};
+                    b.subresourceRange = {
+                        VkImageAspectFlags(IsDepthFormat(c.texture->desc.format)
+                                               ? VK_IMAGE_ASPECT_DEPTH_BIT |
+                                                     (HasStencil(c.texture->desc.format)
+                                                          ? VK_IMAGE_ASPECT_STENCIL_BIT
+                                                          : 0)
+                                               : VK_IMAGE_ASPECT_COLOR_BIT),
+                        0, 1, 0, 1};
                     VkDependencyInfo dependency{};
                     dependency.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
                     dependency.imageMemoryBarrierCount = 1;
@@ -106,7 +110,7 @@ std::shared_ptr<Runtime::Submission> VulkanRuntime::Execute(const CommandList& c
                 {
                     VkBufferImageCopy copy{};
                     copy.bufferOffset = c.offset;
-                    copy.bufferRowLength = c.rowPitch / 4;
+                    copy.bufferRowLength = c.rowPitch / FormatBytes(c.texture->desc.format);
                     copy.imageSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
                     copy.imageExtent = {c.texture->desc.width, c.texture->desc.height, 1};
                     if (c.upload)
@@ -131,21 +135,25 @@ std::shared_ptr<Runtime::Submission> VulkanRuntime::Execute(const CommandList& c
                 }
                 else if constexpr (std::is_same_v<T, BeginRendering>)
                 {
-                    VkRenderingAttachmentInfo color{};
-                    color.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
-                    color.imageView = As<VkView>(c.color).native;
-                    color.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-                    color.loadOp = c.colorLoad == LoadOp::Clear  ? VK_ATTACHMENT_LOAD_OP_CLEAR
-                                   : c.colorLoad == LoadOp::Load ? VK_ATTACHMENT_LOAD_OP_LOAD
-                                                                 : VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-                    color.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-                    std::copy(c.clear.begin(), c.clear.end(), color.clearValue.color.float32);
+                    std::vector<VkRenderingAttachmentInfo> colors(c.colors.size());
+                    for (size_t i = 0; i < c.colors.size(); ++i)
+                    {
+                        auto& color = colors[i];
+                        color.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
+                        color.imageView = As<VkView>(c.colors[i]).native;
+                        color.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+                        color.loadOp = c.colorLoad == LoadOp::Clear  ? VK_ATTACHMENT_LOAD_OP_CLEAR
+                                       : c.colorLoad == LoadOp::Load ? VK_ATTACHMENT_LOAD_OP_LOAD
+                                                                     : VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+                        color.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+                        std::copy(c.clear.begin(), c.clear.end(), color.clearValue.color.float32);
+                    }
                     VkRenderingAttachmentInfo depth{};
                     depth.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
                     if (c.depth)
                     {
                         depth.imageView = As<VkView>(c.depth).native;
-                        depth.imageLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL;
+                        depth.imageLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
                         depth.loadOp = c.depthLoad == LoadOp::Clear ? VK_ATTACHMENT_LOAD_OP_CLEAR
                                        : c.depthLoad == LoadOp::Load
                                            ? VK_ATTACHMENT_LOAD_OP_LOAD
@@ -153,14 +161,22 @@ std::shared_ptr<Runtime::Submission> VulkanRuntime::Execute(const CommandList& c
                         depth.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
                         depth.clearValue.depthStencil.depth = 0;
                     }
-                    const auto& d = c.color->texture->desc;
+                    auto stencil = depth;
+                    const bool hasStencil = c.depth && HasStencil(c.depth->texture->desc.format);
+                    stencil.loadOp = c.stencilLoad == LoadOp::Clear ? VK_ATTACHMENT_LOAD_OP_CLEAR
+                                     : c.stencilLoad == LoadOp::Load
+                                         ? VK_ATTACHMENT_LOAD_OP_LOAD
+                                         : VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+                    stencil.clearValue.depthStencil.stencil = c.clearStencil;
+                    const auto& d = c.colors.front()->texture->desc;
                     VkRenderingInfo rendering{};
                     rendering.sType = VK_STRUCTURE_TYPE_RENDERING_INFO;
                     rendering.renderArea.extent = {d.width, d.height};
                     rendering.layerCount = 1;
-                    rendering.colorAttachmentCount = 1;
-                    rendering.pColorAttachments = &color;
+                    rendering.colorAttachmentCount = static_cast<uint32_t>(colors.size());
+                    rendering.pColorAttachments = colors.data();
                     rendering.pDepthAttachment = c.depth ? &depth : nullptr;
+                    rendering.pStencilAttachment = hasStencil ? &stencil : nullptr;
                     vkCmdBeginRendering(list, &rendering);
                     VkViewport viewport{0, float(d.height), float(d.width), -float(d.height), 0, 1};
                     VkRect2D scissor{{0, 0}, {d.width, d.height}};
@@ -177,7 +193,11 @@ std::shared_ptr<Runtime::Submission> VulkanRuntime::Execute(const CommandList& c
                                       compute ? VK_PIPELINE_BIND_POINT_COMPUTE
                                               : VK_PIPELINE_BIND_POINT_GRAPHICS,
                                       As<VkPipelineObject>(c.pipeline).native);
+                    if (!compute)
+                        vkCmdSetStencilReference(list, VK_STENCIL_FACE_FRONT_AND_BACK, 0);
                 }
+                else if constexpr (std::is_same_v<T, SetStencilReference>)
+                    vkCmdSetStencilReference(list, VK_STENCIL_FACE_FRONT_AND_BACK, c.reference);
                 else if constexpr (std::is_same_v<T, SetBindings>)
                     vkCmdBindDescriptorSets(
                         list,
@@ -223,7 +243,7 @@ std::shared_ptr<Runtime::Submission> VulkanRuntime::Execute(const CommandList& c
                     vkCmdWriteTimestamp2(list, VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT, work->queries,
                                          c.index);
                 else if constexpr (std::is_same_v<T, ResolveTimestamps>)
-                    vkCmdCopyQueryPoolResults(list, work->queries, 0, 2,
+                    vkCmdCopyQueryPoolResults(list, work->queries, 0, c.count,
                                               As<VkBufferObject>(c.destination).native, 0, 8,
                                               VK_QUERY_RESULT_64_BIT | VK_QUERY_RESULT_WAIT_BIT);
             },

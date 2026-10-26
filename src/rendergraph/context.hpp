@@ -41,6 +41,7 @@ protected:
 class RasterContext final : public BindingContext
 {
 public:
+    void StencilReference(uint32_t reference);
     void Geometry(BufferHandle vertices, BufferHandle indices = {});
     void Draw(uint32_t count, uint32_t first = 0);
     void DrawIndexed(uint32_t count, uint32_t first = 0);

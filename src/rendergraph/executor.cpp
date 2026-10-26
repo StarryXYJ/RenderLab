@@ -1,5 +1,6 @@
 #include "rendergraph/detail/graph_impl.hpp"
 #include <chrono>
+#include <cstring>
 
 namespace renderlab::rendergraph
 {
@@ -14,6 +15,14 @@ void Graph::Prepare(Pool& pool)
     g.phase = detail::Phase::Preparing;
     try
     {
+        if (g.profiling && !g.plan.schedule.empty())
+        {
+            Require(g.plan.schedule.size() <= rhi::MaxTimestampSlots / 2,
+                    "GPU profiling supports at most 32 live passes");
+            g.timestampLease = pool.Acquire(rhi::BufferDesc{
+                rhi::MaxTimestampSlots * 8, rhi::Memory::Readback, "Graph.Timestamps"});
+            g.timestamps = g.timestampLease->buffer;
+        }
         for (uint32_t i = 0; i < g.resources.size(); ++i)
         {
             auto& r = g.resources[i];
@@ -35,7 +44,11 @@ void Graph::Prepare(Pool& pool)
                 r.start = r.lease->state;
             }
             if (r.isTexture)
+            {
                 r.view = pool.Device().CreateView(r.texture);
+                if (r.lease)
+                    r.lease->view = r.view;
+            }
         }
         g.Barriers();
         g.active = UINT32_MAX;
@@ -67,19 +80,27 @@ void Graph::Record()
     };
     try
     {
+        uint32_t timestamp = 0;
         for (const auto& scheduled : g.plan.schedule)
         {
             for (const auto& b : scheduled.barriers)
                 barrier(b);
             auto& pass = g.passes[scheduled.pass];
             g.commands->BeginMarker(pass.name);
-            if (pass.color)
+            if (g.timestamps)
+                g.commands->WriteTimestamp(timestamp++);
+            if (!pass.colors.empty())
             {
-                auto& color = g.resources[pass.color->resource];
-                g.commands->Begin(color.view,
+                std::vector<std::shared_ptr<rhi::TextureView>> colors;
+                colors.reserve(pass.colors.size());
+                for (const auto& attachment : pass.colors)
+                    colors.push_back(g.resources[attachment.resource].view);
+                const auto& color = pass.colors.front();
+                g.commands->Begin(std::move(colors),
                                   pass.depth ? g.resources[pass.depth->resource].view : nullptr,
-                                  pass.color->clear, pass.color->load,
-                                  pass.depth ? pass.depth->load : rhi::LoadOp::Clear);
+                                  color.clear, color.load,
+                                  pass.depth ? pass.depth->load : rhi::LoadOp::Clear,
+                                  pass.stencilLoad, pass.clearStencil);
             }
             g.active = scheduled.pass;
             if (pass.kind == PassKind::Raster)
@@ -97,12 +118,20 @@ void Graph::Record()
                 CopyContext context(*this, g.active, *g.commands);
                 std::get<std::function<void(CopyContext&)>>(pass.callback)(context);
             }
-            if (pass.color)
+            if (!pass.colors.empty())
                 g.commands->End();
+            if (g.timestamps)
+                g.commands->WriteTimestamp(timestamp++);
             g.commands->EndMarker();
         }
         for (const auto& b : g.plan.finalBarriers)
             barrier(b);
+        if (g.timestamps)
+        {
+            g.commands->Barrier(g.timestamps, g.timestampLease->state, rhi::State::CopyDest);
+            g.commands->ReadTimestamps(g.timestamps, timestamp);
+            g.commands->Barrier(g.timestamps, rhi::State::CopyDest, rhi::State::HostRead);
+        }
         g.active = UINT32_MAX;
         g.phase = detail::Phase::Recorded;
         g.plan.recordNs = std::chrono::duration_cast<std::chrono::nanoseconds>(
@@ -123,6 +152,13 @@ Submission Graph::Submit(rhi::Swapchain* presentation)
     // Allocate the result before native submission; publication below cannot lose completion
     // ownership.
     Submission result;
+    if (g.timestamps)
+    {
+        result.profile.ticks = g.timestamps;
+        result.profile.periodNs = g.pool->Device().TimestampPeriodNs();
+        for (const auto& scheduled : g.plan.schedule)
+            result.profile.names.push_back(g.passes[scheduled.pass].name);
+    }
     for (uint32_t i = 0; i < g.resources.size(); ++i)
         if (g.resources[i].exported)
         {
@@ -132,6 +168,7 @@ Submission Graph::Submit(rhi::Swapchain* presentation)
     try
     {
         result.completion = g.pool->Device().Submit(std::move(g.commands), presentation);
+        result.profile.completion = result.completion;
     }
     catch (...)
     {
@@ -146,6 +183,11 @@ Submission Graph::Submit(rhi::Swapchain* presentation)
             r.lease->completion = result.completion;
         }
     g.phase = detail::Phase::Submitted;
+    if (g.timestampLease)
+    {
+        g.timestampLease->state = rhi::State::HostRead;
+        g.timestampLease->completion = result.completion;
+    }
     return result;
 }
 Submission Graph::Execute(Pool& pool, rhi::Swapchain* presentation)
@@ -162,5 +204,25 @@ Submission Graph::Execute(Pool& pool, rhi::Swapchain* presentation)
         Poison();
         throw;
     }
+}
+std::vector<Submission::GpuProfile::Timing>
+Submission::GpuProfile::Read(const rhi::Runtime& runtime) const
+{
+    if (!ticks)
+        return {};
+    Require(ticks->owner == &runtime && completion && runtime.Completed() >= completion,
+            "GPU profile requires its owning runtime and a completed submission");
+    const auto bytes = ticks->Map();
+    Require(names.size() <= rhi::MaxTimestampSlots / 2 && bytes.size() >= names.size() * 16,
+            "GPU profile readback is truncated or exceeds capacity");
+    std::vector<Timing> timings;
+    for (size_t i = 0; i < names.size(); ++i)
+    {
+        uint64_t begin, end;
+        std::memcpy(&begin, bytes.data() + i * 16, 8);
+        std::memcpy(&end, bytes.data() + i * 16 + 8, 8);
+        timings.push_back({names[i], double(end - begin) * periodNs});
+    }
+    return timings;
 }
 } // namespace renderlab::rendergraph

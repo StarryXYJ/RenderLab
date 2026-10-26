@@ -1,6 +1,6 @@
 # M1 最小双后端 RHI
 
-公共接口按下表组织，可运行的 API 使用示例位于 `src/samples/rhi_demo.cpp`，构建与复现见 [构建与运行](../manual/build.md)。本层不依赖 Shader 资产系统、Render Graph 或 Renderer。
+公共接口按下表组织，可运行的 API 使用示例位于 `src/samples/rhi/rhi_demo.cpp`，构建与复现见 [构建与运行](../manual/build.md)。本层不依赖 Shader 资产系统、Render Graph 或 Renderer。
 
 ## 文件职责与依赖
 
@@ -18,7 +18,7 @@ DX12/Vulkan 后端采用相同文件边界：`*_device.cpp` 做设备发现与�
 
 一个后端仍只有一个 Runtime 类，相关方法在对应职责的 `.cpp` 中以类外定义实现；每个 `.cpp` 独立编译，不包含其他 `.cpp` 或依赖文本拼接的 partial/inl 片段。没有新增 Manager、重复状态机或单独的队列/资源所有者。
 
-样例与验收分别组织：`rhi_demo.cpp` 准备和录制场景；`rhi_acceptance.cpp` 的 `VerifyRhi()` 读取场景输出并核验图像/查询；`rhi_contract_checks.cpp` 核验传输、保活和上传复用。场景通过 `GetNoiseTexture()` 提供处于 Sampled 状态的借用输出，验收执行后恢复该状态。Shader 文件读取位于 `samples/shader_io.cpp`，RHI 只接收已编译字节和入口名。Sandbox 的 `main.cpp` 负责启动、参数与报告，`presentation.cpp` 负责窗口事件、FrameContext 和展示循环。
+样例与验收分别组织：`rhi_demo.cpp` 准备和录制场景；`rhi_acceptance.cpp` 的 `VerifyRhi()` 读取场景输出并核验图像/查询；`rhi_contract_checks.cpp` 核验传输、保活和上传复用。场景通过 `GetNoiseTexture()` 提供处于 Sampled 状态的借用输出，验收执行后恢复该状态。Shader 文件读取位于 `samples/common/shader_io.cpp`，RHI 只接收已编译字节和入口名。Sandbox 的 `main.cpp` 负责启动、参数与报告，`presentation.cpp` 负责窗口事件、FrameContext 和展示循环。
 
 ## 设备、对象与提交
 
@@ -36,7 +36,7 @@ FrameContext 的索引由 CPU 帧序号选择，与交换链图像索引独立�
 
 ## 资源、内存与屏障
 
-M1 仅实现当前用到的 2D、单 mip、单 layer、单采样纹理：RGBA8/BGRA8 UNORM、对应 sRGB 格式和 D32。Storage 纹理限定 RGBA8_UNORM；M2 补充常量缓冲、只读与可写结构化缓冲，Binding 使用固定 space 0..3。管线显式声明单顶点流的 stride、semantic、location、float2/3/4 和 offset，RHI 不依赖样例的顶点结构。样例在自身模块定义 36 字节 position/color/uv，索引为 uint32。绑定图形管线后再绑定 Geometry；切换管线后重新绑定 Group 和 Geometry。
+当前实现 2D、单 mip、单 layer、单采样纹理：RGBA8/BGRA8 UNORM、对应 sRGB、D32，以及 M4 的 RGBA32F 和 R1 的 D32S8；后两者分别用于 HDR 与深度模板附件。Storage 纹理限定 RGBA8_UNORM，深度模板不可采样/复制；完整状态契约见 [渲染状态](render-states.md)。M2 补充常量缓冲、只读与可写结构化缓冲，Binding 使用固定 space 0..3。管线显式声明单顶点流的 stride、semantic、location、float2/3/4 和 offset，RHI 不依赖样例的顶点结构。样例在自身模块定义 36 字节 position/color/uv，索引为 uint32。绑定图形管线后再绑定 Geometry；切换管线后重新绑定 Group 和 Geometry。
 
 Buffer 的内存类别为 Device、Upload、Readback。仅后两类允许映射；读回前必须完成 CopyDest→HostRead 屏障并等待提交。Upload 的映射内容在消费它的提交完成前不得改写。Vulkan 首版要求 HostVisible + HostCoherent 内存类型，不引入隐藏的非一致内存刷新行为。设备资源初始状态为 Undefined，Upload 为 HostWrite，Readback 为 CopyDest。
 
@@ -44,7 +44,7 @@ Buffer 的内存类别为 Device、Upload、Readback。仅后两类允许映射�
 
 `UploadArena` 是固定容量、显式对齐的线性上传分配器，超容量报错，不静默增长。`UploadRing` 轮换两个 Arena，BeginFrame 等待该段完成点后 Reset，EndFrame 使用实际消费该段的提交点封存。不要保留 Arena 引用并在封存后继续写入；需要多次提交消费同一段时，用最后一次提交点封存。
 
-纹理 Copy 的公共对齐约定为行间距 256 字节、Buffer offset 512 字节。`TextureRowPitch(width)` 提供共同布局；Vulkan 把字节 pitch 转成 texel row length。有效像素外的行 padding 未定义，测试只对有效像素比对。
+纹理 Copy 的公共对齐约定为行间距 256 字节、Buffer offset 512 字节。`TextureRowPitch(width, format)` 提供共同布局，format 默认 RGBA8；M4.3 增加 Rgba32Float（16 字节/texel），FormatBytes 为 texel 大小的唯一入口，Vulkan 按它将字节 pitch 转成 texel row length。有效像素外的行 padding 未定义，测试只对有效像素比对。浮点 HDR 与显示约定见 [M4.3](m4-forward-pbr.md)。
 
 `State` 是首版保守的用途、访问、阶段与布局预设，覆盖 Copy、Vertex、Index、Indirect、Compute Storage、Fragment/Compute Sampled、Color、Depth 和 Present。屏障由调用者明确录制，RHI 不推断前态、不替调用者自动切换。Storage→Storage 在 DX12 发出 UAV barrier，在 Vulkan 发出 Synchronization2 内存依赖，即使布局未变也不能省略。M2 已补充 UniformRead、ShaderRead 和 Storage Buffer；HostWrite→UniformRead/ShaderRead 显式描述上传缓冲供 Shader 读取的依赖。仍不实现子资源细分、多队列与 Ownership Transfer；后续图层应生成明确计划，而非依赖本层猜测。
 
@@ -62,7 +62,7 @@ PSO 在样例准备阶段创建，录制只绑定。Direct Draw、Indexed Draw�
 
 颜色计算和混合使用线性值，由 sRGB 附件在输出时编码。噪声纹理为线性 RGBA8_UNORM 数据；其原始读回必须逐字节匹配，而屏幕样例包含显示编码。测试条把线性 0.25、alpha 0.5 与线性背景 0.02 混合，读回约 103/255，防止误在线性输出前手动编码。
 
-原生资源和管线具有名称；Marker 在 DX12 使用官方 WinPixEventRuntime，Vulkan 使用 DebugUtils。Timestamp 每个列表有两个 slot，读回包含原始 ticks，Runtime 提供纳秒周期；Vulkan 当前要求该队列有 64 个有效时间戳位。验证层开启时的计时仅用于证明查询链路，不作为性能结论。Vulkan 验证同时启用 synchronization validation；不屏蔽同步和生命周期错误。设备丢失给出原生错误并退出，不自动重建设备。
+原生资源和管线具有名称；Marker 在 DX12 使用官方 WinPixEventRuntime，Vulkan 使用 DebugUtils。Timestamp 每个列表有 64 个 slot，ReadTimestamps 解析指定数量的连续已写 slot（默认两个）；读回包含原始 ticks，Runtime 提供纳秒周期。Vulkan 当前要求该队列有 64 个有效时间戳位。验证层开启时的计时仅用于证明查询链路，不作为性能结论。Graph 逐 Pass 计时与完成点契约见 [M4 工具](m4-tools.md)。Vulkan 验证同时启用 synchronization validation；不屏蔽同步和生命周期错误。设备丢失给出原生错误并退出，不自动重建设备。
 
 ## 验收入口与边界
 

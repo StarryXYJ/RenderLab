@@ -96,3 +96,33 @@ GPU Driven 和路径队列都保持动态数量在 GPU 上消费。射线 Payloa
 ## M4.1–M4.2 最小场景闭环
 
 采用值类型场景与静态 glTF 导入，UUID/子资源映射保存于 .meta，Library 只作可重建缓存。Blinn–Phong 先验证矩阵、法线、颜色、材质和 Forward，PBR/HDR/阴影后置。方向光作为场景组件，可有多个；按稳定 UUID 选一个，写入共享帧常量，Lighting 库读取，不增加 CPU 单例或 LightManager。项目 Shader 复用 Core/Lighting 与 .params 生成，Material 返回绑定值以消除与 Graph 的 BindingGroup 准备重复。导入子集和身份键限制见 M4 文档。
+
+## M4.3 Shader 材质与 HDR/IBL
+
+Lit/Unlit 保持普通 Shader 资产，表面值、光栅 SampleGrad 上下文、BRDF 与照明分开。HDR 使用 RGBA32F 正确性基线，显示变换显式进入 Graph；外部图资源通过明确 deferredResources 延后绑定，不以占位纹理伪装实际依赖。IBL 先采用确定性 CPU 预滤波 2D 图集和 BRDF LUT，遵守当前单 mip/layer 的 RHI 边界；明确低分辨率、LDR 环境源、导数切线框架和 split-sum 近似的局限，避免同时扩张 cubemap/mip、流送和离线烘焙系统。数据与采样契约见 [M4.3](../docs/m4-forward-pbr.md)。
+
+## M4.4 单张阴影与 Alpha 角色
+
+先用颜色记录深度的单张正交阴影验证完整遮挡链路，D32 保持只用于附件，避免同时扩张深度采样与无颜色 PSO。RGBA32F 的存储代价显式记录；手动 3×3 PCF 采用接收平面深度修正。Caster 候选与相机可见集分开，防止离屏投影丢失。Masked/Transparent 作为 Lit/Unlit 普通 variant，沿用固定布局与 Forward 的 Opaque/Transparent 阶段；透明不投影且不解决相交排序。Sky、DepthPrepass、Bloom 和级联均等实际用例再增加。
+
+## M5.1 Deferred
+
+M4 的单颜色、不可采样深度约束已不足以表达 Deferred。RHI 与 Render Graph 现支持最多八个同时写入的颜色附件，并通过独立采样视图读取 D32/D32S8。首个 GBuffer 固定使用三张 RGBA32F：BaseColor/Metallic、世界法线/Roughness、Emission/Occlusion；Reversed-Z 深度为零的像素不参与光照。Lit 的 Forward/GBuffer 共用表面求值，透明材质仍走 Forward，缺少 GBuffer 角色的自定义不透明 Shader 明确报错。三张全分辨率目标成本较高，先作为正确性基线；压缩布局和 Forward+ 留到实际测量后再规划。
+
+## M4.5 演示宿主与测量
+
+原生调试面板采用同线程 modeless Win32 控件，避免在 C# 编辑器前引入第二套 UI 框架。固定纹理入口沿用显示 Shader 与 Graph 资源声明，允许编译器剔除不再显示的 Forward 工作。Timestamp 以真实提交完成点保护读回，每个原生命令上下文独立复用 query 存储；窗口收集已退休的两帧结果，离线测量单独预热并在关闭验证层后采样。Player 复用同一宿主与项目格式，用独立安装目录检验运行时内容边界，不另建一套渲染流程。
+
+## M4 后 Shader/Material 契约修订提案
+
+用户指出精确名称匹配与共享 HLSL 全局名的耦合。[v2 提案](shader-material-v2.md) 参考 Unity 的固定状态、Surface/Blend 策略和结构体参数求值，采用类型化 Pass role、显式状态及接口绑定 handle。资源 symbol 仅是局部作者名称，稳定 PropertyId/SchemaId 承担数据身份；普通 bool/enum 为 uniform，keyword 特性才生成有界的局部静态轴。透明分类、Blend、DepthWrite 与静态变体分别管理，标准配方提供默认值，显式 Pass 覆盖保持权威。
+
+保留已有固定布局、不可变快照、整代热重载和有界 PSO 生命周期；不复制完整 ShaderLab，不加全局关键字或通用表达式 DSL。模板测试必须配套真实深度模板格式、动态 reference 与 Graph 的各面访问/初始化，不能以语法存在视为实现。实施和回归要求统一登记在阶段计划。
+
+实施复查将 R1.1 分为 RHI/Graph 和作者层两步。附件格式与状态正交；无深度测试但需写入时统一映射 Always。Graph 暂不拆模板平面的版本与布局，采用整附件保守依赖和逐面初始化/权限检查，任一 Load 都保留旧 producer，避免清深度时丢失模板。该基础独立验证后，再接入材质属性引用，减少临时兼容接口。
+
+收尾复查确认每类身份各有单一来源：资产 UUID 管引用，PropertyId 管保存，Schema ID/version/hash 管参数兼容性，包/Pass handle 管当前代绑定；显示名、路径和 HLSL symbol 仍可局部使用，不承担宿主行为策略。glTF 通过类型化 MaterialSemantic 映射，外部 IBL/阴影另用 BindingSemantic；两者不会形成全局可变参数表。静态值和普通值共用材质属性存储，旧具名变体与材质 v1 明确拒绝，避免两套选择状态长期并存。独立无 sidecar 工具允许路径派生的临时身份，持久资产要求登记 sidecar；限制和显式迁移步骤见 [资产契约](../docs/shader-assets.md)。
+
+## B3 资源复用
+
+B2 测量将差距定位到逐帧原生分配/回收，优先按生命周期复用，保持渲染算法和单队列基线。帧页按 CPU 引用与完成点回收，材质保存不可变版本；描述符分配由逻辑组保活，缓存页不持有场景资源。Profiling 的 CPU 读取期独立于 GPU 完成，默认 View 使用弱回指并由物理所有者持有，交换链 resize 明确清理 View。避免整 Prepared 缓存钉住帧资源，也不通过移动析构计时或改变 benchmark 等待策略取得表面收益。[设计](resource-reuse.md)、[接口](../docs/resource-reuse.md) 与 [配对结果](../docs/performance/b3-resource-reuse.md) 分开维护；阶段验收仍以计划为准。

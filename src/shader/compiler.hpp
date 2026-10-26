@@ -16,6 +16,8 @@ struct CompileOptions
     std::vector<Target> targets{Target::Dxil, Target::Spirv};
     uint64_t generation = 1;
     bool useCache = true;
+    /// Registered asset identity; otherwise read the sidecar, or derive a transient tool ID.
+    std::string assetId;
 };
 struct BuildResult
 {

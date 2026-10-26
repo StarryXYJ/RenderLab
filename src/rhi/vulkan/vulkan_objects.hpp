@@ -100,16 +100,33 @@ struct VkLayout : BindingLayout
                 vkDestroyDescriptorSetLayout(device, set, nullptr);
     }
 };
-struct VkGroup : BindingGroup
+struct VkDescriptorBlock
 {
-    using BindingGroup::BindingGroup;
     VkDevice device = VK_NULL_HANDLE;
     VkDescriptorPool pool = VK_NULL_HANDLE;
+    std::shared_ptr<BindingLayout> layout;
+    std::shared_ptr<DescriptorStats> stats;
     std::array<VkDescriptorSet, 4> native{};
-    ~VkGroup() override
+    ~VkDescriptorBlock()
     {
         if (pool)
             vkDestroyDescriptorPool(device, pool, nullptr);
+        if (stats)
+        {
+            --stats->pages;
+            stats->capacity -= layout->entries.size();
+        }
+    }
+};
+struct VkGroup : BindingGroup
+{
+    using BindingGroup::BindingGroup;
+    std::shared_ptr<VkDescriptorBlock> allocation;
+    std::array<VkDescriptorSet, 4> native{};
+    ~VkGroup() override
+    {
+        if (allocation)
+            allocation->stats->inUse -= layout->entries.size();
     }
 };
 struct VkPipelineObject : Pipeline

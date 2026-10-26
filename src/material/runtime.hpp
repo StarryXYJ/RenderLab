@@ -8,6 +8,7 @@
 #include <map>
 #include <memory>
 #include <optional>
+#include <set>
 #include <string>
 #include <thread>
 #include <vector>
@@ -17,24 +18,31 @@ namespace renderlab::material
 /// @brief Per-draw pass selection, vertex layout and external values; no recording occurs here.
 struct Preparation
 {
-    std::string pass;
-    rhi::Format color = rhi::Format::Rgba8Srgb;
+    shader::PassSelection pass;
+    std::vector<rhi::Format> colorFormats{rhi::Format::Rgba8Srgb};
     uint32_t vertexStride = 0;
     std::vector<rhi::VertexAttribute> attributes;
-    std::optional<bool> depth, blend, cull, frontCounterClockwise;
-    /// External resources or prepacked cbuffers, keyed by generated HLSL symbol.
-    std::map<std::string, rhi::Binding> bindings;
-    std::map<std::string, std::map<std::string, Value>> constants;
+    std::optional<rhi::Format> depthStencilFormat;
+    bool mirrored = false;
+    /// Explicit generation/pass-local interface handles; constant members use stable PropertyId.
+    std::map<shader::BindingHandle, rhi::Binding> bindings;
+    std::map<shader::BindingHandle, std::map<std::string, Value>> constants;
+    /// Graph-owned pass resources, resolved during recording rather than preparation.
+    /// Only external resource handles are accepted; constants remain prepared.
+    std::set<shader::BindingHandle> deferredResources;
 };
 using ResourceResolver = std::function<rhi::Binding(const shader::Property&, const std::string&)>;
 struct GpuGeneration;
 /** @brief Immutable recording snapshot. Commands retain its pipeline and resources when bound. */
 struct Prepared
 {
+    uint32_t stencilReference = 0;
     std::shared_ptr<const GpuGeneration> generation;
     std::shared_ptr<rhi::Pipeline> pipeline;
     std::vector<rhi::Binding> resources;
-    /// Newly uploaded constants require HostWrite -> UniformRead before their first shader use.
+    std::vector<shader::BindingHandle> deferredResources;
+    /// Immutable host-written constants; emit a conservative HostWrite -> UniformRead dependency
+    /// on use. Cached versions may be shared by multiple snapshots; no further CPU writes occur.
     std::vector<std::shared_ptr<rhi::Buffer>> constants;
 };
 /** @brief Owner-thread preparation; never compiles source and never records implicit barriers. */

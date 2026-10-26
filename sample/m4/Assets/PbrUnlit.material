@@ -1,0 +1,34 @@
+{
+  "version": 2,
+  "shader": "9120dfaac72c5c1c88f3a41e3ac22447",
+  "values": {
+    "base_color": {
+      "type": "float4",
+      "count": 1,
+      "array": false,
+      "value": [
+        4,
+        1,
+        0.25,
+        1
+      ]
+    },
+    "surface": {
+      "type": "SurfaceType",
+      "count": 1,
+      "array": false,
+      "value": [
+        0
+      ]
+    },
+    "alpha_clip": {
+      "type": "bool",
+      "count": 1,
+      "array": false,
+      "value": [
+        0
+      ]
+    }
+  },
+  "resources": {}
+}

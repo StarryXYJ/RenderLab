@@ -1,0 +1,50 @@
+{
+  "version": 2,
+  "shader": "5c17b47011bf555285a61b887634f8d1",
+  "values": {
+    "base_color": {
+      "type": "float4",
+      "count": 1,
+      "array": false,
+      "value": [
+        0.7,
+        0.32,
+        0.12,
+        1
+      ]
+    },
+    "metallic": {
+      "type": "float",
+      "count": 1,
+      "array": false,
+      "value": [
+        1
+      ]
+    },
+    "roughness": {
+      "type": "float",
+      "count": 1,
+      "array": false,
+      "value": [
+        0.08
+      ]
+    },
+    "surface": {
+      "type": "SurfaceType",
+      "count": 1,
+      "array": false,
+      "value": [
+        0
+      ]
+    },
+    "alpha_clip": {
+      "type": "bool",
+      "count": 1,
+      "array": false,
+      "value": [
+        0
+      ]
+    }
+  },
+  "resources": {}
+}

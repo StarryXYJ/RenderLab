@@ -18,6 +18,7 @@ struct ProgramRequest
     std::vector<std::filesystem::path> includeDirectories;
     std::string generated;
     std::string sourceSnapshot;
+    std::string generatedTypes;
 };
 struct Preprocessed
 {

@@ -32,8 +32,8 @@ struct Window::Impl
             case WM_KEYDOWN:
             case WM_KEYUP:
             {
-                const std::array<WPARAM, 10> codes{'W', 'S',     'A',      'D',   'E',
-                                                   'Q', VK_LEFT, VK_RIGHT, VK_UP, VK_DOWN};
+                const std::array<WPARAM, 11> codes{'W',     'S',      'A',   'D',     'E',  'Q',
+                                                   VK_LEFT, VK_RIGHT, VK_UP, VK_DOWN, VK_F1};
                 for (size_t i = 0; i < codes.size(); ++i)
                     if (wParam == codes[i])
                         self->keys[i] = message == WM_KEYDOWN;

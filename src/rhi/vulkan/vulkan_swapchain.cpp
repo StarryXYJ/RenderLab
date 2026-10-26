@@ -7,9 +7,10 @@
 
 namespace renderlab::rhi::vulkan
 {
-VulkanSwapchain::VulkanSwapchain(const void* owner, VkInstance instance, VkPhysicalDevice physical,
-                                 VkDevice device, VkQueue queue)
-    : Swapchain(owner), instance_(instance), physical_(physical), device_(device), queue_(queue)
+VulkanSwapchain::VulkanSwapchain(VulkanRuntime& runtime, VkInstance instance,
+                                 VkPhysicalDevice physical, VkDevice device, VkQueue queue)
+    : Swapchain(&runtime), runtime_(runtime), instance_(instance), physical_(physical),
+      device_(device), queue_(queue)
 {
 }
 
@@ -158,6 +159,7 @@ void VulkanSwapchain::Resize(uint32_t width, uint32_t height)
         texture->allocation.device = device_;
         texture->native = image;
         texture->borrowed = true;
+        views_.push_back(runtime_.CreateView(texture, TextureViewUsage::Default));
         images_.push_back(std::move(texture));
     }
     available_.resize(2);
@@ -198,6 +200,7 @@ void VulkanSwapchain::Submitted(uint64_t point)
 
 void VulkanSwapchain::Clear()
 {
+    views_.clear();
     images_.clear();
     for (auto value : available_)
         if (value)
@@ -217,7 +220,8 @@ void VulkanSwapchain::Clear()
 std::unique_ptr<Swapchain> VulkanRuntime::CreateSwapchain(platform::NativeSurface surface,
                                                           uint32_t width, uint32_t height)
 {
-    auto swapchain = std::make_unique<VulkanSwapchain>(this, instance_, physical_, device_, queue_);
+    auto swapchain =
+        std::make_unique<VulkanSwapchain>(*this, instance_, physical_, device_, queue_);
     swapchain->Initialize(family_, surface);
     swapchain->timeline = timeline_;
     swapchain->Resize(width, height);

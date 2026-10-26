@@ -4,11 +4,16 @@
 #include "scene/scene.hpp"
 #include "shader/compiler.hpp"
 
+#include <Windows.h>
+#include <objbase.h>
+
 #include <algorithm>
 #include <cmath>
 #include <cstring>
+#include <exception>
 #include <iostream>
 #include <stdexcept>
+#include <thread>
 
 namespace
 {
@@ -35,6 +40,42 @@ template <class F> void Fails(F function, const std::string& message)
 bool Near(float a, float b)
 {
     return std::abs(a - b) < 1e-4f;
+}
+void ImageApartmentContracts(const std::vector<std::byte>& encoded)
+{
+    APTTYPE apartment;
+    APTTYPEQUALIFIER qualifier;
+    Require(CoGetApartmentType(&apartment, &qualifier) == CO_E_NOTINITIALIZED,
+            "Image fallback test requires an uninitialized import thread");
+    assets::DecodeImage(encoded);
+    Require(CoGetApartmentType(&apartment, &qualifier) == CO_E_NOTINITIALIZED,
+            "Standalone image import leaked its temporary COM apartment");
+    std::exception_ptr failure;
+    std::thread uiThread(
+        [&]
+        {
+            const auto initialized = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
+            try
+            {
+                Require(SUCCEEDED(initialized), "Initialize test UI STA");
+                assets::DecodeImage(encoded);
+                Fails([] { assets::DecodeImage(std::vector<std::byte>(4)); }, "WIC");
+                APTTYPE type;
+                APTTYPEQUALIFIER typeQualifier;
+                Require(SUCCEEDED(CoGetApartmentType(&type, &typeQualifier)) &&
+                            (type == APTTYPE_STA || type == APTTYPE_MAINSTA),
+                        "Successful or failed image decode must preserve its caller's STA");
+            }
+            catch (...)
+            {
+                failure = std::current_exception();
+            }
+            if (SUCCEEDED(initialized))
+                CoUninitialize();
+        });
+    uiThread.join();
+    if (failure)
+        std::rethrow_exception(failure);
 }
 void MathContracts()
 {
@@ -78,11 +119,52 @@ void ContentContracts(const std::filesystem::path& manifest, const std::filesyst
             ->mesh->materials.begin()
             ->second;
     const auto userMaterial = assets::detail::Read(db.Get(materialFile).path);
+    ImageApartmentContracts(assets::detail::Read(project.assets / "Checker.png"));
     auto model = assets::LoadModel(db, modelId);
     Require(!model.cacheHit && !model.meshes.empty() && !model.instances.empty(),
             "Initial model import");
     const auto stableMesh = model.meshes.front().id;
     Require(assets::LoadModel(db, modelId).cacheHit, "Model cache reuse");
+    const auto originalGltf = assets::detail::Read(db.Get(modelId).path);
+    auto pbrSource = assets::detail::LoadJson(db.Get(modelId).path);
+    auto& pbrMaterial = pbrSource["materials"][0];
+    pbrMaterial["pbrMetallicRoughness"]["metallicFactor"] = .75f;
+    pbrMaterial["pbrMetallicRoughness"]["roughnessFactor"] = .25f;
+    pbrMaterial["pbrMetallicRoughness"]["metallicRoughnessTexture"] = {{"index", 0}};
+    pbrMaterial["normalTexture"] = {{"index", 0}, {"scale", .5f}};
+    pbrMaterial["occlusionTexture"] = {{"index", 0}, {"strength", .8f}};
+    pbrMaterial["emissiveTexture"] = {{"index", 0}};
+    pbrMaterial["emissiveFactor"] = {.1f, .2f, .3f};
+    pbrMaterial["alphaMode"] = "MASK";
+    pbrMaterial["alphaCutoff"] = .35f;
+    assets::detail::SaveJson(db.Get(modelId).path, pbrSource);
+    auto importedPbr = assets::LoadModel(db, modelId);
+    Require(!importedPbr.cacheHit && importedPbr.key != model.key, "PBR factors invalidate cache");
+    importedPbr = assets::LoadModel(db, modelId);
+    const auto& surface = importedPbr.materials.front();
+    Require(importedPbr.cacheHit && Near(surface.metallic, .75f) && Near(surface.roughness, .25f) &&
+                Near(surface.normalScale, .5f) && Near(surface.occlusionStrength, .8f) &&
+                Near(surface.emission[2], .3f) && surface.metallicRoughnessImage == 0 &&
+                surface.normalImage == 0 && surface.occlusionImage == 0 &&
+                surface.emissionImage == 0 && surface.alphaMode == "MASK" &&
+                Near(surface.alphaCutoff, .35f),
+            "PBR factors and image references survive cached import");
+    pbrMaterial["alphaMode"] = "BLEND";
+    assets::detail::SaveJson(db.Get(modelId).path, pbrSource);
+    Require(assets::LoadModel(db, modelId).materials.front().alphaMode == "BLEND",
+            "Blend alpha mode must invalidate cached import");
+    pbrMaterial["alphaMode"] = "INVALID";
+    assets::detail::SaveJson(db.Get(modelId).path, pbrSource);
+    Fails([&] { assets::LoadModel(db, modelId); }, "alpha");
+    pbrMaterial["alphaMode"] = "MASK";
+    pbrMaterial["alphaCutoff"] = -1;
+    assets::detail::SaveJson(db.Get(modelId).path, pbrSource);
+    Fails([&] { assets::LoadModel(db, modelId); }, "alpha");
+    pbrMaterial["alphaCutoff"] = .5;
+    pbrMaterial["pbrMetallicRoughness"]["roughnessFactor"] = -1;
+    assets::detail::SaveJson(db.Get(modelId).path, pbrSource);
+    Fails([&] { assets::LoadModel(db, modelId); }, "factor");
+    WriteFileAtomically(db.Get(modelId).path, originalGltf);
     const auto cache = project.library / "Models" / (modelId + "-" + model.key + ".cbor");
     const std::string bad = "corrupt";
     WriteFileAtomically(cache, std::as_bytes(std::span{bad.data(), bad.size()}));
@@ -160,6 +242,14 @@ void ContentContracts(const std::filesystem::path& manifest, const std::filesyst
     Require(!snapshot.instances.empty() && snapshot.culledInstances > 0,
             "Scene extraction and CPU culling");
     const auto selected = snapshot.light.object;
+    scene.Get(selected).light->shadows = true;
+    const auto shadows = extractor.Extract(scene, 16.f / 9, models);
+    Require(shadows.shadowCasters.size() == shadows.totalInstances &&
+                shadows.shadowCasters.size() > shadows.instances.size(),
+            "Camera-culled enabled instances must remain directional shadow candidates");
+    scene.Get(selected).light->shadowResolution = 129;
+    Fails([&] { scene.WorldTransforms(); }, "shadow");
+    scene.Get(selected).light->shadowResolution = 512;
     std::reverse(scene.objects.begin(), scene.objects.end());
     Require(extractor.Extract(scene, 16.f / 9, models).light.object == selected,
             "Light selection independent of storage order");

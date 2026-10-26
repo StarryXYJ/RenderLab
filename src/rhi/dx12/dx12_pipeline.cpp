@@ -2,10 +2,52 @@
 #include "rhi/dx12/dx12_runtime.hpp"
 
 #include <algorithm>
+#include <array>
 #include <stdexcept>
 
 namespace renderlab::rhi::dx12
 {
+namespace
+{
+D3D12_COMPARISON_FUNC Native(CompareOp value)
+{
+    constexpr std::array values = {
+        D3D12_COMPARISON_FUNC_NEVER,         D3D12_COMPARISON_FUNC_LESS,
+        D3D12_COMPARISON_FUNC_EQUAL,         D3D12_COMPARISON_FUNC_LESS_EQUAL,
+        D3D12_COMPARISON_FUNC_GREATER,       D3D12_COMPARISON_FUNC_NOT_EQUAL,
+        D3D12_COMPARISON_FUNC_GREATER_EQUAL, D3D12_COMPARISON_FUNC_ALWAYS};
+    return values.at(static_cast<size_t>(value));
+}
+D3D12_STENCIL_OP Native(StencilOp value)
+{
+    constexpr std::array values = {D3D12_STENCIL_OP_KEEP,     D3D12_STENCIL_OP_ZERO,
+                                   D3D12_STENCIL_OP_REPLACE,  D3D12_STENCIL_OP_INCR_SAT,
+                                   D3D12_STENCIL_OP_DECR_SAT, D3D12_STENCIL_OP_INVERT,
+                                   D3D12_STENCIL_OP_INCR,     D3D12_STENCIL_OP_DECR};
+    return values.at(static_cast<size_t>(value));
+}
+D3D12_BLEND Native(BlendFactor value)
+{
+    constexpr std::array values = {
+        D3D12_BLEND_ZERO,           D3D12_BLEND_ONE,           D3D12_BLEND_SRC_COLOR,
+        D3D12_BLEND_INV_SRC_COLOR,  D3D12_BLEND_DEST_COLOR,    D3D12_BLEND_INV_DEST_COLOR,
+        D3D12_BLEND_SRC_ALPHA,      D3D12_BLEND_INV_SRC_ALPHA, D3D12_BLEND_DEST_ALPHA,
+        D3D12_BLEND_INV_DEST_ALPHA, D3D12_BLEND_SRC_ALPHA_SAT};
+    return values.at(static_cast<size_t>(value));
+}
+D3D12_BLEND_OP Native(BlendOp value)
+{
+    constexpr std::array values = {D3D12_BLEND_OP_ADD, D3D12_BLEND_OP_SUBTRACT,
+                                   D3D12_BLEND_OP_REV_SUBTRACT, D3D12_BLEND_OP_MIN,
+                                   D3D12_BLEND_OP_MAX};
+    return values.at(static_cast<size_t>(value));
+}
+D3D12_DEPTH_STENCILOP_DESC Native(const StencilFaceState& face)
+{
+    return {Native(face.fail), Native(face.depthFail), Native(face.pass), Native(face.compare)};
+}
+} // namespace
+
 std::shared_ptr<BindingLayout> DxRuntime::CreateLayout(std::vector<BindingDesc> entries)
 {
     auto layout = std::make_shared<DxLayout>(this, std::move(entries));
@@ -46,27 +88,64 @@ std::shared_ptr<BindingLayout> DxRuntime::CreateLayout(std::vector<BindingDesc> 
     return layout;
 }
 
+std::shared_ptr<DxDescriptorRange> DxRuntime::AllocateDescriptors(D3D12_DESCRIPTOR_HEAP_TYPE type,
+                                                                  uint32_t count)
+{
+    if (!count)
+        return {};
+    for (const auto& page : descriptorPages_)
+        if (page->type == type)
+        {
+            const auto found =
+                std::search_n(page->occupied.begin(), page->occupied.end(), count, uint8_t{0});
+            if (found != page->occupied.end())
+                return std::make_shared<DxDescriptorRange>(
+                    page, static_cast<uint32_t>(found - page->occupied.begin()), count);
+        }
+    if (std::ranges::count_if(descriptorPages_,
+                              [=](const auto& page) { return page->type == type; }) >= 8)
+        throw std::runtime_error(
+            "DX12 descriptor page budget exhausted; release groups or retire work");
+    const auto capacity = type == D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER ? 256u : 4096u;
+    if (count > capacity)
+        throw std::invalid_argument("Binding group exceeds descriptor page capacity");
+    auto page = std::make_shared<DxDescriptorPage>();
+    page->type = type;
+    page->occupied.resize(capacity);
+    D3D12_DESCRIPTOR_HEAP_DESC desc{};
+    desc.NumDescriptors = capacity;
+    desc.Type = type;
+    desc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
+    {
+        auto cpuTimer = ProfileCpu(CpuOperation::DescriptorPageCreate);
+        Check(device_->CreateDescriptorHeap(&desc, IID_PPV_ARGS(&page->native)), "Descriptor page");
+    }
+    page->stats = descriptorStats_;
+    ++descriptorStats_->pages;
+    ++descriptorStats_->creations;
+    descriptorStats_->capacity += capacity;
+    descriptorPages_.push_back(page);
+    return std::make_shared<DxDescriptorRange>(page, 0, count);
+}
+
 std::shared_ptr<BindingGroup> DxRuntime::CreateGroup(std::shared_ptr<BindingLayout> layout,
                                                      std::vector<Binding> bindings)
 {
+    auto cpuTimer = ProfileCpu(CpuOperation::GroupCreate);
     Validate(layout, bindings);
     auto group = std::make_shared<DxGroup>(layout, std::move(bindings));
     const auto samplerCount = static_cast<UINT>(std::ranges::count_if(
         layout->entries, [](auto e) { return e.kind == BindingKind::Sampler; }));
     const auto resourceCount = static_cast<UINT>(layout->entries.size()) - samplerCount;
-    const auto createHeap = [&](UINT count, D3D12_DESCRIPTOR_HEAP_TYPE type, auto& heap)
-    {
-        if (!count)
-            return;
-        D3D12_DESCRIPTOR_HEAP_DESC desc{};
-        desc.NumDescriptors = count;
-        desc.Type = type;
-        desc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
-        Check(device_->CreateDescriptorHeap(&desc, IID_PPV_ARGS(&heap)), "Binding heap");
-    };
-    createHeap(resourceCount, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, group->resources);
-    createHeap(samplerCount, D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER, group->samplers);
-    UINT resourceIndex = 0, samplerIndex = 0;
+    group->resourceRange =
+        AllocateDescriptors(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, resourceCount);
+    group->samplerRange = AllocateDescriptors(D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER, samplerCount);
+    if (group->resourceRange)
+        group->resources = group->resourceRange->page->native;
+    if (group->samplerRange)
+        group->samplers = group->samplerRange->page->native;
+    UINT resourceIndex = group->resourceRange ? group->resourceRange->first : 0;
+    UINT samplerIndex = group->samplerRange ? group->samplerRange->first : 0;
     for (auto entry : layout->entries)
     {
         const auto& binding =
@@ -132,7 +211,10 @@ std::shared_ptr<BindingGroup> DxRuntime::CreateGroup(std::shared_ptr<BindingLayo
         else
         {
             D3D12_SHADER_RESOURCE_VIEW_DESC desc{};
-            desc.Format = NativeFormat(binding.view->texture->desc.format);
+            const auto format = binding.view->texture->desc.format;
+            desc.Format = format == Format::D32       ? DXGI_FORMAT_R32_FLOAT
+                          : format == Format::D32S8   ? DXGI_FORMAT_R32_FLOAT_X8X24_TYPELESS
+                                                     : NativeFormat(format);
             desc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
             desc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
             desc.Texture2D.MipLevels = 1;
@@ -176,28 +258,38 @@ std::shared_ptr<Pipeline> DxRuntime::CreatePipelineNative(PipelineDesc desc)
         state.InputLayout = {elements.data(), static_cast<UINT>(elements.size())};
         state.SampleMask = UINT_MAX;
         state.RasterizerState.FillMode = D3D12_FILL_MODE_SOLID;
-        state.RasterizerState.CullMode = desc.cull ? D3D12_CULL_MODE_BACK : D3D12_CULL_MODE_NONE;
-        state.RasterizerState.FrontCounterClockwise = desc.frontCounterClockwise;
+        state.RasterizerState.CullMode = desc.raster.cull == CullMode::Back ? D3D12_CULL_MODE_BACK
+                                         : desc.raster.cull == CullMode::Front
+                                             ? D3D12_CULL_MODE_FRONT
+                                             : D3D12_CULL_MODE_NONE;
+        state.RasterizerState.FrontCounterClockwise =
+            desc.raster.frontFace == FrontFace::CounterClockwise;
         state.RasterizerState.DepthClipEnable = TRUE;
         auto& blend = state.BlendState.RenderTarget[0];
-        blend.BlendEnable = desc.blend;
-        blend.SrcBlend = D3D12_BLEND_SRC_ALPHA;
-        blend.DestBlend = D3D12_BLEND_INV_SRC_ALPHA;
-        blend.BlendOp = D3D12_BLEND_OP_ADD;
-        blend.SrcBlendAlpha = D3D12_BLEND_ONE;
-        blend.DestBlendAlpha = D3D12_BLEND_ZERO;
-        blend.BlendOpAlpha = D3D12_BLEND_OP_ADD;
+        blend.BlendEnable = desc.blend.enabled;
+        blend.SrcBlend = Native(desc.blend.srcColor);
+        blend.DestBlend = Native(desc.blend.dstColor);
+        blend.BlendOp = Native(desc.blend.colorOp);
+        blend.SrcBlendAlpha = Native(desc.blend.srcAlpha);
+        blend.DestBlendAlpha = Native(desc.blend.dstAlpha);
+        blend.BlendOpAlpha = Native(desc.blend.alphaOp);
         blend.LogicOp = D3D12_LOGIC_OP_NOOP;
-        blend.RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
-        state.DepthStencilState.DepthEnable = desc.depth;
+        blend.RenderTargetWriteMask = desc.raster.colorWriteMask;
+        state.DepthStencilState.DepthEnable = desc.depth.testEnabled || desc.depth.writeEnabled;
         state.DepthStencilState.DepthWriteMask =
-            desc.depthWrite ? D3D12_DEPTH_WRITE_MASK_ALL : D3D12_DEPTH_WRITE_MASK_ZERO;
-        state.DepthStencilState.DepthFunc = D3D12_COMPARISON_FUNC_GREATER_EQUAL;
-        state.DepthStencilState.StencilReadMask = D3D12_DEFAULT_STENCIL_READ_MASK;
-        state.DepthStencilState.StencilWriteMask = D3D12_DEFAULT_STENCIL_WRITE_MASK;
-        state.NumRenderTargets = 1;
-        state.RTVFormats[0] = NativeFormat(desc.color);
-        state.DSVFormat = desc.depth ? DXGI_FORMAT_D32_FLOAT : DXGI_FORMAT_UNKNOWN;
+            desc.depth.writeEnabled ? D3D12_DEPTH_WRITE_MASK_ALL : D3D12_DEPTH_WRITE_MASK_ZERO;
+        state.DepthStencilState.DepthFunc =
+            Native(desc.depth.testEnabled ? desc.depth.compare : CompareOp::Always);
+        state.DepthStencilState.StencilEnable = desc.stencil.enabled;
+        state.DepthStencilState.FrontFace = Native(desc.stencil.front);
+        state.DepthStencilState.BackFace = Native(desc.stencil.back);
+        state.DepthStencilState.StencilReadMask = desc.stencil.readMask;
+        state.DepthStencilState.StencilWriteMask = desc.stencil.writeMask;
+        state.NumRenderTargets = static_cast<UINT>(desc.colorFormats.size());
+        for (UINT i = 0; i < state.NumRenderTargets; ++i)
+            state.RTVFormats[i] = NativeFormat(desc.colorFormats[i]);
+        state.DSVFormat =
+            desc.depthStencilFormat ? NativeFormat(*desc.depthStencilFormat) : DXGI_FORMAT_UNKNOWN;
         state.SampleDesc.Count = 1;
         state.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
         Check(device_->CreateGraphicsPipelineState(&state, IID_PPV_ARGS(&pipeline->native)),

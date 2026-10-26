@@ -1,7 +1,6 @@
 {
-  "version": 1,
-  "shader": "Project/Copper",
-  "variant": "Default",
+  "version": 2,
+  "shader": "b471049240f159c58236261d87d237d6",
   "values": {
     "base_color": {
       "type": "float4",

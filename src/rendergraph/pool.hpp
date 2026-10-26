@@ -14,6 +14,7 @@ namespace detail
 struct Allocation
 {
     std::shared_ptr<rhi::Texture> texture;
+    std::shared_ptr<rhi::TextureView> view;
     std::shared_ptr<rhi::Buffer> buffer;
     rhi::State state = rhi::State::Undefined;
     uint64_t completion = 0, estimatedBytes = 0;

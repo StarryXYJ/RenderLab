@@ -1,0 +1,6 @@
+[scope(draw), schema("renderlab.object", 1), type(SceneObjectData)] cbuffer SceneObject
+{
+    [id("ObjectToWorld")] float4x4 ObjectToWorld = (1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1);
+    [id("NormalToWorld")] float4x4 NormalToWorld = (1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1);
+    [id("PreviousObjectToWorld")] float4x4 PreviousObjectToWorld = (1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1);
+}

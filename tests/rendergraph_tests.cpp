@@ -87,7 +87,11 @@ struct FakeRuntime : rhi::Runtime
     }
     std::shared_ptr<rhi::TextureView> CreateView(std::shared_ptr<rhi::Texture> t) override
     {
-        return std::make_shared<rhi::TextureView>(t);
+        if (auto cached = t->defaultView.lock())
+            return cached;
+        auto view = std::make_shared<rhi::TextureView>(t);
+        t->defaultView = view;
+        return view;
     }
     std::shared_ptr<rhi::Sampler> CreateSampler() override
     {
@@ -567,9 +571,10 @@ void ForwardContracts()
     auto vertices = runtime.CreateBuffer({256, rhi::Memory::Device, "Vertices"});
     rhi::PipelineDesc desc;
     desc.layout = runtime.CreateLayout({});
-    desc.depth = true;
-    desc.depthWrite = false;
-    desc.blend = true;
+    desc.depthStencilFormat = rhi::Format::D32;
+    desc.depth = {true, true};
+    desc.depth.writeEnabled = false;
+    desc.blend.enabled = true;
     desc.vertexStride = 4;
     DrawPacket draw;
     draw.pipeline = std::make_shared<rhi::Pipeline>(&runtime, desc);
@@ -632,9 +637,9 @@ void ForwardContracts()
         initialize.Execute([](RasterContext&) {});
         auto readonly = invalid.AddRasterPass("ReadOnlyDepth");
         color = readonly.ColorTarget(color, rhi::LoadOp::Load);
-        readonly.DepthTarget(depth, rhi::LoadOp::Load, DepthAccess::ReadOnly);
+        readonly.DepthTarget(depth, rhi::LoadOp::Load, AttachmentAccess::ReadOnly);
         auto writingDesc = desc;
-        writingDesc.depthWrite = true;
+        writingDesc.depth.writeEnabled = true;
         auto writing = std::make_shared<rhi::Pipeline>(&runtime, writingDesc);
         readonly.Execute([writing](RasterContext& c) { c.Bind(writing); });
         invalid.Export(color, rhi::State::Sampled);
@@ -644,6 +649,112 @@ void ForwardContracts()
     runtime.WaitIdle();
 }
 
+void StencilContracts()
+{
+    FakeRuntime runtime;
+    Pool pool(runtime);
+    {
+        Graph graph;
+        auto depth = graph.CreateTexture("Depth", {8, 8, rhi::Format::D32S8, false, true});
+        auto color = Texture(graph, "Color");
+        auto pass = graph.AddRasterPass("PartialClear");
+        pass.ColorTarget(color);
+        pass.DepthStencilTarget(depth, {rhi::LoadOp::Clear},
+                                {rhi::LoadOp::Load, AttachmentAccess::ReadOnly});
+        pass.SideEffect();
+        pass.Execute([](RasterContext&) {});
+        Fails([&] { graph.Compile(); }, "initialization");
+    }
+    {
+        Graph graph;
+        auto depth = graph.CreateTexture("Depth", {8, 8, rhi::Format::D32, false, true});
+        auto pass = graph.AddRasterPass("InvalidStencil");
+        Fails([&] { pass.DepthStencilTarget(depth, {}, {}); }, "stencil format");
+    }
+    {
+        Graph graph;
+        auto color = Texture(graph, "Color");
+        auto depth = graph.CreateTexture("Depth", {8, 8, rhi::Format::D32S8, false, true});
+        auto initialize = graph.AddRasterPass("Mask");
+        color = initialize.ColorTarget(color);
+        depth = initialize.DepthTarget(depth);
+        initialize.Execute([](RasterContext&) {});
+        auto read = graph.AddRasterPass("ReadOnlyStencil");
+        color = read.ColorTarget(color, rhi::LoadOp::Load);
+        read.DepthStencilTarget(depth, {rhi::LoadOp::Clear},
+                                {rhi::LoadOp::Load, AttachmentAccess::ReadOnly});
+        rhi::PipelineDesc desc;
+        desc.layout = runtime.CreateLayout({});
+        desc.depthStencilFormat = rhi::Format::D32S8;
+        desc.stencil.enabled = true;
+        desc.stencil.back.fail = rhi::StencilOp::Replace;
+        auto writing = std::make_shared<rhi::Pipeline>(&runtime, desc);
+        read.Execute([writing](RasterContext& context) { context.Bind(writing); });
+        graph.Export(color, rhi::State::Sampled);
+        graph.Compile();
+        Require(graph.GetPlan().passes[0].live,
+                "Stencil Load must retain the mask producer when depth is cleared");
+        Fails([&] { graph.Execute(pool); }, "stencil writes disabled");
+    }
+    runtime.WaitIdle();
+}
+void ProfilingContracts()
+{
+    FakeRuntime runtime;
+    Pool pool(runtime);
+    {
+        Pool views(runtime, 1, 1024);
+        auto lease = views.Acquire(rhi::TextureDesc{8, 8});
+        auto* identity = lease->texture.get();
+        lease->view = runtime.CreateView(lease->texture);
+        auto retained = lease->view;
+        std::weak_ptr<rhi::Texture> weak = lease->texture;
+        lease.reset();
+        Fails([&] { views.Acquire(rhi::TextureDesc{8, 8}); }, "pool is full");
+        views.Trim();
+        Require(views.Stats().cached == 1, "A retained View must prevent pool trim/reuse");
+        retained.reset();
+        lease = views.Acquire(rhi::TextureDesc{8, 8});
+        Require(lease->texture.get() == identity &&
+                    lease->view == lease->texture->defaultView.lock(),
+                "Pool must reuse a texture with its internal default View");
+        lease.reset();
+        views.Trim();
+        Require(weak.expired() && views.Stats().cached == 0, "Default View must not form a cycle");
+    }
+    {
+        Pool hdr(runtime, 2, 1024);
+        Fails([&] { hdr.Acquire(rhi::TextureDesc{16, 16, rhi::Format::Rgba32Float}); },
+              "byte limit");
+        auto lease = hdr.Acquire(rhi::TextureDesc{8, 8, rhi::Format::Rgba32Float});
+        Require(hdr.Stats().estimatedBytes == 1024,
+                "RGBA32F pool budget must account for 16 bytes per texel");
+        Fails([&] { hdr.Acquire(rhi::TextureDesc{1, 1}); }, "pool is full");
+        Graph estimate;
+        auto texture = estimate.CreateTexture("HDR", {8, 8, rhi::Format::Rgba32Float, false, true});
+        auto pass = estimate.AddRasterPass("HDR.Clear");
+        texture = pass.ColorTarget(texture);
+        pass.Execute([](RasterContext&) {});
+        estimate.Export(texture, rhi::State::Sampled);
+        Require(estimate.Compile().resources.front().estimatedBytes == 1024,
+                "Graph resource diagnostics must use the actual HDR texel size");
+    }
+    Graph graph;
+    for (int i = 0; i < 33; ++i)
+    {
+        auto pass = graph.AddComputePass("Profile." + std::to_string(i));
+        pass.SideEffect();
+        pass.Execute([](ComputeContext&) {});
+    }
+    graph.Compile({.profile = true});
+    Fails([&] { graph.Execute(pool); }, "32 live passes");
+    Submission::GpuProfile profile;
+    Require(profile.Read(runtime).empty(), "Disabled profile must not access readback memory");
+    profile.ticks = runtime.CreateBuffer({16, rhi::Memory::Readback, "Profile"});
+    profile.names = {"test"};
+    profile.completion = 1;
+    Fails([&] { profile.Read(runtime); }, "completed submission");
+}
 } // namespace
 int main()
 {
@@ -656,6 +767,8 @@ int main()
         RecordingValidation();
         FeatureCreationContracts();
         ForwardContracts();
+        StencilContracts();
+        ProfilingContracts();
         std::cout << "Graph contracts passed: names, typed passes, versions, culling, hazards, "
                      "bindings and lifetime\n";
         return 0;

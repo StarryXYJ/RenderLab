@@ -3,6 +3,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <cmath>
 #include <stdexcept>
 #include <utility>
 
@@ -22,6 +23,94 @@ Scope ParseScope(const std::string& text, const SourceLocation& source)
                              ": Explicit cbuffer scope must be view/frame/draw/pass");
 }
 } // namespace
+void detail::DeclarationParser::Enum(Lexer& lexer)
+{
+    EnumDefinition enumeration;
+    enumeration.name = lexer.Identifier().text;
+    if (std::ranges::find(definition.enums, enumeration.name, &EnumDefinition::name) !=
+        definition.enums.end())
+        lexer.Fail("Duplicate enum type " + enumeration.name);
+    // Prevent an enum from shadowing a built-in numeric/resource type.
+    bool builtIn = false;
+    try
+    {
+        ParseType(enumeration.name, lexer.Peek().source);
+        builtIn = true;
+    }
+    catch (const std::runtime_error&)
+    {
+    }
+    if (builtIn)
+        lexer.Fail("Enum conflicts with a built-in type");
+    lexer.Expect("{");
+    while (!lexer.Accept("}"))
+    {
+        auto name = lexer.Identifier().text;
+        lexer.Expect("=");
+        const auto value = lexer.Number();
+        if (value < 0 || value > UINT32_MAX || value != std::floor(value) ||
+            enumeration.items.size() >= 64 ||
+            std::ranges::any_of(enumeration.items, [&](const auto& item)
+                                { return item.name == name || item.value == value; }))
+            lexer.Fail("Enum requires unique names and explicit uint32 values, at most 64 items");
+        lexer.Expect(";");
+        enumeration.items.push_back({name, static_cast<uint32_t>(value)});
+    }
+    lexer.Accept(";");
+    if (enumeration.items.empty())
+        lexer.Fail("Enum must contain an item");
+    definition.enums.push_back(std::move(enumeration));
+}
+void detail::DeclarationParser::Cbuffer(Lexer& lexer)
+{
+    Scope scope = Scope::Pass;
+    std::string schemaId, typeName;
+    uint32_t version = 0;
+    std::set<std::string> attributes;
+    while (lexer.Accept("["))
+    {
+        do
+        {
+            const auto attribute = lexer.Identifier().text;
+            if (!attributes.insert(attribute).second)
+                lexer.Fail("Duplicate cbuffer attribute");
+            lexer.Expect("(");
+            if (attribute == "scope")
+            {
+                const auto token = lexer.Identifier();
+                scope = ParseScope(token.text, token.source);
+            }
+            else if (attribute == "schema")
+            {
+                schemaId = lexer.String();
+                if (std::ranges::any_of(schemaId,
+                                        [](unsigned char c) { return c < 32 || c == 127; }))
+                    lexer.Fail("Schema ID cannot contain control characters");
+                lexer.Expect(",");
+                const auto number = lexer.Number();
+                if (schemaId.empty() || number < 1 || number > UINT32_MAX ||
+                    number != std::floor(number))
+                    lexer.Fail("Schema requires a stable ID and positive uint32 version");
+                version = static_cast<uint32_t>(number);
+            }
+            else if (attribute == "type")
+                typeName = lexer.Identifier().text;
+            else
+                lexer.Fail("Unknown cbuffer attribute " + attribute);
+            lexer.Expect(")");
+        } while (lexer.Accept(","));
+        lexer.Expect("]");
+    }
+    lexer.Expect("cbuffer");
+    auto name = lexer.Identifier().text;
+    auto block = Block(lexer, name, scope);
+    if (std::ranges::any_of(block.properties, [](const auto& p) { return !p.type.Numeric(); }))
+        lexer.Fail("cbuffer members must be numeric");
+    block.schemaId = std::move(schemaId);
+    block.schemaVersion = version;
+    block.typeName = typeName.empty() ? name + "Data" : std::move(typeName);
+    AddBlock(std::move(block));
+}
 void detail::DeclarationParser::AddBlock(ParameterBlock block)
 {
     if (std::ranges::any_of(definition.blocks, [&](const auto& b) { return b.name == block.name; }))
@@ -53,6 +142,7 @@ void detail::DeclarationParser::Load(const std::filesystem::path& input, bool mo
         if (lexer.Accept("use"))
         {
             auto include = lexer.String();
+            const auto alias = lexer.Accept("as") ? lexer.Identifier().text : std::string{};
             lexer.Expect(";");
             auto modulePath = path.parent_path() / platform::Utf8ToWide(include);
             if (!std::filesystem::is_regular_file(modulePath))
@@ -65,8 +155,25 @@ void detail::DeclarationParser::Load(const std::filesystem::path& input, bool mo
                         break;
                     }
                 }
+            const auto firstBlock = definition.blocks.size();
             Load(modulePath, true);
+            if (!alias.empty())
+            {
+                if (firstBlock == definition.blocks.size())
+                    lexer.Fail("Aliased module must introduce new blocks");
+                for (size_t i = firstBlock; i < definition.blocks.size(); ++i)
+                {
+                    auto& block = definition.blocks[i];
+                    if (block.typeName.empty())
+                        block.typeName = block.name + "Data";
+                    block.name = alias + "_" + block.name;
+                }
+            }
         }
+        else if (!module && lexer.Accept("render"))
+            Render(lexer);
+        else if (lexer.Accept("enum"))
+            Enum(lexer);
         else if (lexer.Accept("material"))
         {
             if (module)
@@ -74,58 +181,13 @@ void detail::DeclarationParser::Load(const std::filesystem::path& input, bool mo
             AddBlock(Block(lexer, "Material", Scope::Material));
         }
         else if (lexer.Peek().text == "[" || lexer.Peek().text == "cbuffer")
-        {
-            Scope scope = Scope::Pass;
-            if (lexer.Accept("["))
-            {
-                lexer.Expect("scope");
-                lexer.Expect("(");
-                auto t = lexer.Identifier();
-                scope = ParseScope(t.text, t.source);
-                lexer.Expect(")");
-                lexer.Expect("]");
-            }
-            lexer.Expect("cbuffer");
-            auto name = lexer.Identifier().text;
-            auto block = Block(lexer, name, scope);
-            if (std::ranges::any_of(block.properties,
-                                    [](const auto& p) { return !p.type.Numeric(); }))
-                lexer.Fail("cbuffer members must be numeric");
-            AddBlock(std::move(block));
-        }
-        else if (!module && lexer.Accept("variant"))
-        {
-            Variant variant;
-            variant.name = lexer.Identifier().text;
-            lexer.Expect("{");
-            while (!lexer.Accept("}"))
-            {
-                auto key = lexer.Identifier().text;
-                lexer.Expect("=");
-                std::string value;
-                if (lexer.Peek().text == "-" ||
-                    (!lexer.Peek().text.empty() &&
-                     std::isdigit(static_cast<unsigned char>(lexer.Peek().text.front()))))
-                {
-                    const bool negative = lexer.Accept("-");
-                    value = (negative ? "-" : "") + lexer.Take().text;
-                }
-                else
-                    value = lexer.Identifier().text;
-                lexer.Expect(";");
-                if (!variant.defines.emplace(key, value).second)
-                    lexer.Fail("Duplicate variant define");
-            }
-            if (definition.variants.size() >= 16 ||
-                std::ranges::any_of(definition.variants,
-                                    [&](auto& v) { return v.name == variant.name; }))
-                lexer.Fail("Duplicate variant or variant limit (16) exceeded");
-            definition.variants.push_back(std::move(variant));
-        }
+            Cbuffer(lexer);
+        else if (!module && lexer.Peek().text == "variant")
+            lexer.Fail("Named variants are obsolete; use keyword properties and per-pass features");
         else if (!module && lexer.Accept("pass"))
         {
             Pass pass;
-            auto token = lexer.Identifier();
+            auto token = lexer.Peek().quoted ? lexer.Take() : lexer.Identifier();
             pass.name = token.text;
             pass.source = token.source;
             if (definition.passes.size() >= 16 ||
@@ -133,16 +195,64 @@ void detail::DeclarationParser::Load(const std::filesystem::path& input, bool mo
                                     [&](auto& p) { return p.name == pass.name; }))
                 lexer.Fail("Duplicate pass or pass limit exceeded");
             lexer.Expect("{");
+            std::set<std::string> passOptions;
             while (!lexer.Accept("}"))
             {
                 auto key = lexer.Identifier().text;
+                if (!passOptions.insert(key).second)
+                    lexer.Fail("Duplicate pass option " + key);
                 if (key == "parameters")
                 {
                     pass.blocks.push_back(Block(lexer, pass.name + "Parameters", Scope::Pass));
                     continue;
                 }
+                if (key == "state")
+                {
+                    State(lexer, pass.state);
+                    continue;
+                }
                 lexer.Expect("=");
-                if (key == "vertex" || key == "pixel" || key == "compute")
+                if (key == "role")
+                {
+                    const auto role = lexer.Identifier().text;
+                    if (role == "Forward")
+                        pass.role = PassRole::Forward;
+                    else if (role == "GBuffer")
+                        pass.role = PassRole::GBuffer;
+                    else if (role == "ShadowCaster")
+                        pass.role = PassRole::ShadowCaster;
+                    else if (role == "Custom")
+                        pass.role = PassRole::Custom;
+                    else
+                        lexer.Fail("Unknown pass role " + role);
+                }
+                else if (key == "enabled")
+                {
+                    if (lexer.Accept("true"))
+                        pass.enabled = PassEnable::Always;
+                    else if (lexer.Accept("false"))
+                        pass.enabled = PassEnable::Never;
+                    else
+                    {
+                        lexer.Expect("OpaqueShadow");
+                        pass.enabled = PassEnable::OpaqueShadow;
+                    }
+                }
+                else if (key == "castShadows")
+                    pass.castShadows = StateSource(lexer, "bool");
+                else if (key == "features")
+                {
+                    lexer.Expect("{");
+                    if (!lexer.Accept("}"))
+                    {
+                        do
+                        {
+                            pass.features.push_back(lexer.Identifier().text);
+                        } while (lexer.Accept(","));
+                        lexer.Expect("}");
+                    }
+                }
+                else if (key == "vertex" || key == "pixel" || key == "compute")
                 {
                     auto entry = lexer.String();
                     auto colon = entry.rfind(':');
@@ -159,19 +269,7 @@ void detail::DeclarationParser::Load(const std::filesystem::path& input, bool mo
                          entry.substr(colon + 1)});
                 }
                 else
-                {
-                    const bool value = lexer.Accept("true");
-                    if (!value)
-                        lexer.Expect("false");
-                    if (key == "depth")
-                        pass.depth = value;
-                    else if (key == "blend")
-                        pass.blend = value;
-                    else if (key == "cull")
-                        pass.cull = value;
-                    else
-                        lexer.Fail("Unknown pass option " + key);
-                }
+                    lexer.Fail("Unknown pass option " + key);
                 lexer.Expect(";");
             }
             const auto computes = std::ranges::count_if(
@@ -179,6 +277,10 @@ void detail::DeclarationParser::Load(const std::filesystem::path& input, bool mo
             if (!((computes == 1 && pass.entries.size() == 1) ||
                   (computes == 0 && pass.entries.size() == 2)))
                 lexer.Fail("Pass needs compute or vertex+pixel entries");
+            if (computes &&
+                (pass.role != PassRole::Custom || !pass.state.overrides.empty() ||
+                 pass.state.preset != StatePreset::Explicit || pass.enabled != PassEnable::Always))
+                lexer.Fail("Compute passes cannot declare raster roles, state or enabled policies");
             definition.passes.push_back(std::move(pass));
         }
         else
@@ -196,12 +298,40 @@ Definition ParseDefinition(const std::filesystem::path& path,
 {
     detail::DeclarationParser parser;
     parser.includeDirectories = includeDirectories;
+    parser.definition.enums = BuiltinEnums();
     parser.definition.source = std::filesystem::weakly_canonical(path);
     parser.Load(path, false);
     if (parser.definition.passes.empty())
         throw std::runtime_error(ToUtf8(path) + ": Shader needs at least one pass");
-    if (parser.definition.variants.empty())
-        parser.definition.variants.push_back({"Default", {}});
+    std::set<std::string> macros;
+    for (const auto& block : parser.definition.blocks)
+        for (const auto& property : block.properties)
+            if (!property.keyword.empty() && !macros.insert(property.keyword).second)
+                throw std::runtime_error(property.source.Describe() + ": Duplicate keyword macro");
+    for (auto& pass : parser.definition.passes)
+    {
+        std::set<std::string> features;
+        uint64_t combinations = 1;
+        for (auto& feature : pass.features)
+        {
+            const Property* found = nullptr;
+            for (const auto& block : parser.definition.blocks)
+                if (block.scope == Scope::Material)
+                    for (const auto& property : block.properties)
+                        if (property.symbol == feature)
+                            found = &property;
+            if (!found || found->keyword.empty() || !features.insert(found->id).second)
+                throw std::runtime_error(pass.source.Describe() +
+                                         ": features must name distinct keyword properties");
+            feature = found->id;
+            combinations *= found->type.enumType ? found->enumItems.size() : 2;
+            if (combinations > 64)
+                throw std::runtime_error(pass.source.Describe() +
+                                         ": Static variant limit (64) exceeded");
+        }
+        std::ranges::sort(pass.features);
+    }
+    parser.ValidateStateSources();
     return std::move(parser.definition);
 }
 } // namespace renderlab::shader

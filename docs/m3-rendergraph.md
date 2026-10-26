@@ -52,7 +52,7 @@ AddRasterPass / AddComputePass / AddCopyPass 返回对应 Builder。直接声明
 
 一个 Pass 可访问多个资源。同一资源只允许一种用途和一个版本关系；同版本、同用途的重复只读可合并，Buffer 只读范围合并为覆盖区间。ReadWrite 直接声明保留写，不分别 Read 和 Write。Buffer 调度保守按整资源处理，范围用于校验；TextureRange 目前只允许 mip0/layer0 与匹配 aspect。
 
-完整覆盖是作者承诺，图无法证明 Shader 写满资源；局部写入必须保留旧内容。Raster 支持单颜色、可选一个 D32、固定 Store，不支持 Discard。深度只读仍使用保守的 RHI DepthWrite 附件状态，通过 PSO 禁止实际写入，不能同时采样深度。
+完整覆盖是作者承诺，图无法证明 Shader 写满资源；局部写入必须保留旧内容。Raster 支持单颜色、可选一个 D32/D32S8、固定 Store，不支持 Discard。深度模板仍使用保守的 RHI DepthWrite 附件状态，逻辑只读通过录制校验和 PSO 禁止实际写入，不能同时采样深度。组合附件按整资源跟踪，DepthStencilTarget 支持各面独立 Load/Clear/权限，详见 [深度模板契约](render-states.md#graph)。
 
 | Context | 命令 |
 | --- | --- |
@@ -94,6 +94,8 @@ Export 仅接受当前最新版本和有效 final state。Execute 成功提交�
 
 Pool 在 Runtime 所有线程创建和使用，Runtime 和 Pool 都必须比使用它们的 Graph 活得更久。资源按描述符兼容性复用，名称不参与匹配。默认最多 64 个资源、64MiB 估算内容大小；RHI 的原生分配预算继续独立生效，估算值不是显存实际占用。
 
+纹理估算使用 FormatBytes（RGBA32F 为 16 字节/texel），Graph 计划与 Pool 使用相同规则。SceneRenderer 为两帧高分辨率阴影配置 224MiB 的估算上限，通用 Pool 默认值不变；RHI 的 256MiB 原生预算仍独立检查。
+
 仅在没有图租约、没有额外资源引用且提交已完成时复用。执行中的 Graph 仍持有租约；取消或销毁它不会发布虚假的最终状态。Submit 成功后才更新池中的状态和完成点，命令包继续保活 GPU 使用。
 
 容量不足时淘汰已完成且空闲的缓存资源；全部在用时明确失败，由帧管理层释放引用并等待所需完成点。Trim 只释放已完成空闲项，不执行 DeviceIdle。M3 不在同一图中复用不同资源的存储，不做 Alias 或资源重命名。
@@ -101,6 +103,8 @@ Pool 在 Runtime 所有线程创建和使用，Runtime 和 Pool 都必须比使�
 ## 诊断与验证
 
 `Plan::ToJson` 导出 Pass 类型/源位置/存活原因、各访问的输入输出版本、Buffer 范围、RAW/WAR/WAW/显式顺序、稳定执行顺序、每个 Pass 和导出的屏障、资源估算大小和首次/最后使用，以及 CPU compile/prepare/record 时间。Execute 之后导出才包含该次录制时间；这些时间不代表 GPU 成本。每个 Pass 另有 GPU Marker，便于后续 Capture。
+
+CompileOptions.profile 可为存活 Pass 开启起止 Timestamp（最多 32 个 Pass），返回 Submission.profile；调用方确认完成后使用 profile.Read(runtime) 读取纳秒值，未完成或其他 Runtime 均拒绝。Graph 自己录制查询解析和 HostRead 屏障，读回由提交结果保活；不开启时没有该读回分配。计时不包括 Pass 间屏障或 Present；完整约定见 [M4 工具](m4-tools.md#gpu-timestamp-与完成点)。
 
 `--graph-no-cull` 关闭剔除，仍使用同一个编译器和执行器。`--graph-no-update` 让 Noise Feature 省略更新 Pass。`--graph-dump` 导出首个窗口帧的图。没有额外的立即模式或并行执行路径。
 
@@ -116,10 +120,10 @@ GPU `gpu.{dx12,vulkan}.graph` 将六张图的输出与直接 RHI 基线及 CPU �
 | rendergraph/compiler、validation | 存活分析、依赖、排序、屏障与访问校验 |
 | rendergraph/context、executor | 准备、受限录制、提交和完成状态发布 |
 | rendergraph/pool、diagnostics | 资源复用与计划导出 |
-| samples/graph_features、graph_demo | Demo Feature 实例与 Custom 组合 |
-| samples/graph_acceptance、graph_buffer_checks、forward_acceptance | GPU 行为验收 |
+| samples/graph/graph_features、graph_demo | Demo Feature 实例与 Custom 组合 |
+| samples/graph/graph_acceptance、graph_buffer_checks、forward_acceptance | GPU 行为验收 |
 
-当前仍是单视图、单 Graphics Queue、单 mip/layer、保守整 Buffer 依赖、单颜色附件和固定 Store。名称表仅属于单张图，阶段枚举由 Renderer 提供。没有全局资源黑板、多队列、并行录制、Alias、执行计划缓存、跨设备同步或 GPU 每 Pass Timestamp。相关能力在真实阶段需求出现时扩展。
+当前仍是单视图、单 Graphics Queue、单 mip/layer、保守整 Buffer 依赖、单颜色附件和固定 Store。名称表仅属于单张图，阶段枚举由 Renderer 提供。没有全局资源黑板、多队列、并行录制、Alias、执行计划缓存或跨设备同步。相关能力在真实阶段需求出现时扩展。
 
 普通 Forward 验收另检查透明稳定排序、阶段顺序与剔除、回调输入所有权、双后端图像和独立阶段快照。实际配置见 [阶段计划](../design/phaseplan.md)。
 

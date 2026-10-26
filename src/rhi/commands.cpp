@@ -56,9 +56,9 @@ void CommandList::Barrier(std::shared_ptr<Texture> texture, State before, State 
     Require(valid(before) && valid(after), "Invalid texture state");
     Require(after != State::Storage || texture->desc.storage, "Texture is not storage-capable");
     Require(after != State::ColorAttachment ||
-                (texture->desc.attachment && texture->desc.format != Format::D32),
+                (texture->desc.attachment && !IsDepthFormat(texture->desc.format)),
             "Texture is not a color attachment");
-    Require(after != State::DepthWrite || texture->desc.format == Format::D32,
+    Require(after != State::DepthWrite || IsDepthFormat(texture->desc.format),
             "Texture is not a depth attachment");
     commands_.emplace_back(TextureBarrier{std::move(texture), before, after});
 }
@@ -78,9 +78,9 @@ void CommandList::CopyTexture(std::shared_ptr<Buffer> buffer, std::shared_ptr<Te
 {
     Check(buffer);
     Check(texture);
-    Require(!rendering_ && texture->desc.format != Format::D32, "Invalid texture copy");
-    Require(rowPitch >= uint64_t(texture->desc.width) * 4 && rowPitch % 256 == 0 &&
-                offset % 512 == 0,
+    Require(!rendering_ && !IsDepthFormat(texture->desc.format), "Invalid texture copy");
+    Require(rowPitch >= uint64_t(texture->desc.width) * FormatBytes(texture->desc.format) &&
+                rowPitch % 256 == 0 && offset % 512 == 0,
             "Texture copy pitch/offset alignment invalid");
     Range(offset, uint64_t(rowPitch) * texture->desc.height, buffer->desc.size);
     commands_.emplace_back(
@@ -93,31 +93,59 @@ void CommandList::CopyTexture(std::shared_ptr<Texture> source, std::shared_ptr<T
     Require(!rendering_ && source != destination, "Invalid texture-to-texture copy");
     const auto& a = source->desc;
     const auto& b = destination->desc;
-    Require(a.format != Format::D32 && a.format == b.format && a.width == b.width &&
+    Require(!IsDepthFormat(a.format) && a.format == b.format && a.width == b.width &&
                 a.height == b.height,
             "Texture copy dimensions/format mismatch");
     commands_.emplace_back(TextureToTextureCopy{std::move(source), std::move(destination)});
 }
-void CommandList::Begin(std::shared_ptr<TextureView> color, std::shared_ptr<TextureView> depth,
-                        std::array<float, 4> clear, LoadOp colorLoad, LoadOp depthLoad)
+void CommandList::Begin(std::vector<std::shared_ptr<TextureView>> colors,
+                        std::shared_ptr<TextureView> depth,
+                        std::array<float, 4> clear, LoadOp colorLoad, LoadOp depthLoad,
+                        LoadOp stencilLoad, uint32_t clearStencil)
 {
-    Check(color);
-    Require(!rendering_ && color->texture->desc.attachment &&
-                color->texture->desc.format != Format::D32,
-            "Invalid color attachment");
+    Require(!rendering_ && !colors.empty() && colors.size() <= 8,
+            "Rendering requires one to eight color attachments");
+    for (const auto& color : colors)
+    {
+        Check(color);
+        Require(color->texture->desc.attachment && !IsDepthFormat(color->texture->desc.format),
+                "Invalid color attachment");
+        Require(color->texture->desc.width == colors.front()->texture->desc.width &&
+                    color->texture->desc.height == colors.front()->texture->desc.height,
+                "Color attachment dimensions must match");
+    }
     if (depth)
     {
         Check(depth);
-        Require(depth->texture->desc.format == Format::D32 &&
-                    depth->texture->desc.width == color->texture->desc.width &&
-                    depth->texture->desc.height == color->texture->desc.height,
+        Require(IsDepthFormat(depth->texture->desc.format) &&
+                    depth->texture->desc.width == colors.front()->texture->desc.width &&
+                    depth->texture->desc.height == colors.front()->texture->desc.height,
                 "Depth attachment mismatch");
     }
+    Require(clearStencil <= 255, "Stencil clear must be in [0,255]");
     rendering_ = true;
-    colorFormat_ = color->texture->desc.format;
-    hasDepth_ = bool(depth);
-    commands_.emplace_back(
-        BeginRendering{std::move(color), std::move(depth), clear, colorLoad, depthLoad});
+    colorFormats_.clear();
+    for (const auto& color : colors)
+        colorFormats_.push_back(color->texture->desc.format);
+    depthStencilFormat_ = depth ? std::optional{depth->texture->desc.format} : std::nullopt;
+    commands_.emplace_back(BeginRendering{std::move(colors), std::move(depth), clear, colorLoad,
+                                          depthLoad, stencilLoad, clearStencil});
+}
+void CommandList::Begin(std::shared_ptr<TextureView> color, std::shared_ptr<TextureView> depth,
+                        std::array<float, 4> clear, LoadOp colorLoad, LoadOp depthLoad,
+                        LoadOp stencilLoad, uint32_t clearStencil)
+{
+    std::vector<std::shared_ptr<TextureView>> colors;
+    colors.push_back(std::move(color));
+    Begin(std::move(colors), std::move(depth), clear, colorLoad, depthLoad, stencilLoad,
+          clearStencil);
+}
+void CommandList::StencilReference(uint32_t reference)
+{
+    Recording();
+    Require(rendering_ && reference <= 255,
+            "Stencil reference requires rendering and range [0,255]");
+    commands_.emplace_back(SetStencilReference{reference});
 }
 void CommandList::End()
 {
@@ -179,7 +207,8 @@ void CommandList::DrawReady(bool indexed) const
     Recording();
     Require(rendering_ && pipeline_ && !compute_ && group_ && vertex_ && (!indexed || index_),
             "Draw state incomplete");
-    Require(pipeline_->desc.color == colorFormat_ && pipeline_->desc.depth == hasDepth_,
+    Require(pipeline_->desc.colorFormats == colorFormats_ &&
+                pipeline_->desc.depthStencilFormat == depthStencilFormat_,
             "Pipeline attachment formats do not match rendering");
 }
 void CommandList::Compute(uint32_t x, uint32_t y, uint32_t z)
@@ -206,19 +235,22 @@ void CommandList::EndMarker()
 void CommandList::WriteTimestamp(uint32_t index)
 {
     Recording();
-    Require(index < 2, "M1 supports two timestamp slots per command list");
-    Require((timestampMask_ & (1u << index)) == 0, "Timestamp slot already written");
-    timestampMask_ |= 1u << index;
+    Require(index < MaxTimestampSlots, "Timestamp slot exceeds command-list capacity");
+    Require((timestampMask_ & (uint64_t{1} << index)) == 0, "Timestamp slot already written");
+    timestampMask_ |= uint64_t{1} << index;
     commands_.emplace_back(Timestamp{index});
 }
-void CommandList::ReadTimestamps(std::shared_ptr<Buffer> destination)
+void CommandList::ReadTimestamps(std::shared_ptr<Buffer> destination, uint32_t count)
 {
     Check(destination);
     Require(!rendering_, "Resolve timestamps outside rendering");
-    Require(timestampMask_ == 3, "Both timestamps must be written before resolve");
-    Require(destination->desc.memory == Memory::Readback && destination->desc.size >= 16,
-            "Timestamp destination requires 16 readback bytes");
-    commands_.emplace_back(ResolveTimestamps{std::move(destination)});
+    Require(count > 0 && count <= MaxTimestampSlots, "Invalid timestamp resolve count");
+    const auto expected = count == 64 ? UINT64_MAX : (uint64_t{1} << count) - 1;
+    Require(timestampMask_ == expected, "All contiguous timestamps must be written before resolve");
+    Require(destination->desc.memory == Memory::Readback &&
+                destination->desc.size >= uint64_t(count) * 8,
+            "Timestamp destination is too small or is not readback memory");
+    commands_.emplace_back(ResolveTimestamps{std::move(destination), count});
 }
 void CommandList::Cancel()
 {

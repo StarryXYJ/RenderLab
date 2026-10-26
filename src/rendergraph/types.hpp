@@ -9,6 +9,10 @@
 #include <string>
 #include <vector>
 
+namespace renderlab::rhi
+{
+class Runtime;
+}
 namespace renderlab::rendergraph
 {
 struct TextureTag;
@@ -52,10 +56,17 @@ enum class Use
     Index,
     Indirect
 };
-enum class DepthAccess
+enum class AttachmentAccess
 {
     ReadWrite,
     ReadOnly
+};
+/** @brief Per-aspect initialization and permissions; combined resources are tracked conservatively.
+ */
+struct AttachmentAspect
+{
+    rhi::LoadOp load = rhi::LoadOp::Clear;
+    AttachmentAccess access = AttachmentAccess::ReadWrite;
 };
 enum class Coverage
 {
@@ -66,7 +77,8 @@ enum class Aspect
 {
     Auto,
     Color,
-    Depth
+    Depth,
+    DepthStencil
 };
 struct TextureRange
 {
@@ -89,6 +101,8 @@ struct ImportInfo
 struct CompileOptions
 {
     bool cull = true;
+    /// Adds two timestamp slots per live pass; maximum 32 passes per graph submission.
+    bool profile = false;
 };
 struct Edge
 {
@@ -149,6 +163,20 @@ struct Submission
 {
     uint64_t completion = 0;
     std::vector<ExportedResource> exports;
+    struct GpuProfile
+    {
+        struct Timing
+        {
+            std::string name;
+            double nanoseconds;
+        };
+        std::shared_ptr<rhi::Buffer> ticks;
+        std::vector<std::string> names;
+        uint64_t completion = 0;
+        double periodNs = 0;
+        /// Requires the same runtime and completed submission; never waits or maps early.
+        std::vector<Timing> Read(const rhi::Runtime& runtime) const;
+    } profile;
 };
 rhi::State StateFor(Use use);
 bool IsReadOnly(Use use);

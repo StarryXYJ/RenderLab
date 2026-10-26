@@ -1,6 +1,8 @@
 #include "shader/detail/parser.hpp"
 #include "shader/value.hpp"
 
+#include <algorithm>
+#include <cctype>
 #include <cmath>
 #include <stdexcept>
 
@@ -46,7 +48,29 @@ Property DeclarationParser::Attributes(Lexer& lexer)
                 lexer.Expect("(");
                 std::string value = lexer.Peek().quoted ? lexer.String() : lexer.Identifier().text;
                 lexer.Expect(")");
-                if (attribute == "id")
+                if (attribute == "semantic")
+                {
+                    const auto types = MaterialSemantics();
+                    const auto semantic =
+                        std::ranges::find(types, value, &MaterialSemanticInfo::name);
+                    if (semantic == types.end())
+                        lexer.Fail("Unknown material semantic " + value);
+                    property.semantic = semantic->semantic;
+                }
+                else if (attribute == "binding")
+                {
+                    if (value == "EnvironmentAtlas")
+                        property.binding = Property::BindingSemantic::EnvironmentAtlas;
+                    else if (value == "BrdfLut")
+                        property.binding = Property::BindingSemantic::BrdfLut;
+                    else if (value == "MainLightShadow")
+                        property.binding = Property::BindingSemantic::MainLightShadow;
+                    else
+                        lexer.Fail("Unknown resource binding semantic " + value);
+                }
+                else if (attribute == "keyword")
+                    property.keyword = value;
+                else if (attribute == "id")
                     property.id = value;
                 else if (attribute == "label")
                     property.label = value;
@@ -94,11 +118,21 @@ ParameterBlock DeclarationParser::Block(Lexer& lexer, std::string name, Scope sc
     ParameterBlock block{std::move(name), scope, {}, lexer.Peek().source};
     lexer.Expect("{");
     std::set<std::string> ids, symbols;
+    std::set<MaterialSemantic> semantics;
     while (!lexer.Accept("}"))
     {
         auto property = Attributes(lexer);
         auto type = lexer.Identifier();
-        property.type = ParseType(type.text, type.source);
+        const auto enumeration =
+            std::ranges::find(definition.enums, type.text, &EnumDefinition::name);
+        property.type =
+            ParseType(enumeration == definition.enums.end() ? type.text : "uint", type.source);
+        if (enumeration != definition.enums.end())
+        {
+            property.type.name = type.text;
+            property.type.enumType = true;
+            property.enumItems = enumeration->items;
+        }
         if (lexer.Accept("<"))
         {
             if (!property.type.resource || property.type.resource == rhi::BindingKind::Sampler)
@@ -132,13 +166,23 @@ ParameterBlock DeclarationParser::Block(Lexer& lexer, std::string name, Scope sc
         }
         if (lexer.Accept("="))
         {
-            if (property.type.Numeric())
+            if (property.type.enumType)
+            {
+                auto itemName = lexer.Identifier().text;
+                const auto item = std::ranges::find(property.enumItems, itemName, &EnumItem::name);
+                if (item == property.enumItems.end())
+                    lexer.Fail("Unknown enum initializer " + itemName);
+                property.defaults.push_back(item->value);
+            }
+            else if (property.type.Numeric())
                 Values(lexer, property.defaults);
             else
                 property.resourceDefault =
                     lexer.Peek().quoted ? lexer.String() : lexer.Identifier().text;
         }
         lexer.Expect(";");
+        if (property.type.enumType && property.defaults.empty())
+            property.defaults.push_back(property.enumItems.front().value);
         if (property.type.Numeric())
         {
             const size_t count =
@@ -167,6 +211,33 @@ ParameterBlock DeclarationParser::Block(Lexer& lexer, std::string name, Scope sc
             (property.type.resource == rhi::BindingKind::StorageTexture ||
              property.type.resource == rhi::BindingKind::StorageBuffer))
             lexer.Fail("Writable outputs belong to pass parameters, not saved materials");
+        if (!property.keyword.empty())
+        {
+            const auto& macro = property.keyword;
+            const bool identifier =
+                (std::isalpha(static_cast<unsigned char>(macro.front())) || macro.front() == '_') &&
+                std::ranges::all_of(macro,
+                                    [](unsigned char c) { return std::isalnum(c) || c == '_'; });
+            if (!identifier || scope != Scope::Material || property.type.array ||
+                property.type.rows != 1 || property.type.columns != 1 ||
+                (!property.type.enumType && property.type.scalar != Scalar::Bool))
+                lexer.Fail(
+                    "keyword requires a material bool/enum scalar and a valid macro identifier");
+        }
+        if (property.binding != Property::BindingSemantic::None &&
+            (scope == Scope::Material ||
+             property.type.resource != rhi::BindingKind::SampledTexture))
+            lexer.Fail("Standard binding semantics require external sampled textures");
+        if (property.semantic != MaterialSemantic::None)
+        {
+            const auto types = MaterialSemantics();
+            const auto semantic =
+                std::ranges::find(types, property.semantic, &MaterialSemanticInfo::semantic);
+            if (scope != Scope::Material || property.type.name != semantic->type ||
+                property.type.array || !semantics.insert(property.semantic).second)
+                lexer.Fail("Material semantic requires its exact type, material scope and a unique "
+                           "mapping");
+        }
         block.properties.push_back(std::move(property));
     }
     lexer.Accept(";");

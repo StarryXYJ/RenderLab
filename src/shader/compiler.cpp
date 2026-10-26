@@ -6,6 +6,7 @@
 
 #include <nlohmann/json.hpp>
 
+#include <algorithm>
 #include <cstring>
 #include <fstream>
 #include <map>
@@ -18,7 +19,8 @@ namespace
 {
 using Json = nlohmann::json;
 constexpr const char* GeneratorVersion =
-    "renderlab-declarations-2;sm6.0;-HV2021;-Ges;-WX;-O3;-Zpc;vulkan1.3;-fvk-use-dx-layout";
+    "renderlab-declarations-4-asset-contracts;sm6.0;-HV2021;-Ges;-"
+    "WX;-O3;-Zpc;vulkan1.3;-fvk-use-dx-layout";
 std::vector<std::byte> ReadBinary(const std::filesystem::path& path)
 {
     std::ifstream file(path, std::ios::binary | std::ios::ate);
@@ -56,6 +58,30 @@ BuildResult CompileShader(const std::filesystem::path& source, const CompileOpti
         DxcCompiler dxc;
         std::string key = std::string(GeneratorVersion) + dxc.Version();
         std::set<std::filesystem::path> dependencies;
+        auto meta = package->definition.source;
+        meta += ".meta";
+        std::string assetId = options.assetId;
+        if (std::filesystem::is_regular_file(meta))
+        {
+            const auto content = ReadText(meta);
+            const auto document = Json::parse(content);
+            if (document.at("version") != 1)
+                throw std::invalid_argument("Unsupported shader metadata version");
+            const auto registered = document.at("id").get<std::string>();
+            if (!assetId.empty() && assetId != registered)
+                throw std::invalid_argument("Shader metadata identity mismatch");
+            assetId = registered;
+            key += Sha256(content);
+            dependencies.insert(meta);
+        }
+        if (assetId.empty())
+            assetId = Sha256(ToUtf8(package->definition.source)).substr(0, 32);
+        if (assetId.size() != 32 ||
+            !std::ranges::all_of(assetId, [](char c)
+                                 { return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f'); }))
+            throw std::invalid_argument("Shader asset ID must be 32 lowercase hex digits");
+        package->definition.assetId = std::move(assetId);
+        key += package->definition.assetId;
         for (const auto& dependency : package->definition.declarations)
         {
             key += ToUtf8(dependency.path) + Sha256(dependency.content);
@@ -68,26 +94,28 @@ BuildResult CompileShader(const std::filesystem::path& source, const CompileOpti
             const auto index = package->interfaces.size();
             package->interfaces.push_back(interface);
             for (auto target : options.targets)
-                for (const auto& variant : package->definition.variants)
+                for (const auto& variant : EnumerateVariants(package->definition, pass))
                     for (const auto& entry : pass.entries)
                     {
                         Job job;
                         job.interfaceIndex = index;
-                        job.program = {
-                            pass.name, variant.name, entry.function, entry.stage, target, {}, {}};
+                        job.program = {pass.name, variant.name, entry.function, entry.stage, target,
+                                       {},        {},           variant.axes};
                         job.request = {entry,
                                        target,
                                        variant.defines,
                                        options.includeDirectories,
                                        GenerateHeader(interface, target),
-                                       ReadText(entry.source)};
+                                       ReadText(entry.source),
+                                       GenerateTypesHeader(interface)};
                         auto preprocessed = dxc.Preprocess(job.request);
                         // The exact preprocessed snapshot is compiled; concurrent source edits
                         // cannot poison its key.
                         job.request.sourceSnapshot = std::move(preprocessed.text);
                         key += pass.name + variant.name + entry.function +
                                std::to_string(int(target)) + std::to_string(int(entry.stage)) +
-                               Sha256(job.request.generated) + Sha256(job.request.sourceSnapshot);
+                               Sha256(job.request.generated) + Sha256(job.request.generatedTypes) +
+                               Sha256(job.request.sourceSnapshot);
                         for (const auto& [name, value] : variant.defines)
                             key += name + "=" + value + ";";
                         for (const auto& dependency : preprocessed.dependencies)

@@ -1,10 +1,32 @@
 #include "shader/definition.hpp"
 
+#include <array>
 #include <stdexcept>
 #include <utility>
 
 namespace renderlab::shader
 {
+std::span<const MaterialSemanticInfo> MaterialSemantics()
+{
+    static constexpr std::array types = {
+        MaterialSemanticInfo{MaterialSemantic::BaseColor, "BaseColor", "float4"},
+        MaterialSemanticInfo{MaterialSemantic::Metallic, "Metallic", "float"},
+        MaterialSemanticInfo{MaterialSemantic::Roughness, "Roughness", "float"},
+        MaterialSemanticInfo{MaterialSemantic::NormalScale, "NormalScale", "float"},
+        MaterialSemanticInfo{MaterialSemantic::OcclusionStrength, "OcclusionStrength", "float"},
+        MaterialSemanticInfo{MaterialSemantic::Emission, "Emission", "float3"},
+        MaterialSemanticInfo{MaterialSemantic::AlphaCutoff, "AlphaCutoff", "float"},
+        MaterialSemanticInfo{MaterialSemantic::Surface, "Surface", "SurfaceType"},
+        MaterialSemanticInfo{MaterialSemantic::Cull, "Cull", "CullMode"},
+        MaterialSemanticInfo{MaterialSemantic::AlphaClip, "AlphaClip", "bool"},
+        MaterialSemanticInfo{MaterialSemantic::BaseMap, "BaseMap", "Texture2D"},
+        MaterialSemanticInfo{MaterialSemantic::MetallicRoughnessMap, "MetallicRoughnessMap",
+                             "Texture2D"},
+        MaterialSemanticInfo{MaterialSemantic::NormalMap, "NormalMap", "Texture2D"},
+        MaterialSemanticInfo{MaterialSemantic::OcclusionMap, "OcclusionMap", "Texture2D"},
+        MaterialSemanticInfo{MaterialSemantic::EmissionMap, "EmissionMap", "Texture2D"}};
+    return types;
+}
 Type ParseType(const std::string& name, const SourceLocation& source)
 {
     Type result;

@@ -14,6 +14,7 @@ const Plan& Graph::Compile(CompileOptions options)
     const auto started = std::chrono::steady_clock::now();
     auto& g = *impl_;
     g.Building();
+    g.profiling = options.profile;
     Require(g.active == UINT32_MAX, "Seal the active pass with Execute before Compile");
     try
     {
@@ -21,7 +22,7 @@ const Plan& Graph::Compile(CompileOptions options)
         plan = {};
         for (auto& pass : g.passes)
         {
-            Require(pass.kind != PassKind::Raster || pass.color.has_value(),
+            Require(pass.kind != PassKind::Raster || !pass.colors.empty(),
                     "Raster pass needs a color attachment: " + pass.name + " (" + pass.source +
                         ")");
             plan.passes.push_back({pass.name, pass.source, "unused output", pass.kind, false});

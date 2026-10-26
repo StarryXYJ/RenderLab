@@ -1,6 +1,7 @@
 #pragma once
 
 #include "platform/window.hpp"
+#include "rhi/cpu_profile.hpp"
 #include "rhi/resources.hpp"
 #include "rhi/swapchain.hpp"
 
@@ -24,7 +25,13 @@ public:
     virtual ~Runtime();
     virtual std::shared_ptr<Buffer> CreateBuffer(const BufferDesc& desc) = 0;
     virtual std::shared_ptr<Texture> CreateTexture(const TextureDesc& desc) = 0;
-    virtual std::shared_ptr<TextureView> CreateView(std::shared_ptr<Texture> texture) = 0;
+    /// Immutable default or sampled view; repeated calls may share a still-live view.
+    virtual std::shared_ptr<TextureView> CreateView(std::shared_ptr<Texture> texture,
+                                                    TextureViewUsage usage) = 0;
+    std::shared_ptr<TextureView> CreateView(std::shared_ptr<Texture> texture)
+    {
+        return CreateView(std::move(texture), TextureViewUsage::Default);
+    }
     virtual std::shared_ptr<Sampler> CreateSampler() = 0;
     virtual std::shared_ptr<BindingLayout> CreateLayout(std::vector<BindingDesc> entries) = 0;
     virtual std::shared_ptr<BindingGroup> CreateGroup(std::shared_ptr<BindingLayout> layout,
@@ -47,6 +54,10 @@ public:
     {
         return ledger_->stats;
     }
+    DescriptorStats GetDescriptorStats() const
+    {
+        return *descriptorStats_;
+    }
     size_t PendingCount() const
     {
         return pending_.size();
@@ -55,9 +66,22 @@ public:
     {
         return lastSubmitted_;
     }
+    /// Owner-thread diagnostic scopes; enable between calls. Cumulative counters never reset.
+    void SetCpuProfiling(bool enabled)
+    {
+        cpuProfiling_ = enabled;
+    }
+    CpuProfileSnapshot GetCpuProfile() const
+    {
+        return cpuProfile_;
+    }
 
 protected:
     Runtime();
+    CpuTimer ProfileCpu(CpuOperation operation)
+    {
+        return CpuTimer(cpuProfiling_ ? &cpuProfile_.at(size_t(operation)) : nullptr);
+    }
     virtual std::shared_ptr<Pipeline> CreatePipelineNative(PipelineDesc desc) = 0;
     struct Submission
     {
@@ -73,8 +97,11 @@ protected:
                   const std::vector<Binding>& bindings) const;
     void CheckOwner(const std::shared_ptr<Object>& object) const;
     std::shared_ptr<AllocationLedger> ledger_ = std::make_shared<AllocationLedger>();
+    std::shared_ptr<DescriptorStats> descriptorStats_ = std::make_shared<DescriptorStats>();
 
 private:
+    bool cpuProfiling_ = false;
+    CpuProfileSnapshot cpuProfile_{};
     struct Pending
     {
         uint64_t point;

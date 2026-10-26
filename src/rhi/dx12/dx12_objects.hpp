@@ -2,6 +2,7 @@
 
 #include "rhi/dx12/dx12_common.hpp"
 
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <memory>
@@ -69,10 +70,46 @@ struct DxLayout : BindingLayout
     using BindingLayout::BindingLayout;
     ComPtr<ID3D12RootSignature> native;
 };
+struct DxDescriptorPage
+{
+    ComPtr<ID3D12DescriptorHeap> native;
+    D3D12_DESCRIPTOR_HEAP_TYPE type;
+    std::vector<uint8_t> occupied;
+    std::shared_ptr<DescriptorStats> stats;
+    ~DxDescriptorPage()
+    {
+        if (stats)
+        {
+            --stats->pages;
+            stats->capacity -= occupied.size();
+        }
+    }
+};
+struct DxDescriptorRange
+{
+    std::shared_ptr<DxDescriptorPage> page;
+    uint32_t first, count;
+    DxDescriptorRange(std::shared_ptr<DxDescriptorPage> page, uint32_t first, uint32_t count)
+        : page(std::move(page)), first(first), count(count)
+    {
+        std::fill_n(this->page->occupied.begin() + first, count, uint8_t{1});
+        auto& stats = *this->page->stats;
+        stats.inUse += count;
+        stats.highWater = std::max(stats.highWater, stats.inUse);
+    }
+    ~DxDescriptorRange()
+    {
+        std::fill_n(page->occupied.begin() + first, count, uint8_t{0});
+        page->stats->inUse -= count;
+    }
+    DxDescriptorRange(const DxDescriptorRange&) = delete;
+    DxDescriptorRange& operator=(const DxDescriptorRange&) = delete;
+};
 struct DxGroup : BindingGroup
 {
     using BindingGroup::BindingGroup;
     ComPtr<ID3D12DescriptorHeap> resources, samplers;
+    std::shared_ptr<DxDescriptorRange> resourceRange, samplerRange;
     std::vector<D3D12_GPU_DESCRIPTOR_HANDLE> handles;
 };
 struct DxPipeline : Pipeline

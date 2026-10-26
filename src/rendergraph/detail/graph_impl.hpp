@@ -65,9 +65,12 @@ struct Pass
     PassKind kind;
     bool sideEffect = false;
     std::vector<Access> accesses;
-    std::optional<Attachment> color, depth;
+    std::vector<Attachment> colors;
+    std::optional<Attachment> depth;
     Callback callback;
-    bool depthReadOnly = false;
+    bool depthReadOnly = false, stencilReadOnly = false;
+    rhi::LoadOp stencilLoad = rhi::LoadOp::Clear;
+    uint32_t clearStencil = 0;
 };
 inline void Require(bool condition, const std::string& message)
 {
@@ -93,6 +96,9 @@ struct Graph::Impl
     Plan plan;
     Pool* pool = nullptr;
     std::unique_ptr<rhi::CommandList> commands;
+    bool profiling = false;
+    std::shared_ptr<rhi::Buffer> timestamps;
+    std::shared_ptr<detail::Allocation> timestampLease;
     void Building() const;
     void Builder(uint32_t pass) const;
     detail::Resource& Validate(uint64_t graph, uint32_t resource, uint32_t version, bool texture);

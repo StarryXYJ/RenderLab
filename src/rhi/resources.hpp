@@ -1,8 +1,11 @@
 #pragma once
 
+#include "rhi/render_state.hpp"
+
 #include <cstddef>
 #include <cstdint>
 #include <memory>
+#include <optional>
 #include <span>
 #include <string>
 #include <utility>
@@ -22,8 +25,20 @@ enum class Format
     Bgra8,
     Rgba8Srgb,
     Bgra8Srgb,
-    D32
+    Rgba32Float,
+    D32,
+    D32S8
 };
+/// @brief Uncompressed texel size used by upload/readback footprints.
+uint32_t FormatBytes(Format format);
+constexpr bool IsDepthFormat(Format format)
+{
+    return format == Format::D32 || format == Format::D32S8;
+}
+constexpr bool HasStencil(Format format)
+{
+    return format == Format::D32S8;
+}
 enum class State
 {
     Undefined,
@@ -85,6 +100,12 @@ struct MemoryStats
     uint64_t budget = 256ull * 1024 * 1024;
 };
 
+/// Descriptor slots, not allocation bytes. Shared bookkeeping outlives the allocator's leases.
+struct DescriptorStats
+{
+    uint64_t pages = 0, capacity = 0, inUse = 0, highWater = 0, creations = 0;
+};
+
 /** @brief Dedicated allocations in M1; budget counts native allocation sizes, not requested sizes.
  */
 struct AllocationLedger
@@ -124,17 +145,29 @@ struct Buffer : Object
     /// Upload/Readback mapping only. Readback requires a completed submission and HostRead barrier.
     virtual std::span<std::byte> Map() = 0;
 };
+struct TextureView;
 struct Texture : Object
 {
     Texture(const void* owner, TextureDesc desc) : Object(owner), desc(std::move(desc)) {}
     const TextureDesc desc;
+    /// Owner-thread cache of the immutable default view; weak to avoid a Texture/View cycle.
+    std::weak_ptr<TextureView> defaultView;
+    /// Depth sampling needs a distinct native view from the attachment view.
+    std::weak_ptr<TextureView> sampledView;
+};
+enum class TextureViewUsage
+{
+    Default,
+    Sampled
 };
 struct TextureView : Object
 {
-    TextureView(const std::shared_ptr<Texture>& texture) : Object(texture->owner), texture(texture)
+    TextureView(const std::shared_ptr<Texture>& texture, TextureViewUsage usage)
+        : Object(texture->owner), texture(texture), usage(usage)
     {
     }
     const std::shared_ptr<Texture> texture;
+    const TextureViewUsage usage;
 };
 struct Sampler : Object
 {
@@ -191,12 +224,12 @@ struct PipelineDesc
     std::shared_ptr<ShaderModule> vertex;
     std::shared_ptr<ShaderModule> pixel;
     std::shared_ptr<ShaderModule> compute;
-    Format color = Format::Rgba8;
-    bool depth = false;
-    bool depthWrite = true;
-    bool blend = false;
-    bool cull = true;
-    bool frontCounterClockwise = true;
+    std::vector<Format> colorFormats{Format::Rgba8};
+    std::optional<Format> depthStencilFormat;
+    RasterState raster;
+    DepthState depth;
+    BlendState blend;
+    StencilState stencil;
     uint32_t vertexStride = 0;
     std::vector<VertexAttribute> attributes;
 };

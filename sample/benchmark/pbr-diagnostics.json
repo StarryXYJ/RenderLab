@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "executable": "../../out/build/windows-release/renderlab_player.exe",
+  "backends": ["dx12", "vulkan"],
+  "repeats": 3,
+  "defaults": {
+    "seconds": 5,
+    "warmupSeconds": 2,
+    "warmupFrames": 5,
+    "width": 1280,
+    "height": 720,
+    "quality": "medium",
+    "view": "final",
+    "validation": "off",
+    "cpuProfiling": true
+  },
+  "cases": [
+    {"name": "pbr_720", "project": "../m4/Pbr.rlproject"},
+    {"name": "pbr_257", "project": "../m4/Pbr.rlproject", "width": 257, "height": 193},
+    {"name": "pbr_brdf", "project": "../m4/Pbr.rlproject", "view": "brdf"},
+    {"name": "main_720", "project": "../m4/RenderLab.rlproject"}
+  ]
+}

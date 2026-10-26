@@ -1,7 +1,7 @@
 #include "core/log.hpp"
 #include "platform/text.hpp"
 #include "rhi/device.hpp"
-#include "samples/material_demo.hpp"
+#include "samples/material/material_demo.hpp"
 
 #include <iostream>
 #include <stdexcept>

@@ -4,6 +4,7 @@
 #include "math/math.hpp"
 
 #include <cstddef>
+#include <cstdint>
 #include <filesystem>
 #include <map>
 #include <optional>
@@ -37,6 +38,9 @@ struct DirectionalLight
     math::Vec3 color{1, 1, 1};
     float intensity = 1;
     bool enabled = true;
+    bool shadows = false;
+    uint32_t shadowResolution = 512;
+    float shadowBias = .001f, shadowNormalBias = .01f;
 };
 /// @brief Stable scene identity with optional components and inherited parent enable state.
 struct Object
@@ -60,6 +64,11 @@ struct Scene
 {
     std::string activeCamera;
     math::Vec3 ambient{.035f, .035f, .035f};
+    /// Lat-long sRGB image UUID; empty uses uniform linear ambient radiance.
+    std::string environment;
+    float environmentIntensity = 1, environmentRotation = 0;
+    /// Exposure in stops, applied to linear HDR before the ACES fitted display transform.
+    float exposure = 0;
     std::vector<Object> objects;
     Object& Get(const std::string& id);
     const Object& Get(const std::string& id) const;
@@ -85,14 +94,21 @@ struct MainLight
     std::string object;
     math::Vec3 direction{0, 0, 1}, color{};
     float intensity = 0;
+    bool shadows = false;
+    uint32_t shadowResolution = 512;
+    float shadowBias = .001f, shadowNormalBias = .01f;
 };
 /// @brief Self-contained frame values; recording consumes these without reading the Scene document.
 struct Snapshot
 {
     math::Mat4 view, projection, viewProjection;
     math::Vec3 cameraPosition, ambient;
+    std::string environment;
+    float environmentIntensity = 1, environmentRotation = 0, exposure = 0;
     MainLight light;
     std::vector<Instance> instances;
+    /// All enabled instances, including camera-culled casters. Material roles filter later.
+    std::vector<Instance> shadowCasters;
     size_t totalInstances = 0, culledInstances = 0;
 };
 /** @brief Stable identity/history and CPU culling; GPU resources remain the renderer's projection.
