@@ -1,6 +1,8 @@
 #include "shader/detail/parser.hpp"
 #include "shader/value.hpp"
 
+#include <algorithm>
+#include <cctype>
 #include <cmath>
 #include <stdexcept>
 
@@ -46,7 +48,9 @@ Property DeclarationParser::Attributes(Lexer& lexer)
                 lexer.Expect("(");
                 std::string value = lexer.Peek().quoted ? lexer.String() : lexer.Identifier().text;
                 lexer.Expect(")");
-                if (attribute == "id")
+                if (attribute == "keyword")
+                    property.keyword = value;
+                else if (attribute == "id")
                     property.id = value;
                 else if (attribute == "label")
                     property.label = value;
@@ -98,7 +102,16 @@ ParameterBlock DeclarationParser::Block(Lexer& lexer, std::string name, Scope sc
     {
         auto property = Attributes(lexer);
         auto type = lexer.Identifier();
-        property.type = ParseType(type.text, type.source);
+        const auto enumeration =
+            std::ranges::find(definition.enums, type.text, &EnumDefinition::name);
+        property.type =
+            ParseType(enumeration == definition.enums.end() ? type.text : "uint", type.source);
+        if (enumeration != definition.enums.end())
+        {
+            property.type.name = type.text;
+            property.type.enumType = true;
+            property.enumItems = enumeration->items;
+        }
         if (lexer.Accept("<"))
         {
             if (!property.type.resource || property.type.resource == rhi::BindingKind::Sampler)
@@ -132,13 +145,23 @@ ParameterBlock DeclarationParser::Block(Lexer& lexer, std::string name, Scope sc
         }
         if (lexer.Accept("="))
         {
-            if (property.type.Numeric())
+            if (property.type.enumType)
+            {
+                auto itemName = lexer.Identifier().text;
+                const auto item = std::ranges::find(property.enumItems, itemName, &EnumItem::name);
+                if (item == property.enumItems.end())
+                    lexer.Fail("Unknown enum initializer " + itemName);
+                property.defaults.push_back(item->value);
+            }
+            else if (property.type.Numeric())
                 Values(lexer, property.defaults);
             else
                 property.resourceDefault =
                     lexer.Peek().quoted ? lexer.String() : lexer.Identifier().text;
         }
         lexer.Expect(";");
+        if (property.type.enumType && property.defaults.empty())
+            property.defaults.push_back(property.enumItems.front().value);
         if (property.type.Numeric())
         {
             const size_t count =
@@ -167,6 +190,19 @@ ParameterBlock DeclarationParser::Block(Lexer& lexer, std::string name, Scope sc
             (property.type.resource == rhi::BindingKind::StorageTexture ||
              property.type.resource == rhi::BindingKind::StorageBuffer))
             lexer.Fail("Writable outputs belong to pass parameters, not saved materials");
+        if (!property.keyword.empty())
+        {
+            const auto& macro = property.keyword;
+            const bool identifier =
+                (std::isalpha(static_cast<unsigned char>(macro.front())) || macro.front() == '_') &&
+                std::ranges::all_of(macro,
+                                    [](unsigned char c) { return std::isalnum(c) || c == '_'; });
+            if (!identifier || scope != Scope::Material || property.type.array ||
+                property.type.rows != 1 || property.type.columns != 1 ||
+                (!property.type.enumType && property.type.scalar != Scalar::Bool))
+                lexer.Fail(
+                    "keyword requires a material bool/enum scalar and a valid macro identifier");
+        }
         block.properties.push_back(std::move(property));
     }
     lexer.Accept(";");

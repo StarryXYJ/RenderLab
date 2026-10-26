@@ -1,5 +1,6 @@
 #include "shader/value.hpp"
 
+#include <algorithm>
 #include <cmath>
 #include <limits>
 #include <stdexcept>
@@ -34,6 +35,9 @@ void ValidateValue(const Property& property, std::span<const double> values)
             fail("uint parameter outside range");
         if (type.scalar == Scalar::Bool && value != 0 && value != 1)
             fail("bool parameter requires 0/1");
+        if (type.enumType && std::ranges::none_of(property.enumItems, [&](const auto& item)
+                                                  { return item.value == value; }))
+            fail("Unknown enum value");
         if (!property.enumeration.empty() && (value < 0 || value >= property.enumeration.size()))
             fail("enum index outside range");
     }

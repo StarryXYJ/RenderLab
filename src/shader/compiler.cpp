@@ -17,8 +17,8 @@ namespace renderlab::shader
 namespace
 {
 using Json = nlohmann::json;
-constexpr const char* GeneratorVersion =
-    "renderlab-declarations-2;sm6.0;-HV2021;-Ges;-WX;-O3;-Zpc;vulkan1.3;-fvk-use-dx-layout";
+constexpr const char* GeneratorVersion = "renderlab-declarations-3-static-axes;sm6.0;-HV2021;-Ges;-"
+                                         "WX;-O3;-Zpc;vulkan1.3;-fvk-use-dx-layout";
 std::vector<std::byte> ReadBinary(const std::filesystem::path& path)
 {
     std::ifstream file(path, std::ios::binary | std::ios::ate);
@@ -68,13 +68,13 @@ BuildResult CompileShader(const std::filesystem::path& source, const CompileOpti
             const auto index = package->interfaces.size();
             package->interfaces.push_back(interface);
             for (auto target : options.targets)
-                for (const auto& variant : package->definition.variants)
+                for (const auto& variant : EnumerateVariants(package->definition, pass))
                     for (const auto& entry : pass.entries)
                     {
                         Job job;
                         job.interfaceIndex = index;
-                        job.program = {
-                            pass.name, variant.name, entry.function, entry.stage, target, {}, {}};
+                        job.program = {pass.name, variant.name, entry.function, entry.stage, target,
+                                       {},        {},           variant.axes};
                         job.request = {entry,
                                        target,
                                        variant.defines,

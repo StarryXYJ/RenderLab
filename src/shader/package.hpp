@@ -31,6 +31,7 @@ struct ResourceLayout
 };
 struct Interface
 {
+    std::vector<EnumDefinition> enums;
     std::vector<BlockLayout> blocks;
     std::vector<ResourceLayout> resources;
     std::vector<rhi::BindingDesc> Bindings() const;
@@ -58,6 +59,7 @@ struct Program
     Target target;
     std::vector<std::byte> code;
     std::vector<ReflectedBinding> reflection;
+    VariantKey axes;
 };
 /** @brief Immutable compiled generation; contains CPU data only and never owns RHI objects. */
 struct Package
@@ -72,6 +74,8 @@ struct Package
     const Interface& Layout(const std::string& pass) const;
     const Program& Find(const std::string& pass, const std::string& variant, rhi::ShaderStage stage,
                         Target target) const;
+    const Program& Find(const std::string& pass, const VariantKey& key, rhi::ShaderStage stage,
+                        Target target) const;
 };
 /// Non-owning read-only projection; retains its package to keep schema pointers valid.
 class MaterialTemplate
@@ -79,6 +83,8 @@ class MaterialTemplate
 public:
     explicit MaterialTemplate(std::shared_ptr<const Package> package);
     const std::vector<FieldLayout>& Fields() const;
+    /// @brief Logical material properties, including static axes without GPU offsets.
+    const std::vector<Property>& Properties() const;
     std::vector<ResourceLayout> Resources() const;
     const Package& GetPackage() const
     {

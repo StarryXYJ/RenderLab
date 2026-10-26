@@ -17,11 +17,34 @@ std::string SchemaToJson(const Package& package)
     output["variants"] = Json::array();
     for (const auto& variant : package.definition.variants)
         output["variants"].push_back(Json{{"name", variant.name}, {"defines", variant.defines}});
+    output["properties"] = Json::array();
+    for (const auto& block : package.definition.blocks)
+        if (block.scope == Scope::Material)
+            for (const auto& property : block.properties)
+            {
+                Json choices = Json::array();
+                for (const auto& item : property.enumItems)
+                    choices.push_back({{"name", item.name}, {"value", item.value}});
+                output["properties"].push_back({{"id", property.id},
+                                                {"symbol", property.symbol},
+                                                {"type", property.type.name},
+                                                {"keyword", property.keyword},
+                                                {"choices", choices},
+                                                {"default", property.defaults},
+                                                {"label", property.label},
+                                                {"group", property.group}});
+            }
     output["passes"] = Json::array();
     for (size_t i = 0; i < package.interfaces.size(); ++i)
     {
         const auto& interface = package.interfaces[i];
         Json pass{{"name", package.definition.passes[i].name}};
+        const auto& definition = package.definition.passes[i];
+        pass["features"] = definition.features;
+        pass["variants"] = Json::array();
+        for (const auto& variant : EnumerateVariants(package.definition, definition))
+            pass["variants"].push_back(
+                {{"label", variant.name}, {"axes", variant.axes}, {"defines", variant.defines}});
         pass["blocks"] = Json::array();
         pass["resources"] = Json::array();
         for (const auto& b : interface.blocks)

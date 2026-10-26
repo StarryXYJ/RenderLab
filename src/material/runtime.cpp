@@ -79,10 +79,16 @@ Prepared Runtime::Prepare(std::shared_ptr<const shader::Package> package, const 
                                 : rhi::FrontFace::Clockwise;
     desc.vertexStride = preparation.vertexStride;
     desc.attributes = preparation.attributes;
+    std::map<std::string, uint32_t> featureValues;
+    for (const auto& id : pass.features)
+        featureValues.emplace(id, static_cast<uint32_t>(validated.values.at(id).numbers.at(0)));
+    const auto key = shader::SelectVariantKey(package->definition, pass, featureValues);
     for (const auto& entry : pass.entries)
     {
         auto module = generation->modules.at(
-            &package->Find(pass.name, validated.variant, entry.stage, target_));
+            shader::HasKeywords(package->definition)
+                ? &package->Find(pass.name, key, entry.stage, target_)
+                : &package->Find(pass.name, validated.variant, entry.stage, target_));
         if (entry.stage == rhi::ShaderStage::Vertex)
             desc.vertex = module;
         else if (entry.stage == rhi::ShaderStage::Pixel)

@@ -16,6 +16,8 @@ uint32_t Align(uint32_t value, uint32_t alignment)
 }
 std::string HlslType(const Type& type)
 {
+    if (type.enumType)
+        return "uint";
     if (type.scalar != Scalar::Bool)
         return type.name;
     return type.rows == 1 ? "uint" : "uint" + std::to_string(type.rows);
@@ -41,6 +43,7 @@ const BlockLayout* Interface::Material() const
 Interface BuildInterface(const Definition& definition, const Pass& pass)
 {
     Interface result;
+    result.enums = definition.enums;
     uint32_t next[4]{};
     std::set<std::string> names;
     const auto append = [&](const ParameterBlock& input)
@@ -52,7 +55,7 @@ Interface BuildInterface(const Definition& definition, const Pass& pass)
         BlockLayout block{input.name, input.scope, next[space], 0, {}};
         for (const auto& property : input.properties)
         {
-            if (!property.type.Numeric())
+            if (!property.type.Numeric() || !property.keyword.empty())
                 continue;
             const auto& type = property.type;
             FieldLayout field{property};
@@ -100,6 +103,9 @@ std::string GenerateHeader(const Interface& interface, Target target)
 {
     std::ostringstream out;
     out << "#ifndef RENDERLAB_GENERATED_PARAMETERS\n#define RENDERLAB_GENERATED_PARAMETERS\n";
+    for (const auto& enumeration : interface.enums)
+        for (const auto& item : enumeration.items)
+            out << "#define " << enumeration.name << "_" << item.name << " " << item.value << "\n";
     const auto binding = [&](uint32_t slot, Scope scope, char category)
     {
         if (target == Target::Spirv)
@@ -203,6 +209,16 @@ const Program& Package::Find(const std::string& pass, const std::string& variant
             return program;
     throw std::invalid_argument("Missing prepared shader program: " + pass + "/" + variant);
 }
+const Program& Package::Find(const std::string& pass, const VariantKey& selectedAxes,
+                             rhi::ShaderStage stage, Target target) const
+{
+    for (const auto& program : programs)
+        if (program.pass == pass && program.axes == selectedAxes && program.stage == stage &&
+            program.target == target)
+            return program;
+    throw std::invalid_argument("Missing prepared static program: " + pass + "/" +
+                                VariantLabel(selectedAxes));
+}
 MaterialTemplate::MaterialTemplate(std::shared_ptr<const Package> package)
     : package_(std::move(package))
 {
@@ -214,6 +230,14 @@ const std::vector<FieldLayout>& MaterialTemplate::Fields() const
     static const std::vector<FieldLayout> empty;
     auto block = package_->interfaces.front().Material();
     return block ? block->fields : empty;
+}
+const std::vector<Property>& MaterialTemplate::Properties() const
+{
+    for (const auto& block : package_->definition.blocks)
+        if (block.scope == Scope::Material)
+            return block.properties;
+    static const std::vector<Property> empty;
+    return empty;
 }
 std::vector<ResourceLayout> MaterialTemplate::Resources() const
 {

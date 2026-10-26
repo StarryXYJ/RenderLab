@@ -3,6 +3,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <cmath>
 #include <stdexcept>
 #include <utility>
 
@@ -22,6 +23,44 @@ Scope ParseScope(const std::string& text, const SourceLocation& source)
                              ": Explicit cbuffer scope must be view/frame/draw/pass");
 }
 } // namespace
+void detail::DeclarationParser::Enum(Lexer& lexer)
+{
+    EnumDefinition enumeration;
+    enumeration.name = lexer.Identifier().text;
+    if (std::ranges::find(definition.enums, enumeration.name, &EnumDefinition::name) !=
+        definition.enums.end())
+        lexer.Fail("Duplicate enum type " + enumeration.name);
+    // Prevent an enum from shadowing a built-in numeric/resource type.
+    bool builtIn = false;
+    try
+    {
+        ParseType(enumeration.name, lexer.Peek().source);
+        builtIn = true;
+    }
+    catch (const std::runtime_error&)
+    {
+    }
+    if (builtIn)
+        lexer.Fail("Enum conflicts with a built-in type");
+    lexer.Expect("{");
+    while (!lexer.Accept("}"))
+    {
+        auto name = lexer.Identifier().text;
+        lexer.Expect("=");
+        const auto value = lexer.Number();
+        if (value < 0 || value > UINT32_MAX || value != std::floor(value) ||
+            enumeration.items.size() >= 64 ||
+            std::ranges::any_of(enumeration.items, [&](const auto& item)
+                                { return item.name == name || item.value == value; }))
+            lexer.Fail("Enum requires unique names and explicit uint32 values, at most 64 items");
+        lexer.Expect(";");
+        enumeration.items.push_back({name, static_cast<uint32_t>(value)});
+    }
+    lexer.Accept(";");
+    if (enumeration.items.empty())
+        lexer.Fail("Enum must contain an item");
+    definition.enums.push_back(std::move(enumeration));
+}
 void detail::DeclarationParser::AddBlock(ParameterBlock block)
 {
     if (std::ranges::any_of(definition.blocks, [&](const auto& b) { return b.name == block.name; }))
@@ -67,6 +106,8 @@ void detail::DeclarationParser::Load(const std::filesystem::path& input, bool mo
                 }
             Load(modulePath, true);
         }
+        else if (lexer.Accept("enum"))
+            Enum(lexer);
         else if (lexer.Accept("material"))
         {
             if (module)
@@ -142,7 +183,19 @@ void detail::DeclarationParser::Load(const std::filesystem::path& input, bool mo
                     continue;
                 }
                 lexer.Expect("=");
-                if (key == "vertex" || key == "pixel" || key == "compute")
+                if (key == "features")
+                {
+                    lexer.Expect("{");
+                    if (!lexer.Accept("}"))
+                    {
+                        do
+                        {
+                            pass.features.push_back(lexer.Identifier().text);
+                        } while (lexer.Accept(","));
+                        lexer.Expect("}");
+                    }
+                }
+                else if (key == "vertex" || key == "pixel" || key == "compute")
                 {
                     auto entry = lexer.String();
                     auto colon = entry.rfind(':');
@@ -202,6 +255,34 @@ Definition ParseDefinition(const std::filesystem::path& path,
         throw std::runtime_error(ToUtf8(path) + ": Shader needs at least one pass");
     if (parser.definition.variants.empty())
         parser.definition.variants.push_back({"Default", {}});
+    std::set<std::string> macros;
+    for (const auto& block : parser.definition.blocks)
+        for (const auto& property : block.properties)
+            if (!property.keyword.empty() && !macros.insert(property.keyword).second)
+                throw std::runtime_error(property.source.Describe() + ": Duplicate keyword macro");
+    for (auto& pass : parser.definition.passes)
+    {
+        std::set<std::string> features;
+        uint64_t combinations = 1;
+        for (auto& feature : pass.features)
+        {
+            const Property* found = nullptr;
+            for (const auto& block : parser.definition.blocks)
+                if (block.scope == Scope::Material)
+                    for (const auto& property : block.properties)
+                        if (property.symbol == feature)
+                            found = &property;
+            if (!found || found->keyword.empty() || !features.insert(found->id).second)
+                throw std::runtime_error(pass.source.Describe() +
+                                         ": features must name distinct keyword properties");
+            feature = found->id;
+            combinations *= found->type.enumType ? found->enumItems.size() : 2;
+            if (combinations > 64)
+                throw std::runtime_error(pass.source.Describe() +
+                                         ": Static variant limit (64) exceeded");
+        }
+        std::ranges::sort(pass.features);
+    }
     return std::move(parser.definition);
 }
 } // namespace renderlab::shader

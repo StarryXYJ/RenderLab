@@ -15,6 +15,7 @@ struct DeclarationParser
     void Values(Lexer& lexer, std::vector<double>& values, uint32_t depth = 0);
     ParameterBlock Block(Lexer& lexer, std::string name, Scope scope);
     void AddBlock(ParameterBlock block);
+    void Enum(Lexer& lexer);
     void Load(const std::filesystem::path& input, bool module);
 };
 } // namespace renderlab::shader::detail

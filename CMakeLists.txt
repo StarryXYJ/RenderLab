@@ -91,6 +91,7 @@ add_library(renderlab_shader STATIC
     src/shader/parser.cpp
     src/shader/value.cpp
     src/shader/layout.cpp
+    src/shader/features.cpp
     src/shader/dxc_compiler.cpp
     src/shader/dxil_reflection.cpp
     src/shader/schema.cpp
@@ -176,7 +177,7 @@ install(FILES sample/m4/RenderLab.rlproject sample/m4/Pbr.rlproject sample/m4/Sh
 
 if(BUILD_TESTING)
     add_executable(renderlab_render_state_tests tests/render_state_tests.cpp)
-    target_link_libraries(renderlab_render_state_tests PRIVATE renderlab_options renderlab_shader
+    target_link_libraries(renderlab_render_state_tests PRIVATE renderlab_options renderlab_shader renderlab_material
         renderlab_rendergraph renderlab_rhi renderlab_core renderlab_platform)
     add_custom_command(TARGET renderlab_render_state_tests POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_FILE:renderlab_dxc>

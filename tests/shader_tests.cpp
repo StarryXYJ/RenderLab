@@ -2,6 +2,7 @@
 #include "shader/compiler.hpp"
 #include "shader/reload.hpp"
 
+#include <algorithm>
 #include <array>
 #include <chrono>
 #include <cstring>
@@ -53,6 +54,132 @@ shader::BuildResult Await(shader::ReloadCompiler& worker)
         std::this_thread::sleep_for(std::chrono::milliseconds(10));
     }
     throw std::runtime_error("Background compilation timed out");
+}
+void FeatureContracts(const std::filesystem::path& root)
+{
+    const auto source = root / "features.shader";
+    const std::string text = R"(shader "Test/Features"
+{
+    enum NormalMode { Off = 0; Tangent = 3; Detail = 7; }
+    material
+    {
+        [id("clip"), keyword("ALPHA_CLIP")] bool Clip = false;
+        [id("normal"), keyword("NORMAL_MODE")] NormalMode Normal = Tangent;
+        NormalMode DynamicMode = Detail;
+        bool Enabled = true;
+        float4 Tint = (1, 1, 1, 1);
+    }
+    pass Beauty
+    {
+        features = { Normal, Clip };
+        vertex = "features.hlsl:VSMain";
+        pixel = "features.hlsl:PSMain";
+        depth = false;
+    }
+    pass Sun
+    {
+        features = { Clip };
+        vertex = "features.hlsl:VSMain";
+        pixel = "features.hlsl:PSMain";
+        depth = false;
+    }
+})";
+    Write(source, text);
+    Write(root / "features.hlsl", R"(#include <renderlab/generated/parameters.hlsli>
+struct P { float4 position : SV_Position; };
+P VSMain(float3 p : POSITION) { P v; v.position = float4(p, 1); return v; }
+float4 PSMain(P p) : SV_Target
+{
+#ifdef NORMAL_MODE
+    return Material.Tint + float4(NORMAL_MODE, Material.DynamicMode, ALPHA_CLIP, Material.Enabled);
+#else
+    return Material.Tint * (1 + ALPHA_CLIP);
+#endif
+})");
+    shader::CompileOptions options;
+    options.cacheDirectory = root / "feature-cache";
+    auto built = shader::CompileShader(source, options);
+    Require(bool(built), built.diagnostics);
+    const auto& definition = built.package->definition;
+    Require(built.package->programs.size() == 32,
+            "Forward 6 + Shadow 2 combinations, each with two stages and two targets");
+    const shader::MaterialTemplate materialTemplate(built.package);
+    Require(materialTemplate.Properties().size() == 5 && materialTemplate.Fields().size() == 3,
+            "Static properties remain in logical schema without occupying GPU fields");
+    Require(built.package->interfaces[0].Material()->size ==
+                built.package->interfaces[1].Material()->size,
+            "Different pass feature sets must preserve material layout");
+    auto asset = material::Create(materialTemplate);
+    material::Set(asset, materialTemplate, "clip", std::array<double, 1>{1});
+    material::Set(asset, materialTemplate, "normal", std::array<double, 1>{7});
+    const auto selected =
+        shader::SelectVariantKey(definition, definition.passes[0], {{"clip", 1}, {"normal", 7}});
+    Require(selected == shader::VariantKey{{"clip", 1}, {"normal", 7}},
+            "Variant keys must sort stable property IDs");
+    Require(built.package->Find("Beauty", selected, rhi::ShaderStage::Pixel, shader::Target::Dxil)
+                    .axes == selected,
+            "Program lookup must select the exact static key");
+    Fails(
+        [&]
+        {
+            built.package->Find("Beauty", shader::VariantKey{{"normal", 7}},
+                                rhi::ShaderStage::Pixel, shader::Target::Dxil);
+        },
+        "Missing prepared");
+    Fails([&] { material::Set(asset, materialTemplate, "normal", std::array<double, 1>{2}); },
+          "enum value");
+    Fails([&] { shader::SelectVariantKey(definition, definition.passes[0], {{"clip", 1}}); },
+          "feature value");
+    material::Save(asset, root / "features.material");
+    Require(
+        material::Load(root / "features.material", materialTemplate).values.at("normal").numbers ==
+            std::vector<double>{7},
+        "Static properties must round trip as ordinary logical values");
+    auto renamed = text;
+    Replace(renamed, "bool Clip", "bool RenamedClip");
+    Replace(renamed, "{ Normal, Clip }", "{ Normal, RenamedClip }");
+    Replace(renamed, "{ Clip }", "{ RenamedClip }");
+    Write(source, renamed);
+    auto next = shader::CompileShader(source, options);
+    Require(bool(next), next.diagnostics);
+    auto migrated = material::Migrate(asset, shader::MaterialTemplate(next.package));
+    Require(migrated.values.at("clip").numbers == std::vector<double>{1} &&
+                shader::SelectVariantKey(next.package->definition,
+                                         next.package->definition.passes[0],
+                                         {{"clip", 1}, {"normal", 7}}) == selected,
+            "Renaming a static symbol must preserve values and program selection IDs");
+    auto removedValue = text;
+    Replace(removedValue, "Detail = 7", "Detail = 9");
+    Write(source, removedValue);
+    auto incompatible = shader::CompileShader(source, options);
+    Require(bool(incompatible), incompatible.diagnostics);
+    Fails([&] { material::Migrate(asset, shader::MaterialTemplate(incompatible.package)); },
+          "enum value");
+    const auto rejected = [&](std::string invalid, const char* diagnostic)
+    {
+        Write(source, invalid);
+        const auto result = shader::CompileShader(source, options);
+        Require(!result && result.diagnostics.find(diagnostic) != std::string::npos,
+                "Expected static feature diagnostic: " + std::string(diagnostic) + ": " +
+                    result.diagnostics);
+    };
+    auto invalid = text;
+    Replace(invalid, "bool Clip", "float Clip");
+    rejected(invalid, "material bool/enum");
+    invalid = text;
+    Replace(invalid, "features = { Normal, Clip }", "features = { Enabled }");
+    rejected(invalid, "keyword properties");
+    invalid = text;
+    Replace(invalid, "Tangent = 3", "Tangent = 0");
+    rejected(invalid, "unique names");
+    std::string budget = "shader \"Budget\" { material { ";
+    for (int i = 0; i < 7; ++i)
+        budget +=
+            "[keyword(\"K" + std::to_string(i) + "\")] bool B" + std::to_string(i) + " = false;";
+    budget += "} pass Test { features = { B0, B1, B2, B3, B4, B5, B6 }; vertex = "
+              "\"features.hlsl:VSMain\"; pixel = \"features.hlsl:PSMain\"; } }";
+    rejected(budget, "limit (64)");
+    Write(source, text);
 }
 } // namespace
 int wmain(int argc, wchar_t** argv)
@@ -210,6 +337,7 @@ int wmain(int argc, wchar_t** argv)
         Write(hlsl, hlslOriginal);
         worker.Request(source, options);
         Require(bool(Await(worker)), "Background failure recovery");
+        FeatureContracts(root);
         std::cout << "M2 CPU acceptance passed: declarations, metadata, packing, dual reflection, "
                      "cache invalidation/corruption, material round trip/migration, background "
                      "coalescing/failure/recovery\n";

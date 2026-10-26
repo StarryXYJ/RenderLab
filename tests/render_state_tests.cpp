@@ -1,4 +1,5 @@
 #include "core/log.hpp"
+#include "material/runtime.hpp"
 #include "rendergraph/graph.hpp"
 #include "rendergraph/pool.hpp"
 #include "rhi/commands.hpp"
@@ -46,22 +47,31 @@ class Fixture
 {
 public:
     Fixture(Runtime& runtime, shader::Target target, const std::filesystem::path& output)
-        : runtime_(runtime), pool_(runtime)
+        : runtime_(runtime), pool_(runtime), materials_(runtime, target)
     {
         std::ofstream(output / "state.shader") << R"(shader "Test/State"
 {
+    material { [id("swap"), keyword("STATIC_SWAP")] bool Swap = false; }
     pass Test
     {
+        features = { Swap };
         vertex = "state.hlsl:VSMain";
         pixel = "state.hlsl:PSMain";
         depth = false;
     }
 })";
-        std::ofstream(output / "state.hlsl") << R"(
+        std::ofstream(output / "state.hlsl") << R"(#include <renderlab/generated/parameters.hlsli>
 struct V { float3 position : POSITION; float4 color : COLOR; };
 struct P { float4 position : SV_Position; float4 color : COLOR; };
 P VSMain(V v) { P p; p.position = float4(v.position, 1); p.color = v.color; return p; }
-float4 PSMain(P p) : SV_Target { return p.color; }
+float4 PSMain(P p) : SV_Target
+{
+#if STATIC_SWAP
+    return p.color.bgra;
+#else
+    return p.color;
+#endif
+}
 )";
         shader::CompileOptions options;
         options.targets = {target};
@@ -69,19 +79,32 @@ float4 PSMain(P p) : SV_Target { return p.color; }
         const auto result = shader::CompileShader(output / "state.shader", options);
         if (!result)
             throw std::runtime_error(result.diagnostics);
-        base.layout = runtime.CreateLayout({});
-        for (const auto stage : {ShaderStage::Vertex, ShaderStage::Pixel})
-        {
-            const auto& program = result.package->Find("Test", "Default", stage, target);
-            auto module = runtime.CreateShader(stage, program.code, program.entry);
-            (stage == ShaderStage::Vertex ? base.vertex : base.pixel) = std::move(module);
-        }
+        package_ = result.package;
+        asset_ = material::Create(shader::MaterialTemplate(package_));
+        base = SelectSwap(false);
         base.color = Format::Rgba32Float;
         base.depthStencilFormat = Format::D32S8;
         base.vertexStride = sizeof(Vertex);
         base.attributes = {{"POSITION", 0, VertexFormat::Float3, 0},
                            {"COLOR", 1, VertexFormat::Float4, 12}};
         base.raster.cull = CullMode::None;
+    }
+    PipelineDesc SelectSwap(bool swap)
+    {
+        material::Set(asset_, shader::MaterialTemplate(package_), "swap",
+                      std::array<double, 1>{swap ? 1.0 : 0.0});
+        material::Preparation preparation;
+        preparation.pass = "Test";
+        preparation.vertexStride = sizeof(Vertex);
+        preparation.attributes = {{"POSITION", 0, VertexFormat::Float3, 0},
+                                  {"COLOR", 1, VertexFormat::Float4, 12}};
+        prepared_ = materials_.Prepare(package_, asset_, preparation);
+        Require(prepared_.constants.empty(), "Static-only material must allocate no uniform data");
+        auto desc = prepared_.pipeline->desc;
+        desc.depthStencilFormat = Format::D32S8;
+        desc.color = Format::Rgba32Float;
+        desc.raster.cull = CullMode::None;
+        return desc;
     }
     std::array<float, 4> Render(const std::vector<Step>& steps)
     {
@@ -160,6 +183,10 @@ float4 PSMain(P p) : SV_Target { return p.color; }
 private:
     Runtime& runtime_;
     Pool pool_;
+    material::Runtime materials_;
+    std::shared_ptr<const shader::Package> package_;
+    material::Asset asset_;
+    material::Prepared prepared_;
 };
 void Pixel(const std::array<float, 4>& actual, const std::array<float, 4>& expected,
            const char* message)
@@ -173,6 +200,10 @@ void Pixel(const std::array<float, 4>& actual, const std::array<float, 4>& expec
 void Gpu(Runtime& runtime, shader::Target target, const std::filesystem::path& output)
 {
     Fixture f(runtime, target, output);
+    Step variant{f.SelectSwap(true)};
+    variant.color = {.1f, .3f, .7f, .5f};
+    Pixel(f.Render({variant}), {.7f, .3f, .1f, .5f},
+          "Static material properties must select the exact prepared GPU program");
     Step write{f.base}, read{f.base};
     write.pipeline.depth = {false, true};
     write.z = .8f;

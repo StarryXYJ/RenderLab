@@ -31,10 +31,10 @@ Asset Create(const shader::MaterialTemplate& materialTemplate)
     Asset result;
     result.shader = materialTemplate.GetPackage().definition.name;
     result.variant = materialTemplate.GetPackage().definition.variants.front().name;
-    for (const auto& field : materialTemplate.Fields())
-        result.values.emplace(field.property.id,
-                              Value{field.property.type.name, field.property.type.count,
-                                    field.property.defaults, field.property.type.array});
+    for (const auto& property : materialTemplate.Properties())
+        if (property.type.Numeric())
+            result.values.emplace(property.id, Value{property.type.name, property.type.count,
+                                                     property.defaults, property.type.array});
     for (const auto& resource : materialTemplate.Resources())
         result.resources.emplace(
             resource.property.id,
@@ -46,14 +46,14 @@ void Set(Asset& asset, const shader::MaterialTemplate& materialTemplate, const s
 {
     if (asset.shader != materialTemplate.GetPackage().definition.name)
         throw std::invalid_argument("Material belongs to another shader");
-    for (const auto& field : materialTemplate.Fields())
-        if (field.property.id == id)
+    for (const auto& property : materialTemplate.Properties())
+        if (property.id == id && property.type.Numeric())
         {
-            shader::ValidateValue(field.property, values);
-            asset.values.insert_or_assign(id, Value{field.property.type.name,
-                                                    field.property.type.count,
+            shader::ValidateValue(property, values);
+            asset.values.insert_or_assign(id, Value{property.type.name,
+                                                    property.type.count,
                                                     {values.begin(), values.end()},
-                                                    field.property.type.array});
+                                                    property.type.array});
             return;
         }
     throw std::invalid_argument("Unknown material parameter ID " + id);

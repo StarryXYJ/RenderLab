@@ -5,7 +5,7 @@
 ## 当前状态
 
 - 当前实施阶段：M0–M4 DONE；M4.1–M4.5 全部完成。
-- 当前工作项：R1 IN_PROGRESS，R1.1a RHI/Graph 状态基础已完成；下一工作项 R1.2 类型化属性/静态轴，再接 R1.1b Shader/材质角色和状态配方；M5 NOT_STARTED。
+- 当前工作项：R1 IN_PROGRESS，R1.1a 已提交 a1147d5；正在实施 R1.2 类型化属性/静态轴，随后接 R1.1b role/状态配方；M5 NOT_STARTED。
 - 用户约定：每个子阶段验收完成即提交 Git，无阻塞时在当前授权范围内继续推进；M4.3 提交 c50ee6a、M4.4 提交 40d0c12、M4.5 提交 9a4b2e4。
 - Demo 的 Custom 示例作为回归入口保留；M4 场景示例使用 Forward 组合与现有 Shader/Material 链路。
 
@@ -175,6 +175,10 @@ R1.1b NOT_STARTED：Shader/材质类型化 role、属性状态配方和队列；
 验收：独立深度测试/写入、混合颜色与 Alpha、模板遮罩/双面操作、跨 Pass 保留、reference 隔离与非法配置；双后端 Validation 无错误。
 
 ### R1.2 类型化属性与静态轴
+
+状态：IN_PROGRESS；R1.2a 类型化属性/静态轴基础 DONE（2026 年 10 月 26 日），随后接 R1.1b 作者状态。具名变体入口/资产的移除与材质格式升级留在后续迁移步骤，未完成前不把 R1.2 整体标记 DONE。
+
+R1.2a 结果：显式 uint32 enum、普通 bool/enum uniform、keyword 静态属性、每 Pass features/稳定键、64 组合预算、固定 GPU 布局、逻辑 Schema 与字段分离。验证：RTX 5060，Debug/Release 定向各 5/5（shader.contracts、双后端 material/render_state）；DXIL/SPIR-V 编译验证 6+2 组合，读回证明静态值选择实际程序且静态独占材质无 uniform 分配，改名/保存/非法枚举迁移/超额诊断通过，Validation 错误为 0。文档：[静态轴](../docs/shader-features.md)。
 
 - [ ] enum 稳定数值、普通 bool/enum uniform 与 keyword 特性；每 Pass 显式 features、稳定 VariantKey 和组合预算。
 - [ ] 材质序列化/Inspector/热重载统一属性值，替换任意 variant 字符串；状态修改不重编译，静态属性整代切换。
