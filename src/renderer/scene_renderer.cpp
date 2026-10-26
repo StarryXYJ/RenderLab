@@ -70,6 +70,7 @@ struct SceneRenderer::Impl
     std::map<std::string, CachedMaterial> materialAssets;
     material::Runtime materials;
     rendergraph::Pool pool;
+    rhi::UploadPool uploadPool;
     RenderPipeline pipeline =
         CreatePipeline(PipelineType::Forward)
             .AddFeature(std::make_shared<ShadowFeature>(), RenderStage::BeforeOpaque)
@@ -82,7 +83,7 @@ struct SceneRenderer::Impl
         : runtime(r), project(project::Project::Open(manifest, engine)), database(project),
           document(scene::Scene::Load(database.Get(project.startScene).path)), materials(r, target),
           // Two 2048 shadow color/depth pairs plus 720p HDR/depth fit below the RHI budget.
-          pool(r, 64, 224ull * 1024 * 1024)
+          pool(r, 64, 224ull * 1024 * 1024), uploadPool(r)
     {
         for (const auto& file : std::filesystem::recursive_directory_iterator(project.engine))
         {
@@ -348,18 +349,16 @@ struct SceneRenderer::Impl
         return sceneBindings.emplace(key, std::move(bindings)).first->second;
     }
     template <class Data>
-    std::shared_ptr<rhi::Buffer> ParameterBuffer(const Data& data, const std::string& name)
+    rhi::UploadArena::Slice ParameterBuffer(const Data& data, rhi::UploadPool::Batch& uploads)
     {
         const auto bytes = shader::generated::Pack(data);
-        auto buffer = runtime.CreateBuffer({bytes.size(), rhi::Memory::Upload, name});
-        std::memcpy(buffer->Map().data(), bytes.data(), bytes.size());
-        return buffer;
+        return uploads.Write(bytes);
     }
     struct FrameBuffers
     {
-        std::shared_ptr<rhi::Buffer> view, lighting, shadow;
+        rhi::UploadArena::Slice view, lighting, shadow;
     };
-    FrameBuffers Parameters()
+    FrameBuffers Parameters(rhi::UploadPool::Batch& uploads)
     {
         using namespace shader::generated;
         SceneViewData view;
@@ -383,9 +382,8 @@ struct SceneRenderer::Impl
                     !snapshot.shadowCasters.empty()
                 ? 1.f
                 : 0.f};
-        return {ParameterBuffer(view, "View.Constants"),
-                ParameterBuffer(lighting, "Lighting.Constants"),
-                ParameterBuffer(shadow, "Shadow.Constants")};
+        return {ParameterBuffer(view, uploads), ParameterBuffer(lighting, uploads),
+                ParameterBuffer(shadow, uploads)};
     }
 };
 SceneRenderer::SceneRenderer(rhi::Runtime& runtime, shader::Target target,
@@ -412,6 +410,7 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
                                     const std::filesystem::path& dump, SceneRenderOptions options)
 {
     auto& self = *impl_;
+    auto uploads = self.uploadPool.Begin();
     self.EnsureModels();
     self.snapshot = self.extractor.Extract(
         self.document, float(target->desc.width) / float(target->desc.height), self.models);
@@ -459,8 +458,8 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
     frame.clearColor = {.02f, .02f, .02f, 1};
     frame.shadowResolution =
         self.snapshot.shadowCasters.empty() ? 1 : self.snapshot.light.shadowResolution;
-    const auto frameConstants = self.Parameters();
-    std::map<std::string, std::shared_ptr<rhi::Buffer>> objectConstants;
+    const auto frameConstants = self.Parameters(uploads);
+    std::map<std::string, rhi::UploadArena::Slice> objectConstants;
     std::map<const rhi::Object*, std::string> imported;
     const auto importBuffer =
         [&](const std::shared_ptr<rhi::Buffer>& buffer, const std::string& name, rhi::State state)
@@ -538,10 +537,10 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
                               {"TEXCOORD", 2, rhi::VertexFormat::Float2, 24}};
         const auto& bindings = self.Bindings(material.package, role);
         const auto bind = [&](const std::optional<shader::BindingHandle>& handle,
-                              const std::shared_ptr<rhi::Buffer>& buffer)
+                              const rhi::UploadArena::Slice& slice)
         {
             if (handle)
-                prepare.bindings[*handle] = {0, {}, {}, buffer, 0, buffer->desc.size};
+                prepare.bindings[*handle] = {0, {}, {}, slice.buffer, slice.offset, slice.size};
         };
         bind(bindings.view, frameConstants.view);
         bind(bindings.lighting, frameConstants.lighting);
@@ -554,8 +553,7 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
                 object.ObjectToWorld = instance.world.values;
                 object.NormalToWorld = instance.normal.values;
                 object.PreviousObjectToWorld = instance.previousWorld.values;
-                objectConstants.emplace(
-                    instance.id, self.ParameterBuffer(object, instance.id + "/Object.Constants"));
+                objectConstants.emplace(instance.id, self.ParameterBuffer(object, uploads));
             }
             bind(bindings.object, objectConstants.at(instance.id));
         }
@@ -648,6 +646,13 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
           {options.view != SceneView::Final && options.view != SceneView::Environment ? 1.0
                                                                                       : 0.0}}},
         {"ViewportSize", {"float2", 1, {double(target->desc.width), double(target->desc.height)}}}};
+    for (const auto& [handle, values] : displayPreparation.constants)
+    {
+        const auto slice =
+            uploads.Write(material::Pack(self.toneMapping->GetBlock(handle), values));
+        displayPreparation.bindings[handle] = {0, {}, {}, slice.buffer, slice.offset, slice.size};
+    }
+    displayPreparation.constants.clear();
     displayPreparation.deferredResources.insert(
         self.toneMapping->ResourceBinding(displayHandle, "HdrColor"));
     const auto display = self.materials.Prepare(
@@ -667,7 +672,8 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
     const auto vertices = displayPass.ReadBuffer(fullscreen, rendergraph::Use::Vertex);
     std::vector<std::pair<rhi::Binding, rendergraph::BufferHandle>> constants;
     for (const auto& [binding, name] : displayBuffers)
-        constants.emplace_back(binding, displayPass.ReadBuffer(name, rendergraph::Use::Uniform));
+        constants.emplace_back(binding, displayPass.ReadBuffer(name, rendergraph::Use::Uniform,
+                                                               {binding.offset, binding.size}));
     const auto hdrBinding =
         *std::ranges::find_if(display.pipeline->desc.layout->entries, [](const auto& entry)
                               { return entry.kind == rhi::BindingKind::SampledTexture; });
@@ -678,7 +684,8 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
             context.Bind(pipeline);
             context.BindTexture(hdrBinding.slot, hdr, hdrBinding.space);
             for (const auto& [binding, handle] : constants)
-                context.BindBuffer(binding.slot, handle, 0, binding.size, 0, binding.space);
+                context.BindBuffer(binding.slot, handle, binding.offset, binding.size, 0,
+                                   binding.space);
             context.Geometry(vertices);
             context.Draw(3);
         });
@@ -700,6 +707,7 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
     graph.Export("DisplayColor", swapchain ? rhi::State::Present : rhi::State::CopySource);
     graph.Compile({.profile = options.profile});
     auto submitted = graph.Execute(self.pool, swapchain);
+    uploads.Seal(submitted.completion);
     result.completion = submitted.completion;
     result.profile = std::move(submitted.profile);
     result.compileNs = graph.GetPlan().compileNs;

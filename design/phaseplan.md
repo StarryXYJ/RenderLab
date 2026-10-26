@@ -5,7 +5,7 @@
 ## 当前状态
 
 - 当前实施阶段：M0–M4、R1、B1、B2 DONE。
-- 当前工作项：B3 优化方案分析已完成；性能实现 NOT_STARTED，M5 NOT_STARTED。
+- 当前工作项：B3.1 DONE，下一项 B3.2 不可变材质常量；按 B3 方案逐步实施与验收，M5 NOT_STARTED。
 - 用户约定：每个子阶段验收完成即提交 Git，无阻塞时在当前授权范围内继续推进；M4.3 提交 c50ee6a、M4.4 提交 40d0c12、M4.5 提交 9a4b2e4。
 - Demo 的 Custom 示例作为回归入口保留；M4 场景示例使用 Forward 组合与现有 Shader/Material 链路。
 
@@ -19,7 +19,7 @@
 | R1 | Shader/Material 契约修订 | M4 | DONE |
 | B1 | 样例整理与可扩展 Benchmark | M4、R1 | DONE |
 | B2 | 双后端性能差异调查 | B1 | DONE |
-| B3 | 逐帧资源复用优化 | B2 | NOT_STARTED |
+| B3 | 逐帧资源复用优化 | B2 | IN_PROGRESS |
 | M5 | Deferred 与光追基础 | M4 | NOT_STARTED |
 | M6 | GPU Driven 与执行优化 | M4；光追调度测试另需 M5 | NOT_STARTED |
 | M7 | C# 编辑器与完整项目工作流 | M4；默认在 M5、M6 的核心目标后开展 | NOT_STARTED |
@@ -27,7 +27,7 @@
 
 默认顺序为 M0 到 M8。M5 和 M6 在 M4 后可以独立推进；单阶段内按下列子阶段顺序执行，不同时建设多个高级系统。完整编辑器后置，M4 只实现运行内容所需的最小项目与资源能力。
 
-R1 契约修订、B1 样例整理/Benchmark 和 B2 调查已完成。本轮授权分析 B3 优化方案，尚未开始性能实现；M5 不在本轮实施范围。
+R1 契约修订、B1 样例整理/Benchmark 和 B2 调查已完成。本轮已授权实施 B3 优化方案，逐子阶段验证与提交；M5 不在本轮实施范围。
 
 ## 状态与维护规则
 
@@ -230,11 +230,15 @@ DONE：tools/benchmark 正式工具与 PBR 配置，顺序/交替后端及重复
 
 ## B3 逐帧资源复用优化
 
-状态：NOT_STARTED。2026 年 10 月 26 日完成代码路径与生命周期分析，尚未实现或测得优化收益。
+状态：IN_PROGRESS。B3.1 DONE，B3.2–B3.4 尚未验收。
 
 方案：[逐帧资源复用](resource-reuse.md)。拟按 B3.1 帧上传页、B3.2 不可变材质常量、B3.3 描述符分配复用、B3.4 读回/View 与回收收尾分别验证、提交；每步实测后调整后续优先级。不扩展到 M5/M6 的渲染算法、多线程或多队列。
 
 退出条件：旧 CPU 快照、已录制未提交命令、双帧在途及 profiling 延后读取保持正确；稳定场景预热后消除目标路径持续的原生分配，内存有界；双后端画面/Validation 回归通过，并以相同口径的优化前后配对基线报告耗时、长尾与内存。未运行的专项保持未验收，不能用设计文档代替实现完成。
+
+### B3.1 帧上传页
+
+DONE：有界 UploadPool/Batch 以整页引用和完成点保护复用，取消不伪造提交；SceneRenderer 的帧/对象/Display 常量保留非零 offset/size，未改变 Shader 和 Graph 调度。Debug/Release 完整 CTest 各 41/41，含双后端 Validation、窗口/双帧/resize、取消后保留 CPU 快照与八批次后提交旧命令、页预算/非法 Seal 验收。Release PBR 三次短测量各后端均值 9.1022/2.9743ms；独立探针 Buffer 创建由 23 降至 10 次/帧，包含材质和 timestamp。两后端截图与 B2 对应 BMP 逐字节相同。短测量不替代最终长基线，数据在 out/benchmarks/b3-1-upload{,-probe}；[接口](../docs/resource-reuse.md)、[结果](../docs/performance/b3-resource-reuse.md)。
 
 ## M5 Deferred 与光追基础
 

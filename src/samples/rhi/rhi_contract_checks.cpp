@@ -133,6 +133,81 @@ void CheckUploadRing(Runtime& runtime)
                                     [&](auto b) { return b == std::byte(frame + 1); }),
                 "upload ring overwrote an in-flight frame");
 }
+void CheckUploadPool(Runtime& runtime)
+{
+    UploadPool pool(runtime, 512, 2);
+    std::array<std::byte, 256> data;
+    data.fill(std::byte{0x73});
+    UploadArena::Slice retained;
+    auto delayed = runtime.CreateCommands();
+    auto readback = runtime.CreateBuffer({256, Memory::Readback, "Pool.DelayedReadback"});
+    {
+        auto batch = pool.Begin();
+        retained = batch.Write(data);
+        const auto second = batch.Write(data);
+        Require(second.buffer == retained.buffer && second.offset == 256 && second.size == 256,
+                "upload pool must pack nonzero offsets into one page");
+        delayed->Barrier(second.buffer, State::HostWrite, State::CopySource);
+        delayed->Copy(second.buffer, readback, second.size, second.offset);
+        delayed->Barrier(readback, State::CopyDest, State::HostRead);
+        // No submission: destroying the batch cancels, but references must still pin its page.
+    }
+    for (uint32_t i = 0; i < 8; ++i)
+    {
+        auto batch = pool.Begin();
+        data.fill(std::byte(i + 1));
+        const auto slice = batch.Write(data);
+        Require(slice.buffer != retained.buffer, "CPU snapshot/recording page was overwritten");
+        auto result = runtime.CreateBuffer({256, Memory::Readback, "Pool.FrameReadback"});
+        auto commands = runtime.CreateCommands();
+        commands->Barrier(slice.buffer, State::HostWrite, State::CopySource);
+        commands->Copy(slice.buffer, result, slice.size, slice.offset);
+        commands->Barrier(result, State::CopyDest, State::HostRead);
+        const auto completion = runtime.Submit(std::move(commands));
+        batch.Seal(completion);
+        runtime.Wait(completion);
+        Require(std::memcmp(result->Map().data(), data.data(), data.size()) == 0,
+                "upload pool corrupted frame data");
+    }
+    runtime.Wait(runtime.Submit(std::move(delayed)));
+    Require(std::ranges::all_of(readback->Map(), [](auto b) { return b == std::byte{0x73}; }),
+            "upload pool corrupted a later-submitted recording");
+    Require(retained.buffer->Map()[retained.offset] == std::byte{0x73},
+            "upload pool corrupted a retained CPU snapshot after GPU retirement");
+    {
+        auto batch = pool.Begin();
+        const auto slice = batch.Write(data);
+        bool exhausted = false;
+        try
+        {
+            batch.Write(data);
+            batch.Write(data);
+        }
+        catch (const std::invalid_argument&)
+        {
+            exhausted = true;
+        }
+        Require(exhausted, "upload pool must enforce its page budget");
+    }
+    retained = {};
+    {
+        auto batch = pool.Begin();
+        batch.Write(data);
+        bool invalid = false;
+        try
+        {
+            batch.Seal(0);
+        }
+        catch (const std::invalid_argument&)
+        {
+            invalid = true;
+        }
+        Require(invalid, "upload pool accepted an unsubmitted completion");
+    }
+    Require(pool.Stats().pages == 2 && pool.Stats().reservedBytes == 1024 &&
+                pool.Stats().highWaterBytes == 512,
+            "upload pool reuse or bounded statistics");
+}
 } // namespace
 
 void CheckResourceContracts(Runtime& runtime)
@@ -140,5 +215,6 @@ void CheckResourceContracts(Runtime& runtime)
     CheckTransfers(runtime);
     CheckLifetime(runtime);
     CheckUploadRing(runtime);
+    CheckUploadPool(runtime);
 }
 } // namespace renderlab::samples
