@@ -80,6 +80,11 @@ struct Dispatch
 {
     uint32_t x, y, z;
 };
+struct TraceRays
+{
+    std::shared_ptr<ShaderTable> table;
+    uint32_t width, height, depth;
+};
 struct BuildAccelerationStructure
 {
     std::shared_ptr<AccelerationStructure> accelerationStructure;
@@ -103,8 +108,8 @@ struct ResolveTimestamps
 using Command =
     std::variant<BufferBarrier, TextureBarrier, BufferCopy, TextureCopy, TextureToTextureCopy,
                  BeginRendering, EndRendering, SetPipeline, SetStencilReference, SetBindings,
-                 SetGeometry, Draw, DrawIndirect, Dispatch, BuildAccelerationStructure, Marker,
-                 Timestamp, ResolveTimestamps>;
+                 SetGeometry, Draw, DrawIndirect, Dispatch, TraceRays, BuildAccelerationStructure,
+                 Marker, Timestamp, ResolveTimestamps>;
 
 /**
  * @brief Single-threaded, one-shot command recording. Packets own every referenced object.
@@ -141,6 +146,8 @@ public:
     void DrawIndexed(uint32_t count, uint32_t first = 0);
     void DrawFrom(std::shared_ptr<Buffer> arguments, uint64_t offset = 0);
     void Compute(uint32_t x, uint32_t y, uint32_t z = 1);
+    void Trace(std::shared_ptr<ShaderTable> table, uint32_t width, uint32_t height,
+               uint32_t depth = 1);
     void Build(std::shared_ptr<AccelerationStructure> accelerationStructure, bool update = false);
     void BeginMarker(std::string name);
     void EndMarker();

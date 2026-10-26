@@ -36,6 +36,8 @@ rhi::State StateFor(Use use)
         return rhi::State::AccelerationStructureBuildInput;
     case Use::AccelerationStructureBuildWrite:
         return rhi::State::AccelerationStructureBuildWrite;
+    case Use::ShaderTableRead:
+        return rhi::State::ShaderTableRead;
     case Use::AccelerationStructureRead:
         return rhi::State::AccelerationStructureRead;
     }
@@ -68,6 +70,7 @@ void Graph::Impl::ValidateState(const detail::Resource& r, rhi::State state) con
     else if (r.bufferDesc.memory == rhi::Memory::Upload)
         valid = state == rhi::State::HostWrite || state == rhi::State::CopySource ||
                 state == rhi::State::UniformRead || state == rhi::State::ShaderRead ||
+                (state == rhi::State::ShaderTableRead && r.bufferDesc.shaderTable) ||
                 (state == rhi::State::AccelerationStructureBuildInput &&
                  r.bufferDesc.accelerationStructureInput);
     else if (r.bufferDesc.memory == rhi::Memory::Readback)
@@ -88,6 +91,8 @@ void Graph::Impl::ValidateState(const detail::Resource& r, rhi::State state) con
 void Graph::Impl::ValidateUse(uint32_t index, const detail::Resource& r, Use use, bool write) const
 {
     const auto& pass = passes[index];
+    Require(use != Use::ShaderTableRead || (!r.isTexture && r.bufferDesc.shaderTable),
+            "Invalid SBT resource");
     const auto suffix = " in " + pass.name + " (" + pass.source + ") on " + r.Name();
     Require(!write || !IsReadOnly(use), "Write to read-only use" + suffix);
     Require(write || (use != Use::CopyDestination && use != Use::Color && use != Use::Depth &&
@@ -95,7 +100,7 @@ void Graph::Impl::ValidateUse(uint32_t index, const detail::Resource& r, Use use
             "Read requires a read usage" + suffix);
     Require(pass.kind != PassKind::Copy || use == Use::CopySource || use == Use::CopyDestination,
             "Copy pass contains shader/raster access" + suffix);
-    Require(pass.kind != PassKind::Compute ||
+    Require((pass.kind != PassKind::Compute && pass.kind != PassKind::RayTracing) ||
                 (use != Use::Color && use != Use::Depth && use != Use::DepthRead &&
                  use != Use::Vertex && use != Use::Index && use != Use::Indirect),
             "Compute pass contains raster access" + suffix);
@@ -130,11 +135,11 @@ void Graph::Impl::ValidateUse(uint32_t index, const detail::Resource& r, Use use
         Require(r.bufferDesc.memory != rhi::Memory::Readback ||
                     (write && use == Use::CopyDestination),
                 "Readback buffer is a copy destination only" + suffix);
-        Require(
-            r.bufferDesc.memory != rhi::Memory::Upload ||
-                (!write && (use == Use::CopySource || use == Use::Uniform ||
-                            use == Use::ShaderRead || use == Use::AccelerationStructureBuildInput)),
-            "Upload buffer is a GPU read source only" + suffix);
+        Require(r.bufferDesc.memory != rhi::Memory::Upload ||
+                    (!write &&
+                     (use == Use::CopySource || use == Use::Uniform || use == Use::ShaderRead ||
+                      use == Use::ShaderTableRead || use == Use::AccelerationStructureBuildInput)),
+                "Upload buffer is a GPU read source only" + suffix);
         Require(use != Use::AccelerationStructureBuildInput ||
                     (r.bufferDesc.deviceAddress && r.bufferDesc.accelerationStructureInput),
                 "Acceleration structure input buffer lacks required usage" + suffix);

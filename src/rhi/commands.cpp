@@ -28,13 +28,15 @@ void CommandList::Barrier(std::shared_ptr<Buffer> buffer, State before, State af
                state == State::UniformRead || state == State::ShaderRead ||
                state == State::Storage || state == State::AccelerationStructureBuildInput ||
                state == State::AccelerationStructureBuildWrite ||
-               state == State::AccelerationStructureRead;
+               state == State::AccelerationStructureRead || state == State::ShaderTableRead;
     };
     Require(valid(before) && valid(after) && after != State::Undefined, "Invalid M1 buffer state");
     Require(!buffer->desc.accelerationStructureStorage ||
                 after == State::AccelerationStructureBuildWrite ||
                 after == State::AccelerationStructureRead,
             "Acceleration structure storage cannot transition to an ordinary buffer state");
+    Require(after != State::ShaderTableRead || buffer->desc.shaderTable,
+            "Buffer lacks shader-table usage");
     Require(after != State::Storage || buffer->desc.storage, "Buffer lacks storage usage");
     Require(after != State::AccelerationStructureBuildInput ||
                 buffer->desc.accelerationStructureInput,
@@ -48,9 +50,10 @@ void CommandList::Barrier(std::shared_ptr<Buffer> buffer, State before, State af
     if (buffer->desc.memory == Memory::Upload)
         Require((before == State::HostWrite || before == State::CopySource ||
                  before == State::UniformRead || before == State::ShaderRead ||
+                 before == State::ShaderTableRead ||
                  before == State::AccelerationStructureBuildInput) &&
                     (after == State::CopySource || after == State::UniformRead ||
-                     after == State::ShaderRead ||
+                     after == State::ShaderRead || after == State::ShaderTableRead ||
                      (after == State::AccelerationStructureBuildInput &&
                       buffer->desc.accelerationStructureInput)),
                 "Upload buffers allow host-write to GPU-read or transitions between GPU-read uses");
@@ -177,7 +180,7 @@ void CommandList::Bind(std::shared_ptr<Pipeline> pipeline)
 {
     Check(pipeline);
     pipeline_ = pipeline;
-    compute_ = bool(pipeline->desc.compute);
+    compute_ = bool(pipeline->desc.compute || pipeline->desc.rayGeneration);
     group_.reset();
     vertex_.reset();
     index_.reset();
@@ -233,10 +236,19 @@ void CommandList::DrawReady(bool indexed) const
 void CommandList::Compute(uint32_t x, uint32_t y, uint32_t z)
 {
     Recording();
-    Require(!rendering_ && pipeline_ && compute_ && group_ && x && y && z && x <= 65535 &&
-                y <= 65535 && z <= 65535,
+    Require(!rendering_ && pipeline_ && pipeline_->desc.compute && group_ && x && y && z &&
+                x <= 65535 && y <= 65535 && z <= 65535,
             "Invalid dispatch state or dimensions");
     commands_.emplace_back(Dispatch{x, y, z});
+}
+void CommandList::Trace(std::shared_ptr<ShaderTable> table, uint32_t width, uint32_t height,
+                        uint32_t depth)
+{
+    Check(table);
+    Require(!rendering_ && pipeline_ && table->pipeline == pipeline_ && group_ && width && height &&
+                depth && uint64_t(width) * height * depth <= (1ull << 30),
+            "Invalid TraceRays state or dimensions");
+    commands_.emplace_back(TraceRays{std::move(table), width, height, depth});
 }
 void CommandList::Build(std::shared_ptr<AccelerationStructure> accelerationStructure, bool update)
 {

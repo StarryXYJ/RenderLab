@@ -21,8 +21,11 @@ void BindingContext::Bind(std::shared_ptr<rhi::Pipeline> pipeline)
 {
     auto& g = *graph_.impl_;
     g.Scope(pass_);
-    Require(pipeline && ((g.passes[pass_].kind == PassKind::Compute && pipeline->desc.compute) ||
-                         (g.passes[pass_].kind == PassKind::Raster && !pipeline->desc.compute)),
+    Require(pipeline &&
+                ((g.passes[pass_].kind == PassKind::Compute && pipeline->desc.compute) ||
+                 (g.passes[pass_].kind == PassKind::Raster && !pipeline->desc.compute &&
+                  !pipeline->desc.rayGeneration) ||
+                 (g.passes[pass_].kind == PassKind::RayTracing && pipeline->desc.rayGeneration)),
             "Pipeline kind does not match pass");
     Require(!g.passes[pass_].depthReadOnly || !pipeline->desc.depth.writeEnabled,
             "Read-only depth attachment requires depth writes disabled");
@@ -255,5 +258,17 @@ void CopyContext::CopyTexture(TextureHandle source, TextureHandle destination)
                          Use::CopyDestination)
                    .texture;
     commands_.CopyTexture(std::move(src), std::move(dst));
+}
+void RayTracingContext::TraceRays(std::shared_ptr<rhi::ShaderTable> table, BufferHandle records,
+                                  uint32_t width, uint32_t height, uint32_t depth)
+{
+    auto& g = *graph_.impl_;
+    g.Scope(pass_);
+    auto& resource = g.Resolve(pass_, records.graph, records.resource, records.version, false,
+                               Use::ShaderTableRead);
+    Require(table && table->buffer == resource.buffer,
+            "ShaderTable records do not match declaration");
+    FlushBindings();
+    commands_.Trace(std::move(table), width, height, depth);
 }
 } // namespace renderlab::rendergraph

@@ -77,3 +77,39 @@ instance add/move/remove, an empty TLAS and scratch release after submission. Th
 scene acceptance checks image changes, camera reuse, TLAS rebuild conditions, an empty scene and
 two in-flight scene versions. Run commands and hardware results are recorded in
 [Build and Run](../manual/build.md) and [the phase plan](../design/phaseplan.md).
+
+## Ray Tracing Pipeline and ShaderTable
+
+A ray pipeline provides exactly one RayGeneration, Miss and generic triangle ClosestHit module.
+`PipelineDesc` explicitly declares payload bytes (default 16), triangle attributes (8) and maximum
+recursion depth (1 or 2). DXC compiles individual DXIL `lib_6_5` exports or SPIR-V ray entry points.
+Pipeline cache identity includes all modules and ray configuration. This bounded API does not yet
+support callable, any-hit, procedural geometry, local root arguments or per-material hit programs.
+
+`Runtime::CreateShaderTable` creates immutable raygen/miss/hit records and retains both pipeline
+and addressable upload buffer. DX12 uses 64-byte table spacing (32-byte shader identifiers);
+Vulkan queries handle size, handle alignment, base alignment and maximum stride, including an
+aligned offset within the buffer. Native handles/identifiers are copied from the actual PSO.
+The upload bytes must remain immutable. A changed shader generation requires a new PSO and a
+new table; never reuse identifiers from an old pipeline. Publishing a replacement at a frame
+boundary leaves old command packets owning their previous table, PSO and resources until retirement.
+Built-in raw ray shaders are compiled on renderer creation; automatic file watching is not provided.
+
+`Graph::AddRayTracingPass` exposes a typed `RayTracingContext`. Declare the table buffer with
+`Use::ShaderTableRead`, the TLAS with `AccelerationStructureRead`, and every shading buffer/texture
+with its shader read use. `TraceRays` checks the table storage declaration; RHI checks it belongs
+to the bound pipeline. Dispatch retains the table even if its caller releases the last reference.
+Vulkan shader resource barriers cover ray stages as well as raster and Compute.
+
+`RaySurface.hlsli` and `ray_surface.hpp` define an explicit indexed data ABI: shared 32-byte mesh
+vertices, uint32 indices, 16-byte mesh/instance records and 80-byte material records. TLAS InstanceID
+selects an instance, which selects mesh and material; PrimitiveIndex selects the triangle. One
+hit group interpolates normals/UVs and evaluates the shared metallic-roughness BRDF. A finite 8x8
+tile atlas holds 64x64 maps with wrapped one-texel borders. Color maps are linearized before packing;
+base color, metallic/roughness, normal, occlusion and emission are sampled at explicit LOD 0.
+There are no raster derivatives or implicit mip selection. This deliberately bounded representation
+is independent of material asset count and does not require M6 descriptor arrays.
+
+`--as-test` also executes real TraceRays hit/miss cases, indexed PBR evaluation, explicit texture
+sampling and two rebuilt PSO/table generations on each backend. Ray Query results do not stand in
+for these native pipeline checks.

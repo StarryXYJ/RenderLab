@@ -307,4 +307,8 @@ PassHandle CopyPassBuilder::Execute(std::function<void(CopyContext&)> fn)
 {
     return Finish(std::move(fn));
 }
+PassHandle RayTracingPassBuilder::Execute(std::function<void(RayTracingContext&)> callback)
+{
+    return Finish(std::move(callback));
+}
 } // namespace renderlab::rendergraph

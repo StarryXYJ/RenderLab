@@ -56,6 +56,8 @@ D3D12_RESOURCE_STATES NativeState(State state)
     case State::Storage:
         return D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
     case State::Sampled:
+    case State::ShaderTableRead:
+        return D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
     case State::ShaderRead:
         return D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE |
                D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;

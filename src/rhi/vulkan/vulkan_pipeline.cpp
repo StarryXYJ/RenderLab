@@ -3,6 +3,7 @@
 
 #include <algorithm>
 #include <array>
+#include <cstring>
 #include <stdexcept>
 
 namespace renderlab::rhi::vulkan
@@ -77,10 +78,16 @@ std::shared_ptr<BindingLayout> VulkanRuntime::CreateLayout(std::vector<BindingDe
             std::ranges::count_if(layout->entries, [&](auto e)
                                   { return e.slot == entry.slot && e.space == entry.space; }) != 1)
             throw std::invalid_argument("Duplicate binding slot");
-        bindings[entry.space].push_back({entry.slot, DescriptorType(entry.kind), 1,
-                                         VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT |
-                                             VK_SHADER_STAGE_COMPUTE_BIT,
-                                         nullptr});
+        bindings[entry.space].push_back(
+            {entry.slot, DescriptorType(entry.kind), 1,
+             VkShaderStageFlags(VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT |
+                                VK_SHADER_STAGE_COMPUTE_BIT |
+                                (rayTracingPipelineEnabled_
+                                     ? VK_SHADER_STAGE_RAYGEN_BIT_KHR |
+                                           VK_SHADER_STAGE_MISS_BIT_KHR |
+                                           VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR
+                                     : 0)),
+             nullptr});
     }
     VkDescriptorSetLayoutCreateInfo set{};
     set.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
@@ -238,7 +245,35 @@ std::shared_ptr<Pipeline> VulkanRuntime::CreatePipelineNative(PipelineDesc desc)
         result.pName = shader->entry.c_str();
         return result;
     };
-    if (desc.compute)
+    if (desc.rayGeneration)
+    {
+        const std::array stages{stage(desc.rayGeneration, VK_SHADER_STAGE_RAYGEN_BIT_KHR),
+                                stage(desc.miss, VK_SHADER_STAGE_MISS_BIT_KHR),
+                                stage(desc.closestHit, VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR)};
+        std::array<VkRayTracingShaderGroupCreateInfoKHR, 3> groups{};
+        for (uint32_t i = 0; i < groups.size(); ++i)
+        {
+            auto& group = groups[i];
+            group.sType = VK_STRUCTURE_TYPE_RAY_TRACING_SHADER_GROUP_CREATE_INFO_KHR;
+            group.type = i == 2 ? VK_RAY_TRACING_SHADER_GROUP_TYPE_TRIANGLES_HIT_GROUP_KHR
+                                : VK_RAY_TRACING_SHADER_GROUP_TYPE_GENERAL_KHR;
+            group.generalShader = i == 2 ? VK_SHADER_UNUSED_KHR : i;
+            group.closestHitShader = i == 2 ? 2 : VK_SHADER_UNUSED_KHR;
+            group.anyHitShader = group.intersectionShader = VK_SHADER_UNUSED_KHR;
+        }
+        VkRayTracingPipelineCreateInfoKHR info{};
+        info.sType = VK_STRUCTURE_TYPE_RAY_TRACING_PIPELINE_CREATE_INFO_KHR;
+        info.stageCount = static_cast<uint32_t>(stages.size());
+        info.pStages = stages.data();
+        info.groupCount = static_cast<uint32_t>(groups.size());
+        info.pGroups = groups.data();
+        info.maxPipelineRayRecursionDepth = desc.rayRecursionDepth;
+        info.layout = As<VkLayout>(desc.layout).native;
+        Check(vkCreateRayTracingPipelinesKHR(device_, VK_NULL_HANDLE, VK_NULL_HANDLE, 1, &info,
+                                             nullptr, &pipeline->native),
+              "RayTracingPipeline");
+    }
+    else if (desc.compute)
     {
         VkComputePipelineCreateInfo info{};
         info.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
@@ -355,5 +390,37 @@ std::shared_ptr<Pipeline> VulkanRuntime::CreatePipelineNative(PipelineDesc desc)
     Name(VK_OBJECT_TYPE_PIPELINE, reinterpret_cast<uint64_t>(pipeline->native),
          desc.compute ? "M1.Compute" : "M1.Graphics");
     return pipeline;
+}
+std::shared_ptr<ShaderTable>
+VulkanRuntime::CreateShaderTableNative(std::shared_ptr<Pipeline> pipeline)
+{
+    VkPhysicalDeviceRayTracingPipelinePropertiesKHR ray{};
+    ray.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_PIPELINE_PROPERTIES_KHR;
+    VkPhysicalDeviceProperties2 properties{};
+    properties.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2;
+    properties.pNext = &ray;
+    vkGetPhysicalDeviceProperties2(physical_, &properties);
+    const uint64_t alignment =
+        std::max(ray.shaderGroupBaseAlignment, ray.shaderGroupHandleAlignment);
+    const uint64_t stride = (ray.shaderGroupHandleSize + alignment - 1) / alignment * alignment;
+    if (stride > ray.maxShaderGroupStride)
+        throw std::runtime_error("ShaderTable stride exceeds device limits");
+    auto buffer = CreateBuffer({stride * 3 + alignment, Memory::Upload, "RayTracing.ShaderTable",
+                                false, true, false, false, true});
+    VkBufferDeviceAddressInfo addressInfo{};
+    addressInfo.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
+    addressInfo.buffer = As<VkBufferObject>(buffer).native;
+    const auto address = vkGetBufferDeviceAddress(device_, &addressInfo);
+    const uint64_t offset = (alignment - address % alignment) % alignment;
+    std::vector<std::byte> handles(ray.shaderGroupHandleSize * 3);
+    Check(vkGetRayTracingShaderGroupHandlesKHR(device_, As<VkPipelineObject>(pipeline).native, 0, 3,
+                                               handles.size(), handles.data()),
+          "ShaderGroupHandles");
+    auto mapped = buffer->Map();
+    std::memset(mapped.data(), 0, mapped.size());
+    for (uint64_t i = 0; i < 3; ++i)
+        std::memcpy(mapped.data() + offset + stride * i,
+                    handles.data() + ray.shaderGroupHandleSize * i, ray.shaderGroupHandleSize);
+    return std::make_shared<ShaderTable>(std::move(pipeline), std::move(buffer), offset, stride);
 }
 } // namespace renderlab::rhi::vulkan

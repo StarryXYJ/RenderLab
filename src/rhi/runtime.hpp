@@ -45,6 +45,8 @@ public:
     /// Unified bounded weak cache; immutable shader/layout identities and every PSO state form the
     /// key.
     std::shared_ptr<Pipeline> CreatePipeline(PipelineDesc desc);
+    /// Rebuild for every pipeline generation; records contain no material-specific local data.
+    std::shared_ptr<ShaderTable> CreateShaderTable(std::shared_ptr<Pipeline> pipeline);
     virtual std::unique_ptr<Swapchain> CreateSwapchain(platform::NativeSurface surface,
                                                        uint32_t width, uint32_t height) = 0;
     std::shared_ptr<ShaderModule> CreateShader(ShaderStage stage, std::vector<std::byte> code,
@@ -101,6 +103,7 @@ protected:
         return CpuTimer(cpuProfiling_ ? &cpuProfile_.at(size_t(operation)) : nullptr);
     }
     virtual std::shared_ptr<Pipeline> CreatePipelineNative(PipelineDesc desc) = 0;
+    virtual std::shared_ptr<ShaderTable> CreateShaderTableNative(std::shared_ptr<Pipeline>);
     virtual AccelerationStructureSizes
     QueryAccelerationStructureSizesNative(const AccelerationStructureDesc& desc);
     virtual std::shared_ptr<AccelerationStructure>

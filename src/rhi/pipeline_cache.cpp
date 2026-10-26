@@ -20,7 +20,12 @@ std::shared_ptr<Pipeline> Runtime::CreatePipeline(PipelineDesc desc)
             continue;
         const auto& key = pipeline->desc;
         if (key.layout == desc.layout && key.vertex == desc.vertex && key.pixel == desc.pixel &&
-            key.compute == desc.compute && key.colorFormats == desc.colorFormats &&
+            key.compute == desc.compute && key.rayGeneration == desc.rayGeneration &&
+            key.miss == desc.miss && key.closestHit == desc.closestHit &&
+            key.rayPayloadSize == desc.rayPayloadSize &&
+            key.rayAttributeSize == desc.rayAttributeSize &&
+            key.rayRecursionDepth == desc.rayRecursionDepth &&
+            key.colorFormats == desc.colorFormats &&
             key.depthStencilFormat == desc.depthStencilFormat && key.depth == desc.depth &&
             key.blend == desc.blend && key.raster == desc.raster && key.stencil == desc.stencil &&
             key.vertexStride == desc.vertexStride && key.attributes == desc.attributes)
@@ -32,5 +37,16 @@ std::shared_ptr<Pipeline> Runtime::CreatePipeline(PipelineDesc desc)
         pipelines_.erase(pipelines_.begin());
     pipelines_.push_back(pipeline);
     return pipeline;
+}
+std::shared_ptr<ShaderTable> Runtime::CreateShaderTable(std::shared_ptr<Pipeline> pipeline)
+{
+    CheckOwner(pipeline);
+    detail::Require(SupportsRayTracingPipeline() && pipeline->desc.rayGeneration,
+                    "ShaderTable requires a ray tracing pipeline");
+    return CreateShaderTableNative(std::move(pipeline));
+}
+std::shared_ptr<ShaderTable> Runtime::CreateShaderTableNative(std::shared_ptr<Pipeline>)
+{
+    throw std::runtime_error("ShaderTable is unavailable");
 }
 } // namespace renderlab::rhi

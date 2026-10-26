@@ -46,6 +46,7 @@ public:
                                                uint32_t height) override;
 
 protected:
+    std::shared_ptr<ShaderTable> CreateShaderTableNative(std::shared_ptr<Pipeline>) override;
     std::shared_ptr<Pipeline> CreatePipelineNative(PipelineDesc desc) override;
     AccelerationStructureSizes
     QueryAccelerationStructureSizesNative(const AccelerationStructureDesc& desc) override;

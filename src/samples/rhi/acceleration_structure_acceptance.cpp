@@ -1,6 +1,8 @@
 #include "samples/rhi/acceleration_structure_acceptance.hpp"
 
+#include "assets/model.hpp"
 #include "core/log.hpp"
+#include "renderer/ray_surface.hpp"
 #include "rendergraph/graph.hpp"
 #include "rendergraph/pool.hpp"
 #include "rhi/commands.hpp"
@@ -166,6 +168,133 @@ uint32_t BuildAndQuery(Runtime& runtime, Pool& pool, std::shared_ptr<Pipeline> q
     return value;
 }
 
+void VerifyTraceRays(Runtime& runtime, Pool& pool, shader::Target target,
+                     const std::filesystem::path& source,
+                     const std::shared_ptr<AccelerationStructure>& hit,
+                     const std::shared_ptr<AccelerationStructure>& miss)
+{
+    if (!runtime.SupportsRayTracingPipeline())
+        throw std::runtime_error("--as-test TraceRays requires rayTracingPipeline capability");
+    using namespace renderer;
+    const auto upload = [&](std::span<const std::byte> bytes, const std::string& name)
+    {
+        auto buffer = runtime.CreateBuffer({bytes.size(), Memory::Upload, name});
+        std::memcpy(buffer->Map().data(), bytes.data(), bytes.size());
+        return buffer;
+    };
+    const std::array<assets::Vertex, 3> vertices{{{{-1, -1, 0}, {0, 0, -1}, {0, 0}},
+                                                  {{1, -1, 0}, {0, 0, -1}, {1, 0}},
+                                                  {{0, 1, 0}, {0, 0, -1}, {.5f, 1}}}};
+    const std::array<uint32_t, 3> indices{0, 1, 2};
+    const std::array<RayMeshData, 1> meshes{};
+    const std::array<RayInstanceData, 1> instances{};
+    std::array<RayMaterialData, 1> materials{};
+    materials[0].baseMetallic = {1, 0, 0, 0};
+    materials[0].emissionRoughness = {1, 0, 0, .5f};
+    const std::array buffers{upload(std::as_bytes(std::span{vertices}), "Trace.Vertices"),
+                             upload(std::as_bytes(std::span{indices}), "Trace.Indices"),
+                             upload(std::as_bytes(std::span{meshes}), "Trace.Meshes"),
+                             upload(std::as_bytes(std::span{instances}), "Trace.Instances"),
+                             upload(std::as_bytes(std::span{materials}), "Trace.Materials")};
+    constexpr std::array<uint32_t, 5> strides{32, 4, 16, 16, 80};
+    auto atlas = runtime.CreateTexture(
+        {RayAtlasSize, RayAtlasSize, Format::Rgba8, false, false, "Trace.Atlas"});
+    const auto pitch = (RayAtlasSize * 4 + 255) / 256 * 256;
+    auto pixels =
+        runtime.CreateBuffer({uint64_t(pitch) * RayAtlasSize, Memory::Upload, "Trace.AtlasUpload"});
+    auto mapped = pixels->Map();
+    std::memset(mapped.data(), 255, mapped.size());
+    for (uint32_t y = 0; y < RayAtlasSize; ++y)
+        for (uint32_t x = 66; x < 132; ++x)
+        {
+            auto* texel = mapped.data() + y * pitch + x * 4;
+            texel[0] = texel[1] = std::byte{128};
+        }
+    auto copy = runtime.CreateCommands();
+    copy->Barrier(pixels, State::HostWrite, State::CopySource);
+    copy->Barrier(atlas, State::Undefined, State::CopyDest);
+    copy->CopyTexture(pixels, atlas, pitch, true);
+    copy->Barrier(atlas, State::CopyDest, State::Sampled);
+    runtime.Wait(runtime.Submit(std::move(copy)));
+    auto sampler = runtime.CreateSampler();
+    std::vector<BindingDesc> entries{{0, BindingKind::AccelerationStructure},
+                                     {1, BindingKind::StorageBuffer},
+                                     {10, BindingKind::SampledTexture},
+                                     {11, BindingKind::Sampler}};
+    for (uint32_t i = 5; i <= 9; ++i)
+        entries.push_back({i, BindingKind::ReadOnlyBuffer});
+    auto layout = runtime.CreateLayout(entries);
+    // Distinct shader objects force a new PSO/table generation. Old work retains the first pair.
+    std::vector<std::pair<std::shared_ptr<ShaderTable>, uint64_t>> pending;
+    for (uint32_t generation = 0; generation < 2; ++generation)
+    {
+        shader::DxcCompiler compiler;
+        PipelineDesc desc;
+        desc.layout = layout;
+        const auto compile = [&](ShaderStage stage, const char* entry)
+        {
+            shader::ProgramRequest request;
+            request.entry = {stage, source, entry};
+            request.target = target;
+            return runtime.CreateShader(stage, compiler.Compile(request), entry);
+        };
+        desc.rayGeneration = compile(ShaderStage::RayGeneration, "RayGeneration");
+        desc.miss = compile(ShaderStage::Miss, "Miss");
+        desc.closestHit = compile(ShaderStage::ClosestHit, "ClosestHit");
+        auto pipeline = runtime.CreatePipeline(desc);
+        auto table = runtime.CreateShaderTable(pipeline);
+        for (uint32_t query = 0; query < 2; ++query)
+        {
+            auto scene = query == 0 ? hit : miss;
+            auto result = runtime.CreateBuffer({4, Memory::Device, "Trace.Result", true});
+            Graph graph;
+            auto as = graph.ImportBuffer("Trace.AS", scene->storage,
+                                         {State::AccelerationStructureRead, true});
+            auto records = graph.ImportBuffer("Trace.SBT", table->buffer, {State::HostWrite, true});
+            auto output = graph.ImportBuffer("Trace.Result", result, {State::Undefined, false});
+            std::array<BufferHandle, 5> data;
+            for (size_t i = 0; i < buffers.size(); ++i)
+                data[i] = graph.ImportBuffer("Trace.Data" + std::to_string(i), buffers[i],
+                                             {State::HostWrite, true});
+            auto texture = graph.ImportTexture("Trace.Atlas", atlas, {State::Sampled, true});
+            auto pass = graph.AddRayTracingPass("Trace.IndexedPBR");
+            as = pass.ReadBuffer(as, Use::AccelerationStructureRead);
+            records = pass.ReadBuffer(records, Use::ShaderTableRead);
+            output = pass.WriteBuffer(output);
+            texture = pass.ReadTexture(texture);
+            for (auto& buffer : data)
+                buffer = pass.ReadBuffer(buffer);
+            pass.Execute(
+                [=](RayTracingContext& context)
+                {
+                    context.Bind(pipeline);
+                    context.BindAccelerationStructure(0, scene, as);
+                    context.BindBuffer(1, output, 0, 4, 4);
+                    for (uint32_t i = 0; i < data.size(); ++i)
+                        context.BindBuffer(i + 5, data[i], 0, 0, strides[i]);
+                    context.BindTexture(10, texture);
+                    context.BindSampler(11, sampler);
+                    context.TraceRays(table, records, 1, 1);
+                });
+            graph.Export(output, State::CopySource);
+            graph.Compile();
+            auto completion = graph.Execute(pool).completion;
+            auto readback = runtime.CreateBuffer({4, Memory::Readback, "Trace.Readback"});
+            auto read = runtime.CreateCommands();
+            read->Copy(result, readback, 4);
+            read->Barrier(readback, State::CopyDest, State::HostRead);
+            completion = runtime.Submit(std::move(read));
+            pending.emplace_back(table, completion);
+            runtime.Wait(completion);
+            uint32_t value = 0;
+            std::memcpy(&value, readback->Map().data(), 4);
+            if (value != (query == 0 ? 1u : 0u))
+                throw std::runtime_error("TraceRays indexed PBR hit/miss mismatch: " +
+                                         std::to_string(value));
+        }
+    }
+}
+
 std::array<float, 12> Translation(float x)
 {
     return {1, 0, 0, x, 0, 1, 0, 0, 0, 0, 1, 0};
@@ -233,6 +362,10 @@ void VerifyAccelerationStructures(Runtime& runtime, shader::Target target,
     auto empty = topLevel({}, "AS.TLAS.Empty");
     if (BuildAndQuery(runtime, pool, queryPipeline, empty, "AS.TLAS.Empty") != 0)
         throw std::runtime_error("Empty TLAS returned a ray hit");
+    VerifyTraceRays(runtime, pool, target, shader.parent_path() / "trace_rays_acceptance.hlsl",
+                    centered, moved);
+    logger.Write(LogLevel::Info,
+                 "M5.3 TraceRays indexed PBR hit/miss and ShaderTable generation rebuild passed");
     logger.Write(
         LogLevel::Info,
         std::format("M5.2 AS/Ray Query passed on {}: BLAS storage={} B, TLAS storage={} B, "

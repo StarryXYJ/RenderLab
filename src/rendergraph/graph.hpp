@@ -24,7 +24,8 @@ namespace detail
 {
 using Callback =
     std::variant<std::monostate, std::function<void(RasterContext&)>,
-                 std::function<void(ComputeContext&)>, std::function<void(CopyContext&)>>;
+                 std::function<void(ComputeContext&)>, std::function<void(CopyContext&)>,
+                 std::function<void(RayTracingContext&)>>;
 }
 /** @brief Immediate resource declarations. Execute seals the builder; never retain it across
  * graphs. */
@@ -111,6 +112,15 @@ private:
     friend class Graph;
     CopyPassBuilder(Graph& g, uint32_t p) : PassBuilder(g, p) {}
 };
+class RayTracingPassBuilder final : public PassBuilder
+{
+public:
+    PassHandle Execute(std::function<void(RayTracingContext&)> callback);
+
+private:
+    friend class Graph;
+    RayTracingPassBuilder(Graph& g, uint32_t p) : PassBuilder(g, p) {}
+};
 /** @brief One-frame resource graph. Names resolve during building; callbacks own captured values.
  */
 class Graph final
@@ -139,6 +149,9 @@ public:
     AddComputePass(std::string name, std::source_location source = std::source_location::current());
     CopyPassBuilder AddCopyPass(std::string name,
                                 std::source_location source = std::source_location::current());
+    RayTracingPassBuilder
+    AddRayTracingPass(std::string name,
+                      std::source_location source = std::source_location::current());
     uint32_t PassCount() const;
     PassHandle GetPass(uint32_t index) const;
     /// Ordering only; never retains an otherwise dead pass.
@@ -157,6 +170,7 @@ private:
     friend class BindingContext;
     friend class RasterContext;
     friend class ComputeContext;
+    friend class RayTracingContext;
     friend class CopyContext;
     struct Impl;
     std::unique_ptr<Impl> impl_;

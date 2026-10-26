@@ -21,6 +21,9 @@ void Runtime::CheckOwner(const std::shared_ptr<Object>& object) const
 void Runtime::Validate(const BufferDesc& desc) const
 {
     Require(desc.size > 0 && desc.size <= ledger_->stats.budget, "Invalid buffer size");
+    Require(!desc.shaderTable || (desc.deviceAddress && SupportsRayTracingPipeline() &&
+                                  desc.memory == Memory::Upload),
+            "Invalid shader table buffer");
     Require(!desc.storage || desc.memory == Memory::Device,
             "Storage buffers require device memory");
     Require(!desc.deviceAddress || SupportsAccelerationStructures(),
@@ -103,6 +106,22 @@ void Runtime::Validate(const AccelerationStructureDesc& desc) const
 void Runtime::Validate(const PipelineDesc& desc) const
 {
     CheckOwner(desc.layout);
+    if (desc.rayGeneration)
+    {
+        Require(SupportsRayTracingPipeline(), "Ray Tracing Pipeline is unavailable");
+        CheckOwner(desc.rayGeneration);
+        CheckOwner(desc.miss);
+        CheckOwner(desc.closestHit);
+        Require(!desc.compute && !desc.vertex && !desc.pixel &&
+                    desc.rayGeneration->stage == ShaderStage::RayGeneration &&
+                    desc.miss->stage == ShaderStage::Miss &&
+                    desc.closestHit->stage == ShaderStage::ClosestHit && desc.rayPayloadSize > 0 &&
+                    desc.rayPayloadSize <= 128 && desc.rayAttributeSize == 8 &&
+                    desc.rayRecursionDepth > 0 && desc.rayRecursionDepth <= 2,
+                "Invalid triangle ray tracing pipeline");
+        return;
+    }
+    Require(!desc.miss && !desc.closestHit, "Ray shaders require a ray generation program");
     if (desc.compute)
     {
         CheckOwner(desc.compute);

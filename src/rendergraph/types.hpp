@@ -39,7 +39,8 @@ enum class PassKind
 {
     Raster,
     Compute,
-    Copy
+    Copy,
+    RayTracing
 };
 enum class Use
 {
@@ -57,7 +58,8 @@ enum class Use
     Indirect,
     AccelerationStructureBuildInput,
     AccelerationStructureBuildWrite,
-    AccelerationStructureRead
+    AccelerationStructureRead,
+    ShaderTableRead
 };
 enum class AttachmentAccess
 {

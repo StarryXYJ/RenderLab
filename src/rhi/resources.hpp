@@ -59,7 +59,8 @@ enum class State
     ShaderRead,
     AccelerationStructureBuildInput,
     AccelerationStructureBuildWrite,
-    AccelerationStructureRead
+    AccelerationStructureRead,
+    ShaderTableRead
 };
 enum class BindingKind
 {
@@ -139,6 +140,7 @@ struct BufferDesc
     bool deviceAddress = false;
     bool accelerationStructureInput = false;
     bool accelerationStructureStorage = false;
+    bool shaderTable = false;
 };
 struct TextureDesc
 {
@@ -279,6 +281,8 @@ struct PipelineDesc
     std::shared_ptr<ShaderModule> vertex;
     std::shared_ptr<ShaderModule> pixel;
     std::shared_ptr<ShaderModule> compute;
+    std::shared_ptr<ShaderModule> rayGeneration, miss, closestHit;
+    uint32_t rayPayloadSize = 16, rayAttributeSize = 8, rayRecursionDepth = 1;
     std::vector<Format> colorFormats{Format::Rgba8};
     std::optional<Format> depthStencilFormat;
     RasterState raster;
@@ -292,6 +296,20 @@ struct Pipeline : Object
 {
     Pipeline(const void* owner, PipelineDesc desc) : Object(owner), desc(std::move(desc)) {}
     const PipelineDesc desc;
+};
+
+/** @brief Immutable three-record table for one generic triangle hit group. Retains its PSO. */
+struct ShaderTable : Object
+{
+    ShaderTable(std::shared_ptr<Pipeline> pipeline, std::shared_ptr<Buffer> buffer, uint64_t offset,
+                uint64_t stride)
+        : Object(pipeline->owner), pipeline(std::move(pipeline)), buffer(std::move(buffer)),
+          offset(offset), stride(stride)
+    {
+    }
+    const std::shared_ptr<Pipeline> pipeline;
+    const std::shared_ptr<Buffer> buffer;
+    const uint64_t offset, stride;
 };
 
 /// Common D3D/Vulkan non-indexed indirect ABI; one command, no count buffer in M1.

@@ -67,6 +67,16 @@ private:
     friend class Graph;
     ComputeContext(Graph& g, uint32_t p, rhi::CommandList& c) : BindingContext(g, p, c) {}
 };
+class RayTracingContext final : public BindingContext
+{
+public:
+    void TraceRays(std::shared_ptr<rhi::ShaderTable> table, BufferHandle records, uint32_t width,
+                   uint32_t height, uint32_t depth = 1);
+
+private:
+    friend class Graph;
+    RayTracingContext(Graph& g, uint32_t p, rhi::CommandList& c) : BindingContext(g, p, c) {}
+};
 /** @brief Copy-only recording, restricted to the current pass declarations. */
 class CopyContext final
 {

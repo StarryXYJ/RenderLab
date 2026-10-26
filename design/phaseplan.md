@@ -5,7 +5,7 @@
 ## 当前状态
 
 - 当前实施阶段：M0–M4、R1、B1–B3 DONE；M5 IN_PROGRESS。
-- 当前工作项：M5.3 Ray Tracing Pipeline。
+- 当前工作项：M5.4 独立光追反射与样例集成。
 - 用户约定：每个子阶段验收完成即提交 Git，无阻塞时在当前授权范围内继续推进。
 
 | 阶段 | 目标 | 前置依赖 | 状态 |
@@ -185,11 +185,13 @@ R1 契约修订、B1 样例整理/Benchmark、B2 调查和 B3 资源复用已完
 
 ### M5.3 Ray Tracing Pipeline
 
-- [ ] RayGen、Miss、通用 Hit Group、ShaderTable 和 TraceRays。
-- [ ] 通过 Mesh/Instance/Material 索引访问基础 PBR，不为每个材质资产生成命中程序。
-- [ ] 明确显式纹理 LOD、Payload、ShaderTable 对齐和热重载重建规则。
+状态：DONE，日期：2026 年 10 月 26 日。
 
-验收在支持的双后端设备上运行同一最小不透明三角形场景；不能用 Ray Query 成功代替此项。
+结果：双后端 RayGen/Miss/通用三角形 Hit Group、不可变 ShaderTable 与 TraceRays；Graph 增加类型化 RayTracing Pass、显式 ShaderTableRead 与匹配检查。通过 Instance/Mesh/Material 索引访问共享 PBR，有限纹理图集显式 LOD 0；表对齐遵守原生限制，代际变化重建 PSO/表，录制保活旧版本。
+
+验证：MSVC Debug/NMake 构建 Sandbox 成功；RTX 5060 上 `gpu.{dx12,vulkan}.acceleration_structure` 2/2，实际执行 Ray Query 与 TraceRays；覆盖索引表面求值、纹理采样、hit/miss 和两代 PSO/ShaderTable 重建，validation errors=0。Vulkan 顶点用两个 float4 保持 32 字节 ABI，SBT 使用基础 KHR ray tracing 的 ShaderRead 访问，无额外布局/maintenance 扩展要求。
+
+边界：仅一个通用三角形 Hit Group；无 any-hit、callable、程序几何、局部参数或自动文件监视。场景反射集成继续 M5.4，其他 GPU 未验证。入口：[接口、数据 ABI 与表重建规则](../docs/raytracing.md)。
 
 ### M5.4 混合效果
 

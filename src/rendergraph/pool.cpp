@@ -80,7 +80,8 @@ std::shared_ptr<detail::Allocation> Pool::Acquire(const rhi::BufferDesc& desc)
             if (key.size == desc.size && key.memory == desc.memory && key.storage == desc.storage &&
                 key.deviceAddress == desc.deviceAddress &&
                 key.accelerationStructureInput == desc.accelerationStructureInput &&
-                key.accelerationStructureStorage == desc.accelerationStructureStorage)
+                key.accelerationStructureStorage == desc.accelerationStructureStorage &&
+                key.shaderTable == desc.shaderTable)
             {
                 ++stats_.reuses;
                 return entry;

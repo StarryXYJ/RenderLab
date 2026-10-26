@@ -363,6 +363,8 @@ BLAS 管理几何，TLAS 管理场景实例；通过统一的 InstanceID、MeshI
 
 M5 的 AS 实现通过明确的 BuildInput、BuildWrite 与 Read 用途把底层存储 Buffer 纳入图依赖；构建 Context 核对目标、scratch、几何/实例输入和 BLAS 引用，绑定 Context 核对 TLAS 与已声明存储的对应关系。静态 Mesh 复用 BLAS，实例变化重建不可变 TLAS 版本；命令包单独保活 scratch，提交后可释放宿主引用。Ray Tracing 组合在 GBuffer 后用独立 Ray Query Pass 生成 ShadowVisibility，再由 Deferred Lighting 消费。能力、资源和材质边界见 [光追基础](../docs/raytracing.md)。
 
+Ray Tracing Pipeline 使用类型化 RayTracing Pass 与显式 ShaderTableRead；单个通用三角形 Hit Group 通过 InstanceID、Mesh 和 Material 索引消费基础 PBR。ShaderTable 保持不可变并持有对应 PSO；Shader 代际变化同时重建 PSO 和表，旧命令引用保护在途版本。有限图集与显式 LOD 0 先于 M6 的描述符数组，数据 ABI 和限制见上述光追文档。
+
 渲染图描述可静态组织的 GPU 阶段，射线遍历、路径队列和逐路径分支留在 Shader 与积分器内部，不为每条射线生成图节点。GPU 生成的数量通过间接执行或有界 Dispatch 消费，不在热路径读回 CPU 再决定本帧命令。射线 Payload 和队列元素只携带后续工作必需的数据，避免把完整表面对象跨阶段搬运。组织方式以正确的简单基线为起点，测量分支、寄存器和内存流量后再拆分。[pbrt GPU 任务组织](https://pbr-book.org/4ed/Wavefront_Rendering_on_GPUs/Mapping_Path_Tracing_to_the_GPU)
 
 ## 可组合渲染管线

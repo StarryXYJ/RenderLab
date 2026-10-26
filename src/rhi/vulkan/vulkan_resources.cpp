@@ -21,6 +21,8 @@ std::shared_ptr<Buffer> VulkanRuntime::CreateBuffer(const BufferDesc& desc)
                  VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT |
                  VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT | VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT |
                  VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
+    if (desc.shaderTable)
+        info.usage |= VK_BUFFER_USAGE_SHADER_BINDING_TABLE_BIT_KHR;
     if (desc.deviceAddress)
         info.usage |= VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
     if (desc.accelerationStructureInput)

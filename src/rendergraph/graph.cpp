@@ -241,4 +241,8 @@ const Plan& Graph::GetPlan() const
             "Compile the graph before inspecting its plan");
     return impl_->plan;
 }
+RayTracingPassBuilder Graph::AddRayTracingPass(std::string name, std::source_location source)
+{
+    return {*this, BeginPass(std::move(name), PassKind::RayTracing, source)};
+}
 } // namespace renderlab::rendergraph

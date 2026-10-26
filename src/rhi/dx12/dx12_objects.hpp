@@ -116,6 +116,7 @@ struct DxPipeline : Pipeline
 {
     using Pipeline::Pipeline;
     ComPtr<ID3D12PipelineState> native;
+    ComPtr<ID3D12StateObject> rayState;
 };
 struct DxAccelerationStructure final : AccelerationStructure
 {

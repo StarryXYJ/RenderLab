@@ -153,9 +153,17 @@ std::shared_ptr<Runtime::Submission> DxRuntime::Execute(const CommandList& comma
                 }
                 else if constexpr (std::is_same_v<T, SetPipeline>)
                 {
-                    compute = bool(c.pipeline->desc.compute);
+                    compute = bool(c.pipeline->desc.compute || c.pipeline->desc.rayGeneration);
                     vertexStride = c.pipeline->desc.vertexStride;
-                    list->SetPipelineState(As<DxPipeline>(c.pipeline).native.Get());
+                    if (c.pipeline->desc.rayGeneration)
+                    {
+                        ComPtr<ID3D12GraphicsCommandList4> rayList;
+                        Check(list->QueryInterface(IID_PPV_ARGS(&rayList)),
+                              "RayTracing command list");
+                        rayList->SetPipelineState1(As<DxPipeline>(c.pipeline).rayState.Get());
+                    }
+                    else
+                        list->SetPipelineState(As<DxPipeline>(c.pipeline).native.Get());
                     auto* root = As<DxLayout>(c.pipeline->desc.layout).native.Get();
                     if (compute)
                         list->SetComputeRootSignature(root);
@@ -218,6 +226,22 @@ std::shared_ptr<Runtime::Submission> DxRuntime::Execute(const CommandList& comma
                                           0);
                 else if constexpr (std::is_same_v<T, Dispatch>)
                     list->Dispatch(c.x, c.y, c.z);
+                else if constexpr (std::is_same_v<T, TraceRays>)
+                {
+                    ComPtr<ID3D12GraphicsCommandList4> rayList;
+                    Check(list->QueryInterface(IID_PPV_ARGS(&rayList)), "TraceRays command list");
+                    auto address = As<DxBuffer>(c.table->buffer).native->GetGPUVirtualAddress() +
+                                   c.table->offset;
+                    const auto stride = c.table->stride;
+                    D3D12_DISPATCH_RAYS_DESC desc{};
+                    desc.RayGenerationShaderRecord = {address, stride};
+                    desc.MissShaderTable = {address + stride, stride, stride};
+                    desc.HitGroupTable = {address + stride * 2, stride, stride};
+                    desc.Width = c.width;
+                    desc.Height = c.height;
+                    desc.Depth = c.depth;
+                    rayList->DispatchRays(&desc);
+                }
                 else if constexpr (std::is_same_v<T, BuildAccelerationStructure>)
                 {
                     ComPtr<ID3D12GraphicsCommandList4> rayList;

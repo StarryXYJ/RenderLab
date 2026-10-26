@@ -213,6 +213,8 @@ out/build/windows-debug/renderlab_sandbox.exe --backend vulkan --headless --vali
 ctest --test-dir out/build/windows-debug -R "acceleration_structure|ray_query_scene" --output-on-failure
 ```
 
+`--as-test` 还运行原生 TraceRays 的三角形命中/未命中、索引 PBR 和 PSO/ShaderTable 代际重建检查；成功日志分别列出 Ray Query 与 TraceRays。
+
 RayTracing.rlproject 与 M4 项目共用 Assets，只保留不透明地面、球和立方体，适合在三种组合间对照。AS 接口、资源声明、scratch 与在途 TLAS 生命周期见 [光追基础](../docs/raytracing.md)。Path Tracing 按 M8 计划保留，Forward+ 按 M6 计划保留；实现后可加入现有类型化菜单选项表。
 
 ## M4.3 PBR 参考场景

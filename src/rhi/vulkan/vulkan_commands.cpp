@@ -48,7 +48,7 @@ std::shared_ptr<Runtime::Submission> VulkanRuntime::Execute(const CommandList& c
     begin.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
     Check(vkBeginCommandBuffer(list, &begin), "BeginCommandBuffer");
     vkCmdResetQueryPool(list, work->queries, 0, MaxTimestampSlots);
-    bool compute = false;
+    VkPipelineBindPoint bindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
     VkPipelineLayout layout = VK_NULL_HANDLE;
     for (const auto& command : commands.GetCommands())
         std::visit(
@@ -188,22 +188,20 @@ std::shared_ptr<Runtime::Submission> VulkanRuntime::Execute(const CommandList& c
                     vkCmdEndRendering(list);
                 else if constexpr (std::is_same_v<T, SetPipeline>)
                 {
-                    compute = bool(c.pipeline->desc.compute);
+                    bindPoint = c.pipeline->desc.rayGeneration
+                                    ? VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR
+                                : c.pipeline->desc.compute ? VK_PIPELINE_BIND_POINT_COMPUTE
+                                                           : VK_PIPELINE_BIND_POINT_GRAPHICS;
                     layout = As<VkLayout>(c.pipeline->desc.layout).native;
-                    vkCmdBindPipeline(list,
-                                      compute ? VK_PIPELINE_BIND_POINT_COMPUTE
-                                              : VK_PIPELINE_BIND_POINT_GRAPHICS,
-                                      As<VkPipelineObject>(c.pipeline).native);
-                    if (!compute)
+                    vkCmdBindPipeline(list, bindPoint, As<VkPipelineObject>(c.pipeline).native);
+                    if (bindPoint == VK_PIPELINE_BIND_POINT_GRAPHICS)
                         vkCmdSetStencilReference(list, VK_STENCIL_FACE_FRONT_AND_BACK, 0);
                 }
                 else if constexpr (std::is_same_v<T, SetStencilReference>)
                     vkCmdSetStencilReference(list, VK_STENCIL_FACE_FRONT_AND_BACK, c.reference);
                 else if constexpr (std::is_same_v<T, SetBindings>)
-                    vkCmdBindDescriptorSets(
-                        list,
-                        compute ? VK_PIPELINE_BIND_POINT_COMPUTE : VK_PIPELINE_BIND_POINT_GRAPHICS,
-                        layout, 0, 4, As<VkGroup>(c.group).native.data(), 0, nullptr);
+                    vkCmdBindDescriptorSets(list, bindPoint, layout, 0, 4,
+                                            As<VkGroup>(c.group).native.data(), 0, nullptr);
                 else if constexpr (std::is_same_v<T, SetGeometry>)
                 {
                     VkDeviceSize offset = 0;
@@ -225,6 +223,20 @@ std::shared_ptr<Runtime::Submission> VulkanRuntime::Execute(const CommandList& c
                                       sizeof(DrawArguments));
                 else if constexpr (std::is_same_v<T, Dispatch>)
                     vkCmdDispatch(list, c.x, c.y, c.z);
+                else if constexpr (std::is_same_v<T, TraceRays>)
+                {
+                    VkBufferDeviceAddressInfo info{};
+                    info.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
+                    info.buffer = As<VkBufferObject>(c.table->buffer).native;
+                    const auto address = vkGetBufferDeviceAddress(device_, &info) + c.table->offset;
+                    const auto stride = c.table->stride;
+                    const VkStridedDeviceAddressRegionKHR raygen{address, stride, stride};
+                    const VkStridedDeviceAddressRegionKHR miss{address + stride, stride, stride};
+                    const VkStridedDeviceAddressRegionKHR hit{address + stride * 2, stride, stride};
+                    const VkStridedDeviceAddressRegionKHR callable{};
+                    vkCmdTraceRaysKHR(list, &raygen, &miss, &hit, &callable, c.width, c.height,
+                                      c.depth);
+                }
                 else if constexpr (std::is_same_v<T, BuildAccelerationStructure>)
                 {
                     if (!accelerationStructureEnabled_ || !vkCmdBuildAccelerationStructuresKHR)
