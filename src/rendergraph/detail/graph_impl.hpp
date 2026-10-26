@@ -97,6 +97,7 @@ struct Graph::Impl
     std::unique_ptr<rhi::CommandList> commands;
     bool profiling = false;
     std::shared_ptr<rhi::Buffer> timestamps;
+    std::shared_ptr<detail::Allocation> timestampLease;
     void Building() const;
     void Builder(uint32_t pass) const;
     detail::Resource& Validate(uint64_t graph, uint32_t resource, uint32_t version, bool texture);

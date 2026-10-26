@@ -25,6 +25,7 @@ public:
     virtual ~Runtime();
     virtual std::shared_ptr<Buffer> CreateBuffer(const BufferDesc& desc) = 0;
     virtual std::shared_ptr<Texture> CreateTexture(const TextureDesc& desc) = 0;
+    /// Immutable default view; repeated calls may share a still-live view. Owner-thread only.
     virtual std::shared_ptr<TextureView> CreateView(std::shared_ptr<Texture> texture) = 0;
     virtual std::shared_ptr<Sampler> CreateSampler() = 0;
     virtual std::shared_ptr<BindingLayout> CreateLayout(std::vector<BindingDesc> entries) = 0;

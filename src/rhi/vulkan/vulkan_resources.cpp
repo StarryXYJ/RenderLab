@@ -74,8 +74,10 @@ std::shared_ptr<Texture> VulkanRuntime::CreateTexture(const TextureDesc& desc)
 
 std::shared_ptr<TextureView> VulkanRuntime::CreateView(std::shared_ptr<Texture> texture)
 {
-    auto cpuTimer = ProfileCpu(CpuOperation::ViewCreate);
     CheckOwner(texture);
+    if (auto cached = texture->defaultView.lock())
+        return cached;
+    auto cpuTimer = ProfileCpu(CpuOperation::ViewCreate);
     auto view = std::make_shared<VkView>(texture);
     view->device = device_;
     VkImageViewCreateInfo info{};
@@ -91,6 +93,7 @@ std::shared_ptr<TextureView> VulkanRuntime::CreateView(std::shared_ptr<Texture> 
                 : VK_IMAGE_ASPECT_COLOR_BIT),
         0, 1, 0, 1};
     Check(vkCreateImageView(device_, &info, nullptr, &view->native), "vkCreateImageView");
+    texture->defaultView = view;
     return view;
 }
 

@@ -86,8 +86,10 @@ std::shared_ptr<Texture> DxRuntime::CreateTexture(const TextureDesc& desc)
 
 std::shared_ptr<TextureView> DxRuntime::CreateView(std::shared_ptr<Texture> texture)
 {
-    auto cpuTimer = ProfileCpu(CpuOperation::ViewCreate);
     CheckOwner(texture);
+    if (auto cached = texture->defaultView.lock())
+        return cached;
+    auto cpuTimer = ProfileCpu(CpuOperation::ViewCreate);
     auto view = std::make_shared<DxView>(texture);
     if (texture->desc.attachment)
     {
@@ -109,6 +111,7 @@ std::shared_ptr<TextureView> DxRuntime::CreateView(std::shared_ptr<Texture> text
                                             view->handle);
         }
     }
+    texture->defaultView = view;
     return view;
 }
 

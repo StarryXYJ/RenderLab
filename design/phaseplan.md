@@ -5,7 +5,7 @@
 ## 当前状态
 
 - 当前实施阶段：M0–M4、R1、B1、B2 DONE。
-- 当前工作项：B3.3 DONE，下一项 B3.4 读回/View 与回收收尾；M5 NOT_STARTED。
+- 当前工作项：B3.1–B3.4 DONE，正在执行 B3 最终优化前后配对长基线；M5 NOT_STARTED。
 - 用户约定：每个子阶段验收完成即提交 Git，无阻塞时在当前授权范围内继续推进；M4.3 提交 c50ee6a、M4.4 提交 40d0c12、M4.5 提交 9a4b2e4。
 - Demo 的 Custom 示例作为回归入口保留；M4 场景示例使用 Forward 组合与现有 Shader/Material 链路。
 
@@ -230,7 +230,7 @@ DONE：tools/benchmark 正式工具与 PBR 配置，顺序/交替后端及重复
 
 ## B3 逐帧资源复用优化
 
-状态：IN_PROGRESS。B3.1–B3.3 DONE，B3.4 尚未验收。
+状态：IN_PROGRESS。B3.1–B3.4 DONE；最终优化前后配对长基线尚未完成。
 
 方案：[逐帧资源复用](resource-reuse.md)。拟按 B3.1 帧上传页、B3.2 不可变材质常量、B3.3 描述符分配复用、B3.4 读回/View 与回收收尾分别验证、提交；每步实测后调整后续优先级。不扩展到 M5/M6 的渲染算法、多线程或多队列。
 
@@ -247,6 +247,10 @@ DONE：同 GPU 包代际下，按布局 hash 与完整打包字节缓存至多 6
 ### B3.3 描述符分配复用
 
 DONE：DX12 有界持久 heap 页与 RAII 区间，连续绑定同页组合省略冗余 SetDescriptorHeaps；Vulkan 有界复用同布局 pool/set 块。分配不保活场景资源，组与命令引用保护旧描述符；新增原生创建/绑定探针及容量统计。最终 Debug/Release 完整 CTest 各 41/41，Python 13/13，双后端 Validation 通过；包含描述符预算耗尽/释放恢复、保留旧命令并持续 70 次真实绘制与原生创建稳定性。PBR 三次短测量各后端均值 1.3112/1.0650ms；独立探针原生描述符创建 0 次/帧，DX12 实际 heap 绑定 2 次/帧，逻辑组仍 10 次。预热后 DX12 保留 2 页，Vulkan 保留 10 块，容量/高水位有记录，两后端 BMP 与 B2 相同。原始组 out/benchmarks/b3-3-descriptors{,-probe}，阶段二进制 b3-3-player.exe。
+
+### B3.4 读回/View 与回收收尾
+
+DONE：timestamp 以 512B Readback 租约进入现有有界 Graph Pool，CPU 结果引用保护延后读取；默认 View 弱缓存、物理分配/离屏宿主/交换链各自持有，池可用条件计入内部 View 引用并检查外部引用，resize 先释放交换链 View。Debug/Release 完整 CTest 各 41/41，双后端 Validation 通过；覆盖八次后重复读旧 tick、池只用两份读回、保留 View 阻止 Trim、无引用环、窗口双帧/resize。三次短测量各后端帧均值 0.9821/0.9591ms，独立探针 Buffer/View/原生描述符创建均为 0 次/帧，两后端 BMP 与 B2 相同。原始组 out/benchmarks/b3-4-readback-views{,-probe}，阶段二进制 b3-4-player.exe。实现子阶段已验收，主阶段仍待配对长测量收尾。
 
 ## M5 Deferred 与光追基础
 

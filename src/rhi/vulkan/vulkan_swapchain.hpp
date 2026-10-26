@@ -8,10 +8,11 @@
 
 namespace renderlab::rhi::vulkan
 {
+class VulkanRuntime;
 class VulkanSwapchain final : public Swapchain
 {
 public:
-    VulkanSwapchain(const void* owner, VkInstance instance, VkPhysicalDevice physical,
+    VulkanSwapchain(VulkanRuntime& runtime, VkInstance instance, VkPhysicalDevice physical,
                     VkDevice device, VkQueue queue);
     void Initialize(uint32_t family, platform::NativeSurface surface);
     ~VulkanSwapchain() override;
@@ -26,6 +27,7 @@ public:
 
 private:
     void Clear();
+    VulkanRuntime& runtime_;
     VkInstance instance_;
     VkPhysicalDevice physical_;
     VkDevice device_;
@@ -34,6 +36,7 @@ private:
     VkSwapchainKHR native_ = VK_NULL_HANDLE;
     Format format_ = Format::Rgba8;
     std::vector<std::shared_ptr<Texture>> images_;
+    std::vector<std::shared_ptr<TextureView>> views_;
     std::vector<VkSemaphore> available_, finished_;
     std::vector<uint64_t> acquirePoints_;
     uint32_t acquireSlot_ = 0, imageIndex_ = 0;

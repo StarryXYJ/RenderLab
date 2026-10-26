@@ -13,8 +13,13 @@ Pool::Pool(rhi::Runtime& runtime, size_t maxResources, uint64_t maxEstimatedByte
 }
 bool Pool::Available(const std::shared_ptr<detail::Allocation>& entry) const
 {
-    return entry.use_count() == 1 && entry->completion <= runtime_.Completed() &&
-           (entry->texture ? entry->texture.use_count() == 1 : entry->buffer.use_count() == 1);
+    if (entry.use_count() != 1 || entry->completion > runtime_.Completed())
+        return false;
+    if (!entry->texture)
+        return entry->buffer.use_count() == 1;
+    // Allocation and its default View own the Texture; external views/commands must be absent.
+    return entry->texture.use_count() == (entry->view ? 2 : 1) &&
+           (!entry->view || entry->view.use_count() == 1);
 }
 void Pool::CheckOwner() const
 {
@@ -81,6 +86,9 @@ std::shared_ptr<detail::Allocation> Pool::Acquire(const rhi::BufferDesc& desc)
     MakeRoom(desc.size);
     auto entry = std::make_shared<detail::Allocation>();
     entry->buffer = runtime_.CreateBuffer(desc);
+    entry->state = desc.memory == rhi::Memory::Readback ? rhi::State::CopyDest
+                   : desc.memory == rhi::Memory::Upload ? rhi::State::HostWrite
+                                                        : rhi::State::Undefined;
     entry->estimatedBytes = desc.size;
     entries_.push_back(entry);
     ++stats_.allocations;

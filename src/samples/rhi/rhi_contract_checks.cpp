@@ -243,6 +243,17 @@ void CheckDescriptorBudget(Runtime& runtime)
     Require(runtime.GetDescriptorStats().creations == creations,
             "descriptor allocator must reuse released capacity after exhaustion");
 }
+void CheckDefaultView(Runtime& runtime)
+{
+    auto texture = runtime.CreateTexture({8, 8, Format::Rgba8, false, true, "View.Cache"});
+    auto view = runtime.CreateView(texture);
+    Require(runtime.CreateView(texture) == view, "Default View must reuse its immutable object");
+    std::weak_ptr<Texture> weak = texture;
+    texture.reset();
+    Require(!weak.expired(), "View must retain its texture");
+    view.reset();
+    Require(weak.expired(), "Default View cache must not retain a texture cycle");
+}
 } // namespace
 
 void CheckResourceContracts(Runtime& runtime)
@@ -252,5 +263,6 @@ void CheckResourceContracts(Runtime& runtime)
     CheckUploadRing(runtime);
     CheckUploadPool(runtime);
     CheckDescriptorBudget(runtime);
+    CheckDefaultView(runtime);
 }
 } // namespace renderlab::samples

@@ -57,6 +57,7 @@ struct SceneRenderer::Impl
     std::array<float, 3> environmentAmbient{};
     std::shared_ptr<const shader::Package> toneMapping;
     std::shared_ptr<rhi::Buffer> fullscreen;
+    std::shared_ptr<rhi::TextureView> offscreenDisplayView;
     struct MaterialInput
     {
         std::shared_ptr<const shader::Package> package;
@@ -431,6 +432,9 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
     if (target->desc.format != rhi::Format::Rgba8Srgb &&
         target->desc.format != rhi::Format::Bgra8Srgb)
         throw std::invalid_argument("Scene display target requires an sRGB format");
+    // Swapchain owns its views and clears them before resize; only keep offscreen targets here.
+    if (!swapchain)
+        self.offscreenDisplayView = self.runtime.CreateView(target);
     graph.ImportTexture("DisplayColor", target, {initial, initial != rhi::State::Undefined});
     graph.CreateTexture("CameraColor", {target->desc.width, target->desc.height,
                                         rhi::Format::Rgba32Float, false, true});

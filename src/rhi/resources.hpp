@@ -145,10 +145,13 @@ struct Buffer : Object
     /// Upload/Readback mapping only. Readback requires a completed submission and HostRead barrier.
     virtual std::span<std::byte> Map() = 0;
 };
+struct TextureView;
 struct Texture : Object
 {
     Texture(const void* owner, TextureDesc desc) : Object(owner), desc(std::move(desc)) {}
     const TextureDesc desc;
+    /// Owner-thread cache of the immutable default view; weak to avoid a Texture/View cycle.
+    std::weak_ptr<TextureView> defaultView;
 };
 struct TextureView : Object
 {

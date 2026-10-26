@@ -99,6 +99,39 @@ void VerifyGraph(rhi::Runtime& runtime, const std::filesystem::path& shaders,
         }
     }
     VerifyGraphBuffers(runtime, shaders, output);
+    {
+        rendergraph::Pool profiles(runtime, 4, 4096);
+        const auto submit = [&]
+        {
+            rendergraph::Graph graph;
+            auto pass = graph.AddCopyPass("Retained.Timestamp");
+            pass.SideEffect();
+            pass.Execute([](rendergraph::CopyContext&) {});
+            graph.Compile({.profile = true});
+            return graph.Execute(profiles).profile;
+        };
+        auto retained = submit();
+        runtime.Wait(retained.completion);
+        const auto bytes = retained.ticks->Map();
+        const std::vector<std::byte> original(bytes.begin(), bytes.begin() + 16);
+        for (uint32_t i = 0; i < 8; ++i)
+        {
+            const auto current = submit();
+            runtime.Wait(current.completion);
+            Require(current.Read(runtime).size() == 1,
+                    "Reused timestamp readback must be readable");
+        }
+        Require(profiles.Stats().allocations == 2 &&
+                    std::memcmp(retained.ticks->Map().data(), original.data(), original.size()) ==
+                        0 &&
+                    retained.Read(runtime).size() == 1,
+                "GPU retirement must not overwrite CPU-retained profiling results");
+        profiles.Trim();
+        Require(profiles.Stats().cached == 1, "Trim must retain the CPU-owned profile");
+        retained = {};
+        profiles.Trim();
+        Require(profiles.Stats().cached == 0, "Released profiles must permit pool trim");
+    }
     VerifyForward(runtime, shaders, output, logger, baseline);
     const auto stats = demo.Stats();
     Require(stats.reuses > 0 && stats.allocations < 12,

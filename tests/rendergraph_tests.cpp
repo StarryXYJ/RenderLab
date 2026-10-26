@@ -87,7 +87,11 @@ struct FakeRuntime : rhi::Runtime
     }
     std::shared_ptr<rhi::TextureView> CreateView(std::shared_ptr<rhi::Texture> t) override
     {
-        return std::make_shared<rhi::TextureView>(t);
+        if (auto cached = t->defaultView.lock())
+            return cached;
+        auto view = std::make_shared<rhi::TextureView>(t);
+        t->defaultView = view;
+        return view;
     }
     std::shared_ptr<rhi::Sampler> CreateSampler() override
     {
@@ -698,6 +702,26 @@ void ProfilingContracts()
 {
     FakeRuntime runtime;
     Pool pool(runtime);
+    {
+        Pool views(runtime, 1, 1024);
+        auto lease = views.Acquire(rhi::TextureDesc{8, 8});
+        auto* identity = lease->texture.get();
+        lease->view = runtime.CreateView(lease->texture);
+        auto retained = lease->view;
+        std::weak_ptr<rhi::Texture> weak = lease->texture;
+        lease.reset();
+        Fails([&] { views.Acquire(rhi::TextureDesc{8, 8}); }, "pool is full");
+        views.Trim();
+        Require(views.Stats().cached == 1, "A retained View must prevent pool trim/reuse");
+        retained.reset();
+        lease = views.Acquire(rhi::TextureDesc{8, 8});
+        Require(lease->texture.get() == identity &&
+                    lease->view == lease->texture->defaultView.lock(),
+                "Pool must reuse a texture with its internal default View");
+        lease.reset();
+        views.Trim();
+        Require(weak.expired() && views.Stats().cached == 0, "Default View must not form a cycle");
+    }
     {
         Pool hdr(runtime, 2, 1024);
         Fails([&] { hdr.Acquire(rhi::TextureDesc{16, 16, rhi::Format::Rgba32Float}); },

@@ -19,8 +19,9 @@ void Graph::Prepare(Pool& pool)
         {
             Require(g.plan.schedule.size() <= rhi::MaxTimestampSlots / 2,
                     "GPU profiling supports at most 32 live passes");
-            g.timestamps = pool.Device().CreateBuffer(
-                {g.plan.schedule.size() * 16, rhi::Memory::Readback, "Graph.Timestamps"});
+            g.timestampLease = pool.Acquire(rhi::BufferDesc{
+                rhi::MaxTimestampSlots * 8, rhi::Memory::Readback, "Graph.Timestamps"});
+            g.timestamps = g.timestampLease->buffer;
         }
         for (uint32_t i = 0; i < g.resources.size(); ++i)
         {
@@ -43,7 +44,11 @@ void Graph::Prepare(Pool& pool)
                 r.start = r.lease->state;
             }
             if (r.isTexture)
+            {
                 r.view = pool.Device().CreateView(r.texture);
+                if (r.lease)
+                    r.lease->view = r.view;
+            }
         }
         g.Barriers();
         g.active = UINT32_MAX;
@@ -119,6 +124,7 @@ void Graph::Record()
             barrier(b);
         if (g.timestamps)
         {
+            g.commands->Barrier(g.timestamps, g.timestampLease->state, rhi::State::CopyDest);
             g.commands->ReadTimestamps(g.timestamps, timestamp);
             g.commands->Barrier(g.timestamps, rhi::State::CopyDest, rhi::State::HostRead);
         }
@@ -173,6 +179,11 @@ Submission Graph::Submit(rhi::Swapchain* presentation)
             r.lease->completion = result.completion;
         }
     g.phase = detail::Phase::Submitted;
+    if (g.timestampLease)
+    {
+        g.timestampLease->state = rhi::State::HostRead;
+        g.timestampLease->completion = result.completion;
+    }
     return result;
 }
 Submission Graph::Execute(Pool& pool, rhi::Swapchain* presentation)

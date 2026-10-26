@@ -48,6 +48,8 @@ B3 起 headless 报告可包含 `resourceReuse`：`frameUpload` 为 pages/reserv
 
 B3 另外记录 `rhiDescriptorPageCreateMs` 和 `rhiDescriptorHeapBindMs`，分别为实际原生描述符 heap/pool 创建和 DX12 SetDescriptorHeaps。前者包含在 GroupCreate 内，后者包含在 NativeSubmit 内，不能重复相加。稳定场景的逻辑 GroupCreate 可以保持非零，同时原生描述符创建次数为零。
 
+B3.4 的默认 View 缓存命中不进入 `rhiViewCreateMs`，该项计数表示实际构造次数。CPU 计时开关不改变缓存策略；timestamp 池也继续保护 CPU 结果的持有期，不在 GPU 完成后立即覆盖仍存活的结果。
+
 CPU 区间不覆盖所有对象析构，例如被 Graph 剔除的资源可能在 Render 返回前释放；它们不能作为完整线程 CPU profile。分析器核对各项 totalMs 与逐帧增量之和，并在报告/可选图表中展示操作时间和 calls/frame。扩展样本与实际定位见 [B2 记录](performance/b2-pbr-rtx5060.md)。
 
 `sample/benchmark/pbr-diagnostics.json` 提供完整 PBR 720p、低分辨率 257×193、BRDF 查看和较小的原始 RenderLab 场景。BRDF 查看仍经过场景参数/材质准备，但无消费者的场景绘制在 Graph 编译时剔除，可以用实际调用计数区分准备开销和 Draw/描述符开销。原始场景用于对照较少 Draw 的创建计数；CPU 探针不改变资源分配与帧提交策略。

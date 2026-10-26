@@ -24,4 +24,12 @@ Debug 全套其余 39 项通过，材质测试调整为仅检查材质块共享�
 
 含预热的资源统计：上传页均为一页 64KiB，单批高水位 3328B；DX12 描述符为 2 页、4352 个保留 slot，Vulkan 为 10 块、120 个保留 slot；两者在用高水位均为 120，测量结束在用数为 0。描述符 slot 不等同于原生分配字节。两后端 Debug/Release 完整 CTest 各 41/41，Python 13/13；容量耗尽恢复及旧绑定组在 70 次绘制中保持正确。
 
-原始组 out/benchmarks/b3-3-descriptors{,-probe}，阶段二进制 out/benchmarks/b3-3-player.exe。最终长基线与 B3.4 尚未执行。
+原始组 out/benchmarks/b3-3-descriptors{,-probe}，阶段二进制 out/benchmarks/b3-3-player.exe。
+
+## B3.4 Timestamp 与 View
+
+相同三次短测量配置，DX12/Vulkan 等权帧均值 0.9821/0.9591ms。独立探针 Buffer、实际 View 和原生描述符创建均为 0 次/帧；逻辑 GroupCreate 仍为 10，DX12 heap 绑定仍为 2。测量结果的持有期和正常逐帧等待策略均未缩短；BMP 与 B2 相同。
+
+Debug/Release 完整 CTest 各 41/41，验证保留一个完成的 profiling 结果、再运行八张图后 tick 字节不变；两份读回即可循环，释放结果后可 Trim。默认 View 的弱缓存无环，物理池内部 View 不阻止安全复用，外部 View 仍阻止 Trim；双帧、窗口反复 resize 和 Validation 均通过。
+
+原始组 out/benchmarks/b3-4-readback-views{,-probe}，阶段二进制 out/benchmarks/b3-4-player.exe。最终配对长基线尚未完成。

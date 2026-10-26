@@ -33,3 +33,13 @@ Vulkan 首版复用与 BindingLayout 身份关联的 pool/set 块，每块包含
 `Runtime::GetDescriptorStats()` 返回当前原生页/块数、容量项数、在用项数、高水位和累计创建次数。这里的单位是 descriptor slot，不是字节；不并入 RHI Buffer/Texture 的分配 ledger。统计共享状态与租约同寿命，不捕获可能已失效的分配器地址。首版缓存至 Runtime 销毁；Vulkan 另有满预算时的空闲淘汰。
 
 Benchmark 报告增加可选 `resourceReuse.descriptors` 和 `resourceReuse.frameUpload`，在测量结束、截图前读取累计及当前统计（含预热）。CPU 探针另有 `rhiDescriptorPageCreateMs`（DX12 shader-visible heap / Vulkan pool 创建）和 `rhiDescriptorHeapBindMs`（DX12 实际 heap 绑定）；为包含关系的墙钟区间，不能与 GroupCreate/NativeSubmit 相加。
+
+## Timestamp 与默认 View
+
+Graph profiling 从同一个有界 Graph Pool 取得 512 字节 Readback Buffer，覆盖 64 个 timestamp slot。录制前按该分配的实际状态执行 CopyDest 依赖，成功提交才发布 HostRead 和 completion；失败不发布。GpuProfile 的 ticks 引用保护 CPU 读取期，连同图租约、命令引用和完成点共同限制复用。可以多次 Read 已完成的结果；仅等待 Fence 后保留的结果仍不可被后续图覆盖。
+
+默认 TextureView 为不可变对象，`CreateView(texture)` 可以返回同一存活实例。Texture 内只保存 weak_ptr，View 强持有 Texture，因此没有循环引用。Graph Pool 的物理 Allocation 强持有默认 View；Available 同时检查分配租约、完成点、View 外部引用以及 Texture 的已知内部引用数（Allocation 加默认 View）。保留 View 的 CPU/命令引用也会阻止 Trim。
+
+静态资源使用其已有的 View；SceneRenderer 只额外持有一个 offscreen Display View。窗口交换链持有每张图像的 View，并在等待展示完成后的 resize 路径先清 View、再释放图像和重建。Renderer 不缓存交换链目标，避免 ResizeBuffers 被隐式引用阻挡；Vulkan 在销毁旧 swapchain 前同样清理 View。
+
+`rhiViewCreateMs` 从 B3.4 起只覆盖默认 View 缓存未命中时的实际对象构造，缓存查询不计为创建。B2/B3.3 之前未缓存，每次调用都构造对象。双后端图验收保留一个已完成的 GpuProfile，再运行八个图并重复读旧结果；需保持 tick 字节不变、只用两份读回分配，最后释放结果后 Trim 清空。CPU 测试另验证保留 View 阻止复用、内部 View 不阻止合法复用、无引用环。
