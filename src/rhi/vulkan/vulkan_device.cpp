@@ -257,26 +257,63 @@ public:
         VkPhysicalDeviceVulkan12Features enabled12{};
         enabled12.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES;
         enabled12.timelineSemaphore = VK_TRUE;
+        enabled12.bufferDeviceAddress = report_.supported.accelerationStructure;
         VkPhysicalDeviceVulkan13Features enabled13{};
         enabled13.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES;
         enabled13.dynamicRendering = VK_TRUE;
         enabled13.synchronization2 = VK_TRUE;
         enabled13.shaderDemoteToHelperInvocation = VK_TRUE;
         enabled13.pNext = &enabled12;
+        VkPhysicalDeviceAccelerationStructureFeaturesKHR enabledAcceleration{};
+        enabledAcceleration.sType =
+            VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ACCELERATION_STRUCTURE_FEATURES_KHR;
+        enabledAcceleration.accelerationStructure = report_.supported.accelerationStructure;
+        VkPhysicalDeviceRayQueryFeaturesKHR enabledRayQuery{};
+        enabledRayQuery.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_QUERY_FEATURES_KHR;
+        enabledRayQuery.rayQuery = report_.supported.rayQuery;
+        VkPhysicalDeviceRayTracingPipelineFeaturesKHR enabledRayPipeline{};
+        enabledRayPipeline.sType =
+            VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_PIPELINE_FEATURES_KHR;
+        enabledRayPipeline.rayTracingPipeline = report_.supported.rayTracingPipeline;
+        void** featureTail = &enabled12.pNext;
+        if (report_.supported.accelerationStructure)
+        {
+            *featureTail = &enabledAcceleration;
+            featureTail = &enabledAcceleration.pNext;
+        }
+        if (report_.supported.rayQuery)
+        {
+            *featureTail = &enabledRayQuery;
+            featureTail = &enabledRayQuery.pNext;
+        }
+        if (report_.supported.rayTracingPipeline)
+        {
+            *featureTail = &enabledRayPipeline;
+            featureTail = &enabledRayPipeline.pNext;
+        }
         const float queuePriority = 1.0f;
         VkDeviceQueueCreateInfo queueInfo{};
         queueInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
         queueInfo.queueFamilyIndex = queueFamily_;
         queueInfo.queueCount = 1;
         queueInfo.pQueuePriorities = &queuePriority;
-        const char* swapchainExtension = VK_KHR_SWAPCHAIN_EXTENSION_NAME;
+        std::vector<const char*> deviceExtensions{VK_KHR_SWAPCHAIN_EXTENSION_NAME};
+        if (report_.supported.accelerationStructure)
+        {
+            deviceExtensions.push_back(VK_KHR_DEFERRED_HOST_OPERATIONS_EXTENSION_NAME);
+            deviceExtensions.push_back(VK_KHR_ACCELERATION_STRUCTURE_EXTENSION_NAME);
+        }
+        if (report_.supported.rayQuery)
+            deviceExtensions.push_back(VK_KHR_RAY_QUERY_EXTENSION_NAME);
+        if (report_.supported.rayTracingPipeline)
+            deviceExtensions.push_back(VK_KHR_RAY_TRACING_PIPELINE_EXTENSION_NAME);
         VkDeviceCreateInfo deviceInfo{};
         deviceInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
         deviceInfo.pNext = &enabled13;
         deviceInfo.queueCreateInfoCount = 1;
         deviceInfo.pQueueCreateInfos = &queueInfo;
-        deviceInfo.enabledExtensionCount = 1;
-        deviceInfo.ppEnabledExtensionNames = &swapchainExtension;
+        deviceInfo.enabledExtensionCount = static_cast<uint32_t>(deviceExtensions.size());
+        deviceInfo.ppEnabledExtensionNames = deviceExtensions.data();
         Check(vkCreateDevice(physical_, &deviceInfo, nullptr, &device_), "vkCreateDevice");
         // Device dispatch is loaded only after creation; volk loads global/instance dispatch
         // earlier.
@@ -286,10 +323,15 @@ public:
         {
             throw std::runtime_error("vkGetDeviceQueue returned a null queue");
         }
-        report_.details.emplace_back("enabledFeatures",
-                                     "dynamicRendering, synchronization2, "
-                                     "shaderDemoteToHelperInvocation, timelineSemaphore; one "
-                                     "graphics queue; no advanced rendering features enabled");
+        report_.details.emplace_back(
+            "enabledFeatures",
+            "dynamicRendering, synchronization2, "
+            "shaderDemoteToHelperInvocation, timelineSemaphore" +
+                std::string(report_.supported.accelerationStructure ? "; accelerationStructure"
+                                                                    : "") +
+                (report_.supported.rayQuery ? "; rayQuery" : "") +
+                (report_.supported.rayTracingPipeline ? "; rayTracingPipeline" : "") +
+                "; one graphics queue");
     }
 
     const DeviceReport& GetReport() const override
@@ -298,8 +340,10 @@ public:
     }
     std::unique_ptr<Runtime> CreateRuntime() override
     {
-        return CreateVulkanRuntime(instance_, physical_, device_, queue_, queueFamily_,
-                                   report_.validationEnabled);
+        return CreateVulkanRuntime(
+            instance_, physical_, device_, queue_, queueFamily_, report_.validationEnabled,
+            report_.supported.accelerationStructure, report_.supported.rayQuery,
+            report_.supported.rayTracingPipeline);
     }
     void PollDiagnostics() override {}
     uint32_t GetValidationErrorCount() const override
@@ -418,10 +462,16 @@ private:
                                   features12.runtimeDescriptorArray &&
                                   features12.shaderSampledImageArrayNonUniformIndexing;
         caps.accelerationStructure =
+            HasExtension(extensions, VK_KHR_ACCELERATION_STRUCTURE_EXTENSION_NAME) &&
             acceleration.accelerationStructure && features12.bufferDeviceAddress &&
             HasExtension(extensions, VK_KHR_DEFERRED_HOST_OPERATIONS_EXTENSION_NAME);
-        caps.rayQuery = caps.accelerationStructure && rayQuery.rayQuery;
-        caps.rayTracingPipeline = caps.accelerationStructure && rayPipeline.rayTracingPipeline;
+        caps.rayQuery = caps.accelerationStructure &&
+                        HasExtension(extensions, VK_KHR_RAY_QUERY_EXTENSION_NAME) &&
+                        rayQuery.rayQuery;
+        caps.rayTracingPipeline =
+            caps.accelerationStructure &&
+            HasExtension(extensions, VK_KHR_RAY_TRACING_PIPELINE_EXTENSION_NAME) &&
+            rayPipeline.rayTracingPipeline;
         caps.meshShader = mesh.meshShader != VK_FALSE;
         caps.maxTexture2D = props.limits.maxImageDimension2D;
         caps.maxColorAttachments = props.limits.maxColorAttachments;

@@ -75,6 +75,7 @@ target_link_libraries(renderlab_rendergraph PRIVATE renderlab_options renderlab_
     nlohmann_json::nlohmann_json)
 
 add_library(renderlab_renderer STATIC src/renderer/forward.cpp src/renderer/deferred.cpp
+    src/renderer/raytracing.cpp src/renderer/acceleration_scene.cpp
     src/renderer/pipeline.cpp
     src/renderer/scene_renderer.cpp src/renderer/environment.cpp src/renderer/shadow.cpp)
 target_include_directories(renderlab_renderer PUBLIC src)
@@ -163,11 +164,16 @@ add_library(renderlab_samples STATIC
     src/samples/graph/graph_acceptance.cpp
     src/samples/graph/graph_buffer_checks.cpp
     src/samples/rhi/rhi_acceptance.cpp
+    src/samples/rhi/acceleration_structure_acceptance.cpp
     src/samples/rhi/rhi_contract_checks.cpp
     src/samples/common/shader_io.cpp)
 target_include_directories(renderlab_samples PUBLIC src)
-target_link_libraries(renderlab_samples PRIVATE renderlab_options renderlab_rhi renderlab_core renderlab_platform renderlab_rendergraph renderlab_renderer)
+target_link_libraries(renderlab_samples PRIVATE renderlab_options renderlab_rhi renderlab_core renderlab_platform renderlab_rendergraph renderlab_renderer renderlab_shader)
 add_dependencies(renderlab_sandbox renderlab_m1_shaders renderlab_m3_shaders)
+add_custom_target(renderlab_m5_shaders
+    COMMAND ${CMAKE_COMMAND} -E copy_directory_if_different "${CMAKE_SOURCE_DIR}/shaders/m5"
+        "$<TARGET_FILE_DIR:renderlab_sandbox>/shaders/m5" VERBATIM)
+add_dependencies(renderlab_sandbox renderlab_m5_shaders)
 add_custom_target(renderlab_scene_shaders
     COMMAND ${CMAKE_COMMAND} -E copy_directory_if_different "${CMAKE_SOURCE_DIR}/shaders/RenderLab"
         "$<TARGET_FILE_DIR:renderlab_sandbox>/shaders/RenderLab" VERBATIM)
@@ -321,6 +327,12 @@ if(BUILD_TESTING)
                 --output ${CMAKE_BINARY_DIR}/deferred
                 --log ${CMAKE_BINARY_DIR}/logs/${backend}-deferred.log)
             set_tests_properties(gpu.${backend}.deferred PROPERTIES LABELS gpu RUN_SERIAL TRUE TIMEOUT 90)
+            add_test(NAME gpu.${backend}.ray_query_scene COMMAND renderlab_sandbox
+                --backend ${backend} --headless --validation on --scene-test --pipeline raytracing
+                --project ${CMAKE_SOURCE_DIR}/sample/m4/Pbr.rlproject
+                --output ${CMAKE_BINARY_DIR}/ray-query-scene
+                --log ${CMAKE_BINARY_DIR}/logs/${backend}-ray-query-scene.log)
+            set_tests_properties(gpu.${backend}.ray_query_scene PROPERTIES LABELS gpu RUN_SERIAL TRUE TIMEOUT 120)
             add_test(NAME gpu.${backend}.pbr COMMAND renderlab_pbr_tests ${backend}
                 ${CMAKE_SOURCE_DIR}/sample/m4/Pbr.rlproject ${CMAKE_SOURCE_DIR}/shaders
                 ${CMAKE_BINARY_DIR}/pbr/${backend})
@@ -348,10 +360,15 @@ if(BUILD_TESTING)
                 --backend ${backend} --headless --validation on --rhi-test
                 --output ${CMAKE_BINARY_DIR}/acceptance
                 --log ${CMAKE_BINARY_DIR}/logs/${backend}-rhi.log)
+            add_test(NAME gpu.${backend}.acceleration_structure COMMAND renderlab_sandbox
+                --backend ${backend} --headless --validation on --as-test
+                --output ${CMAKE_BINARY_DIR}/acceleration-structure
+                --log ${CMAKE_BINARY_DIR}/logs/${backend}-acceleration-structure.log)
             add_test(NAME gpu.${backend}.immediate_exit COMMAND renderlab_sandbox
                 --backend ${backend} --validation on --frames 1
                 --log ${CMAKE_BINARY_DIR}/logs/${backend}-exit.log)
             set_tests_properties(gpu.${backend}.init gpu.${backend}.window gpu.${backend}.rhi
+                gpu.${backend}.acceleration_structure
                 gpu.${backend}.immediate_exit PROPERTIES
                 LABELS gpu RUN_SERIAL TRUE TIMEOUT 30)
         endforeach()

@@ -4,9 +4,14 @@
 
 namespace renderlab::rhi::dx12
 {
-DxRuntime::DxRuntime(ID3D12Device* device, ID3D12CommandQueue* queue, IDXGIFactory6* factory)
-    : device_(device), queue_(queue), factory_(factory)
+DxRuntime::DxRuntime(ID3D12Device* device, ID3D12CommandQueue* queue, IDXGIFactory6* factory,
+                     bool accelerationStructureEnabled, bool rayQueryEnabled,
+                     bool rayTracingPipelineEnabled)
+    : device_(device), queue_(queue), factory_(factory),
+      accelerationStructureEnabled_(accelerationStructureEnabled),
+      rayQueryEnabled_(rayQueryEnabled), rayTracingPipelineEnabled_(rayTracingPipelineEnabled)
 {
+    device_->QueryInterface(IID_PPV_ARGS(&rayDevice_));
     Check(device_->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&fence_)), "CreateFence");
     D3D12_INDIRECT_ARGUMENT_DESC argument{};
     argument.Type = D3D12_INDIRECT_ARGUMENT_TYPE_DRAW;
@@ -59,8 +64,10 @@ void DxRuntime::WaitNative(uint64_t point)
 namespace renderlab::rhi
 {
 std::unique_ptr<Runtime> CreateDx12Runtime(ID3D12Device* device, ID3D12CommandQueue* queue,
-                                           IDXGIFactory6* factory)
+                                           IDXGIFactory6* factory, bool accelerationStructure,
+                                           bool rayQuery, bool rayTracingPipeline)
 {
-    return std::make_unique<dx12::DxRuntime>(device, queue, factory);
+    return std::make_unique<dx12::DxRuntime>(device, queue, factory, accelerationStructure,
+                                             rayQuery, rayTracingPipeline);
 }
 } // namespace renderlab::rhi

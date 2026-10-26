@@ -12,6 +12,7 @@
 #include "rhi/device.hpp"
 #include "rhi/runtime.hpp"
 #include "samples/graph/graph_demo.hpp"
+#include "samples/rhi/acceleration_structure_acceptance.hpp"
 #include "samples/rhi/rhi_acceptance.hpp"
 #include "samples/rhi/rhi_demo.hpp"
 #include "samples/scene/scene_acceptance.hpp"
@@ -89,6 +90,12 @@ void RunRendering(platform::Window* window, rhi::Device& device, rhi::Runtime& r
                              std::filesystem::path(platform::Utf8ToWide(options.outputPath)) /
                                  options.backend,
                              logger);
+    if (options.accelerationStructureTest)
+        samples::VerifyAccelerationStructures(
+            runtime, options.backend == "dx12" ? shader::Target::Dxil : shader::Target::Spirv,
+            shaderRoot / "m5" / "ray_query_acceptance.hlsl",
+            std::filesystem::path(platform::Utf8ToWide(options.outputPath)) / options.backend,
+            logger);
     if (!window && !options.projectPath.empty() && !options.sceneTest)
         CaptureScene(runtime, device.GetReport(), options, shaderRoot, logger);
     if (!window && !options.projectPath.empty() && options.sceneTest)
@@ -138,7 +145,8 @@ void RunRendering(platform::Window* window, rhi::Device& device, rhi::Runtime& r
             window->GetNativeSurface(),
             DebugControls{settings, scene->Document().exposure,
                           !selectedLight.empty() &&
-                              scene->Document().Get(selectedLight).light->shadows});
+                              scene->Document().Get(selectedLight).light->shadows},
+            runtime.SupportsAccelerationStructures() && runtime.SupportsRayQuery());
         if (options.windowTest)
             panel->VerifyControls();
     };

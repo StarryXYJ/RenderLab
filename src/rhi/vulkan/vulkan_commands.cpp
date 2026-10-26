@@ -142,9 +142,10 @@ std::shared_ptr<Runtime::Submission> VulkanRuntime::Execute(const CommandList& c
                         color.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
                         color.imageView = As<VkView>(c.colors[i]).native;
                         color.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-                        color.loadOp = c.colorLoad == LoadOp::Clear  ? VK_ATTACHMENT_LOAD_OP_CLEAR
-                                       : c.colorLoad == LoadOp::Load ? VK_ATTACHMENT_LOAD_OP_LOAD
-                                                                     : VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+                        color.loadOp = c.colorLoad == LoadOp::Clear ? VK_ATTACHMENT_LOAD_OP_CLEAR
+                                       : c.colorLoad == LoadOp::Load
+                                           ? VK_ATTACHMENT_LOAD_OP_LOAD
+                                           : VK_ATTACHMENT_LOAD_OP_DONT_CARE;
                         color.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
                         std::copy(c.clear.begin(), c.clear.end(), color.clearValue.color.float32);
                     }
@@ -224,6 +225,104 @@ std::shared_ptr<Runtime::Submission> VulkanRuntime::Execute(const CommandList& c
                                       sizeof(DrawArguments));
                 else if constexpr (std::is_same_v<T, Dispatch>)
                     vkCmdDispatch(list, c.x, c.y, c.z);
+                else if constexpr (std::is_same_v<T, BuildAccelerationStructure>)
+                {
+                    if (!accelerationStructureEnabled_ || !vkCmdBuildAccelerationStructuresKHR)
+                        throw std::runtime_error(
+                            "Vulkan acceleration structure commands are not enabled");
+                    const auto& accelerationStructure = *c.accelerationStructure;
+                    std::vector<VkAccelerationStructureGeometryKHR> geometries;
+                    std::vector<uint32_t> primitiveCounts;
+                    if (accelerationStructure.desc.topLevel)
+                    {
+                        geometries.resize(1);
+                        primitiveCounts.push_back(
+                            static_cast<uint32_t>(accelerationStructure.desc.instances.size()));
+                    }
+                    else
+                    {
+                        geometries.resize(accelerationStructure.desc.geometries.size());
+                        primitiveCounts.resize(geometries.size());
+                    }
+                    const auto address = [&](const std::shared_ptr<Buffer>& buffer)
+                    {
+                        VkBufferDeviceAddressInfo info{};
+                        info.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
+                        info.buffer = As<VkBufferObject>(buffer).native;
+                        return vkGetBufferDeviceAddress(device_, &info);
+                    };
+                    for (size_t i = 0; i < geometries.size(); ++i)
+                    {
+                        auto& geometry = geometries[i];
+                        geometry.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_KHR;
+                        if (accelerationStructure.desc.topLevel)
+                        {
+                            geometry.geometryType = VK_GEOMETRY_TYPE_INSTANCES_KHR;
+                            geometry.geometry.instances.sType =
+                                VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_INSTANCES_DATA_KHR;
+                            geometry.geometry.instances.arrayOfPointers = VK_FALSE;
+                            geometry.geometry.instances.data.deviceAddress =
+                                address(accelerationStructure.instanceData);
+                        }
+                        else
+                        {
+                            const auto& source = accelerationStructure.desc.geometries[i];
+                            geometry.geometryType = VK_GEOMETRY_TYPE_TRIANGLES_KHR;
+                            geometry.flags = VK_GEOMETRY_OPAQUE_BIT_KHR;
+                            geometry.geometry.triangles.sType =
+                                VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_TRIANGLES_DATA_KHR;
+                            geometry.geometry.triangles.vertexFormat = VK_FORMAT_R32G32B32_SFLOAT;
+                            geometry.geometry.triangles.vertexData.deviceAddress =
+                                address(source.vertices) + source.vertexOffset;
+                            geometry.geometry.triangles.vertexStride = source.vertexStride;
+                            geometry.geometry.triangles.maxVertex = source.vertexCount - 1;
+                            geometry.geometry.triangles.indexType =
+                                source.indices ? VK_INDEX_TYPE_UINT32 : VK_INDEX_TYPE_NONE_KHR;
+                            if (source.indices)
+                                geometry.geometry.triangles.indexData.deviceAddress =
+                                    address(source.indices) + source.indexOffset;
+                            primitiveCounts[i] =
+                                source.indices ? source.indexCount / 3 : source.vertexCount / 3;
+                        }
+                    }
+                    VkAccelerationStructureBuildGeometryInfoKHR build{};
+                    build.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_GEOMETRY_INFO_KHR;
+                    build.type = accelerationStructure.desc.topLevel
+                                     ? VK_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL_KHR
+                                     : VK_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL_KHR;
+                    build.flags = VK_BUILD_ACCELERATION_STRUCTURE_PREFER_FAST_TRACE_BIT_KHR;
+                    if (accelerationStructure.desc.allowUpdate)
+                        build.flags |= VK_BUILD_ACCELERATION_STRUCTURE_ALLOW_UPDATE_BIT_KHR;
+                    build.mode = c.update ? VK_BUILD_ACCELERATION_STRUCTURE_MODE_UPDATE_KHR
+                                          : VK_BUILD_ACCELERATION_STRUCTURE_MODE_BUILD_KHR;
+                    build.srcAccelerationStructure =
+                        c.update ? As<VkAccelerationStructure>(c.accelerationStructure).native
+                                 : VK_NULL_HANDLE;
+                    build.dstAccelerationStructure =
+                        As<VkAccelerationStructure>(c.accelerationStructure).native;
+                    build.geometryCount = static_cast<uint32_t>(geometries.size());
+                    build.pGeometries = geometries.data();
+                    VkPhysicalDeviceAccelerationStructurePropertiesKHR properties{};
+                    properties.sType =
+                        VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ACCELERATION_STRUCTURE_PROPERTIES_KHR;
+                    VkPhysicalDeviceProperties2 physicalProperties{};
+                    physicalProperties.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2;
+                    physicalProperties.pNext = &properties;
+                    vkGetPhysicalDeviceProperties2(physical_, &physicalProperties);
+                    const auto scratch = address(c.scratch);
+                    const auto alignment = std::max<uint64_t>(
+                        1, properties.minAccelerationStructureScratchOffsetAlignment);
+                    build.scratchData.deviceAddress = (scratch + alignment - 1) & ~(alignment - 1);
+                    VkAccelerationStructureBuildRangeInfoKHR range{};
+                    range.primitiveCount = primitiveCounts.front();
+                    std::vector<VkAccelerationStructureBuildRangeInfoKHR> ranges(geometries.size(),
+                                                                                 range);
+                    for (size_t i = 0; i < ranges.size() && !accelerationStructure.desc.topLevel;
+                         ++i)
+                        ranges[i].primitiveCount = primitiveCounts[i];
+                    const VkAccelerationStructureBuildRangeInfoKHR* rangePointer = ranges.data();
+                    vkCmdBuildAccelerationStructuresKHR(list, 1, &build, &rangePointer);
+                }
                 else if constexpr (std::is_same_v<T, Marker>)
                 {
                     if (debug_)

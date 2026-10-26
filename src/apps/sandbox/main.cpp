@@ -32,6 +32,7 @@ std::string_view ApplicationUsage()
            "  --width N --height N        Output size (default: 1280x720)\n"
            "  --quality scene|low|medium|high  Shadow quality override\n"
            "  --view final|hdr|shadow|environment|brdf  Texture preview\n"
+           "  --pipeline forward|deferred|raytracing  Scene rendering path\n"
            "  --fixed-camera --debug-panel  Camera and native controls\n"
            "  --headless --benchmark N    Capture or measure a fixed scene\n"
            "  --benchmark-seconds S       Measure for a duration instead of a frame count\n"
@@ -96,7 +97,8 @@ int Run(const sandbox::Options& options, const std::filesystem::path& shaderRoot
         std::format("Supported: rayPipeline={}, rayQuery={}, descriptorIndexing={}, meshShader={}",
                     report.supported.rayTracingPipeline, report.supported.rayQuery,
                     report.supported.descriptorIndexing, report.supported.meshShader));
-    if (window || options.rhiTest || options.graphTest || !options.projectPath.empty())
+    if (window || options.rhiTest || options.graphTest || options.accelerationStructureTest ||
+        !options.projectPath.empty())
     {
         auto runtime = device->CreateRuntime();
         sandbox::RunRendering(window.get(), *device, *runtime, options, shaderRoot, logger);
@@ -156,7 +158,8 @@ int wmain(int argc, wchar_t** argv)
         const auto options = renderlab::sandbox::ParseOptions(arguments);
 #ifdef RENDERLAB_PLAYER
         if (!options.help && (options.projectPath.empty() || options.rhiTest || options.graphTest ||
-                              options.sceneTest || options.graphNoCull || options.graphNoUpdate))
+                              options.accelerationStructureTest || options.sceneTest ||
+                              options.graphNoCull || options.graphNoUpdate))
             throw std::invalid_argument(
                 "Player requires --project and does not run Sandbox acceptance demos");
 #endif

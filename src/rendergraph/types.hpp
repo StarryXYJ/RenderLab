@@ -54,7 +54,10 @@ enum class Use
     CopyDestination,
     Vertex,
     Index,
-    Indirect
+    Indirect,
+    AccelerationStructureBuildInput,
+    AccelerationStructureBuildWrite,
+    AccelerationStructureRead
 };
 enum class AttachmentAccess
 {

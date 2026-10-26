@@ -80,6 +80,12 @@ struct Dispatch
 {
     uint32_t x, y, z;
 };
+struct BuildAccelerationStructure
+{
+    std::shared_ptr<AccelerationStructure> accelerationStructure;
+    std::shared_ptr<Buffer> scratch;
+    bool update;
+};
 struct Marker
 {
     std::string name;
@@ -97,7 +103,8 @@ struct ResolveTimestamps
 using Command =
     std::variant<BufferBarrier, TextureBarrier, BufferCopy, TextureCopy, TextureToTextureCopy,
                  BeginRendering, EndRendering, SetPipeline, SetStencilReference, SetBindings,
-                 SetGeometry, Draw, DrawIndirect, Dispatch, Marker, Timestamp, ResolveTimestamps>;
+                 SetGeometry, Draw, DrawIndirect, Dispatch, BuildAccelerationStructure, Marker,
+                 Timestamp, ResolveTimestamps>;
 
 /**
  * @brief Single-threaded, one-shot command recording. Packets own every referenced object.
@@ -134,6 +141,7 @@ public:
     void DrawIndexed(uint32_t count, uint32_t first = 0);
     void DrawFrom(std::shared_ptr<Buffer> arguments, uint64_t offset = 0);
     void Compute(uint32_t x, uint32_t y, uint32_t z = 1);
+    void Build(std::shared_ptr<AccelerationStructure> accelerationStructure, bool update = false);
     void BeginMarker(std::string name);
     void EndMarker();
     void WriteTimestamp(uint32_t index);

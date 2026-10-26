@@ -142,6 +142,8 @@ Options ParseOptions(std::span<const std::string_view> arguments)
         {
             options.rhiTest = true;
         }
+        else if (arg == "--as-test")
+            options.accelerationStructureTest = true;
         else if (arg == "--scene-test")
             options.sceneTest = true;
         else if (arg == "--graph-test")
@@ -195,8 +197,9 @@ Options ParseOptions(std::span<const std::string_view> arguments)
     if (options.view != "final" && options.view != "hdr" && options.view != "shadow" &&
         options.view != "environment" && options.view != "brdf")
         throw std::invalid_argument("--view must be final, hdr, shadow, environment or brdf");
-    if (options.pipeline != "forward" && options.pipeline != "deferred")
-        throw std::invalid_argument("--pipeline must be forward or deferred");
+    if (options.pipeline != "forward" && options.pipeline != "deferred" &&
+        options.pipeline != "raytracing")
+        throw std::invalid_argument("--pipeline must be forward, deferred or raytracing");
     if (options.headless && options.debugPanel)
         throw std::invalid_argument("--debug-panel requires a window");
     if ((options.debugPanel || options.fixedCamera || options.Benchmark() ||
@@ -206,8 +209,8 @@ Options ParseOptions(std::span<const std::string_view> arguments)
         throw std::invalid_argument("Scene tools require --project");
     if (options.benchmarkFrames && options.benchmarkSeconds)
         throw std::invalid_argument("Select either --benchmark or --benchmark-seconds");
-    if (options.Benchmark() &&
-        (!options.headless || options.sceneTest || options.rhiTest || options.graphTest))
+    if (options.Benchmark() && (!options.headless || options.sceneTest || options.rhiTest ||
+                                options.graphTest || options.accelerationStructureTest))
         throw std::invalid_argument("Benchmark requires --headless and excludes acceptance demos");
     if (!options.Benchmark() &&
         (!options.samplesPath.empty() || options.warmupSeconds || options.warmupFrames != 5))
@@ -228,6 +231,7 @@ std::string_view Usage()
            "  --window-test               Exercise resize, minimize, restore and close\n"
            "  --frames N                  Present N frames then close\n"
            "  --rhi-test                  Verify transfers, lifetime, compute and raster readback\n"
+           "  --as-test                   Verify BLAS/TLAS builds and Ray Query\n"
            "  --graph-test                Verify graph/direct image equivalence and resource "
            "reuse\n"
            "  --graph-no-cull             Disable graph pass culling in the window demo\n"
@@ -239,7 +243,7 @@ std::string_view Usage()
            "  --width N --height N        Scene output size (default: 1280x720)\n"
            "  --quality scene|low|medium|high  Scene shadows, or 128/512/1024 resolution\n"
            "  --view final|hdr|shadow|environment|brdf  Select the displayed texture\n"
-           "  --pipeline forward|deferred  Select scene rendering path\n"
+           "  --pipeline forward|deferred|raytracing  Select scene rendering path\n"
            "  --debug-panel               Open native scene controls (F1 toggles)\n"
            "  --fixed-camera              Ignore camera movement keys\n"
            "  --profile PATH              Save CPU/GPU pass timing and memory JSON\n"

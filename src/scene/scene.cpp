@@ -304,6 +304,7 @@ Snapshot Extractor::Extract(const Scene& scene, float aspect,
             if (auto found = renderer.materials.find(surface.id); found != renderer.materials.end())
                 instance.material = found->second;
             ++snapshot.totalInstances;
+            snapshot.allInstances.push_back(instance);
             if (snapshot.light.shadows && snapshot.light.intensity > 0)
                 snapshot.shadowCasters.push_back(instance);
             if (!math::Visible(snapshot.viewProjection, instance.bounds))

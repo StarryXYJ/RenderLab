@@ -202,6 +202,19 @@ GBuffer 格式、深度重建、透明材质路径和限制见 [Deferred Pipelin
 
 Assets 与 .meta 纳入版本管理，Library 可以清除重建。不要原地改写命令正在使用的 Upload 数据。资产首次上传可等待，普通帧仍使用现有完成点与帧管理。
 
+### Ray Tracing 组合与 Ray Query
+
+支持 AS/Ray Query 的设备可在 Pipeline 菜单选择 **Ray Tracing**，CLI 使用 `--pipeline raytracing`。当前组合以 Deferred 为主体，通过独立 Ray Query Pass 生成方向光阴影可见性；Shadow 纹理查看项显示此可见性图。方向光的 Shadows 开关控制该效果。当前仅支持不透明静态几何，Masked 材质会给出诊断，透明材质仍走 Forward。
+
+```powershell
+out/build/windows-debug/renderlab_sandbox.exe --backend dx12 --validation on `
+  --project sample/m4/RayTracing.rlproject --pipeline raytracing --debug-panel
+out/build/windows-debug/renderlab_sandbox.exe --backend vulkan --headless --validation on --as-test
+ctest --test-dir out/build/windows-debug -R "acceleration_structure|ray_query_scene" --output-on-failure
+```
+
+RayTracing.rlproject 与 M4 项目共用 Assets，只保留不透明地面、球和立方体，适合在三种组合间对照。AS 接口、资源声明、scratch 与在途 TLAS 生命周期见 [光追基础](../docs/raytracing.md)。Path Tracing 按 M8 计划保留，Forward+ 按 M6 计划保留；实现后可加入现有类型化菜单选项表。
+
 ## M4.3 PBR 参考场景
 
 Pbr.rlproject 与原场景共用 Assets，独立选择固定材质球场景。上排从左至右是粗糙度 0.08/0.3/0.65/1 的金属，下排是对应非金属；下排第三个含 Normal Map，第四个含 Metallic-Roughness 图，底部小球演示 Unlit HDR。Studio、Normal 与 MR 图是原创程序测试纹理。

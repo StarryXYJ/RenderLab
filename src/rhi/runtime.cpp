@@ -4,6 +4,7 @@
 #include "rhi/detail/validation.hpp"
 
 #include <algorithm>
+#include <cmath>
 #include <utility>
 
 namespace renderlab::rhi
@@ -22,6 +23,17 @@ void Runtime::Validate(const BufferDesc& desc) const
     Require(desc.size > 0 && desc.size <= ledger_->stats.budget, "Invalid buffer size");
     Require(!desc.storage || desc.memory == Memory::Device,
             "Storage buffers require device memory");
+    Require(!desc.deviceAddress || SupportsAccelerationStructures(),
+            "Device-address buffers require enabled acceleration structure capabilities");
+    Require((!desc.deviceAddress && !desc.accelerationStructureInput &&
+             !desc.accelerationStructureStorage) ||
+                desc.memory != Memory::Readback,
+            "Readback buffers cannot participate in acceleration structure operations");
+    Require(!desc.accelerationStructureInput || desc.deviceAddress,
+            "Acceleration structure input requires a device address");
+    Require(!desc.accelerationStructureStorage ||
+                (desc.deviceAddress && desc.memory == Memory::Device),
+            "Acceleration structure storage requires device-local addressable memory");
 }
 void Runtime::Validate(const TextureDesc& desc) const
 {
@@ -31,6 +43,62 @@ void Runtime::Validate(const TextureDesc& desc) const
             "Depth texture requires attachment usage and forbids storage usage");
     Require(!desc.storage || desc.format == Format::Rgba8,
             "M1 storage textures require RGBA8_UNORM");
+}
+void Runtime::Validate(const AccelerationStructureDesc& desc) const
+{
+    Require(!desc.name.empty(), "Acceleration structure requires a name");
+    if (desc.topLevel)
+    {
+        Require(desc.geometries.empty(),
+                "Top-level acceleration structure requires instances only");
+        Require(desc.instances.size() <= 0xFFFFFF, "Too many acceleration structure instances");
+        for (const auto& instance : desc.instances)
+        {
+            CheckOwner(instance.bottomLevel);
+            Require(!instance.bottomLevel->desc.topLevel && instance.mask <= 0xFF &&
+                        instance.instanceId <= 0xFFFFFF,
+                    "Invalid top-level acceleration structure instance");
+            for (const auto value : instance.transform)
+                Require(std::isfinite(value), "Instance transform must be finite");
+            const auto& m = instance.transform;
+            const auto determinant = m[0] * (m[5] * m[10] - m[6] * m[9]) -
+                                     m[1] * (m[4] * m[10] - m[6] * m[8]) +
+                                     m[2] * (m[4] * m[9] - m[5] * m[8]);
+            Require(std::abs(determinant) > 1e-12f, "Instance transform must be invertible");
+        }
+    }
+    else
+    {
+        Require(desc.instances.empty() && !desc.geometries.empty(),
+                "Bottom-level acceleration structure requires triangle geometry only");
+        for (const auto& geometry : desc.geometries)
+        {
+            CheckOwner(geometry.vertices);
+            if (geometry.indices)
+                CheckOwner(geometry.indices);
+            Require(geometry.vertices->desc.deviceAddress &&
+                        geometry.vertices->desc.accelerationStructureInput &&
+                        geometry.vertexCount >= 3 && geometry.vertexStride >= 12 &&
+                        geometry.vertexStride % 4 == 0 && geometry.vertexOffset % 4 == 0 &&
+                        geometry.vertexOffset <= geometry.vertices->desc.size &&
+                        uint64_t(geometry.vertexCount) * geometry.vertexStride <=
+                            geometry.vertices->desc.size - geometry.vertexOffset,
+                    "Invalid triangle vertex buffer for acceleration structure");
+            if (geometry.indices)
+                Require(geometry.indices->desc.deviceAddress &&
+                            geometry.indices->desc.accelerationStructureInput &&
+                            geometry.indexCount >= 3 && geometry.indexCount % 3 == 0 &&
+                            geometry.indexOffset % 4 == 0 &&
+                            geometry.indexOffset <= geometry.indices->desc.size &&
+                            uint64_t(geometry.indexCount) * sizeof(uint32_t) <=
+                                geometry.indices->desc.size - geometry.indexOffset,
+                        "Invalid triangle index buffer for acceleration structure");
+            else
+                Require(geometry.indexCount == 0 && geometry.indexOffset == 0 &&
+                            geometry.vertexCount % 3 == 0,
+                        "Index data requires an index buffer");
+        }
+    }
 }
 void Runtime::Validate(const PipelineDesc& desc) const
 {
@@ -139,7 +207,17 @@ void Runtime::Validate(const std::shared_ptr<BindingLayout>& layout,
                     "Storage binding requires storage buffer usage");
             continue;
         }
-        Require(!b.buffer, "Texture/sampler slot contains a buffer");
+        if (entry.kind == BindingKind::AccelerationStructure)
+        {
+            CheckOwner(b.accelerationStructure);
+            Require(b.accelerationStructure->desc.topLevel,
+                    "Shader acceleration structure bindings require a TLAS");
+            Require(!b.view && !b.sampler && !b.buffer,
+                    "Acceleration structure slot contains another resource type");
+            continue;
+        }
+        Require(!b.buffer && !b.accelerationStructure,
+                "Texture/sampler slot contains a non-texture resource");
         if (entry.kind == BindingKind::Sampler)
         {
             CheckOwner(b.sampler);
@@ -163,6 +241,34 @@ std::shared_ptr<ShaderModule> Runtime::CreateShader(ShaderStage stage, std::vect
     Require(!code.empty() && code.size() % 4 == 0, "Invalid shader binary");
     Require(!entry.empty(), "Shader entry cannot be empty");
     return std::make_shared<ShaderModule>(this, stage, std::move(code), std::move(entry));
+}
+AccelerationStructureSizes
+Runtime::QueryAccelerationStructureSizes(const AccelerationStructureDesc& desc)
+{
+    if (!SupportsAccelerationStructures())
+        throw std::runtime_error("Device does not support acceleration structures");
+    Validate(desc);
+    const auto sizes = QueryAccelerationStructureSizesNative(desc);
+    Require(sizes.storage && sizes.storage <= ledger_->stats.budget &&
+                sizes.scratch <= ledger_->stats.budget,
+            "Invalid or over-budget acceleration structure sizes");
+    return sizes;
+}
+AccelerationStructureSizes
+Runtime::QueryAccelerationStructureSizesNative(const AccelerationStructureDesc&)
+{
+    throw std::runtime_error("Acceleration structures are not implemented by this runtime");
+}
+std::shared_ptr<AccelerationStructure>
+Runtime::CreateAccelerationStructureNative(AccelerationStructureDesc, AccelerationStructureSizes)
+{
+    throw std::runtime_error("Acceleration structures are not implemented by this runtime");
+}
+std::shared_ptr<AccelerationStructure>
+Runtime::CreateAccelerationStructure(const AccelerationStructureDesc& desc)
+{
+    Validate(desc);
+    return CreateAccelerationStructureNative(desc, QueryAccelerationStructureSizes(desc));
 }
 std::unique_ptr<CommandList> Runtime::CreateCommands()
 {

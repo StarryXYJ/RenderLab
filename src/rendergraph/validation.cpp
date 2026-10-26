@@ -32,13 +32,19 @@ rhi::State StateFor(Use use)
         return rhi::State::Index;
     case Use::Indirect:
         return rhi::State::Indirect;
+    case Use::AccelerationStructureBuildInput:
+        return rhi::State::AccelerationStructureBuildInput;
+    case Use::AccelerationStructureBuildWrite:
+        return rhi::State::AccelerationStructureBuildWrite;
+    case Use::AccelerationStructureRead:
+        return rhi::State::AccelerationStructureRead;
     }
     throw std::invalid_argument("Unknown graph usage");
 }
 bool IsReadOnly(Use use)
 {
     return use != Use::Storage && use != Use::Color && use != Use::Depth &&
-           use != Use::CopyDestination;
+           use != Use::CopyDestination && use != Use::AccelerationStructureBuildWrite;
 }
 void Graph::Impl::ValidateState(const detail::Resource& r, rhi::State state) const
 {
@@ -55,9 +61,15 @@ void Graph::Impl::ValidateState(const detail::Resource& r, rhi::State state) con
                  rhi::IsDepthFormat(r.textureDesc.format)) ||
                 (state == rhi::State::Present && r.imported);
     }
+    else if (r.bufferDesc.accelerationStructureStorage)
+        valid = state == rhi::State::Undefined ||
+                state == rhi::State::AccelerationStructureBuildWrite ||
+                state == rhi::State::AccelerationStructureRead;
     else if (r.bufferDesc.memory == rhi::Memory::Upload)
         valid = state == rhi::State::HostWrite || state == rhi::State::CopySource ||
-                state == rhi::State::UniformRead || state == rhi::State::ShaderRead;
+                state == rhi::State::UniformRead || state == rhi::State::ShaderRead ||
+                (state == rhi::State::AccelerationStructureBuildInput &&
+                 r.bufferDesc.accelerationStructureInput);
     else if (r.bufferDesc.memory == rhi::Memory::Readback)
         valid = state == rhi::State::CopyDest || state == rhi::State::HostRead;
     else
@@ -65,7 +77,12 @@ void Graph::Impl::ValidateState(const detail::Resource& r, rhi::State state) con
                 state == rhi::State::CopyDest || state == rhi::State::UniformRead ||
                 state == rhi::State::ShaderRead || state == rhi::State::Vertex ||
                 state == rhi::State::Index || state == rhi::State::Indirect ||
-                (state == rhi::State::Storage && r.bufferDesc.storage);
+                (state == rhi::State::Storage && r.bufferDesc.storage) ||
+                (state == rhi::State::AccelerationStructureBuildInput &&
+                 r.bufferDesc.accelerationStructureInput) ||
+                ((state == rhi::State::AccelerationStructureBuildWrite ||
+                  state == rhi::State::AccelerationStructureRead) &&
+                 (r.bufferDesc.accelerationStructureStorage || r.bufferDesc.storage));
     Require(valid, "Invalid import/export state for " + r.Name());
 }
 void Graph::Impl::ValidateUse(uint32_t index, const detail::Resource& r, Use use, bool write) const
@@ -73,7 +90,8 @@ void Graph::Impl::ValidateUse(uint32_t index, const detail::Resource& r, Use use
     const auto& pass = passes[index];
     const auto suffix = " in " + pass.name + " (" + pass.source + ") on " + r.Name();
     Require(!write || !IsReadOnly(use), "Write to read-only use" + suffix);
-    Require(write || (use != Use::CopyDestination && use != Use::Color && use != Use::Depth),
+    Require(write || (use != Use::CopyDestination && use != Use::Color && use != Use::Depth &&
+                      use != Use::AccelerationStructureBuildWrite),
             "Read requires a read usage" + suffix);
     Require(pass.kind != PassKind::Copy || use == Use::CopySource || use == Use::CopyDestination,
             "Copy pass contains shader/raster access" + suffix);
@@ -101,6 +119,10 @@ void Graph::Impl::ValidateUse(uint32_t index, const detail::Resource& r, Use use
     }
     else
     {
+        Require(!r.bufferDesc.accelerationStructureStorage ||
+                    use == Use::AccelerationStructureBuildWrite ||
+                    use == Use::AccelerationStructureRead,
+                "AS storage cannot be used as an ordinary buffer" + suffix);
         Require(use != Use::Sampled && use != Use::Color && use != Use::Depth &&
                     use != Use::DepthRead,
                 "Texture usage on buffer" + suffix);
@@ -108,10 +130,21 @@ void Graph::Impl::ValidateUse(uint32_t index, const detail::Resource& r, Use use
         Require(r.bufferDesc.memory != rhi::Memory::Readback ||
                     (write && use == Use::CopyDestination),
                 "Readback buffer is a copy destination only" + suffix);
-        Require(r.bufferDesc.memory != rhi::Memory::Upload ||
-                    (!write &&
-                     (use == Use::CopySource || use == Use::Uniform || use == Use::ShaderRead)),
-                "Upload buffer is a GPU read source only" + suffix);
+        Require(
+            r.bufferDesc.memory != rhi::Memory::Upload ||
+                (!write && (use == Use::CopySource || use == Use::Uniform ||
+                            use == Use::ShaderRead || use == Use::AccelerationStructureBuildInput)),
+            "Upload buffer is a GPU read source only" + suffix);
+        Require(use != Use::AccelerationStructureBuildInput ||
+                    (r.bufferDesc.deviceAddress && r.bufferDesc.accelerationStructureInput),
+                "Acceleration structure input buffer lacks required usage" + suffix);
+        Require((use != Use::AccelerationStructureBuildWrite &&
+                 use != Use::AccelerationStructureRead) ||
+                    (r.bufferDesc.deviceAddress &&
+                     (r.bufferDesc.accelerationStructureStorage || r.bufferDesc.storage)),
+                "Acceleration structure storage buffer lacks required usage" + suffix);
+        Require(use != Use::AccelerationStructureRead || r.bufferDesc.accelerationStructureStorage,
+                "Acceleration structure traversal requires AS storage" + suffix);
     }
 }
 void Graph::Impl::Scope(uint32_t pass) const
@@ -149,11 +182,15 @@ void Graph::Impl::ValidateBindings(uint32_t pass, const rhi::BindingGroup& group
         const auto use = entry.kind == rhi::BindingKind::ConstantBuffer   ? Use::Uniform
                          : entry.kind == rhi::BindingKind::ReadOnlyBuffer ? Use::ShaderRead
                          : entry.kind == rhi::BindingKind::SampledTexture ? Use::Sampled
-                                                                          : Use::Storage;
+                         : entry.kind == rhi::BindingKind::AccelerationStructure
+                             ? Use::AccelerationStructureRead
+                             : Use::Storage;
         const auto resource =
             std::ranges::find_if(resources,
                                  [&](auto& r)
                                  {
+                                     if (found->accelerationStructure)
+                                         return r.buffer == found->accelerationStructure->storage;
                                      return found->buffer
                                                 ? r.buffer == found->buffer
                                                 : found->view && r.texture == found->view->texture;

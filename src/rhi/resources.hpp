@@ -2,6 +2,7 @@
 
 #include "rhi/render_state.hpp"
 
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <memory>
@@ -55,7 +56,10 @@ enum class State
     HostRead,
     HostWrite,
     UniformRead,
-    ShaderRead
+    ShaderRead,
+    AccelerationStructureBuildInput,
+    AccelerationStructureBuildWrite,
+    AccelerationStructureRead
 };
 enum class BindingKind
 {
@@ -64,13 +68,17 @@ enum class BindingKind
     Sampler,
     ConstantBuffer,
     ReadOnlyBuffer,
-    StorageBuffer
+    StorageBuffer,
+    AccelerationStructure
 };
 enum class ShaderStage
 {
     Vertex,
     Pixel,
-    Compute
+    Compute,
+    RayGeneration,
+    Miss,
+    ClosestHit
 };
 enum class VertexFormat
 {
@@ -128,6 +136,9 @@ struct BufferDesc
     Memory memory = Memory::Device;
     std::string name;
     bool storage = false;
+    bool deviceAddress = false;
+    bool accelerationStructureInput = false;
+    bool accelerationStructureStorage = false;
 };
 struct TextureDesc
 {
@@ -187,6 +198,7 @@ struct BindingLayout : Object
     }
     const std::vector<BindingDesc> entries;
 };
+struct AccelerationStructure;
 struct Binding
 {
     uint32_t slot;
@@ -197,6 +209,49 @@ struct Binding
     uint64_t size = 0;
     uint32_t stride = 0;
     uint32_t space = 0;
+    std::shared_ptr<AccelerationStructure> accelerationStructure;
+};
+struct AccelerationStructureGeometry
+{
+    std::shared_ptr<Buffer> vertices;
+    std::shared_ptr<Buffer> indices;
+    uint64_t vertexOffset = 0, indexOffset = 0;
+    uint32_t vertexCount = 0, indexCount = 0, vertexStride = 0;
+};
+struct AccelerationStructureInstance
+{
+    std::shared_ptr<AccelerationStructure> bottomLevel;
+    /// Row-major 3x4 affine transform required by the native instance formats.
+    std::array<float, 12> transform{1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0};
+    uint32_t instanceId = 0, mask = 0xff;
+};
+struct AccelerationStructureDesc
+{
+    std::string name;
+    bool topLevel = false;
+    bool allowUpdate = false;
+    std::vector<AccelerationStructureGeometry> geometries;
+    std::vector<AccelerationStructureInstance> instances;
+};
+struct AccelerationStructureSizes
+{
+    uint64_t storage = 0, scratch = 0, updateScratch = 0;
+};
+struct AccelerationStructure : Object
+{
+    AccelerationStructure(const void* owner, AccelerationStructureDesc desc,
+                          AccelerationStructureSizes sizes, std::shared_ptr<Buffer> storage,
+                          std::shared_ptr<Buffer> scratch, std::shared_ptr<Buffer> instanceData)
+        : Object(owner), desc(std::move(desc)), sizes(sizes), storage(std::move(storage)),
+          scratch(std::move(scratch)), instanceData(std::move(instanceData))
+    {
+    }
+    const AccelerationStructureDesc desc;
+    const AccelerationStructureSizes sizes;
+    const std::shared_ptr<Buffer> storage;
+    /// May be released after submission; recorded build packets retain their scratch allocation.
+    std::shared_ptr<Buffer> scratch;
+    const std::shared_ptr<Buffer> instanceData;
 };
 struct BindingGroup : Object
 {

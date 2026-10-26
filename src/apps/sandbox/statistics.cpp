@@ -17,8 +17,9 @@ namespace renderlab::sandbox
 renderer::SceneRenderOptions RenderOptions(const Options& options)
 {
     renderer::SceneRenderOptions render;
-    render.pipeline = options.pipeline == "deferred" ? renderer::PipelineType::Deferred
-                                                       : renderer::PipelineType::Forward;
+    render.pipeline = options.pipeline == "deferred"     ? renderer::PipelineType::Deferred
+                      : options.pipeline == "raytracing" ? renderer::PipelineType::RayTracing
+                                                         : renderer::PipelineType::Forward;
     render.profile = options.debugPanel || !options.profilePath.empty() || options.Benchmark();
     if (options.quality != "scene")
         render.shadowResolution = options.quality == "low"      ? 128u

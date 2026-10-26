@@ -85,12 +85,15 @@ struct FakeRuntime : rhi::Runtime
     {
         return std::make_shared<rhi::Texture>(this, d);
     }
-    std::shared_ptr<rhi::TextureView> CreateView(std::shared_ptr<rhi::Texture> t) override
+    using rhi::Runtime::CreateView;
+    std::shared_ptr<rhi::TextureView> CreateView(std::shared_ptr<rhi::Texture> t,
+                                                 rhi::TextureViewUsage usage) override
     {
-        if (auto cached = t->defaultView.lock())
+        auto& cache = usage == rhi::TextureViewUsage::Sampled ? t->sampledView : t->defaultView;
+        if (auto cached = cache.lock())
             return cached;
-        auto view = std::make_shared<rhi::TextureView>(t);
-        t->defaultView = view;
+        auto view = std::make_shared<rhi::TextureView>(t, usage);
+        cache = view;
         return view;
     }
     std::shared_ptr<rhi::Sampler> CreateSampler() override
@@ -755,6 +758,48 @@ void ProfilingContracts()
     profile.completion = 1;
     Fails([&] { profile.Read(runtime); }, "completed submission");
 }
+void AccelerationStructureContracts()
+{
+    FakeRuntime runtime;
+    rhi::AccelerationStructureDesc unsupported;
+    unsupported.name = "Unsupported.TLAS";
+    unsupported.topLevel = true;
+    Fails([&] { runtime.QueryAccelerationStructureSizes(unsupported); },
+          "does not support acceleration structures");
+    const rhi::BufferDesc storage{256, rhi::Memory::Device, "AS", false, true, false, true};
+    {
+        Graph graph;
+        auto target = graph.CreateBuffer("AS", storage);
+        auto pass = graph.AddComputePass("UpdateBeforeBuild");
+        pass.ReadWriteBuffer(target, Use::AccelerationStructureBuildWrite);
+        pass.SideEffect();
+        pass.Execute([](ComputeContext&) {});
+        Fails([&] { graph.Compile(); }, "Read before initialization");
+    }
+    {
+        Graph graph;
+        auto target = graph.CreateBuffer("AS", storage);
+        auto build = graph.AddComputePass("Build");
+        target = build.WriteBuffer(target, Use::AccelerationStructureBuildWrite);
+        build.Execute([](ComputeContext&) {});
+        auto update = graph.AddComputePass("Update");
+        target = update.ReadWriteBuffer(target, Use::AccelerationStructureBuildWrite);
+        update.Execute([](ComputeContext&) {});
+        auto trace = graph.AddComputePass("Trace");
+        trace.ReadBuffer(target, Use::AccelerationStructureRead);
+        trace.SideEffect();
+        trace.Execute([](ComputeContext&) {});
+        Require(graph.Compile().schedule.size() == 3,
+                "A preserving AS update must retain the original build producer");
+    }
+    {
+        Graph graph;
+        auto target = graph.CreateBuffer("AS", storage);
+        auto pass = graph.AddComputePass("InvalidRead");
+        Fails([&] { pass.ReadBuffer(target, Use::ShaderRead); },
+              "AS storage cannot be used as an ordinary buffer");
+    }
+}
 } // namespace
 int main()
 {
@@ -769,6 +814,7 @@ int main()
         ForwardContracts();
         StencilContracts();
         ProfilingContracts();
+        AccelerationStructureContracts();
         std::cout << "Graph contracts passed: names, typed passes, versions, culling, hazards, "
                      "bindings and lifetime\n";
         return 0;

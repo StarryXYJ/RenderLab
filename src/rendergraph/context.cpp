@@ -94,6 +94,24 @@ void BindingContext::BindSampler(uint32_t slot, std::shared_ptr<rhi::Sampler> sa
     b.space = space;
     SetBinding(std::move(b));
 }
+void BindingContext::BindAccelerationStructure(
+    uint32_t slot, std::shared_ptr<rhi::AccelerationStructure> accelerationStructure,
+    BufferHandle storage, uint32_t space)
+{
+    auto& g = *graph_.impl_;
+    g.Scope(pass_);
+    Require(Kind(pipeline_, slot, space) == rhi::BindingKind::AccelerationStructure,
+            "Acceleration structure binding kind mismatch");
+    Require(bool(accelerationStructure), "Acceleration structure binding is null");
+    auto& resource = g.Resolve(pass_, storage.graph, storage.resource, storage.version, false,
+                               Use::AccelerationStructureRead);
+    Require(resource.buffer == accelerationStructure->storage,
+            "Acceleration structure binding does not match its declared storage");
+    rhi::Binding binding{slot};
+    binding.accelerationStructure = std::move(accelerationStructure);
+    binding.space = space;
+    SetBinding(std::move(binding));
+}
 void BindingContext::FlushBindings()
 {
     auto& g = *graph_.impl_;
@@ -151,6 +169,51 @@ void ComputeContext::Dispatch(uint32_t x, uint32_t y, uint32_t z)
 {
     FlushBindings();
     commands_.Compute(x, y, z);
+}
+void ComputeContext::BuildAccelerationStructure(
+    std::shared_ptr<rhi::AccelerationStructure> accelerationStructure, BufferHandle storage,
+    BufferHandle scratch, bool update)
+{
+    auto& g = *graph_.impl_;
+    g.Scope(pass_);
+    Require(bool(accelerationStructure), "Acceleration structure build target is null");
+    auto& output = g.Resolve(pass_, storage.graph, storage.resource, storage.version, false,
+                             Use::AccelerationStructureBuildWrite);
+    auto& temporary = g.Resolve(pass_, scratch.graph, scratch.resource, scratch.version, false,
+                                Use::AccelerationStructureBuildWrite);
+    Require(output.buffer == accelerationStructure->storage &&
+                temporary.buffer == accelerationStructure->scratch,
+            "Acceleration structure output/scratch declarations do not match the build target");
+    Require(!update || std::ranges::any_of(g.passes[pass_].accesses,
+                                           [&](const auto& access)
+                                           {
+                                               return access.resource == storage.resource &&
+                                                      access.output == storage.version &&
+                                                      access.read && access.write;
+                                           }),
+            "Acceleration structure update requires a preserving ReadWrite declaration");
+    const auto requireInput = [&](const std::shared_ptr<rhi::Buffer>& buffer, Use use)
+    {
+        const auto resource = std::ranges::find(g.resources, buffer, &detail::Resource::buffer);
+        Require(resource != g.resources.end(),
+                "Acceleration structure build input is not imported into the graph");
+        const auto index = static_cast<uint32_t>(resource - g.resources.begin());
+        Require(std::ranges::any_of(
+                    g.passes[pass_].accesses, [&](const auto& access)
+                    { return access.resource == index && access.read && access.use == use; }),
+                "Acceleration structure build input was not declared read-only");
+    };
+    for (const auto& geometry : accelerationStructure->desc.geometries)
+    {
+        requireInput(geometry.vertices, Use::AccelerationStructureBuildInput);
+        if (geometry.indices)
+            requireInput(geometry.indices, Use::AccelerationStructureBuildInput);
+    }
+    if (accelerationStructure->instanceData)
+        requireInput(accelerationStructure->instanceData, Use::AccelerationStructureBuildInput);
+    for (const auto& instance : accelerationStructure->desc.instances)
+        requireInput(instance.bottomLevel->storage, Use::AccelerationStructureRead);
+    commands_.Build(std::move(accelerationStructure), update);
 }
 void CopyContext::Copy(BufferHandle source, BufferHandle destination, uint64_t size,
                        uint64_t sourceOffset, uint64_t destinationOffset)

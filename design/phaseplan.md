@@ -5,7 +5,7 @@
 ## 当前状态
 
 - 当前实施阶段：M0–M4、R1、B1–B3 DONE；M5 IN_PROGRESS。
-- 当前工作项：M5.2 加速结构与 Ray Query。
+- 当前工作项：M5.3 Ray Tracing Pipeline。
 - 用户约定：每个子阶段验收完成即提交 Git，无阻塞时在当前授权范围内继续推进。
 
 | 阶段 | 目标 | 前置依赖 | 状态 |
@@ -169,13 +169,19 @@ R1 契约修订、B1 样例整理/Benchmark、B2 调查和 B3 资源复用已完
 
 边界：三张全分辨率 RGBA32F 目标带宽较高；自定义不透明 Shader 必须提供 GBuffer 角色。Path Tracing 与 Forward+ 尚未实现，菜单只显示已实现组合；其他 GPU 未验证。
 
+后续修复：M5.2 增加 Unlit GBuffer 标记，保持 Forward 输出并跳过 PBR 光照；补齐 MRT/采样视图修改后的 FakeRuntime 与共享 LitSurface 改名回归。双后端 surface 验证通过。
+
 ### M5.2 加速结构与 Ray Query
 
-- [ ] BLAS/TLAS 尺寸查询、构建、scratch 与图访问声明。
-- [ ] 静态网格复用 BLAS，Transform 变化更新 TLAS，正确管理在途版本。
-- [ ] 用 Ray Query 实现独立 RayTracedShadow 或 AO Feature，共用实例索引，以 ShadowVisibility 等明确资源接入光栅照明。
+状态：DONE，日期：2026 年 10 月 26 日。
 
-验收构建后查询、对象增删/移动、相机变化以及不支持能力时的诊断。动态顶点与蒙皮先报告不支持。
+结果：双后端 BLAS/TLAS 原生尺寸查询、build/update、设备地址、scratch 保活及 Graph BuildInput/BuildWrite/Read 声明；静态 Mesh 复用 BLAS，独立 allInstances 列表驱动不可变 TLAS 版本重建。RayTracing 组合以独立 Ray Query Pass 生成 ShadowVisibility，接入 Deferred 直接光；面板和 CLI 可选 Forward/Deferred/Ray Tracing。新增 [RayTracing 参考项目](../sample/m4/RayTracing.rlproject)。
+
+验证：MSVC Debug/NMake 构建 Sandbox、Surface、Graph、Core 目标。RTX 5060 上所选 CTest 14 项通过（core/graph；双后端 AS、Ray Query Scene、surface、deferred、rhi、tools_window），validation errors=0；覆盖原生 build/update、空 TLAS、提交后释放 scratch、对象增删/移动、相机复用、两帧在途版本、接收面阴影和 Unlit 对照。新增参考场景 DX12/Vulkan 窗口各 54 帧、10 次重建；640×360 离线输出均通过，validation errors=0。不支持能力诊断由 CPU 合约验证。
+
+边界：仅不透明三角形，Masked 显式拒绝，透明继续 Forward 且不进入 AS；场景 Transform 更新采用新 TLAS 重建，动态顶点/蒙皮、压缩未实现。DX12 清除值优化和 Vulkan 未消费顶点属性仍有非错误警告。其他 GPU 未验证；WARP 软件路径探测未完成，不计通过。TraceRays 与反射集成继续 M5.3/M5.4，Path Tracing 仍按 M8 计划保留。
+
+入口：[接口与生命周期](../docs/raytracing.md)、[运行与验收](../manual/build.md#ray-tracing-组合与-ray-query)。
 
 ### M5.3 Ray Tracing Pipeline
 

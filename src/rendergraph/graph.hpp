@@ -54,6 +54,8 @@ public:
     TextureHandle ReadWriteTexture(std::string_view name, TextureRange range = {});
     BufferHandle ReadWriteBuffer(BufferHandle handle, BufferRange range = {});
     BufferHandle ReadWriteBuffer(std::string_view name, BufferRange range = {});
+    BufferHandle ReadWriteBuffer(BufferHandle handle, Use use, BufferRange range = {});
+    BufferHandle ReadWriteBuffer(std::string_view name, Use use, BufferRange range = {});
     void SideEffect();
     PassHandle Handle() const;
 

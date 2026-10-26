@@ -18,7 +18,7 @@ struct DebugControls
 class DebugPanel final
 {
 public:
-    DebugPanel(platform::NativeSurface owner, DebugControls controls);
+    DebugPanel(platform::NativeSurface owner, DebugControls controls, bool rayTracingAvailable);
     ~DebugPanel();
     DebugPanel(const DebugPanel&) = delete;
     DebugPanel& operator=(const DebugPanel&) = delete;

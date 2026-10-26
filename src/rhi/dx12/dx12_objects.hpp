@@ -117,4 +117,8 @@ struct DxPipeline : Pipeline
     using Pipeline::Pipeline;
     ComPtr<ID3D12PipelineState> native;
 };
+struct DxAccelerationStructure final : AccelerationStructure
+{
+    using AccelerationStructure::AccelerationStructure;
+};
 } // namespace renderlab::rhi::dx12

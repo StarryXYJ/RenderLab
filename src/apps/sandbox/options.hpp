@@ -32,6 +32,7 @@ struct Options
     bool headless = false;
     bool windowTest = false;
     bool rhiTest = false;
+    bool accelerationStructureTest = false;
     bool sceneTest = false;
     bool graphTest = false, graphNoCull = false, graphNoUpdate = false;
     std::string graphDumpPath;

@@ -361,6 +361,8 @@ BLAS 管理几何，TLAS 管理场景实例；通过统一的 InstanceID、MeshI
 
 两者都依赖加速结构，但设备能力分别检测。完整光追作为正式目标保留，第一阶段只完成最小可验证样例。路径追踪的采样序列、累积和降噪是独立渲染功能；相机、场景、材质或分辨率变化时明确失效历史。
 
+M5 的 AS 实现通过明确的 BuildInput、BuildWrite 与 Read 用途把底层存储 Buffer 纳入图依赖；构建 Context 核对目标、scratch、几何/实例输入和 BLAS 引用，绑定 Context 核对 TLAS 与已声明存储的对应关系。静态 Mesh 复用 BLAS，实例变化重建不可变 TLAS 版本；命令包单独保活 scratch，提交后可释放宿主引用。Ray Tracing 组合在 GBuffer 后用独立 Ray Query Pass 生成 ShadowVisibility，再由 Deferred Lighting 消费。能力、资源和材质边界见 [光追基础](../docs/raytracing.md)。
+
 渲染图描述可静态组织的 GPU 阶段，射线遍历、路径队列和逐路径分支留在 Shader 与积分器内部，不为每条射线生成图节点。GPU 生成的数量通过间接执行或有界 Dispatch 消费，不在热路径读回 CPU 再决定本帧命令。射线 Payload 和队列元素只携带后续工作必需的数据，避免把完整表面对象跨阶段搬运。组织方式以正确的简单基线为起点，测量分支、寄存器和内存流量后再拆分。[pbrt GPU 任务组织](https://pbr-book.org/4ed/Wavefront_Rendering_on_GPUs/Mapping_Path_Tracing_to_the_GPU)
 
 ## 可组合渲染管线

@@ -180,6 +180,33 @@ void Gpu(rhi::Runtime& runtime, shader::Target target, const std::filesystem::pa
         offscreenDarkened += offscreen[i] + 15 < offscreenUnshadowed[i];
     Require(offscreenDarkened > 20, "Camera-culled caster must still shadow the visible receiver");
 
+    if (runtime.SupportsAccelerationStructures() && runtime.SupportsRayQuery())
+    {
+        document = original;
+        object("masked").enabled = false;
+        object("glass").enabled = false;
+        renderer::SceneRenderOptions raySettings;
+        raySettings.pipeline = renderer::PipelineType::RayTracing;
+        const auto rayShadow = render("ray-query-shadow", raySettings);
+        object("sun").light->shadows = false;
+        const auto rayUnshadowed = render("ray-query-unshadowed", raySettings);
+        size_t rayDarkened = 0, rayBrightened = 0;
+        for (size_t i = 0; i < rayShadow.size(); i += 4)
+        {
+            const int shadowValue = rayShadow[i] + rayShadow[i + 1] + rayShadow[i + 2];
+            const int litValue = rayUnshadowed[i] + rayUnshadowed[i + 1] + rayUnshadowed[i + 2];
+            rayDarkened += shadowValue + 20 < litValue;
+            rayBrightened += litValue + 5 < shadowValue;
+        }
+        Require(rayDarkened > 100 && rayBrightened == 0,
+                "Ray Query visibility must darken direct light on the receiver");
+        object("sun").light->intensity = 0;
+        const auto rayAmbient = render("ray-query-ambient", raySettings);
+        object("sun").light->shadows = true;
+        Require(render("ray-query-ambient-shadow-enabled", raySettings) == rayAmbient,
+                "Ray Query shadows must preserve ambient light and emission");
+    }
+
     // Two intersecting view rays through separate planar layers exercise real linear HDR blend.
     // UUID order deliberately places the near layer first; distance sorting must reverse it.
     shader::CompileOptions compile;
@@ -248,7 +275,11 @@ void Gpu(rhi::Runtime& runtime, shader::Target target, const std::filesystem::pa
     Require(render("masked-discard") == zero,
             "Masked alpha below cutoff must leave color and depth untouched");
     save(nearMaterial, {1, 0, 0, .25}, "Default");
-    expect(render("opaque-ignores-alpha"), {1, 0, 0});
+    const auto unlitForward = render("opaque-ignores-alpha");
+    expect(unlitForward, {1, 0, 0});
+    Require(render("unlit-deferred", {.pipeline = renderer::PipelineType::Deferred}) ==
+                unlitForward,
+            "Unlit GBuffer must preserve Forward output without applying PBR lighting");
     document.Get(nearLayer.id).transform.position.z = .5f;
     const auto depthOccluded = render("transparent-depth-test");
     expect(depthOccluded, {.5f, 0, .5f});
@@ -269,6 +300,8 @@ void Gpu(rhi::Runtime& runtime, shader::Target target, const std::filesystem::pa
     {
         document = original;
         const auto baseline = render("policy-before-rename");
+        const auto deferredBaseline =
+            render("policy-before-rename-deferred", {.pipeline = renderer::PipelineType::Deferred});
         const auto isolatedEngine = root / "engine";
         std::filesystem::create_directories(isolatedEngine);
         std::filesystem::copy(engine / "RenderLab", isolatedEngine / "RenderLab",
@@ -288,9 +321,11 @@ void Gpu(rhi::Runtime& runtime, shader::Target target, const std::filesystem::pa
             };
             replace("pass Forward", "pass ArbitraryBeautyName");
             replace("pass Shadow", "pass ArbitraryCasterName");
+            replace("pass GBuffer", "pass ArbitraryGBufferName");
             replace(std::string("shader \"RenderLab/") + name + "\"",
                     std::string("shader \"DisplayName/") + name + "\"");
             replace(std::string(name) + ".hlsl:", std::string("Renamed") + name + ".hlsl:");
+            replace("LitGBuffer.hlsl:", "RenamedLitGBuffer.hlsl:");
             replace("Shadow.hlsl:", "RenamedShadow.hlsl:");
             replace("float4 BaseColor =", "float4 TintAlias =");
             replace("Texture2D<float4> BaseMap =", "Texture2D<float4> SurfaceMap =");
@@ -308,9 +343,10 @@ void Gpu(rhi::Runtime& runtime, shader::Target target, const std::filesystem::pa
             std::filesystem::rename(path, renamedShader);
             std::filesystem::rename(path.string() + ".meta", renamedShader.string() + ".meta");
         }
-        for (const auto name : {"Lit", "Unlit", "Shadow"})
+        for (const auto file :
+             {"Lit.hlsl", "LitGBuffer.hlsl", "LitSurface.hlsli", "Unlit.hlsl", "Shadow.hlsl"})
         {
-            const auto path = isolatedEngine / "RenderLab" / (std::string(name) + ".hlsl");
+            const auto path = isolatedEngine / "RenderLab" / file;
             auto source = shader::ReadText(path);
             const auto replace = [&](const std::string& from, const std::string& to)
             {
@@ -324,26 +360,35 @@ void Gpu(rhi::Runtime& runtime, shader::Target target, const std::filesystem::pa
             for (const auto block : {"SceneView", "SceneObject", "SceneLighting", "SceneShadow"})
                 replace(block, std::string("Renamed_") + block);
             replace(", MainLightShadow,", ", SunTexture,");
-            replace(", EnvironmentAtlas, BrdfLut", ", SkyTexture, LookupTexture");
+            replace("EnvironmentAtlas", "SkyTexture");
+            replace("BrdfLut", "LookupTexture");
+            replace("LitSurface.hlsli", "RenamedLitSurface.hlsli");
             replace("Material.BaseColor", "Material.TintAlias");
             replace("BaseMap", "SurfaceMap");
             WriteFileAtomically(path, std::as_bytes(std::span{source.data(), source.size()}));
-            std::filesystem::rename(path,
-                                    path.parent_path() / (std::string("Renamed") + name + ".hlsl"));
+            std::filesystem::rename(path, path.parent_path() / (std::string("Renamed") + file));
         }
         renderer::SceneRenderer renamed(runtime, target, root / "Shadow.rlproject", isolatedEngine);
         renamed.Document() = document;
         auto destination = runtime.CreateTexture(
             {257, 193, rhi::Format::Rgba8Srgb, false, true, "Policy.Renamed"});
-        const auto result = renamed.Render(destination, rhi::State::Undefined, nullptr, true,
-                                           output / "policy-renamed-stencil.json");
-        runtime.Wait(result.completion);
-        const auto bytes = result.pixels->Map();
-        for (size_t y = 0; y < 193; ++y)
-            Require(std::memcmp(bytes.data() + y * rhi::TextureRowPitch(257),
-                                baseline.data() + y * 257 * 4, 257 * 4) == 0,
-                    "Shader identity and renamed passes/properties/modules/resources/files must "
-                    "preserve scene pixels");
+        auto state = rhi::State::Undefined;
+        for (const auto& [pipeline, expected] :
+             std::array{std::pair{renderer::PipelineType::Forward, &baseline},
+                        std::pair{renderer::PipelineType::Deferred, &deferredBaseline}})
+        {
+            renderer::SceneRenderOptions settings;
+            settings.pipeline = pipeline;
+            const auto result = renamed.Render(destination, state, nullptr, true, {}, settings);
+            runtime.Wait(result.completion);
+            state = rhi::State::CopySource;
+            const auto bytes = result.pixels->Map();
+            for (size_t y = 0; y < 193; ++y)
+                Require(std::memcmp(bytes.data() + y * rhi::TextureRowPitch(257),
+                                    expected->data() + y * 257 * 4, 257 * 4) == 0,
+                        "Renamed shader identities, passes, properties, modules and shared "
+                        "libraries must preserve Forward/Deferred pixels");
+        }
     }
     renderer::SceneRenderOptions largest;
     largest.shadowResolution = 2048;

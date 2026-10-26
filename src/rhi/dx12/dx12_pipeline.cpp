@@ -208,13 +208,22 @@ std::shared_ptr<BindingGroup> DxRuntime::CreateGroup(std::shared_ptr<BindingLayo
             device_->CreateUnorderedAccessView(As<DxTexture>(binding.view->texture).native.Get(),
                                                nullptr, &desc, cpu);
         }
+        else if (entry.kind == BindingKind::AccelerationStructure)
+        {
+            D3D12_SHADER_RESOURCE_VIEW_DESC desc{};
+            desc.ViewDimension = D3D12_SRV_DIMENSION_RAYTRACING_ACCELERATION_STRUCTURE;
+            desc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+            desc.RaytracingAccelerationStructure.Location =
+                As<DxBuffer>(binding.accelerationStructure->storage).native->GetGPUVirtualAddress();
+            device_->CreateShaderResourceView(nullptr, &desc, cpu);
+        }
         else
         {
             D3D12_SHADER_RESOURCE_VIEW_DESC desc{};
             const auto format = binding.view->texture->desc.format;
-            desc.Format = format == Format::D32       ? DXGI_FORMAT_R32_FLOAT
-                          : format == Format::D32S8   ? DXGI_FORMAT_R32_FLOAT_X8X24_TYPELESS
-                                                     : NativeFormat(format);
+            desc.Format = format == Format::D32     ? DXGI_FORMAT_R32_FLOAT
+                          : format == Format::D32S8 ? DXGI_FORMAT_R32_FLOAT_X8X24_TYPELESS
+                                                    : NativeFormat(format);
             desc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
             desc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
             desc.Texture2D.MipLevels = 1;

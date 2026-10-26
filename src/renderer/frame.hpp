@@ -55,6 +55,13 @@ struct DrawPacket
 /** @brief Per-frame immutable inputs; no graph handles or ownership of graph outputs. */
 struct RenderFrame
 {
+    struct RayTracingInputs
+    {
+        std::shared_ptr<rhi::AccelerationStructure> scene;
+        std::string storage;
+        std::shared_ptr<rhi::Pipeline> shadowPipeline;
+        BufferBinding parameters;
+    } rayTracing;
     std::vector<DrawPacket> opaque, transparent;
     std::vector<DrawPacket> gbuffer;
     DrawPacket deferredLighting;

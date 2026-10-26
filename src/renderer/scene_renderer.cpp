@@ -1,6 +1,8 @@
 #include "renderer/scene_renderer.hpp"
 #include "material/render_state.hpp"
+#include "renderer/acceleration_scene.hpp"
 #include "renderer/builtin_shaders.hpp"
+#include "renderer/raytracing.hpp"
 
 #include "assets/io.hpp"
 #include "assets/json_io.hpp"
@@ -15,11 +17,13 @@
 #include "rhi/upload.hpp"
 #include "scene_parameters.hpp"
 #include "shader/compiler.hpp"
+#include "shader/dxc_compiler.hpp"
 
 #include <algorithm>
 #include <array>
 #include <cstring>
 #include <map>
+#include <optional>
 #include <stdexcept>
 #include <utility>
 
@@ -35,6 +39,7 @@ std::array<float, 4> Vector(math::Vec3 value, float w = 0)
 struct SceneRenderer::Impl
 {
     rhi::Runtime& runtime;
+    shader::Target shaderTarget;
     project::Project project;
     assets::Database database;
     scene::Scene document;
@@ -73,6 +78,8 @@ struct SceneRenderer::Impl
     material::Runtime materials;
     rendergraph::Pool pool;
     rhi::UploadPool uploadPool;
+    AccelerationScene accelerationScene;
+    std::shared_ptr<rhi::Pipeline> rayQueryShadow;
     RenderPipeline forwardPipeline =
         CreatePipeline(PipelineType::Forward)
             .AddFeature(std::make_shared<ShadowFeature>(), RenderStage::BeforeOpaque)
@@ -81,15 +88,20 @@ struct SceneRenderer::Impl
         CreatePipeline(PipelineType::Deferred)
             .AddFeature(std::make_shared<ShadowFeature>(), RenderStage::BeforeOpaque)
             .Create();
+    RenderPipeline rayTracingPipeline =
+        CreatePipeline(PipelineType::RayTracing)
+            .AddFeature(std::make_shared<ShadowFeature>(), RenderStage::BeforeOpaque)
+            .Create();
     math::Mat4 shadowMatrix = math::Mat4::Identity();
     scene::Extractor extractor;
     scene::Snapshot snapshot;
     Impl(rhi::Runtime& r, shader::Target target, const std::filesystem::path& manifest,
          const std::filesystem::path& engine)
-        : runtime(r), project(project::Project::Open(manifest, engine)), database(project),
-          document(scene::Scene::Load(database.Get(project.startScene).path)), materials(r, target),
+        : runtime(r), shaderTarget(target), project(project::Project::Open(manifest, engine)),
+          database(project), document(scene::Scene::Load(database.Get(project.startScene).path)),
+          materials(r, target),
           // Two 2048 shadow color/depth pairs plus 720p HDR/depth fit below the RHI budget.
-          pool(r, 64, 224ull * 1024 * 1024), uploadPool(r)
+          pool(r, 64, 224ull * 1024 * 1024), uploadPool(r), accelerationScene(r, pool)
     {
         for (const auto& file : std::filesystem::recursive_directory_iterator(project.engine))
         {
@@ -144,11 +156,13 @@ struct SceneRenderer::Impl
         EnsureModels();
     }
     std::shared_ptr<rhi::Buffer> Upload(std::span<const std::byte> bytes, const std::string& name,
-                                        rhi::State state)
+                                        rhi::State state, bool accelerationInput = false)
     {
         auto staging = runtime.CreateBuffer({bytes.size(), rhi::Memory::Upload, name + ".Upload"});
         std::memcpy(staging->Map().data(), bytes.data(), bytes.size());
-        auto destination = runtime.CreateBuffer({bytes.size(), rhi::Memory::Device, name});
+        const bool addressable = accelerationInput && runtime.SupportsAccelerationStructures();
+        auto destination = runtime.CreateBuffer(
+            {bytes.size(), rhi::Memory::Device, name, false, addressable, addressable});
         auto commands = runtime.CreateCommands();
         commands->Barrier(staging, rhi::State::HostWrite, rhi::State::CopySource);
         commands->Barrier(destination, rhi::State::Undefined, rhi::State::CopyDest);
@@ -225,16 +239,42 @@ struct SceneRenderer::Impl
                 for (const auto& mesh : model.meshes)
                 {
                     const auto name = model.id + "/" + mesh.id;
-                    geometry.emplace(name, Geometry{Upload(std::as_bytes(std::span{mesh.vertices}),
-                                                           name + ".Vertices", rhi::State::Vertex),
-                                                    Upload(std::as_bytes(std::span{mesh.indices}),
-                                                           name + ".Indices", rhi::State::Index)});
+                    geometry.emplace(name,
+                                     Geometry{Upload(std::as_bytes(std::span{mesh.vertices}),
+                                                     name + ".Vertices", rhi::State::Vertex, true),
+                                              Upload(std::as_bytes(std::span{mesh.indices}),
+                                                     name + ".Indices", rhi::State::Index, true)});
                 }
                 const auto id = model.id;
                 const auto& stored = models.emplace(id, std::move(model)).first->second;
                 for (size_t i = 0; i < stored.images.size(); ++i)
                     modelImages.emplace(id + "/Image/" + std::to_string(i), &stored.images[i]);
             }
+    }
+    void EnsureRayQueryProgram()
+    {
+        if (rayQueryShadow)
+            return;
+        if (!runtime.SupportsAccelerationStructures() || !runtime.SupportsRayQuery())
+            throw std::invalid_argument(
+                "Ray Tracing requires accelerationStructure and rayQuery device capabilities");
+        shader::ProgramRequest request;
+        request.entry = {rhi::ShaderStage::Compute,
+                         project.engine / "RenderLab" / "RayQueryShadow.hlsl", "CSMain"};
+        request.target = shaderTarget;
+        request.targetProfile = "cs_6_5";
+        if (shaderTarget == shader::Target::Spirv)
+            request.defines["SPIRV"] = "1";
+        shader::DxcCompiler compiler;
+        rhi::PipelineDesc description;
+        description.layout = runtime.CreateLayout({{0, rhi::BindingKind::AccelerationStructure},
+                                                   {1, rhi::BindingKind::SampledTexture},
+                                                   {2, rhi::BindingKind::SampledTexture},
+                                                   {3, rhi::BindingKind::ConstantBuffer},
+                                                   {4, rhi::BindingKind::StorageTexture}});
+        description.compute =
+            runtime.CreateShader(rhi::ShaderStage::Compute, compiler.Compile(request), "CSMain");
+        rayQueryShadow = runtime.CreatePipeline(std::move(description));
     }
     MaterialInput MaterialFor(const scene::Instance& instance, const assets::Surface& surface)
     {
@@ -425,6 +465,11 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
                                     const std::filesystem::path& dump, SceneRenderOptions options)
 {
     auto& self = *impl_;
+    const bool rayTracing = options.pipeline == PipelineType::RayTracing;
+    if (options.pipeline != PipelineType::Forward && options.pipeline != PipelineType::Deferred &&
+        !rayTracing)
+        throw std::invalid_argument("Unknown or unavailable scene render pipeline");
+    const bool deferred = options.pipeline != PipelineType::Forward;
     auto uploads = self.uploadPool.Begin();
     self.EnsureModels();
     self.snapshot = self.extractor.Extract(
@@ -438,6 +483,45 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
     }
     self.UpdateEnvironment();
     self.shadowMatrix = FitDirectionalShadow(self.snapshot);
+    std::vector<AccelerationScene::Instance> rayInstances;
+    if (rayTracing)
+    {
+        self.EnsureRayQueryProgram();
+        std::vector<AccelerationScene::Mesh> rayMeshes;
+        for (const auto& instance : self.snapshot.allInstances)
+        {
+            const auto& model = self.models.at(instance.model);
+            const auto mesh = std::ranges::find(model.meshes, instance.mesh, &assets::Mesh::id);
+            if (mesh == model.meshes.end())
+                throw std::logic_error("Ray Tracing snapshot references a missing mesh");
+            const auto material = self.MaterialFor(instance, model.materials.at(mesh->material));
+            const auto policy =
+                material::ResolvePolicy(material.package->definition, material.asset);
+            if (policy.surface == shader::SurfaceType::Transparent)
+                continue;
+            if (policy.alphaClip)
+                throw std::invalid_argument("Ray Tracing currently supports opaque geometry; "
+                                            "masked materials require any-hit alpha evaluation");
+            const auto key = model.id + "/" + mesh->id;
+            const auto& geometry = self.geometry.at(key);
+            rayMeshes.push_back({key, geometry.vertices, geometry.indices,
+                                 static_cast<uint32_t>(mesh->vertices.size()),
+                                 static_cast<uint32_t>(mesh->indices.size()),
+                                 sizeof(assets::Vertex)});
+            AccelerationScene::Instance rayInstance{
+                key, {}, static_cast<uint32_t>(rayInstances.size()), 2};
+            std::copy_n(instance.world.values.begin(), 12, rayInstance.transform.begin());
+            if (material.package->HasRole(shader::PassRole::ShadowCaster))
+            {
+                const auto& pass = material.package->GetPass(
+                    material.package->ResolvePass(shader::PassRole::ShadowCaster));
+                if (material::PassEnabled(material.package->definition, pass, material.asset))
+                    rayInstance.mask |= 1;
+            }
+            rayInstances.push_back(std::move(rayInstance));
+        }
+        self.accelerationScene.EnsureMeshes(rayMeshes);
+    }
     rendergraph::Graph graph;
     if (target->desc.format != rhi::Format::Rgba8Srgb &&
         target->desc.format != rhi::Format::Bgra8Srgb)
@@ -448,9 +532,6 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
     graph.ImportTexture("DisplayColor", target, {initial, initial != rhi::State::Undefined});
     graph.CreateTexture("CameraColor", {target->desc.width, target->desc.height,
                                         rhi::Format::Rgba32Float, false, true});
-    if (options.pipeline != PipelineType::Forward && options.pipeline != PipelineType::Deferred)
-        throw std::invalid_argument("Unknown or unavailable scene render pipeline");
-    const bool deferred = options.pipeline == PipelineType::Deferred;
     auto cameraDepthFormat = rhi::Format::D32;
     RenderFrame frame;
     const auto scan = [&](const std::vector<scene::Instance>& instances, shader::PassRole role,
@@ -463,7 +544,8 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
             if (mesh == model.meshes.end())
                 throw std::logic_error("Snapshot references missing mesh");
             const auto material = self.MaterialFor(instance, model.materials.at(mesh->material));
-            const auto policy = material::ResolvePolicy(material.package->definition, material.asset);
+            const auto policy =
+                material::ResolvePolicy(material.package->definition, material.asset);
             if (role == shader::PassRole::GBuffer &&
                 policy.surface == shader::SurfaceType::Transparent)
                 continue;
@@ -482,8 +564,8 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
                 format = rhi::Format::D32S8;
         }
     };
-    scan(self.snapshot.instances,
-         deferred ? shader::PassRole::GBuffer : shader::PassRole::Forward, cameraDepthFormat);
+    scan(self.snapshot.instances, deferred ? shader::PassRole::GBuffer : shader::PassRole::Forward,
+         cameraDepthFormat);
     if (deferred)
         scan(self.snapshot.instances, shader::PassRole::Forward, cameraDepthFormat);
     scan(self.snapshot.shadowCasters, shader::PassRole::ShadowCaster, frame.shadowDepthFormat);
@@ -513,6 +595,26 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
         imported.emplace(view->texture.get(), name);
         return name;
     };
+    std::optional<AccelerationScene::Prepared> preparedAcceleration;
+    if (rayTracing)
+    {
+        preparedAcceleration = self.accelerationScene.Build(graph, std::move(rayInstances));
+        frame.rayTracing.scene = preparedAcceleration->topLevel;
+        frame.rayTracing.storage = "RayTracing.SceneAS";
+        frame.rayTracing.shadowPipeline = self.rayQueryShadow;
+        RayQueryParameters parameters;
+        const auto inverse = math::Inverse(self.snapshot.viewProjection);
+        parameters.inverseViewProjection = inverse.values;
+        parameters.directionToLight = Vector(self.snapshot.light.direction);
+        parameters.shadowOptions = {
+            .002f, .001f, 10000,
+            self.snapshot.light.shadows && self.snapshot.light.intensity > 0 ? 1.f : 0.f};
+        const auto slice = uploads.Write(std::as_bytes(std::span{&parameters, size_t{1}}));
+        const auto name =
+            importBuffer(slice.buffer, "RayTracing.Parameters", rhi::State::HostWrite);
+        frame.rayTracing.parameters = {
+            3, name, rendergraph::Use::Uniform, {slice.offset, slice.size}};
+    }
     const material::ResourceResolver resolve =
         [&](const shader::Property& property, const std::string& reference)
     {
@@ -551,8 +653,7 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
         const auto material = self.MaterialFor(instance, surface);
         const auto policy = material::ResolvePolicy(material.package->definition, material.asset);
         auto role = requestedRole;
-        if (role == shader::PassRole::GBuffer &&
-            policy.surface == shader::SurfaceType::Transparent)
+        if (role == shader::PassRole::GBuffer && policy.surface == shader::SurfaceType::Transparent)
             role = shader::PassRole::Forward;
         if (role == shader::PassRole::ShadowCaster && !material.package->HasRole(role))
             return;
@@ -565,14 +666,13 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
         const bool transparent = policy.surface == shader::SurfaceType::Transparent;
         material::Preparation prepare;
         prepare.pass = role;
-        prepare.colorFormats = role == shader::PassRole::GBuffer
-                                   ? std::vector<rhi::Format>{rhi::Format::Rgba32Float,
-                                                             rhi::Format::Rgba32Float,
-                                                             rhi::Format::Rgba32Float}
-                                   : std::vector<rhi::Format>{rhi::Format::Rgba32Float};
-        prepare.depthStencilFormat = role == shader::PassRole::ShadowCaster
-                                         ? frame.shadowDepthFormat
-                                         : cameraDepthFormat;
+        prepare.colorFormats =
+            role == shader::PassRole::GBuffer
+                ? std::vector<rhi::Format>{rhi::Format::Rgba32Float, rhi::Format::Rgba32Float,
+                                           rhi::Format::Rgba32Float}
+                : std::vector<rhi::Format>{rhi::Format::Rgba32Float};
+        prepare.depthStencilFormat =
+            role == shader::PassRole::ShadowCaster ? frame.shadowDepthFormat : cameraDepthFormat;
         const auto& w = instance.world;
         const math::Vec3 x{w.At(0, 0), w.At(1, 0), w.At(2, 0)},
             y{w.At(0, 1), w.At(1, 1), w.At(2, 1)}, z{w.At(0, 2), w.At(1, 2), w.At(2, 2)};
@@ -670,8 +770,7 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
     for (const auto& instance : self.snapshot.shadowCasters)
         prepareDraw(instance, shader::PassRole::ShadowCaster);
     for (const auto& instance : self.snapshot.instances)
-        prepareDraw(instance,
-                    deferred ? shader::PassRole::GBuffer : shader::PassRole::Forward);
+        prepareDraw(instance, deferred ? shader::PassRole::GBuffer : shader::PassRole::Forward);
     if (deferred)
     {
         material::Preparation prepare;
@@ -680,12 +779,13 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
         prepare.vertexStride = 8;
         prepare.attributes = {{"POSITION", 0, rhi::VertexFormat::Float2, 0}};
         const auto pass = self.deferredLighting->ResolvePass(prepare.pass);
-        const auto bind = [&](const shader::BlockContract& contract,
-                              const rhi::UploadArena::Slice& slice)
+        const auto bind =
+            [&](const shader::BlockContract& contract, const rhi::UploadArena::Slice& slice)
         {
             const auto handle = self.deferredLighting->SchemaBinding(pass, contract);
             if (!handle)
-                throw std::logic_error("Deferred lighting shader is missing a scene parameter block");
+                throw std::logic_error(
+                    "Deferred lighting shader is missing a scene parameter block");
             rhi::Binding value{};
             value.buffer = slice.buffer;
             value.offset = slice.offset;
@@ -698,12 +798,12 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
         bind(SceneShadowDataContract, frameConstants.shadow);
         const auto inverse = math::Inverse(self.snapshot.viewProjection);
         const std::vector<double> inverseValues(inverse.values.begin(), inverse.values.end());
-        prepare.constants[self.deferredLighting->BlockBinding(pass,
-                                                              "DeferredLightingParameters")] = {
-            {"InverseViewProjection", {"float4x4", 1, inverseValues}}};
-        for (const auto name : {"GBufferAlbedoMetallic", "GBufferNormalRoughness",
-                                "GBufferEmissionOcclusion", "CameraDepth", "EnvironmentAtlas",
-                                "BrdfLut", "MainLightShadow"})
+        prepare.constants[self.deferredLighting->BlockBinding(pass, "DeferredLightingParameters")] =
+            {{"InverseViewProjection", {"float4x4", 1, inverseValues}},
+             {"RayTracedShadows", {"uint", 1, {rayTracing ? 1.0 : 0.0}}}};
+        for (const auto name :
+             {"GBufferAlbedoMetallic", "GBufferNormalRoughness", "GBufferEmissionOcclusion",
+              "CameraDepth", "EnvironmentAtlas", "BrdfLut", "MainLightShadow", "ShadowVisibility"})
             prepare.deferredResources.insert(self.deferredLighting->ResourceBinding(pass, name));
         auto prepared = self.materials.Prepare(
             self.deferredLighting,
@@ -721,12 +821,17 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
                 { return value.slot == binding.slot && value.space == binding.space; });
             if (entry == prepared.pipeline->desc.layout->entries.end() || !binding.buffer)
                 throw std::logic_error("Deferred lighting binding layout mismatch");
-            const auto name = importBuffer(
-                binding.buffer, "Deferred.Lighting.Constants." + std::to_string(binding.space) +
-                                   "." + std::to_string(binding.slot),
-                rhi::State::HostWrite);
-            draw.buffers.push_back({binding.slot, name, rendergraph::Use::Uniform,
-                                    {binding.offset, binding.size}, binding.stride, binding.space});
+            const auto name =
+                importBuffer(binding.buffer,
+                             "Deferred.Lighting.Constants." + std::to_string(binding.space) + "." +
+                                 std::to_string(binding.slot),
+                             rhi::State::HostWrite);
+            draw.buffers.push_back({binding.slot,
+                                    name,
+                                    rendergraph::Use::Uniform,
+                                    {binding.offset, binding.size},
+                                    binding.stride,
+                                    binding.space});
         }
         const std::map<std::string, std::string> textureNames{
             {"GBufferAlbedoMetallic", "GBuffer.AlbedoMetallic"},
@@ -735,7 +840,9 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
             {"CameraDepth", "CameraDepth"},
             {"EnvironmentAtlas", importTexture(self.environmentAtlas)},
             {"BrdfLut", importTexture(self.brdfLut)},
-            {"MainLightShadow", "MainLightShadow"}};
+            {"MainLightShadow", "MainLightShadow"},
+            {"ShadowVisibility", rayTracing ? "RayTracing.ShadowVisibility"
+                                            : importTexture(self.textures.at("white/Linear"))}};
         for (const auto& handle : prepared.deferredResources)
         {
             const auto& resource = self.deferredLighting->GetResource(handle);
@@ -746,13 +853,15 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
                 {resource.slot, found->second, static_cast<uint32_t>(resource.scope)});
         }
     }
-    if (deferred)
+    if (rayTracing)
+        self.rayTracingPipeline.Build(graph, frame);
+    else if (deferred)
         self.deferredPipeline.Build(graph, frame);
     else
         self.forwardPipeline.Build(graph, frame);
     std::string displaySource = "CameraColor";
     if (options.view == SceneView::Shadow)
-        displaySource = "MainLightShadow";
+        displaySource = rayTracing ? "RayTracing.ShadowVisibility" : "MainLightShadow";
     else if (options.view == SceneView::Environment)
         displaySource = importTexture(self.environmentAtlas);
     else if (options.view == SceneView::Brdf)
@@ -833,6 +942,8 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
     graph.Export("DisplayColor", swapchain ? rhi::State::Present : rhi::State::CopySource);
     graph.Compile({.profile = options.profile});
     auto submitted = graph.Execute(self.pool, swapchain);
+    if (preparedAcceleration)
+        self.accelerationScene.Commit(std::move(*preparedAcceleration), submitted.completion);
     uploads.Seal(submitted.completion);
     result.completion = submitted.completion;
     result.profile = std::move(submitted.profile);

@@ -23,6 +23,10 @@ public:
     void BindBuffer(uint32_t slot, BufferHandle handle, uint64_t offset = 0, uint64_t size = 0,
                     uint32_t stride = 0, uint32_t space = 0);
     void BindSampler(uint32_t slot, std::shared_ptr<rhi::Sampler> sampler, uint32_t space = 0);
+    void
+    BindAccelerationStructure(uint32_t slot,
+                              std::shared_ptr<rhi::AccelerationStructure> accelerationStructure,
+                              BufferHandle storage, uint32_t space = 0);
 
 protected:
     BindingContext(Graph& graph, uint32_t pass, rhi::CommandList& commands)
@@ -55,6 +59,9 @@ class ComputeContext final : public BindingContext
 {
 public:
     void Dispatch(uint32_t x, uint32_t y, uint32_t z = 1);
+    void
+    BuildAccelerationStructure(std::shared_ptr<rhi::AccelerationStructure> accelerationStructure,
+                               BufferHandle storage, BufferHandle scratch, bool update = false);
 
 private:
     friend class Graph;

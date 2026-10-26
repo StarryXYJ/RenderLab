@@ -7,6 +7,7 @@
 #include <array>
 #include <format>
 #include <stdexcept>
+#include <vector>
 
 namespace renderlab::sandbox
 {
@@ -31,13 +32,15 @@ struct PipelineChoice
 };
 constexpr std::array PipelineChoices{
     PipelineChoice{L"Forward", renderer::PipelineType::Forward},
-    PipelineChoice{L"Deferred", renderer::PipelineType::Deferred}};
+    PipelineChoice{L"Deferred", renderer::PipelineType::Deferred},
+    PipelineChoice{L"Ray Tracing", renderer::PipelineType::RayTracing}};
 } // namespace
 struct DebugPanel::Impl
 {
-    HWND window = nullptr, pipeline = nullptr, view = nullptr, quality = nullptr,
-         shadows = nullptr, freeze = nullptr, exposure = nullptr, statistics = nullptr;
+    HWND window = nullptr, pipeline = nullptr, view = nullptr, quality = nullptr, shadows = nullptr,
+         freeze = nullptr, exposure = nullptr, statistics = nullptr;
     DebugControls controls;
+    std::vector<PipelineChoice> choices;
     static LRESULT CALLBACK Procedure(HWND window, UINT message, WPARAM wParam, LPARAM lParam)
     {
         auto* self = reinterpret_cast<Impl*>(GetWindowLongPtrW(window, GWLP_USERDATA));
@@ -57,8 +60,8 @@ struct DebugPanel::Impl
             if (HIWORD(wParam) == CBN_SELCHANGE && id == Pipeline)
             {
                 const auto index = SendMessageW(self->pipeline, CB_GETCURSEL, 0, 0);
-                if (index >= 0 && size_t(index) < PipelineChoices.size())
-                    self->controls.render.pipeline = PipelineChoices[size_t(index)].type;
+                if (index >= 0 && size_t(index) < self->choices.size())
+                    self->controls.render.pipeline = self->choices[size_t(index)].type;
             }
             else if (HIWORD(wParam) == CBN_SELCHANGE && id == View)
                 self->controls.render.view =
@@ -102,11 +105,15 @@ struct DebugPanel::Impl
             DestroyWindow(window);
     }
 };
-DebugPanel::DebugPanel(platform::NativeSurface owner, DebugControls controls)
+DebugPanel::DebugPanel(platform::NativeSurface owner, DebugControls controls,
+                       bool rayTracingAvailable)
     : impl_(std::make_unique<Impl>())
 {
     auto& self = *impl_;
     self.controls = controls;
+    for (const auto& choice : PipelineChoices)
+        if (choice.type != renderer::PipelineType::RayTracing || rayTracingAvailable)
+            self.choices.push_back(choice);
     WNDCLASSEXW type{};
     type.cbSize = sizeof(type);
     type.lpfnWndProc = Impl::Procedure;
@@ -123,14 +130,14 @@ DebugPanel::DebugPanel(platform::NativeSurface owner, DebugControls controls)
     if (!self.window)
         throw std::runtime_error("Cannot create debug panel");
     self.Control(L"STATIC", L"Pipeline", 0, 0, 12, 12, 100, 20);
-    self.pipeline = self.Control(L"COMBOBOX", L"", CBS_DROPDOWNLIST | WS_TABSTOP, Pipeline,
-                                 112, 10, 280, 100);
+    self.pipeline =
+        self.Control(L"COMBOBOX", L"", CBS_DROPDOWNLIST | WS_TABSTOP, Pipeline, 112, 10, 280, 100);
     size_t selectedPipeline = 0;
-    for (size_t i = 0; i < PipelineChoices.size(); ++i)
+    for (size_t i = 0; i < self.choices.size(); ++i)
     {
         SendMessageW(self.pipeline, CB_ADDSTRING, 0,
-                     reinterpret_cast<LPARAM>(PipelineChoices[i].label));
-        if (PipelineChoices[i].type == controls.render.pipeline)
+                     reinterpret_cast<LPARAM>(self.choices[i].label));
+        if (self.choices[i].type == controls.render.pipeline)
             selectedPipeline = i;
     }
     SendMessageW(self.pipeline, CB_SETCURSEL, selectedPipeline, 0);
@@ -190,10 +197,13 @@ void DebugPanel::VerifyControls()
     const auto saved = self.controls;
     SendMessageW(self.view, CB_SETCURSEL, 2, 0);
     SendMessageW(self.window, WM_COMMAND, MAKEWPARAM(View, CBN_SELCHANGE), 0);
-    SendMessageW(self.pipeline, CB_SETCURSEL, 0, 0);
-    SendMessageW(self.window, WM_COMMAND, MAKEWPARAM(Pipeline, CBN_SELCHANGE), 0);
-    if (self.controls.render.pipeline != renderer::PipelineType::Forward)
-        throw std::runtime_error("Native debug controls failed to select Forward");
+    for (size_t i = 0; i < self.choices.size(); ++i)
+    {
+        SendMessageW(self.pipeline, CB_SETCURSEL, i, 0);
+        SendMessageW(self.window, WM_COMMAND, MAKEWPARAM(Pipeline, CBN_SELCHANGE), 0);
+        if (self.controls.render.pipeline != self.choices[i].type)
+            throw std::runtime_error("Native debug controls failed to select a render pipeline");
+    }
     SendMessageW(self.pipeline, CB_SETCURSEL, 1, 0);
     SendMessageW(self.window, WM_COMMAND, MAKEWPARAM(Pipeline, CBN_SELCHANGE), 0);
     SendMessageW(self.window, WM_COMMAND, Brighter, 0);
@@ -213,8 +223,8 @@ void DebugPanel::VerifyControls()
         control.right > client.right || control.bottom > client.bottom)
         throw std::runtime_error("Native debug controls failed");
     self.controls = saved;
-    for (size_t i = 0; i < PipelineChoices.size(); ++i)
-        if (PipelineChoices[i].type == saved.render.pipeline)
+    for (size_t i = 0; i < self.choices.size(); ++i)
+        if (self.choices[i].type == saved.render.pipeline)
             SendMessageW(self.pipeline, CB_SETCURSEL, i, 0);
     SendMessageW(self.view, CB_SETCURSEL, WPARAM(saved.render.view), 0);
     for (size_t i = 0; i < Resolutions.size(); ++i)

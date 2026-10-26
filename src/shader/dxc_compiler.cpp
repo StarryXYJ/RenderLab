@@ -95,9 +95,11 @@ private:
 };
 std::vector<std::wstring> Arguments(const ProgramRequest& request, bool preprocess)
 {
-    const auto stage = request.entry.stage == rhi::ShaderStage::Vertex  ? L"vs_6_0"
-                       : request.entry.stage == rhi::ShaderStage::Pixel ? L"ps_6_0"
-                                                                        : L"cs_6_0";
+    const auto defaultStage = request.entry.stage == rhi::ShaderStage::Vertex  ? L"vs_6_0"
+                              : request.entry.stage == rhi::ShaderStage::Pixel ? L"ps_6_0"
+                                                                               : L"cs_6_0";
+    const auto stage = request.targetProfile.empty() ? std::wstring(defaultStage)
+                                                     : platform::Utf8ToWide(request.targetProfile);
     std::vector<std::wstring> args{request.entry.source.wstring(),
                                    L"-E",
                                    platform::Utf8ToWide(request.entry.function),

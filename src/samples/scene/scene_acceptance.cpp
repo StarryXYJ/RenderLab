@@ -20,6 +20,10 @@ void VerifyScene(rhi::Runtime& runtime, shader::Target target, const std::filesy
 {
     std::filesystem::create_directories(output);
     renderer::SceneRenderer renderer(runtime, target, project, engine);
+    if (pipeline == renderer::PipelineType::RayTracing)
+        for (auto& object : renderer.Document().objects)
+            if (object.light)
+                object.light->shadows = true;
     auto color =
         runtime.CreateTexture({640, 360, rhi::Format::Rgba8Srgb, false, true, "Scene.Acceptance"});
     auto initial = rhi::State::Undefined;
@@ -27,8 +31,8 @@ void VerifyScene(rhi::Runtime& runtime, shader::Target target, const std::filesy
     {
         ::renderlab::renderer::SceneRenderOptions options;
         options.pipeline = pipeline;
-        auto result = renderer.Render(color, initial, nullptr, true,
-                                      output / (name + "-plan.json"), options);
+        auto result =
+            renderer.Render(color, initial, nullptr, true, output / (name + "-plan.json"), options);
         runtime.Wait(result.completion);
         initial = rhi::State::CopySource;
         const auto bytes = result.pixels->Map();
@@ -56,6 +60,13 @@ void VerifyScene(rhi::Runtime& runtime, shader::Target target, const std::filesy
     const auto original = document;
     const auto selected = renderer.LastSnapshot().light.object;
     detail::Require(!selected.empty(), "Fixture requires a directional light");
+    if (pipeline == renderer::PipelineType::RayTracing)
+    {
+        document.Get(selected).light->shadows = false;
+        detail::Require(render("ray-shadow-disabled") != baseline,
+                        "Ray Query shadows did not change direct-light visibility");
+        document = original;
+    }
     for (auto& object : document.objects)
         if (object.light && object.id != selected)
         {
@@ -101,6 +112,42 @@ void VerifyScene(rhi::Runtime& runtime, shader::Target target, const std::filesy
     document.objects.push_back(sourceObject);
     detail::Require(render("added-object") != baseline, "New instance did not change output");
     document = original;
+    if (pipeline == renderer::PipelineType::RayTracing)
+    {
+        detail::Require(render("removed-object") == baseline,
+                        "Removing a ray-traced instance did not restore the reference");
+        const auto containsBuild = [&](const std::string& name)
+        {
+            return shader::ReadText(output / (name + "-plan.json")).find("RayTracing.BuildTLAS") !=
+                   std::string::npos;
+        };
+        detail::Require(containsBuild("scene") && !containsBuild("secondary-light") &&
+                            !containsBuild("moved-camera") && containsBuild("disabled-object") &&
+                            containsBuild("added-object"),
+                        "Scene TLAS cache did not follow instance and transform changes");
+        renderer::SceneRenderOptions options;
+        options.pipeline = pipeline;
+        auto first = renderer.Render(color, initial, nullptr, true, {}, options);
+        auto changed = std::ranges::find_if(document.objects, [](const auto& value)
+                                            { return value.mesh.has_value(); });
+        changed->transform.position.x += .75f;
+        auto second = renderer.Render(color, rhi::State::CopySource, nullptr, true, {}, options);
+        runtime.Wait(second.completion);
+        const auto firstPixels = first.pixels->Map();
+        const auto secondPixels = second.pixels->Map();
+        detail::Require(std::equal(firstPixels.begin(), firstPixels.end(), baseline.begin()) &&
+                            !std::equal(secondPixels.begin(), secondPixels.end(), baseline.begin()),
+                        "In-flight TLAS versions did not preserve their submitted scene values");
+        document = original;
+        for (auto& entity : document.objects)
+            if (entity.mesh)
+                entity.enabled = false;
+        detail::Require(render("empty-scene") != baseline, "Empty ray-traced scene did not render");
+        logger.Write(LogLevel::Info,
+                     "M5.2 scene acceptance passed: static BLAS reuse, TLAS membership/transform "
+                     "updates, camera reuse, empty scene and two in-flight scene versions");
+        return;
+    }
     auto materialSource =
         std::ranges::find_if(document.objects, [](const auto& value)
                              { return value.mesh && !value.mesh->materials.empty(); });

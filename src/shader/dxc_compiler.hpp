@@ -19,6 +19,8 @@ struct ProgramRequest
     std::string generated;
     std::string sourceSnapshot;
     std::string generatedTypes;
+    /// Optional DXC profile override for features introduced after the default stage target.
+    std::string targetProfile;
 };
 struct Preprocessed
 {

@@ -37,6 +37,8 @@ float4 PSMain(Varyings input) : SV_Target
     const float4 albedoMetallic = GBufferAlbedoMetallic.Load(int3(pixel, 0));
     const float4 normalRoughness = GBufferNormalRoughness.Load(int3(pixel, 0));
     const float4 emissionOcclusion = GBufferEmissionOcclusion.Load(int3(pixel, 0));
+    if (normalRoughness.a < 0)
+        return float4(albedoMetallic.rgb, 1);
 
     MaterialSurface surface;
     surface.baseColor = max(albedoMetallic.rgb, 0);
@@ -53,7 +55,9 @@ float4 PSMain(Varyings input) : SV_Target
                                                            surface.normalWS);
     const RasterShadowSamplingContext shadowSampling = MakeShadowSamplingContext(
         shadowCoordinate, ddx(shadowCoordinate), ddy(shadowCoordinate));
-    const float visibility = MainLightVisibility(SceneShadow, MainLightShadow, shadowSampling);
+    const float visibility = DeferredLightingParameters.RayTracedShadows != 0
+        ? ShadowVisibility.Load(int3(pixel, 0)).x
+        : MainLightVisibility(SceneShadow, MainLightShadow, shadowSampling);
     const float3 direct = EvaluateBRDF(surface.baseColor, surface.metallic,
         surface.perceptualRoughness, surface.normalWS, SafeNormalize(viewDirWS), light.direction)
         * light.color * visibility;

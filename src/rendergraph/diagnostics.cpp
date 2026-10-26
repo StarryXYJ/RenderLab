@@ -40,6 +40,12 @@ const char* Name(rhi::State state)
         return "UniformRead";
     case rhi::State::ShaderRead:
         return "ShaderRead";
+    case rhi::State::AccelerationStructureBuildInput:
+        return "ASBuildInput";
+    case rhi::State::AccelerationStructureBuildWrite:
+        return "ASBuildWrite";
+    case rhi::State::AccelerationStructureRead:
+        return "ASRead";
     }
     return "Unknown";
 }

@@ -118,9 +118,10 @@ VulkanRuntime::AcquireDescriptors(std::shared_ptr<BindingLayout> layout)
     allocation->device = device_;
     allocation->layout = layout;
     std::vector<VkDescriptorPoolSize> sizes;
-    for (auto type : {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
-                      VK_DESCRIPTOR_TYPE_SAMPLER, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-                      VK_DESCRIPTOR_TYPE_STORAGE_BUFFER})
+    for (auto type :
+         {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
+          VK_DESCRIPTOR_TYPE_SAMPLER, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+          VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR})
     {
         const auto count = static_cast<uint32_t>(std::ranges::count_if(
             layout->entries, [&](auto e) { return DescriptorType(e.kind) == type; }));
@@ -176,7 +177,7 @@ std::shared_ptr<BindingGroup> VulkanRuntime::CreateGroup(std::shared_ptr<Binding
         }
         else if (entry.kind == BindingKind::Sampler)
             image.sampler = As<VkSamplerObject>(binding.sampler).native;
-        else
+        else if (entry.kind != BindingKind::AccelerationStructure)
         {
             image.imageView = As<VkView>(binding.view).native;
             image.imageLayout = entry.kind == BindingKind::StorageTexture
@@ -189,7 +190,18 @@ std::shared_ptr<BindingGroup> VulkanRuntime::CreateGroup(std::shared_ptr<Binding
         write.dstBinding = entry.slot;
         write.descriptorCount = 1;
         write.descriptorType = DescriptorType(entry.kind);
-        write.pImageInfo = isBuffer ? nullptr : &image;
+        VkWriteDescriptorSetAccelerationStructureKHR acceleration{};
+        VkAccelerationStructureKHR nativeAcceleration = VK_NULL_HANDLE;
+        if (entry.kind == BindingKind::AccelerationStructure)
+        {
+            acceleration.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET_ACCELERATION_STRUCTURE_KHR;
+            nativeAcceleration = As<VkAccelerationStructure>(binding.accelerationStructure).native;
+            acceleration.accelerationStructureCount = 1;
+            acceleration.pAccelerationStructures = &nativeAcceleration;
+            write.pNext = &acceleration;
+        }
+        write.pImageInfo =
+            isBuffer || entry.kind == BindingKind::AccelerationStructure ? nullptr : &image;
         write.pBufferInfo = isBuffer ? &buffer : nullptr;
         vkUpdateDescriptorSets(device_, 1, &write, 0, nullptr);
     }

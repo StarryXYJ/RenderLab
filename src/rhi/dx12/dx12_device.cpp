@@ -202,8 +202,8 @@ public:
         report_.details.emplace_back("resourceBindingTier",
                                      std::to_string(base.ResourceBindingTier));
         report_.details.emplace_back("rayTracingTier", std::to_string(rayTracing.RaytracingTier));
-        report_.details.emplace_back("enabledWork", "one direct queue; M1 graphics, compute, copy "
-                                                    "and indirect draw; no ray tracing commands");
+        report_.details.emplace_back("enabledWork", "one direct queue; graphics, compute, copy, "
+                                                    "indirect draw; AS/Ray Query when supported");
         report_.details.emplace_back("descriptorIndexingScope",
                                      "resource arrays; shader and tier limits still apply");
 
@@ -242,7 +242,9 @@ public:
     }
     std::unique_ptr<Runtime> CreateRuntime() override
     {
-        return CreateDx12Runtime(device_.Get(), queue_.Get(), factory_.Get());
+        return CreateDx12Runtime(device_.Get(), queue_.Get(), factory_.Get(),
+                                 report_.supported.accelerationStructure,
+                                 report_.supported.rayQuery, report_.supported.rayTracingPipeline);
     }
     uint32_t GetValidationErrorCount() const override
     {
