@@ -5,7 +5,7 @@
 ## 当前状态
 
 - 当前实施阶段：M0–M4、R1、B1、B2 DONE。
-- 当前工作项：B2 DONE；扩大样本并定位 CPU 创建/描述符/回收开销，M5 NOT_STARTED。
+- 当前工作项：B3 优化方案分析已完成；性能实现 NOT_STARTED，M5 NOT_STARTED。
 - 用户约定：每个子阶段验收完成即提交 Git，无阻塞时在当前授权范围内继续推进；M4.3 提交 c50ee6a、M4.4 提交 40d0c12、M4.5 提交 9a4b2e4。
 - Demo 的 Custom 示例作为回归入口保留；M4 场景示例使用 Forward 组合与现有 Shader/Material 链路。
 
@@ -19,6 +19,7 @@
 | R1 | Shader/Material 契约修订 | M4 | DONE |
 | B1 | 样例整理与可扩展 Benchmark | M4、R1 | DONE |
 | B2 | 双后端性能差异调查 | B1 | DONE |
+| B3 | 逐帧资源复用优化 | B2 | NOT_STARTED |
 | M5 | Deferred 与光追基础 | M4 | NOT_STARTED |
 | M6 | GPU Driven 与执行优化 | M4；光追调度测试另需 M5 | NOT_STARTED |
 | M7 | C# 编辑器与完整项目工作流 | M4；默认在 M5、M6 的核心目标后开展 | NOT_STARTED |
@@ -26,7 +27,7 @@
 
 默认顺序为 M0 到 M8。M5 和 M6 在 M4 后可以独立推进；单阶段内按下列子阶段顺序执行，不同时建设多个高级系统。完整编辑器后置，M4 只实现运行内容所需的最小项目与资源能力。
 
-用户已授权 R1 契约修订与 B1 样例整理/Benchmark，均按子阶段验证、提交；M5 不在本轮实施范围。
+R1 契约修订、B1 样例整理/Benchmark 和 B2 调查已完成。本轮授权分析 B3 优化方案，尚未开始性能实现；M5 不在本轮实施范围。
 
 ## 状态与维护规则
 
@@ -226,6 +227,14 @@ DONE：tools/benchmark 正式工具与 PBR 配置，顺序/交替后端及重复
 限制与后续：短诊断出现过一次 Vulkan 严重回收停顿及其他波动，未删除运行；典型诊断图明确使用 3 次均值的中位数，性能比较仍以前述更长基线为主。探针为包含驱动/系统的墙钟区间，不能区分全部内核/调度原因，也不覆盖所有局部析构。CPU 策略优化（完成点保护的上传区、不可变材质数据复用、描述符空间/读回复用）需另行实现与在途/画面/性能验收；本轮没有将诊断代码冒充性能修复。
 
 入口：[数值、图与定位理由](../docs/performance/b2-pbr-rtx5060.md)、[探针接口](../docs/benchmark.md#可选-rhi-cpu-分解)、[对照配置](../sample/benchmark/pbr-diagnostics.json)。完整原始/诊断组分别在 out/benchmarks/b2-pbr-extended 与 out/benchmarks/b2-cpu-diagnostics；正确性专项在 out/benchmarks/b2-probe-validation，完整测试在各配置 Testing/Temporary/LastTest.log。
+
+## B3 逐帧资源复用优化
+
+状态：NOT_STARTED。2026 年 10 月 26 日完成代码路径与生命周期分析，尚未实现或测得优化收益。
+
+方案：[逐帧资源复用](resource-reuse.md)。拟按 B3.1 帧上传页、B3.2 不可变材质常量、B3.3 描述符分配复用、B3.4 读回/View 与回收收尾分别验证、提交；每步实测后调整后续优先级。不扩展到 M5/M6 的渲染算法、多线程或多队列。
+
+退出条件：旧 CPU 快照、已录制未提交命令、双帧在途及 profiling 延后读取保持正确；稳定场景预热后消除目标路径持续的原生分配，内存有界；双后端画面/Validation 回归通过，并以相同口径的优化前后配对基线报告耗时、长尾与内存。未运行的专项保持未验收，不能用设计文档代替实现完成。
 
 ## M5 Deferred 与光追基础
 
