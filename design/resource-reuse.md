@@ -1,6 +1,6 @@
 # B3：逐帧资源复用方案
 
-分析日期：2026 年 10 月 26 日。本文是基于现有代码和 [B2 实测](../docs/performance/b2-pbr-rtx5060.md) 的实施建议，未包含优化后的性能结果。实施状态仅记录在 [阶段计划](phaseplan.md)。
+分析日期：2026 年 10 月 26 日。本文保留基于原实现和 [B2 实测](../docs/performance/b2-pbr-rtx5060.md) 的设计取舍；实际接口见 [资源复用](../docs/resource-reuse.md)，优化后的配对实测见 [B3 结果](../docs/performance/b3-resource-reuse.md)。实施状态仅记录在 [阶段计划](phaseplan.md)。
 
 ## 优化目标与依据
 

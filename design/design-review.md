@@ -118,3 +118,7 @@ Lit/Unlit 保持普通 Shader 资产，表面值、光栅 SampleGrad 上下文�
 实施复查将 R1.1 分为 RHI/Graph 和作者层两步。附件格式与状态正交；无深度测试但需写入时统一映射 Always。Graph 暂不拆模板平面的版本与布局，采用整附件保守依赖和逐面初始化/权限检查，任一 Load 都保留旧 producer，避免清深度时丢失模板。该基础独立验证后，再接入材质属性引用，减少临时兼容接口。
 
 收尾复查确认每类身份各有单一来源：资产 UUID 管引用，PropertyId 管保存，Schema ID/version/hash 管参数兼容性，包/Pass handle 管当前代绑定；显示名、路径和 HLSL symbol 仍可局部使用，不承担宿主行为策略。glTF 通过类型化 MaterialSemantic 映射，外部 IBL/阴影另用 BindingSemantic；两者不会形成全局可变参数表。静态值和普通值共用材质属性存储，旧具名变体与材质 v1 明确拒绝，避免两套选择状态长期并存。独立无 sidecar 工具允许路径派生的临时身份，持久资产要求登记 sidecar；限制和显式迁移步骤见 [资产契约](../docs/shader-assets.md)。
+
+## B3 资源复用
+
+B2 测量将差距定位到逐帧原生分配/回收，优先按生命周期复用，保持渲染算法和单队列基线。帧页按 CPU 引用与完成点回收，材质保存不可变版本；描述符分配由逻辑组保活，缓存页不持有场景资源。Profiling 的 CPU 读取期独立于 GPU 完成，默认 View 使用弱回指并由物理所有者持有，交换链 resize 明确清理 View。避免整 Prepared 缓存钉住帧资源，也不通过移动析构计时或改变 benchmark 等待策略取得表面收益。[设计](resource-reuse.md)、[接口](../docs/resource-reuse.md) 与 [配对结果](../docs/performance/b3-resource-reuse.md) 分开维护；阶段验收仍以计划为准。

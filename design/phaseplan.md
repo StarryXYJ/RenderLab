@@ -4,8 +4,8 @@
 
 ## 当前状态
 
-- 当前实施阶段：M0–M4、R1、B1、B2 DONE。
-- 当前工作项：B3.1–B3.4 DONE，正在执行 B3 最终优化前后配对长基线；M5 NOT_STARTED。
+- 当前实施阶段：M0–M4、R1、B1–B3 DONE。
+- 当前工作项：B3 DONE；资源复用与配对长基线已验收，M5 NOT_STARTED。
 - 用户约定：每个子阶段验收完成即提交 Git，无阻塞时在当前授权范围内继续推进；M4.3 提交 c50ee6a、M4.4 提交 40d0c12、M4.5 提交 9a4b2e4。
 - Demo 的 Custom 示例作为回归入口保留；M4 场景示例使用 Forward 组合与现有 Shader/Material 链路。
 
@@ -19,7 +19,7 @@
 | R1 | Shader/Material 契约修订 | M4 | DONE |
 | B1 | 样例整理与可扩展 Benchmark | M4、R1 | DONE |
 | B2 | 双后端性能差异调查 | B1 | DONE |
-| B3 | 逐帧资源复用优化 | B2 | IN_PROGRESS |
+| B3 | 逐帧资源复用优化 | B2 | DONE |
 | M5 | Deferred 与光追基础 | M4 | NOT_STARTED |
 | M6 | GPU Driven 与执行优化 | M4；光追调度测试另需 M5 | NOT_STARTED |
 | M7 | C# 编辑器与完整项目工作流 | M4；默认在 M5、M6 的核心目标后开展 | NOT_STARTED |
@@ -27,7 +27,7 @@
 
 默认顺序为 M0 到 M8。M5 和 M6 在 M4 后可以独立推进；单阶段内按下列子阶段顺序执行，不同时建设多个高级系统。完整编辑器后置，M4 只实现运行内容所需的最小项目与资源能力。
 
-R1 契约修订、B1 样例整理/Benchmark 和 B2 调查已完成。本轮已授权实施 B3 优化方案，逐子阶段验证与提交；M5 不在本轮实施范围。
+R1 契约修订、B1 样例整理/Benchmark、B2 调查和 B3 资源复用已完成，均按子阶段验证与提交；M5 不在本轮实施范围。
 
 ## 状态与维护规则
 
@@ -230,27 +230,31 @@ DONE：tools/benchmark 正式工具与 PBR 配置，顺序/交替后端及重复
 
 ## B3 逐帧资源复用优化
 
-状态：IN_PROGRESS。B3.1–B3.4 DONE；最终优化前后配对长基线尚未完成。
+状态：DONE，日期：2026 年 10 月 26 日。
 
-方案：[逐帧资源复用](resource-reuse.md)。拟按 B3.1 帧上传页、B3.2 不可变材质常量、B3.3 描述符分配复用、B3.4 读回/View 与回收收尾分别验证、提交；每步实测后调整后续优先级。不扩展到 M5/M6 的渲染算法、多线程或多队列。
+结果：帧上传页、包代际内不可变材质常量、DX12 描述符区间/Vulkan pool-set 块、timestamp 读回与默认 View 均实现有界复用。CPU 快照、未提交命令和真实完成点共同保护旧数据；保持 Shader、Pass、画面质量及串行测量口径。方案见 [设计](resource-reuse.md)，长期接口见 [资源复用](../docs/resource-reuse.md)。
 
-退出条件：旧 CPU 快照、已录制未提交命令、双帧在途及 profiling 延后读取保持正确；稳定场景预热后消除目标路径持续的原生分配，内存有界；双后端画面/Validation 回归通过，并以相同口径的优化前后配对基线报告耗时、长尾与内存。未运行的专项保持未验收，不能用设计文档代替实现完成。
+最终验证：RTX 5060，Debug/Release 完整 CTest 各 41/41，双后端 Validation 通过，Python 13/13。覆盖旧快照/命令、70 次材质版本淘汰与真实绘制、上传/描述符预算耗尽恢复、延后读取 timestamp、池 Trim、View 无环、热重载、双帧与窗口 resize。优化前后两后端各八次、5 秒预热/20 秒测量，交替版本/后端顺序，共 32 次、360,600 帧；32 张 BMP 分别与同后端 B2 逐字节相同，Shader/项目 hash 一致。
+
+实测：DX12/Vulkan 串行帧均值由 14.3575/5.7114ms 降至 1.0365/0.9293ms；P95 的八次平均由 17.0373/7.0984 降至 1.4641/1.2594ms。稳定 PBR 预热后 Buffer/View/原生描述符创建均为 0 次/帧，逻辑组仍为 10 次。上传页与描述符容量不随帧数增长；DX12 跟踪占用固定为 24.125MiB、Vulkan 22.946MiB。保留所有尖峰，优化版仍有 45.02/230.19ms 单帧停顿，不能宣称消除系统/驱动调度长尾或推广到其他 GPU，也不把串行延迟当窗口 FPS。
+
+证据：[结果、图与完整逐次统计](../docs/performance/b3-resource-reuse.md)；最终原始组 out/benchmarks/b3-long-paired，schedule.json 保存交替顺序/命令；各子阶段短基准与独立探针分别保存在 b3-1-upload、b3-2-material、b3-3-descriptors、b3-4-readback-views 及对应 -probe 目录。原版/四份阶段二进制均保留；完整 CTest 日志位于各配置 Testing/Temporary/LastTest.log。
 
 ### B3.1 帧上传页
 
-DONE：有界 UploadPool/Batch 以整页引用和完成点保护复用，取消不伪造提交；SceneRenderer 的帧/对象/Display 常量保留非零 offset/size，未改变 Shader 和 Graph 调度。Debug/Release 完整 CTest 各 41/41，含双后端 Validation、窗口/双帧/resize、取消后保留 CPU 快照与八批次后提交旧命令、页预算/非法 Seal 验收。Release PBR 三次短测量各后端均值 9.1022/2.9743ms；独立探针 Buffer 创建由 23 降至 10 次/帧，包含材质和 timestamp。两后端截图与 B2 对应 BMP 逐字节相同。短测量不替代最终长基线，数据在 out/benchmarks/b3-1-upload{,-probe}；[接口](../docs/resource-reuse.md)、[结果](../docs/performance/b3-resource-reuse.md)。
+DONE（278ddce）：UploadPool/Batch 与帧/对象/Display 的真实范围绑定；快照、延后提交和页预算验收通过，Buffer 创建由 23 降至 10 次/帧。
 
 ### B3.2 不可变材质常量
 
-DONE：同 GPU 包代际下，按布局 hash 与完整打包字节缓存至多 64 个只读常量版本；外部块和纹理解析保持独立，淘汰不修改旧快照。Debug 全套 41 项中的 39 项首次通过，修正验收误将非材质块也要求复用的断言后，两后端材质重跑均通过；Release 全套 41/41。覆盖 70 次编辑淘汰、延后提交/重用旧 Prepared、纹理编辑和整代热重载；Validation 通过。PBR 三次短测量各后端均值 5.4230/1.2512ms；独立探针 Buffer 创建降至 1 次/帧（timestamp），两后端 BMP 与 B2 相同。原始组 out/benchmarks/b3-2-material{,-probe}，阶段二进制 b3-2-player.exe；短测量仍不代替最终配对长基线。
+DONE（e4b02ad）：按布局与完整字节缓存至多 64 个不可变版本，淘汰和热重载不修改旧 Prepared，纹理解析独立；Buffer 创建降至一次 timestamp。
 
 ### B3.3 描述符分配复用
 
-DONE：DX12 有界持久 heap 页与 RAII 区间，连续绑定同页组合省略冗余 SetDescriptorHeaps；Vulkan 有界复用同布局 pool/set 块。分配不保活场景资源，组与命令引用保护旧描述符；新增原生创建/绑定探针及容量统计。最终 Debug/Release 完整 CTest 各 41/41，Python 13/13，双后端 Validation 通过；包含描述符预算耗尽/释放恢复、保留旧命令并持续 70 次真实绘制与原生创建稳定性。PBR 三次短测量各后端均值 1.3112/1.0650ms；独立探针原生描述符创建 0 次/帧，DX12 实际 heap 绑定 2 次/帧，逻辑组仍 10 次。预热后 DX12 保留 2 页，Vulkan 保留 10 块，容量/高水位有记录，两后端 BMP 与 B2 相同。原始组 out/benchmarks/b3-3-descriptors{,-probe}，阶段二进制 b3-3-player.exe。
+DONE（a9399e0）：有界 heap 区间/pool-set 块，分配缓存不钉住场景资源，预算耗尽恢复与旧绑定绘制验收通过；原生描述符创建归零，记录真实 heap 绑定、容量和高水位。
 
 ### B3.4 读回/View 与回收收尾
 
-DONE：timestamp 以 512B Readback 租约进入现有有界 Graph Pool，CPU 结果引用保护延后读取；默认 View 弱缓存、物理分配/离屏宿主/交换链各自持有，池可用条件计入内部 View 引用并检查外部引用，resize 先释放交换链 View。Debug/Release 完整 CTest 各 41/41，双后端 Validation 通过；覆盖八次后重复读旧 tick、池只用两份读回、保留 View 阻止 Trim、无引用环、窗口双帧/resize。三次短测量各后端帧均值 0.9821/0.9591ms，独立探针 Buffer/View/原生描述符创建均为 0 次/帧，两后端 BMP 与 B2 相同。原始组 out/benchmarks/b3-4-readback-views{,-probe}，阶段二进制 b3-4-player.exe。实现子阶段已验收，主阶段仍待配对长测量收尾。
+DONE（70daa34）：timestamp 读回进入 Graph Pool，CPU 结果保护读取期；默认 View 弱缓存且由物理分配/宿主/交换链分别持有，resize 先释放 View。延后读取、合法复用/Trim、无环与窗口回归通过；Buffer/View 创建归零，最终长测量完成。
 
 ## M5 Deferred 与光追基础
 
