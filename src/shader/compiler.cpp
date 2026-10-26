@@ -80,14 +80,16 @@ BuildResult CompileShader(const std::filesystem::path& source, const CompileOpti
                                        variant.defines,
                                        options.includeDirectories,
                                        GenerateHeader(interface, target),
-                                       ReadText(entry.source)};
+                                       ReadText(entry.source),
+                                       GenerateTypesHeader(interface)};
                         auto preprocessed = dxc.Preprocess(job.request);
                         // The exact preprocessed snapshot is compiled; concurrent source edits
                         // cannot poison its key.
                         job.request.sourceSnapshot = std::move(preprocessed.text);
                         key += pass.name + variant.name + entry.function +
                                std::to_string(int(target)) + std::to_string(int(entry.stage)) +
-                               Sha256(job.request.generated) + Sha256(job.request.sourceSnapshot);
+                               Sha256(job.request.generated) + Sha256(job.request.generatedTypes) +
+                               Sha256(job.request.sourceSnapshot);
                         for (const auto& [name, value] : variant.defines)
                             key += name + "=" + value + ";";
                         for (const auto& dependency : preprocessed.dependencies)

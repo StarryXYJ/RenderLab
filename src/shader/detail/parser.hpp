@@ -21,6 +21,7 @@ struct DeclarationParser
     void State(Lexer& lexer, StateDefinition& state, const std::string& prefix = {});
     void Render(Lexer& lexer);
     void ValidateStateSources();
+    void Cbuffer(Lexer& lexer);
     void Load(const std::filesystem::path& input, bool module);
 };
 } // namespace renderlab::shader::detail

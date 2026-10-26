@@ -61,6 +61,56 @@ void detail::DeclarationParser::Enum(Lexer& lexer)
         lexer.Fail("Enum must contain an item");
     definition.enums.push_back(std::move(enumeration));
 }
+void detail::DeclarationParser::Cbuffer(Lexer& lexer)
+{
+    Scope scope = Scope::Pass;
+    std::string schemaId, typeName;
+    uint32_t version = 0;
+    std::set<std::string> attributes;
+    while (lexer.Accept("["))
+    {
+        do
+        {
+            const auto attribute = lexer.Identifier().text;
+            if (!attributes.insert(attribute).second)
+                lexer.Fail("Duplicate cbuffer attribute");
+            lexer.Expect("(");
+            if (attribute == "scope")
+            {
+                const auto token = lexer.Identifier();
+                scope = ParseScope(token.text, token.source);
+            }
+            else if (attribute == "schema")
+            {
+                schemaId = lexer.String();
+                if (std::ranges::any_of(schemaId,
+                                        [](unsigned char c) { return c < 32 || c == 127; }))
+                    lexer.Fail("Schema ID cannot contain control characters");
+                lexer.Expect(",");
+                const auto number = lexer.Number();
+                if (schemaId.empty() || number < 1 || number > UINT32_MAX ||
+                    number != std::floor(number))
+                    lexer.Fail("Schema requires a stable ID and positive uint32 version");
+                version = static_cast<uint32_t>(number);
+            }
+            else if (attribute == "type")
+                typeName = lexer.Identifier().text;
+            else
+                lexer.Fail("Unknown cbuffer attribute " + attribute);
+            lexer.Expect(")");
+        } while (lexer.Accept(","));
+        lexer.Expect("]");
+    }
+    lexer.Expect("cbuffer");
+    auto name = lexer.Identifier().text;
+    auto block = Block(lexer, name, scope);
+    if (std::ranges::any_of(block.properties, [](const auto& p) { return !p.type.Numeric(); }))
+        lexer.Fail("cbuffer members must be numeric");
+    block.schemaId = std::move(schemaId);
+    block.schemaVersion = version;
+    block.typeName = typeName.empty() ? name + "Data" : std::move(typeName);
+    AddBlock(std::move(block));
+}
 void detail::DeclarationParser::AddBlock(ParameterBlock block)
 {
     if (std::ranges::any_of(definition.blocks, [&](const auto& b) { return b.name == block.name; }))
@@ -92,6 +142,7 @@ void detail::DeclarationParser::Load(const std::filesystem::path& input, bool mo
         if (lexer.Accept("use"))
         {
             auto include = lexer.String();
+            const auto alias = lexer.Accept("as") ? lexer.Identifier().text : std::string{};
             lexer.Expect(";");
             auto modulePath = path.parent_path() / platform::Utf8ToWide(include);
             if (!std::filesystem::is_regular_file(modulePath))
@@ -104,7 +155,20 @@ void detail::DeclarationParser::Load(const std::filesystem::path& input, bool mo
                         break;
                     }
                 }
+            const auto firstBlock = definition.blocks.size();
             Load(modulePath, true);
+            if (!alias.empty())
+            {
+                if (firstBlock == definition.blocks.size())
+                    lexer.Fail("Aliased module must introduce new blocks");
+                for (size_t i = firstBlock; i < definition.blocks.size(); ++i)
+                {
+                    auto& block = definition.blocks[i];
+                    if (block.typeName.empty())
+                        block.typeName = block.name + "Data";
+                    block.name = alias + "_" + block.name;
+                }
+            }
         }
         else if (!module && lexer.Accept("render"))
             Render(lexer);
@@ -117,25 +181,7 @@ void detail::DeclarationParser::Load(const std::filesystem::path& input, bool mo
             AddBlock(Block(lexer, "Material", Scope::Material));
         }
         else if (lexer.Peek().text == "[" || lexer.Peek().text == "cbuffer")
-        {
-            Scope scope = Scope::Pass;
-            if (lexer.Accept("["))
-            {
-                lexer.Expect("scope");
-                lexer.Expect("(");
-                auto t = lexer.Identifier();
-                scope = ParseScope(t.text, t.source);
-                lexer.Expect(")");
-                lexer.Expect("]");
-            }
-            lexer.Expect("cbuffer");
-            auto name = lexer.Identifier().text;
-            auto block = Block(lexer, name, scope);
-            if (std::ranges::any_of(block.properties,
-                                    [](const auto& p) { return !p.type.Numeric(); }))
-                lexer.Fail("cbuffer members must be numeric");
-            AddBlock(std::move(block));
-        }
+            Cbuffer(lexer);
         else if (!module && lexer.Accept("variant"))
         {
             Variant variant;

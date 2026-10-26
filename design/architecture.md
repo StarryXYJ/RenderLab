@@ -210,6 +210,8 @@ M4 的首个场景闭环见 [项目、场景](../docs/m4-scene.md)，Forward PBR
 
 ### Shader 工具链
 
+参数块可声明稳定 Schema ID、版本和数据类型名，布局 hash 排除绑定别名与槽；同一声明生成 C++ 数据/打包代码及独立 HLSL 类型头。Package 解析代际 BindingHandle，按 Schema 或固定资源语义验证接口。场景适配与共享库正在迁移；已实现的基础契约见 [参数接口](../docs/shader-parameters.md)。
+
 ShaderDefinition 是作者维护的 Shader 资产，包含 HLSL 来源、入口点、材质属性、合法变体、Pass 角色和状态选择。M2 采用简洁声明语法作为唯一作者入口，共享参数模块由 use 引入，HLSL 函数与工具仍由普通 Include 组织。内部描述统一，不并存另一份手写 JSON 元数据。
 
 普通 material 数值自动生成 Material 常量缓冲，显式 cbuffer 声明共享数据块及 frame/view/draw/pass 作用域。参数 Schema、绑定映射和 PackingPlan 从同一声明生成。Shader 编译层仅产生 CPU 程序/接口数据，不依赖 RHI Device；DXC 处理 HLSL 预处理、Include 和程序编译，反射验证保留字段与资源接口。生成头按编译任务隔离，缓存覆盖共享声明及传递 Include。后台编译成功后，由设备所有线程在准备阶段创建 GPU 对象并在帧边界整体切换，失败保留旧代。Material 返回不可变绑定值：直接 RHI 建立绑定组，Graph 适配先导入并声明资源，由 Graph 录制时组装绑定，避免重复准备。

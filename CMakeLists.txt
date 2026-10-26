@@ -94,6 +94,8 @@ add_library(renderlab_shader STATIC
     src/shader/features.cpp
     src/shader/render_state.cpp
     src/shader/state_parser.cpp
+    src/shader/bindings.cpp
+    src/shader/cpp_generator.cpp
     src/shader/dxc_compiler.cpp
     src/shader/dxil_reflection.cpp
     src/shader/schema.cpp
@@ -178,6 +180,19 @@ install(DIRECTORY sample/m4/Assets DESTINATION project)
 install(FILES sample/m4/RenderLab.rlproject sample/m4/Pbr.rlproject sample/m4/Shadow.rlproject DESTINATION project)
 
 if(BUILD_TESTING)
+    set(parameter_fixture "${CMAKE_BINARY_DIR}/generated/parameter_fixture.hpp")
+    add_custom_command(OUTPUT "${parameter_fixture}"
+        COMMAND $<TARGET_FILE:renderlab_shaderc> "${CMAKE_SOURCE_DIR}/shaders/tests/parameters.shader"
+            --target dxil --cache "${CMAKE_BINARY_DIR}/parameter-generator-cache"
+            --schema "${CMAKE_BINARY_DIR}/generated/parameter_fixture.json" --cpp "${parameter_fixture}"
+        DEPENDS renderlab_shaderc shaders/tests/parameters.shader shaders/tests/parameters.params
+            shaders/tests/parameters.hlsl shaders/tests/parameter_library.hlsli VERBATIM)
+    add_executable(renderlab_parameter_tests tests/parameter_tests.cpp "${parameter_fixture}")
+    target_include_directories(renderlab_parameter_tests PRIVATE "${CMAKE_BINARY_DIR}/generated")
+    target_link_libraries(renderlab_parameter_tests PRIVATE renderlab_options renderlab_material renderlab_shader)
+    add_test(NAME parameters.contracts COMMAND renderlab_parameter_tests
+        "${CMAKE_SOURCE_DIR}/shaders/tests" "${CMAKE_BINARY_DIR}/parameter-tests")
+    set_tests_properties(parameters.contracts PROPERTIES TIMEOUT 60)
     add_executable(renderlab_render_state_tests tests/render_state_tests.cpp)
     target_link_libraries(renderlab_render_state_tests PRIVATE renderlab_options renderlab_shader renderlab_material
         renderlab_rendergraph renderlab_rhi renderlab_core renderlab_platform)

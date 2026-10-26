@@ -2,11 +2,14 @@
 
 #include "shader/definition.hpp"
 
+#include <compare>
 #include <cstddef>
 #include <cstdint>
 #include <filesystem>
 #include <memory>
+#include <optional>
 #include <string>
+#include <string_view>
 #include <variant>
 #include <vector>
 
@@ -19,6 +22,14 @@ struct PassHandle
 {
     const Package* package = nullptr;
     uint32_t index = UINT32_MAX;
+    auto operator<=>(const PassHandle&) const = default;
+};
+struct BindingHandle
+{
+    PassHandle pass;
+    uint32_t index = UINT32_MAX;
+    bool constant = false;
+    auto operator<=>(const BindingHandle&) const = default;
 };
 struct FieldLayout
 {
@@ -31,6 +42,15 @@ struct BlockLayout
     Scope scope;
     uint32_t slot = 0, size = 0;
     std::vector<FieldLayout> fields;
+    std::string schemaId, typeName, layoutHash;
+    uint32_t schemaVersion = 0;
+};
+struct BlockContract
+{
+    std::string_view id;
+    uint32_t version;
+    std::string_view layoutHash;
+    Scope scope;
 };
 struct ResourceLayout
 {
@@ -76,6 +96,14 @@ struct Package
     PassHandle ResolvePass(const PassSelection& selection) const;
     const Pass& GetPass(PassHandle handle) const;
     bool HasRole(PassRole role) const;
+    BindingHandle BlockBinding(PassHandle pass, std::string_view localName) const;
+    BindingHandle ResourceBinding(PassHandle pass, std::string_view localName) const;
+    std::optional<BindingHandle> SchemaBinding(PassHandle pass,
+                                               const BlockContract& contract) const;
+    std::optional<BindingHandle> SemanticBinding(PassHandle pass,
+                                                 Property::BindingSemantic semantic) const;
+    const BlockLayout& GetBlock(BindingHandle handle) const;
+    const ResourceLayout& GetResource(BindingHandle handle) const;
     uint64_t generation = 0;
     std::string key;
     Definition definition;
@@ -108,6 +136,8 @@ private:
 };
 Interface BuildInterface(const Definition& definition, const Pass& pass);
 std::string GenerateHeader(const Interface& interface, Target target);
+std::string GenerateTypesHeader(const Interface& interface);
+std::string GenerateCppHeader(const Package& package);
 void ValidateReflection(const Interface& interface, const std::vector<ReflectedBinding>& bindings);
 std::string SchemaToJson(const Package& package);
 } // namespace renderlab::shader

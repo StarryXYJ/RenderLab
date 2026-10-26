@@ -1,3 +1,4 @@
+#include "core/file_io.hpp"
 #include "platform/text.hpp"
 #include "shader/compiler.hpp"
 
@@ -15,12 +16,13 @@ int wmain(int argc, wchar_t** argv)
         if (argc < 2)
         {
             std::cout << "renderlab_shaderc FILE.shader [--cache DIRECTORY] [--schema FILE] "
-                         "[--target dxil|spirv|both] [--include DIRECTORY]\n";
+                         "[--target dxil|spirv|both] [--include DIRECTORY] [--cpp FILE]\n";
             return 2;
         }
         renderlab::shader::CompileOptions options;
         options.cacheDirectory = "cache/shaders";
         std::filesystem::path output;
+        std::filesystem::path cppOutput;
         for (int i = 2; i < argc; ++i)
         {
             const std::wstring option = argv[i];
@@ -32,6 +34,8 @@ int wmain(int argc, wchar_t** argv)
                 options.includeDirectories.emplace_back(argv[i]);
             else if (option == L"--schema")
                 output = argv[i];
+            else if (option == L"--cpp")
+                cppOutput = argv[i];
             else if (option == L"--target")
             {
                 const std::wstring target = argv[i];
@@ -50,6 +54,14 @@ int wmain(int argc, wchar_t** argv)
         {
             std::cerr << result.diagnostics << '\n';
             return 1;
+        }
+        if (!cppOutput.empty())
+        {
+            const auto text = renderlab::shader::GenerateCppHeader(*result.package);
+            if (!std::filesystem::exists(cppOutput) ||
+                renderlab::shader::ReadText(cppOutput) != text)
+                renderlab::WriteFileAtomically(cppOutput,
+                                               std::as_bytes(std::span{text.data(), text.size()}));
         }
         const auto json = renderlab::shader::SchemaToJson(*result.package);
         if (output.empty())

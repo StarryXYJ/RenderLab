@@ -77,6 +77,14 @@ struct Property
     std::vector<std::string> enumeration;
     std::vector<EnumItem> enumItems;
     std::string keyword;
+    enum class BindingSemantic
+    {
+        None,
+        EnvironmentAtlas,
+        BrdfLut,
+        MainLightShadow
+    };
+    BindingSemantic binding = BindingSemantic::None;
     SourceLocation source;
 };
 struct ParameterBlock
@@ -85,6 +93,8 @@ struct ParameterBlock
     Scope scope = Scope::Pass;
     std::vector<Property> properties;
     SourceLocation source;
+    std::string schemaId, typeName;
+    uint32_t schemaVersion = 0;
 };
 struct Entry
 {

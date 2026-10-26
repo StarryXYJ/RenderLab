@@ -5,7 +5,7 @@
 ## 当前状态
 
 - 当前实施阶段：M0–M4 DONE；M4.1–M4.5 全部完成。
-- 当前工作项：R1 IN_PROGRESS，R1.1a 已提交 a1147d5、R1.2a 已提交 65879ad；R1.1b role/状态配方已完成，下一工作项 R1.3 参数接口与显式 HLSL 库；M5 NOT_STARTED。
+- 当前工作项：R1 IN_PROGRESS，R1.1 已完成（a1147d5/f09c321），R1.2a 已提交 65879ad；R1.3a 参数契约/代码生成基础已完成，下一工作项 R1.3b 场景绑定与显式 HLSL 库迁移；M5 NOT_STARTED。
 - 用户约定：每个子阶段验收完成即提交 Git，无阻塞时在当前授权范围内继续推进；M4.3 提交 c50ee6a、M4.4 提交 40d0c12、M4.5 提交 9a4b2e4。
 - Demo 的 Custom 示例作为回归入口保留；M4 场景示例使用 Forward 组合与现有 Shader/Material 链路。
 
@@ -182,7 +182,9 @@ R1.2a 结果：显式 uint32 enum、普通 bool/enum uniform、keyword 静态属
 
 ### R1.3 参数接口与显式 HLSL 库
 
-状态：IN_PROGRESS；按接口 Schema/生成和绑定、场景/HLSL 迁移两步实施，分别验证提交。
+状态：IN_PROGRESS；R1.3a 参数契约/代码生成基础 DONE（2026 年 10 月 26 日）；R1.3b 场景绑定/HLSL 迁移尚未完成。
+
+R1.3a 结果：cbuffer Schema ID/version/type、独立布局 hash、模块别名、HLSL 类型头/绑定头分离、C++ POD/显式打包生成、代际 BindingHandle 与 Schema/资源语义解析。验证：RTX 5060，Debug/Release 定向各 6/6（parameters/shader、双后端 surface/material），生成头实际编译；矩阵/数组/bool/稀疏枚举/范围/NaN、错误版本/代际、模块与资源别名独立性通过，Validation 错误为 0。文档：[参数接口](../docs/shader-parameters.md)。Material/Scene 的准备输入仍使用原适配，完整接入留给 R1.3b，不将基础 handle API 等同于迁移完成。
 
 - [ ] `.params` 接口身份/版本/布局校验、生成 C++ 数据/打包接口及 HLSL 类型、类型化绑定 handle 与标准资源语义。
 - [ ] 拆分 View/Object/Lighting/Shadow，入口绑定适配与纯函数库分离；纹理参数和光栅梯度显式传递。

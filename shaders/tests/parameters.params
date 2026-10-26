@@ -1,0 +1,9 @@
+enum AbiChoice { Off = 0; Seven = 7; }
+[scope(view), schema("test.parameters", 1), type(AbiData)] cbuffer Inputs
+{
+    float3x2 Basis = (1, 2, 3, 4, 5, 6);
+    float Weights[2] = (0.2, 0.8);
+    bool Enabled = true;
+    AbiChoice Choice = Seven;
+    [range(0.5, 10.5)] uint Count = 5;
+}

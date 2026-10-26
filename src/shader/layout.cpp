@@ -1,3 +1,4 @@
+#include "core/hash.hpp"
 #include "shader/package.hpp"
 
 #include <algorithm>
@@ -45,14 +46,22 @@ Interface BuildInterface(const Definition& definition, const Pass& pass)
     Interface result;
     result.enums = definition.enums;
     uint32_t next[4]{};
-    std::set<std::string> names;
+    std::set<std::string> names, schemaIds;
+    std::set<Property::BindingSemantic> bindingSemantics;
     const auto append = [&](const ParameterBlock& input)
     {
-        if (!names.insert(input.name).second || !names.insert(input.name + "Data").second)
+        const auto typeName = input.typeName.empty() ? input.name + "Data" : input.typeName;
+        if (!names.insert(input.name).second || !names.insert(typeName).second)
             throw std::runtime_error(input.source.Describe() + ": Conflicting parameter block " +
                                      input.name);
         const auto space = uint32_t(input.scope);
         BlockLayout block{input.name, input.scope, next[space], 0, {}};
+        block.schemaId = input.schemaId;
+        block.schemaVersion = input.schemaVersion;
+        block.typeName = typeName;
+        if (!block.schemaId.empty() && !schemaIds.insert(block.schemaId).second)
+            throw std::invalid_argument(input.source.Describe() +
+                                        ": Duplicate parameter schema ID");
         for (const auto& property : input.properties)
         {
             if (!property.type.Numeric() || !property.keyword.empty())
@@ -76,6 +85,25 @@ Interface BuildInterface(const Definition& definition, const Pass& pass)
             if (block.size > 16384)
                 throw std::runtime_error(input.source.Describe() +
                                          ": Parameter block exceeds portable M2 limit (16KiB)");
+            std::string identity = std::to_string(space) + ":" + std::to_string(block.size) + ";";
+            for (const auto& field : block.fields)
+            {
+                const auto& type = field.property.type;
+                identity += std::to_string(field.property.id.size()) + ":" + field.property.id +
+                            ":" + type.name + ":" + std::to_string(type.rows) + ":" +
+                            std::to_string(type.columns) + ":" + std::to_string(type.count) + ":" +
+                            std::to_string(type.array) + ":" + std::to_string(field.offset) + ":" +
+                            std::to_string(field.size) + ":" + std::to_string(field.arrayStride) +
+                            ":" + std::to_string(field.matrixStride) + ";";
+                std::vector<uint32_t> choices;
+                for (const auto& item : field.property.enumItems)
+                    choices.push_back(item.value);
+                std::ranges::sort(choices);
+                for (auto value : choices)
+                    identity += std::to_string(value) + ",";
+                identity += ";";
+            }
+            block.layoutHash = Sha256(identity);
             ++next[space];
             result.blocks.push_back(std::move(block));
         }
@@ -83,6 +111,10 @@ Interface BuildInterface(const Definition& definition, const Pass& pass)
         {
             if (property.type.Numeric())
                 continue;
+            if (property.binding != Property::BindingSemantic::None &&
+                !bindingSemantics.insert(property.binding).second)
+                throw std::invalid_argument(property.source.Describe() +
+                                            ": Duplicate resource binding semantic");
             if (!names.insert(property.symbol).second)
                 throw std::runtime_error(property.source.Describe() +
                                          ": Global resource symbol conflict " + property.symbol);
@@ -103,9 +135,7 @@ std::string GenerateHeader(const Interface& interface, Target target)
 {
     std::ostringstream out;
     out << "#ifndef RENDERLAB_GENERATED_PARAMETERS\n#define RENDERLAB_GENERATED_PARAMETERS\n";
-    for (const auto& enumeration : interface.enums)
-        for (const auto& item : enumeration.items)
-            out << "#define " << enumeration.name << "_" << item.name << " " << item.value << "\n";
+    out << "#include <renderlab/generated/types.hlsli>\n";
     const auto binding = [&](uint32_t slot, Scope scope, char category)
     {
         if (target == Target::Spirv)
@@ -115,18 +145,8 @@ std::string GenerateHeader(const Interface& interface, Target target)
     };
     for (const auto& block : interface.blocks)
     {
-        out << "struct " << block.name << "Data\n{\n";
-        for (const auto& field : block.fields)
-        {
-            out << "    " << (field.property.type.columns > 1 ? "column_major " : "")
-                << HlslType(field.property.type) << " " << field.property.symbol;
-            if (field.property.type.array)
-                out << "[" << field.property.type.count << "]";
-            out << ";\n";
-        }
-        out << "};\n";
         const auto suffix = binding(block.slot, block.scope, 'b');
-        out << "ConstantBuffer<" << block.name << "Data> " << block.name << suffix;
+        out << "ConstantBuffer<" << block.typeName << "> " << block.name << suffix;
     }
     for (const auto& resource : interface.resources)
     {
@@ -143,6 +163,29 @@ std::string GenerateHeader(const Interface& interface, Target target)
         if (kind != rhi::BindingKind::Sampler)
             out << "<" << resource.property.type.element << ">";
         out << " " << resource.property.symbol << suffix;
+    }
+    out << "#endif\n";
+    return out.str();
+}
+std::string GenerateTypesHeader(const Interface& interface)
+{
+    std::ostringstream out;
+    out << "#ifndef RENDERLAB_GENERATED_TYPES\n#define RENDERLAB_GENERATED_TYPES\n";
+    for (const auto& enumeration : interface.enums)
+        for (const auto& item : enumeration.items)
+            out << "#define " << enumeration.name << "_" << item.name << " " << item.value << "\n";
+    for (const auto& block : interface.blocks)
+    {
+        out << "struct " << block.typeName << "\n{\n";
+        for (const auto& field : block.fields)
+        {
+            out << "    " << (field.property.type.columns > 1 ? "column_major " : "")
+                << HlslType(field.property.type) << " " << field.property.symbol;
+            if (field.property.type.array)
+                out << "[" << field.property.type.count << "]";
+            out << ";\n";
+        }
+        out << "};\n";
     }
     out << "#endif\n";
     return out.str();

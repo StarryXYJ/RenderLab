@@ -48,7 +48,18 @@ Property DeclarationParser::Attributes(Lexer& lexer)
                 lexer.Expect("(");
                 std::string value = lexer.Peek().quoted ? lexer.String() : lexer.Identifier().text;
                 lexer.Expect(")");
-                if (attribute == "keyword")
+                if (attribute == "binding")
+                {
+                    if (value == "EnvironmentAtlas")
+                        property.binding = Property::BindingSemantic::EnvironmentAtlas;
+                    else if (value == "BrdfLut")
+                        property.binding = Property::BindingSemantic::BrdfLut;
+                    else if (value == "MainLightShadow")
+                        property.binding = Property::BindingSemantic::MainLightShadow;
+                    else
+                        lexer.Fail("Unknown resource binding semantic " + value);
+                }
+                else if (attribute == "keyword")
                     property.keyword = value;
                 else if (attribute == "id")
                     property.id = value;
@@ -203,6 +214,10 @@ ParameterBlock DeclarationParser::Block(Lexer& lexer, std::string name, Scope sc
                 lexer.Fail(
                     "keyword requires a material bool/enum scalar and a valid macro identifier");
         }
+        if (property.binding != Property::BindingSemantic::None &&
+            (scope == Scope::Material ||
+             property.type.resource != rhi::BindingKind::SampledTexture))
+            lexer.Fail("Standard binding semantics require external sampled textures");
         block.properties.push_back(std::move(property));
     }
     lexer.Accept(";");

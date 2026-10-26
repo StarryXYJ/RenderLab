@@ -59,6 +59,10 @@ std::string SchemaToJson(const Package& package)
         for (const auto& b : interface.blocks)
         {
             Json block{{"name", b.name},
+                       {"schema", b.schemaId},
+                       {"schemaVersion", b.schemaVersion},
+                       {"type", b.typeName},
+                       {"layoutHash", b.layoutHash},
                        {"space", uint32_t(b.scope)},
                        {"slot", b.slot},
                        {"size", b.size},
@@ -92,6 +96,7 @@ std::string SchemaToJson(const Package& package)
         }
         for (const auto& r : interface.resources)
             pass["resources"].push_back({{"id", r.property.id},
+                                         {"bindingSemantic", static_cast<int>(r.property.binding)},
                                          {"symbol", r.property.symbol},
                                          {"type", r.property.type.name},
                                          {"element", r.property.type.element},
