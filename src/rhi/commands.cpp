@@ -206,19 +206,22 @@ void CommandList::EndMarker()
 void CommandList::WriteTimestamp(uint32_t index)
 {
     Recording();
-    Require(index < 2, "M1 supports two timestamp slots per command list");
-    Require((timestampMask_ & (1u << index)) == 0, "Timestamp slot already written");
-    timestampMask_ |= 1u << index;
+    Require(index < MaxTimestampSlots, "Timestamp slot exceeds command-list capacity");
+    Require((timestampMask_ & (uint64_t{1} << index)) == 0, "Timestamp slot already written");
+    timestampMask_ |= uint64_t{1} << index;
     commands_.emplace_back(Timestamp{index});
 }
-void CommandList::ReadTimestamps(std::shared_ptr<Buffer> destination)
+void CommandList::ReadTimestamps(std::shared_ptr<Buffer> destination, uint32_t count)
 {
     Check(destination);
     Require(!rendering_, "Resolve timestamps outside rendering");
-    Require(timestampMask_ == 3, "Both timestamps must be written before resolve");
-    Require(destination->desc.memory == Memory::Readback && destination->desc.size >= 16,
-            "Timestamp destination requires 16 readback bytes");
-    commands_.emplace_back(ResolveTimestamps{std::move(destination)});
+    Require(count > 0 && count <= MaxTimestampSlots, "Invalid timestamp resolve count");
+    const auto expected = count == 64 ? UINT64_MAX : (uint64_t{1} << count) - 1;
+    Require(timestampMask_ == expected, "All contiguous timestamps must be written before resolve");
+    Require(destination->desc.memory == Memory::Readback &&
+                destination->desc.size >= uint64_t(count) * 8,
+            "Timestamp destination is too small or is not readback memory");
+    commands_.emplace_back(ResolveTimestamps{std::move(destination), count});
 }
 void CommandList::Cancel()
 {

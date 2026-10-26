@@ -64,6 +64,19 @@ int main()
         RequireInvalid([] { ParseOptions(std::array{"--frames"sv, "1"sv, "--headless"sv}); });
         RequireInvalid([] { ParseOptions(std::array{"--frames"sv, "-1"sv}); });
         RequireInvalid([] { ParseOptions(std::array{"--output"sv, ""sv}); });
+        RequireInvalid([] { ParseOptions(std::array{"--width"sv, "0"sv}); });
+        RequireInvalid([] { ParseOptions(std::array{"--height"sv, "16385"sv}); });
+        RequireInvalid([] { ParseOptions(std::array{"--quality"sv, "ultra"sv}); });
+        RequireInvalid([] { ParseOptions(std::array{"--view"sv, "missing"sv}); });
+        RequireInvalid([] { ParseOptions(std::array{"--profile"sv, ""sv}); });
+        RequireInvalid([] { ParseOptions(std::array{"--benchmark"sv, "0"sv}); });
+        RequireInvalid([] { ParseOptions(std::array{"--debug-panel"sv, "--headless"sv}); });
+        const auto tools = ParseOptions(
+            std::array{"--project"sv, "sample.rlproject"sv, "--headless"sv, "--benchmark"sv, "12"sv,
+                       "--quality"sv, "high"sv, "--view"sv, "shadow"sv, "--width"sv, "257"sv});
+        Require(tools.benchmarkFrames == 12 && tools.quality == "high" && tools.view == "shadow" &&
+                    tools.width == 257,
+                "Scene capture options must remain explicit and reproducible");
 
         using namespace renderlab::rhi;
         int owner = 0, otherOwner = 0;
@@ -84,6 +97,16 @@ int main()
         RequireInvalid([&] { commands.CopyTexture(buffer, texture, 512, true, 1); });
         RequireInvalid([&] { commands.Barrier(texture, State::Undefined, State::Storage); });
         RequireInvalid([&] { commands.ReadTimestamps(destination); });
+        RequireInvalid([&] { commands.WriteTimestamp(MaxTimestampSlots); });
+        {
+            CommandList many(&owner);
+            for (uint32_t i = 0; i < MaxTimestampSlots; ++i)
+                many.WriteTimestamp(i);
+            RequireInvalid([&] { many.ReadTimestamps(destination, 0); });
+            RequireInvalid([&] { many.ReadTimestamps(destination, MaxTimestampSlots + 1); });
+            many.ReadTimestamps(destination, MaxTimestampSlots);
+            many.Cancel();
+        }
         commands.WriteTimestamp(0);
         RequireInvalid([&] { commands.WriteTimestamp(0); });
         RequireInvalid([&] { commands.EndMarker(); });

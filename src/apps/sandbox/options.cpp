@@ -73,6 +73,30 @@ Options ParseOptions(std::span<const std::string_view> arguments)
         {
             options.headless = true;
         }
+        else if (arg == "--width")
+            options.width = number();
+        else if (arg == "--height")
+            options.height = number();
+        else if (arg == "--benchmark")
+        {
+            options.benchmarkFrames = number();
+            if (!options.benchmarkFrames || options.benchmarkFrames > 10000)
+                throw std::invalid_argument("--benchmark requires 1..10000 measured frames");
+        }
+        else if (arg == "--quality")
+            options.quality = value();
+        else if (arg == "--view")
+            options.view = value();
+        else if (arg == "--profile")
+        {
+            options.profilePath = value();
+            if (options.profilePath.empty())
+                throw std::invalid_argument("--profile cannot be empty");
+        }
+        else if (arg == "--debug-panel")
+            options.debugPanel = true;
+        else if (arg == "--fixed-camera")
+            options.fixedCamera = true;
         else if (arg == "--window-test")
         {
             options.windowTest = true;
@@ -126,6 +150,22 @@ Options ParseOptions(std::span<const std::string_view> arguments)
         throw std::invalid_argument("--frames requires a window");
     if (options.sceneTest && options.projectPath.empty())
         throw std::invalid_argument("--scene-test requires --project");
+    if (!options.width || !options.height || options.width > 16384 || options.height > 16384)
+        throw std::invalid_argument("--width and --height must be in [1,16384]");
+    if (options.quality != "scene" && options.quality != "low" && options.quality != "medium" &&
+        options.quality != "high")
+        throw std::invalid_argument("--quality must be scene, low, medium or high");
+    if (options.view != "final" && options.view != "hdr" && options.view != "shadow" &&
+        options.view != "environment" && options.view != "brdf")
+        throw std::invalid_argument("--view must be final, hdr, shadow, environment or brdf");
+    if (options.headless && options.debugPanel)
+        throw std::invalid_argument("--debug-panel requires a window");
+    if ((options.debugPanel || options.fixedCamera || options.benchmarkFrames ||
+         !options.profilePath.empty() || options.view != "final" || options.quality != "scene") &&
+        options.projectPath.empty())
+        throw std::invalid_argument("Scene tools require --project");
+    if (options.benchmarkFrames && (!options.headless || options.sceneTest))
+        throw std::invalid_argument("--benchmark requires --headless and excludes --scene-test");
     return options;
 }
 
@@ -147,7 +187,14 @@ std::string_view Usage()
            "  --graph-dump PATH           Write the first window frame graph plan as JSON\n"
            "  --output PATH               Acceptance images and data (default: out/m1)\n"
            "  --scene-test               Check the M4 reference scene (--project required)\n"
-           "  --project FILE             Load a project scene using Forward Blinn-Phong\n"
+           "  --project FILE             Load a project scene using Forward PBR/HDR\n"
+           "  --width N --height N        Scene output size (default: 1280x720)\n"
+           "  --quality scene|low|medium|high  Scene shadows, or 128/512/1024 resolution\n"
+           "  --view final|hdr|shadow|environment|brdf  Select the displayed texture\n"
+           "  --debug-panel               Open native scene controls (F1 toggles)\n"
+           "  --fixed-camera              Ignore camera movement keys\n"
+           "  --profile PATH              Save CPU/GPU pass timing and memory JSON\n"
+           "  --benchmark N               Headless: 5 warmup frames then N measured frames\n"
            "  --report PATH               Write a JSON capability report\n"
            "  --log PATH                  UTF-8 log (default: logs/renderlab.log)\n"
            "  --help                      Show this help\n";

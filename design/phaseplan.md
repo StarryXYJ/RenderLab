@@ -4,9 +4,9 @@
 
 ## 当前状态
 
-- 当前实施阶段：M0–M3 DONE；M4 IN_PROGRESS，M4.1–M4.4 DONE。
-- 当前工作项：M4.4 已验收；下一工作项为 M4.5 可重复演示。
-- 用户授权无阻塞时继续按计划推进，每个子阶段验收完成即提交 Git；M4.3 已提交 c50ee6a。
+- 当前实施阶段：M0–M4 DONE；M4.1–M4.5 全部完成。
+- 当前工作项：M4 交付与验收完成，按子阶段提交 Git；下一计划阶段 M5 NOT_STARTED。
+- 用户约定：每个子阶段验收完成即提交 Git，无阻塞时在当前授权范围内继续推进；M4.3 提交 c50ee6a、M4.4 提交 40d0c12，M4.5 随本轮提交。
 - Demo 的 Custom 示例作为回归入口保留；M4 场景示例使用 Forward 组合与现有 Shader/Material 链路。
 
 | 阶段 | 目标 | 前置依赖 | 状态 |
@@ -15,7 +15,7 @@
 | M1 | 最小双后端 RHI | M0 | DONE |
 | M2 | Shader 与材质数据链路 | M1 | DONE |
 | M3 | 单队列 Render Graph | M2 | DONE |
-| M4 | 场景资源与基础 Renderer | M3 | IN_PROGRESS |
+| M4 | 场景资源与基础 Renderer | M3 | DONE |
 | M5 | Deferred 与光追基础 | M4 | NOT_STARTED |
 | M6 | GPU Driven 与执行优化 | M4；光追调度测试另需 M5 | NOT_STARTED |
 | M7 | C# 编辑器与完整项目工作流 | M4；默认在 M5、M6 的核心目标后开展 | NOT_STARTED |
@@ -96,7 +96,7 @@
 
 验证：RTX 4060 Laptop GPU、MSVC 19.51、DXC 1.8，最终标准 windows-debug 完整 CTest 19/19；DX12/Vulkan 窗口直接启动与图像/噪声/Buffer/快照参考通过，验证错误为 0。原接口曾在 RTX 5060 上通过 Debug/Release 各 19/19；新接口未复验 Release 或其他 GPU，历史结果不替代新配置验收。
 
-边界：单队列/单线程/单视图、单 mip/layer、单颜色附件与固定 Store；无 Alias、多队列、计划缓存、深度采样或每 Pass GPU Timestamp。Feature 依赖显式声明，Full 写覆盖由作者保证；普通 Forward 目前消费已准备 DrawPacket，场景、Material 适配和光照属于 M4。
+边界：单队列/单线程/单视图、单 mip/layer、单颜色附件与固定 Store；无 Alias、多队列、计划缓存或深度采样；可选逐 Pass GPU Timestamp 后由 M4.5 补齐。Feature 依赖显式声明，Full 写覆盖由作者保证；普通 Forward 目前消费已准备 DrawPacket，场景、Material 适配和光照属于 M4。
 
 入口：[Graph API](../docs/m3-rendergraph.md)、[Feature/Create/Forward](../docs/forward-pipeline.md)、[构建与恢复](../manual/build.md#render-graph-与-feature)。产物位于构建树 graph、logs、Testing，不纳入源码。
 
@@ -114,67 +114,43 @@
 
 ## M4 场景资源与基础 Renderer
 
-状态：IN_PROGRESS。
+状态：DONE，日期：2026 年 10 月 26 日。
 
-目标是形成可展示画面和可保存内容，完整工程 UI 仍后置。M4.1–M4.2 打通资产 → 场景 → 材质 → Forward → 显示，M4.3 接入 PBR/HDR/IBL；阴影、透明和可重复演示工具继续保留后续计划。
+结果：最小 Project/UUID/资源缓存、静态 glTF/GLB、可保存 Scene/Material、层级变换/相机/主方向光/CPU 剔除；普通 Shader/Material 驱动的 Lit/Unlit、HDR/ACES/IBL、单张方向光阴影、Masked 与排序透明；原生调试面板、Graph 纹理查看、逐 Pass GPU Timestamp、固定配置/性能报告和独立原生 Player。原 Custom/RHI 示例与项目 Copper Shader 保留。
+
+最终验证：RTX 5060、MSVC 19.51.36257、DXC 1.9.0.5512，标准 windows-debug/windows-release 构建及完整 CTest 各 37/37（11 CPU/CLI、26 GPU）通过，DX12/Vulkan validation error 为 0。content/scene/material/graph/RHI 原有回归通过，场景/材质保存重载、窗口 STA/两帧提交/resize/minimize/restore/退出和泄漏检查均覆盖。独立安装目录 out/player-m45-validation 的双后端 headless 与各 4 帧窗口启动通过；Library 从安装内容重建。
+
+图像：两配置各 16 张 PBR 参考图双后端逐字节一致，24 张 surface 专项图最大差异 2 个显示 code；透明线性混合→ACES→sRGB 与独立 CPU 参考误差不超过一个 code。1280×720 Release 基线中 Pbr 有 2 个像素相差一个 code，Shadow 有 19 个像素的局部 PCF 差异、最大 16 个 code，比较数据已保留，不以小尺寸结果代替高分辨率验收。
+
+基线：两场景 × 两后端，Release/validation off、1280×720/Medium、预热 5 帧后各 120 帧。CPU render 均值 1.770–7.635ms，已测 GPU Pass 范围均值合计约 0.037–0.068ms，RHI 当前约 22.88–28.38MiB；进程 working set/private 和逐 Pass/min/max/count 见 [原始记录与范围](../docs/performance/m4-rtx5060.md)。GPU 范围合计不等于含同步/Present 的完整帧耗时。
+
+边界：单 Graphics Queue、单视图、静态三角形、point-clamp、单 mip/layer；低分辨率 CPU IBL 与 LDR 环境源，无 .hdr/.exr；导数切线框架非 authored TANGENT/MikkTSpace 保证。单张阴影，无级联/完全稳定拟合；透明不投影，无相交透明/OIT/折射。项目 Shader 需显式提供 Shadow Pass 才投影；Sky、DepthPrepass、Bloom 按需增加。Vulkan 检查并启用 shaderDemoteToHelperInvocation，保留未消费顶点属性提示；DX12 保留优化 clear 值不匹配的性能提示，无验证错误。仅本 NVIDIA 设备完整验收，新面板的手动键鼠操作/其他 GPU 未验收；原始完整 PBR Debug DX12 交互已由用户确认恢复。
+
+入口：[场景/资源](../docs/m4-scene.md)、[PBR/HDR/IBL](../docs/m4-forward-pbr.md)、[阴影/Alpha](../docs/m4-shadows-alpha.md)、[工具/Player](../docs/m4-tools.md)、[构建运行](../manual/build.md#m4-项目场景)。构建树 pbr、surface、tools 保存图像/Graph/日志/隔离资产与 backend-comparison.json；各配置 Testing/Temporary/LastTest.log 保存最终完整验收。
 
 ### M4.1 最小项目与资源
 
-状态：DONE，日期：2026 年 10 月 24 日。
-
-结果：Manifest/挂载根、UUID/.meta 索引、稳定子资源与依赖映射、重命名；静态 glTF/GLB、WIC 图像、内容/Importer 版本化 CBOR 缓存。用户材质覆盖与导入产物分离。
-
-验证：标准 windows-debug 的 content.contracts 通过，覆盖缓存命中/损坏重建、依赖失效、清缓存后移动资源及外部依赖、重名 UUID、稳定子资源、glTF/GLB 和用户材质保留；DX12/Vulkan 场景专项已通过首轮导入与显示。
-
-入口：[数据契约与导入范围](../docs/m4-scene.md)、[启动与资源使用](../manual/build.md#m4-项目场景)。范围限静态三角形、float32 顶点和 Opaque，完整 glTF 外观、任意结构变化后的身份推断、实时重导入与流送均不在本阶段。
+DONE（2026 年 10 月 24 日）：Manifest/挂载根、UUID/.meta/子资源/依赖移动、静态 glTF/GLB/WIC 与可重建缓存；用户材质与导入产物分离。content.contracts 持续回归缓存、身份、依赖和非法内容；PBR/Alpha 导入在 M4.3–M4.4 补齐。
 
 ### M4.2 场景与 GPU 数据
 
-状态：DONE，日期：2026 年 10 月 24 日。
-
-结果：层级 Scene/保存加载、Camera、MeshRenderer、方向光组件与确定性主光选择；值快照、CPU 视锥剔除、历史变换、法线/镜像处理；Material 资源适配到既有 Forward/Graph。内置 Core/Lighting HLSL 和 Blinn–Phong，项目 Shader 可引用引擎参数与变换/光照辅助；Sandbox 项目加载及相机控制。
-
-验证：RTX 4060 Laptop GPU、MSVC 19.51、DXC 1.8，标准 windows-debug 完整构建及 CTest 22/22 通过。场景专项双后端覆盖选光/旋转/强度、相机、实例增删、材质替换、镜像和保存重开；固定参考图像逐字节一致。另以 --project 加 --window-test 验证 DX12/Vulkan 各 54 帧、resize/minimize/restore，Validation 错误为 0。矩阵、层级、非均匀缩放、缓存与剔除的 CPU 合约同时通过。
-
-入口：[场景、资源与 HLSL 契约](../docs/m4-scene.md)、[启动与控制](../manual/build.md#m4-项目场景)；参考项目 sample/m4/RenderLab.rlproject，图像与日志保留在构建树 scene、logs、Testing。
-
-边界：本轮只验收 Debug 与该 NVIDIA 设备；Release、其他 GPU 和实际键盘手动操作未验收。单视图、静态 Opaque、point-clamp、LDR；模型/Shader 无实时重导入，常量按帧创建，历史指上次提取。PBR/HDR/IBL、阴影与高级透明仍在后续；整个 M4 保持 IN_PROGRESS。
-
-补充修正（2026 年 10 月 24 日）：相机俯仰改为右乘局部旋转，绕自身右轴；转向保留父空间上轴。windows-debug Sandbox 重建通过；本次未运行测试或手动键盘验收。
+DONE（2026 年 10 月 24 日）：层级 Scene/相机/方向光、值快照/剔除/历史/法线与镜像、Material→Forward/Graph；项目 Shader 共用内置 Core/Lighting。相机俯仰使用局部右轴，主光按稳定 UUID 选择；最终 scene/content 与双后端窗口回归覆盖。
 
 ### M4.3 Forward PBR
 
-状态：DONE，日期：2026 年 10 月 26 日。
+DONE（2026 年 10 月 26 日）：Lit/Unlit、Surface/Math/BRDF、MR/Normal/AO/Emission、RGBA32F HDR/曝光/ACES 与单次 sRGB、确定性预滤波图集和 split-sum LUT；Pbr.rlproject 固定材质球参考。最初 Debug/Release 各 25/25，COM/窗口修复后各 27/27，最终完整回归见本阶段汇总。
 
-结果：普通 Shader/Material 驱动的 Lit/Unlit、glTF MR/Normal/Occlusion/Emission 参数与图像、独立 MaterialSurface/光栅 SampleGrad/BRDF 库；确定性预滤波 2D IBL 图集与 split-sum LUT；RGBA32F HDR、曝光、ACES fitted Tone Mapping 与单次 sRGB 显示编码。新增固定材质球参考项目，保留项目 Copper Shader 与原 Custom/RHI 示例。
-
-验证：RTX 5060、MSVC 19.51.36257、DXC 1.9.0.5512，标准 windows-debug/windows-release 完整构建及最终 CTest 各 27/27 通过；DX12/Vulkan 严格 Validation 错误为 0。两配置各 16 张 PBR 参考 BMP 双后端逐字节一致；Unlit HDR/曝光/ACES/sRGB 数值参考误差不超过一个显示 code；RGBA32F 非整齐行间距上传读回逐位一致。完整 PBR 项目的双后端窗口回归纳入 CTest，覆盖 STA 保持、54 帧、10 次重建及 minimize/restore。原 content/scene/material/graph/RHI 回归均通过。
-
-交互修复（同日）：首帧独立纹理 WIC 解码不再临时创建并卸载窗口线程的最后一个 COM apartment；Sandbox 在窗口/设备创建前初始化 STA，持有至宿主对象销毁，解码复用调用线程 apartment。用户在 VS Code 终端重跑原始 Debug DX12 完整 PBR 命令，确认蓝圈与交互问题消失。另修复材质 generation 未驻留 PSO 导致退休帧后重复创建的问题，保留独立生命周期回归。content.contracts 覆盖独立导入的临时 COM 清理，以及成功/失败解码均保持调用者 STA。
-
-入口：[表面、IBL 与 HDR 契约](../docs/m4-forward-pbr.md)、[构建运行](../manual/build.md#m43-pbr-参考场景)；参考项目 sample/m4/Pbr.rlproject。构建树 pbr 下保留 BMP/Graph/日志/隔离资产，windows-debug/pbr/backend-comparison.json 保存后端比较；Testing/Temporary/LastTest.log 为完整测试结果。
-
-限制：环境源为 sRGB lat-long 图加线性强度，无 .hdr/.exr 导入；低分辨率 IBL 与 split-sum 近似、导数切线框架（非 authored TANGENT/MikkTSpace 保证）、point-clamp/单 mip/layer/静态 Opaque。Vulkan 保留 Unlit 未消费 NORMAL 的提示，无验证错误。未验收其他 GPU、Vulkan/Release 的手动键盘与拖动或本子阶段的性能基准；阴影、透明与演示工具未因此标记完成，M4 保持 IN_PROGRESS。
+交互修复：窗口宿主持有完整生命周期的 COM STA，WIC 解码复用调用者 apartment；用户在 VS Code 终端重跑原始 Debug DX12 完整 PBR 命令，确认蓝圈与交互问题消失。另修复 generation 未驻留 PSO 导致退休帧后重复创建的问题，保留独立生命周期回归。
 
 ### M4.4 阴影与透明
 
-状态：DONE，日期：2026 年 10 月 26 日。
-
-结果：单张正交 Reversed-Z 方向光阴影，独立 ShadowFeature、RGBA32F 深度图与 D32 可见性附件、3×3 PCF 与接收平面深度修正；保留相机视野外投影实例。Lit/Unlit 的 Masked/Transparent 普通 variant、glTF alphaMode/alphaCutoff 与 v3 缓存、HDR straight alpha 混合/只读深度/从远到近排序。固定 Shadow.rlproject 覆盖实体、裁剪孔洞、透明薄片和接收地面；快照仍在 Tone Mapping 前。
-
-验证：RTX 5060、MSVC 19.51.36257、DXC 1.9.0.5512，标准 windows-debug/windows-release 构建及完整 CTest 各 32/32 通过，双后端 validation error 为 0。新增 CPU 投影/竖直光/退化包围盒、alpha 导入缓存与非法值、离屏 caster 保留；GPU 专项覆盖离屏投影、光旋转、128/512 分辨率、直接光与 IBL 隔离、Masked 裁剪/不投影、透明排序/零 alpha/深度遮挡，以及 CPU 线性混合显示参考（误差不超过一个 code）。两配置各 18 张专项参考图双后端最大差异 2 个 8-bit code，差异局限于少数通道；透明数值参考图逐字节一致。原 PBR 16 张参考图逐字节一致；Shadow 完整窗口回归双后端各 54 帧与 10 次重建通过。
-
-入口：[阴影与 Alpha 契约](../docs/m4-shadows-alpha.md)、[构建运行](../manual/build.md#m44-阴影与透明场景)。构建树 surface/{dx12,vulkan} 保存 BMP/Graph/日志/隔离资产，backend-comparison.json 保存比较，完整测试结果见 Testing/Temporary/LastTest.log。
-
-限制：单张场景拟合图，无级联或移动场景的完全稳定保证；RGBA32F+D32 的 512² 逻辑大小为 5 MiB。透明不投影，无相交透明/OIT/折射；项目 Shader 需显式提供 Shadow Pass 才投影。Vulkan 显式检查并启用 shaderDemoteToHelperInvocation；保留未消费顶点属性提示，DX12 保留优化 clear 值不匹配的性能提示，无验证错误。未手动验收本场景输入或其他 GPU；Sky、DepthPrepass、Bloom 按需增加，M4 仍待 M4.5 与基线验收。
+DONE（2026 年 10 月 26 日）：BeforeOpaque ShadowFeature、RGBA32F 记录 Reversed-Z 深度与 D32 可见性、3×3 PCF/接收平面修正、相机视野外投影；Lit/Unlit Masked/Transparent variant、glTF alphaMode/alphaCutoff 与 v3 缓存、HDR straight alpha/只读深度/排序。Shadow.rlproject 为固定参考；子阶段 Debug/Release 各 32/32，最终完整回归见汇总。
 
 ### M4.5 可重复演示
 
-- [ ] 相机控制、原生调试面板、Texture Viewer 与 Pass Timestamp。
-- [ ] 固定相机参考场景，支持运行参数选择后端和画质配置。
-- [ ] 最小独立 Player 读取同一项目内容，不依赖 C#。
+DONE（2026 年 10 月 26 日）：同线程 modeless Win32 面板、F1、冻结/重置相机、曝光/阴影质量、最终/HDR/阴影/环境/LUT 查看；Graph 可选逐 Pass Timestamp，64 slot/最多 32 个存活 Pass，完成后读取。固定宽高/质量/项目与 5 帧预热测量，独立 Player 与安装目录，共用现有宿主和渲染流程。
 
-退出条件：同一项目在双后端得到合理一致的画面；场景与材质能保存重载；有初步 CPU/GPU 和内存基线。
+补充修复：Graph/Pool 改用真实 FormatBytes 估算，修正 HDR 按 4 字节低估的问题；SceneRenderer 的池上限明确设为 64 项/224MiB，RHI 仍独立检查 256MiB。CPU 回归覆盖格式预算/溢出/未完成计时读取；双后端验证连续提交的 2048² 阴影、计时不改变画面、查看器图剔除和控件命令/布局边界。最终 Debug/Release 各 37/37 与固定基线见汇总；不把自动控件测试当作手动 UI 验收。
 
 ## M5 Deferred 与光追基础
 

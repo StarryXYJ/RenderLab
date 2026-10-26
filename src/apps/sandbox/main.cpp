@@ -22,6 +22,25 @@
 namespace
 {
 using namespace renderlab;
+std::string_view ApplicationUsage()
+{
+#ifdef RENDERLAB_PLAYER
+    return "RenderLab Player\n"
+           "  --project FILE              Project to run (required)\n"
+           "  --backend dx12|vulkan       Backend (default: dx12)\n"
+           "  --validation auto|on|off    Device validation\n"
+           "  --width N --height N        Output size (default: 1280x720)\n"
+           "  --quality scene|low|medium|high  Shadow quality override\n"
+           "  --view final|hdr|shadow|environment|brdf  Texture preview\n"
+           "  --fixed-camera --debug-panel  Camera and native controls\n"
+           "  --headless --benchmark N    Capture or measure a fixed scene\n"
+           "  --profile PATH --output DIR  Timing JSON and captured image\n"
+           "  --frames N                  Close after N presented frames\n"
+           "  --help                      Show help\n";
+#else
+    return sandbox::Usage();
+#endif
+}
 
 int Run(const sandbox::Options& options, const std::filesystem::path& shaderRoot, Logger& logger)
 {
@@ -42,7 +61,12 @@ int Run(const sandbox::Options& options, const std::filesystem::path& shaderRoot
     if (!options.headless)
     {
         window = std::make_unique<platform::Window>(
-            "RenderLab M3 - Render Graph - " + options.backend, 1280, 720);
+#ifdef RENDERLAB_PLAYER
+            "RenderLab Player - " + options.backend,
+#else
+            "RenderLab Sandbox - " + options.backend,
+#endif
+            options.width, options.height);
         RENDERLAB_ASSERT(window->GetNativeSurface().window != nullptr);
     }
     rhi::DeviceOptions deviceOptions;
@@ -126,9 +150,15 @@ int wmain(int argc, wchar_t** argv)
             arguments.push_back(string);
         }
         const auto options = renderlab::sandbox::ParseOptions(arguments);
+#ifdef RENDERLAB_PLAYER
+        if (!options.help && (options.projectPath.empty() || options.rhiTest || options.graphTest ||
+                              options.sceneTest || options.graphNoCull || options.graphNoUpdate))
+            throw std::invalid_argument(
+                "Player requires --project and does not run Sandbox acceptance demos");
+#endif
         if (options.help)
         {
-            std::cout << renderlab::sandbox::Usage();
+            std::cout << ApplicationUsage();
             return 0;
         }
         renderlab::Logger logger(
@@ -146,7 +176,7 @@ int wmain(int argc, wchar_t** argv)
     }
     catch (const std::invalid_argument& error)
     {
-        std::cerr << "Invalid arguments: " << error.what() << '\n' << renderlab::sandbox::Usage();
+        std::cerr << "Invalid arguments: " << error.what() << '\n' << ApplicationUsage();
         return 2;
     }
     catch (const std::exception& error)

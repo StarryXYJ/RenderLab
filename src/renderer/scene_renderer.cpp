@@ -81,7 +81,8 @@ struct SceneRenderer::Impl
          const std::filesystem::path& engine)
         : runtime(r), project(project::Project::Open(manifest, engine)), database(project),
           document(scene::Scene::Load(database.Get(project.startScene).path)), materials(r, target),
-          pool(r)
+          // Two 2048 shadow color/depth pairs plus 720p HDR/depth fit below the RHI budget.
+          pool(r, 64, 224ull * 1024 * 1024)
     {
         shader::CompileOptions options;
         options.cacheDirectory = project.library / "Shaders";
@@ -362,12 +363,19 @@ const std::map<std::string, assets::Model>& SceneRenderer::Models() const
 }
 SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::State initial,
                                     rhi::Swapchain* swapchain, bool readback,
-                                    const std::filesystem::path& dump)
+                                    const std::filesystem::path& dump, SceneRenderOptions options)
 {
     auto& self = *impl_;
     self.EnsureModels();
     self.snapshot = self.extractor.Extract(
         self.document, float(target->desc.width) / float(target->desc.height), self.models);
+    if (options.shadowResolution)
+    {
+        const auto size = options.shadowResolution;
+        if (size < 128 || size > 2048 || (size & (size - 1)))
+            throw std::invalid_argument("Invalid render shadow resolution");
+        self.snapshot.light.shadowResolution = size;
+    }
     self.UpdateEnvironment();
     self.shadowMatrix = FitDirectionalShadow(self.snapshot);
     rendergraph::Graph graph;
@@ -531,13 +539,26 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
     for (const auto& instance : self.snapshot.instances)
         prepareDraw(instance, false);
     self.pipeline.Build(graph, frame);
+    std::string displaySource = "CameraColor";
+    if (options.view == SceneView::Shadow)
+        displaySource = "MainLightShadow";
+    else if (options.view == SceneView::Environment)
+        displaySource = importTexture(self.environmentAtlas);
+    else if (options.view == SceneView::Brdf)
+        displaySource = importTexture(self.brdfLut);
     material::Preparation displayPreparation;
     displayPreparation.pass = "Display";
     displayPreparation.color = target->desc.format;
     displayPreparation.vertexStride = 8;
     displayPreparation.attributes = {{"POSITION", 0, rhi::VertexFormat::Float2, 0}};
     displayPreparation.constants["DisplayParameters"] = {
-        {"Exposure", {"float", 1, {self.snapshot.exposure}}}};
+        {"Exposure", {"float", 1, {self.snapshot.exposure}}},
+        {"RawView",
+         {"uint",
+          1,
+          {options.view != SceneView::Final && options.view != SceneView::Environment ? 1.0
+                                                                                      : 0.0}}},
+        {"ViewportSize", {"float2", 1, {double(target->desc.width), double(target->desc.height)}}}};
     displayPreparation.deferredResources.insert("HdrColor");
     const auto display = self.materials.Prepare(
         self.toneMapping, material::Create(shader::MaterialTemplate(self.toneMapping)),
@@ -549,9 +570,10 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
         if (binding.buffer)
             displayBuffers.emplace_back(
                 binding, importBuffer(binding.buffer, "Display.Constants", rhi::State::HostWrite));
-    auto displayPass = graph.AddRasterPass("Display.ToneMapping");
+    auto displayPass = graph.AddRasterPass(
+        options.view == SceneView::Final ? "Display.ToneMapping" : "Debug.TextureViewer");
     displayPass.ColorTarget("DisplayColor", rhi::LoadOp::Clear, {.02f, .02f, .02f, 1});
-    const auto hdr = displayPass.ReadTexture("CameraColor");
+    const auto hdr = displayPass.ReadTexture(displaySource);
     const auto vertices = displayPass.ReadBuffer(fullscreen, rendergraph::Use::Vertex);
     std::vector<std::pair<rhi::Binding, rendergraph::BufferHandle>> constants;
     for (const auto& [binding, name] : displayBuffers)
@@ -586,8 +608,13 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
         graph.Export(buffer, rhi::State::HostRead);
     }
     graph.Export("DisplayColor", swapchain ? rhi::State::Present : rhi::State::CopySource);
-    graph.Compile();
-    result.completion = graph.Execute(self.pool, swapchain).completion;
+    graph.Compile({.profile = options.profile});
+    auto submitted = graph.Execute(self.pool, swapchain);
+    result.completion = submitted.completion;
+    result.profile = std::move(submitted.profile);
+    result.compileNs = graph.GetPlan().compileNs;
+    result.prepareNs = graph.GetPlan().prepareNs;
+    result.recordNs = graph.GetPlan().recordNs;
     if (!dump.empty())
     {
         const auto json = graph.GetPlan().ToJson();

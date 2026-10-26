@@ -38,7 +38,7 @@ std::shared_ptr<Runtime::Submission> VulkanRuntime::Execute(const CommandList& c
         VkQueryPoolCreateInfo query{};
         query.sType = VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO;
         query.queryType = VK_QUERY_TYPE_TIMESTAMP;
-        query.queryCount = 2;
+        query.queryCount = MaxTimestampSlots;
         Check(vkCreateQueryPool(device_, &query, nullptr, &work->queries), "Timestamp QueryPool");
         contexts_.push_back(work);
     }
@@ -47,7 +47,7 @@ std::shared_ptr<Runtime::Submission> VulkanRuntime::Execute(const CommandList& c
     begin.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
     begin.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
     Check(vkBeginCommandBuffer(list, &begin), "BeginCommandBuffer");
-    vkCmdResetQueryPool(list, work->queries, 0, 2);
+    vkCmdResetQueryPool(list, work->queries, 0, MaxTimestampSlots);
     bool compute = false;
     VkPipelineLayout layout = VK_NULL_HANDLE;
     for (const auto& command : commands.GetCommands())
@@ -223,7 +223,7 @@ std::shared_ptr<Runtime::Submission> VulkanRuntime::Execute(const CommandList& c
                     vkCmdWriteTimestamp2(list, VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT, work->queries,
                                          c.index);
                 else if constexpr (std::is_same_v<T, ResolveTimestamps>)
-                    vkCmdCopyQueryPoolResults(list, work->queries, 0, 2,
+                    vkCmdCopyQueryPoolResults(list, work->queries, 0, c.count,
                                               As<VkBufferObject>(c.destination).native, 0, 8,
                                               VK_QUERY_RESULT_64_BIT | VK_QUERY_RESULT_WAIT_BIT);
             },

@@ -62,7 +62,7 @@ PSO 在样例准备阶段创建，录制只绑定。Direct Draw、Indexed Draw�
 
 颜色计算和混合使用线性值，由 sRGB 附件在输出时编码。噪声纹理为线性 RGBA8_UNORM 数据；其原始读回必须逐字节匹配，而屏幕样例包含显示编码。测试条把线性 0.25、alpha 0.5 与线性背景 0.02 混合，读回约 103/255，防止误在线性输出前手动编码。
 
-原生资源和管线具有名称；Marker 在 DX12 使用官方 WinPixEventRuntime，Vulkan 使用 DebugUtils。Timestamp 每个列表有两个 slot，读回包含原始 ticks，Runtime 提供纳秒周期；Vulkan 当前要求该队列有 64 个有效时间戳位。验证层开启时的计时仅用于证明查询链路，不作为性能结论。Vulkan 验证同时启用 synchronization validation；不屏蔽同步和生命周期错误。设备丢失给出原生错误并退出，不自动重建设备。
+原生资源和管线具有名称；Marker 在 DX12 使用官方 WinPixEventRuntime，Vulkan 使用 DebugUtils。Timestamp 每个列表有 64 个 slot，ReadTimestamps 解析指定数量的连续已写 slot（默认两个）；读回包含原始 ticks，Runtime 提供纳秒周期。Vulkan 当前要求该队列有 64 个有效时间戳位。验证层开启时的计时仅用于证明查询链路，不作为性能结论。Graph 逐 Pass 计时与完成点契约见 [M4 工具](m4-tools.md)。Vulkan 验证同时启用 synchronization validation；不屏蔽同步和生命周期错误。设备丢失给出原生错误并退出，不自动重建设备。
 
 ## 验收入口与边界
 

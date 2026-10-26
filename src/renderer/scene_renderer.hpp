@@ -1,5 +1,6 @@
 #pragma once
 
+#include "rendergraph/types.hpp"
 #include "rhi/resources.hpp"
 #include "scene/scene.hpp"
 #include "shader/definition.hpp"
@@ -16,11 +17,28 @@ class Swapchain;
 } // namespace renderlab::rhi
 namespace renderlab::renderer
 {
+enum class SceneView
+{
+    Final,
+    Hdr,
+    Shadow,
+    Environment,
+    Brdf
+};
+struct SceneRenderOptions
+{
+    SceneView view = SceneView::Final;
+    bool profile = false;
+    /// Zero preserves the scene setting; otherwise a power of two in [128,2048].
+    uint32_t shadowResolution = 0;
+};
 /// @brief Submission completion point and optional pixels; wait before mapping the readback buffer.
 struct SceneReadback
 {
     uint64_t completion = 0;
     std::shared_ptr<rhi::Buffer> pixels;
+    rendergraph::Submission::GpuProfile profile;
+    uint64_t compileNs = 0, prepareNs = 0, recordNs = 0;
 };
 /** @brief Project/scene to the existing Forward composition. Runtime outlives the renderer. */
 class SceneRenderer final
@@ -42,7 +60,7 @@ public:
      */
     SceneReadback Render(std::shared_ptr<rhi::Texture> target, rhi::State initial,
                          rhi::Swapchain* swapchain = nullptr, bool readback = false,
-                         const std::filesystem::path& dump = {});
+                         const std::filesystem::path& dump = {}, SceneRenderOptions options = {});
 
 private:
     struct Impl;

@@ -122,7 +122,13 @@ add_custom_command(TARGET renderlab_material_demo POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_FILE:renderlab_pix>
         $<TARGET_FILE_DIR:renderlab_material_demo> VERBATIM)
 
-add_executable(renderlab_sandbox src/apps/sandbox/main.cpp src/apps/sandbox/presentation.cpp)
+set(RENDERLAB_HOST_SOURCES src/apps/sandbox/presentation.cpp
+    src/apps/sandbox/debug_panel.cpp src/apps/sandbox/statistics.cpp src/apps/sandbox/capture.cpp)
+add_library(renderlab_app_host STATIC ${RENDERLAB_HOST_SOURCES})
+target_include_directories(renderlab_app_host PUBLIC src)
+add_executable(renderlab_sandbox src/apps/sandbox/main.cpp)
+add_executable(renderlab_player src/apps/sandbox/main.cpp)
+target_compile_definitions(renderlab_player PRIVATE RENDERLAB_PLAYER=1)
 add_library(renderlab_samples STATIC
     src/samples/rhi_demo.cpp
     src/samples/demo_geometry.cpp
@@ -143,6 +149,12 @@ add_custom_target(renderlab_scene_shaders
     COMMAND ${CMAKE_COMMAND} -E copy_directory_if_different "${CMAKE_SOURCE_DIR}/shaders/RenderLab"
         "$<TARGET_FILE_DIR:renderlab_sandbox>/shaders/RenderLab" VERBATIM)
 add_dependencies(renderlab_sandbox renderlab_scene_shaders)
+add_dependencies(renderlab_player renderlab_scene_shaders)
+add_custom_command(TARGET renderlab_player POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_FILE:renderlab_dxc>
+        $<TARGET_FILE_DIR:renderlab_player>
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_FILE:renderlab_pix>
+        $<TARGET_FILE_DIR:renderlab_player> VERBATIM)
 add_custom_command(TARGET renderlab_sandbox POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_FILE:renderlab_dxc>
         $<TARGET_FILE_DIR:renderlab_sandbox> VERBATIM)
@@ -150,7 +162,17 @@ add_custom_command(TARGET renderlab_sandbox POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_FILE:renderlab_pix>
         $<TARGET_FILE_DIR:renderlab_sandbox> VERBATIM)
 target_link_libraries(renderlab_sandbox PRIVATE renderlab_options renderlab_core
-    renderlab_platform renderlab_rhi renderlab_sandbox_options renderlab_samples ole32)
+    renderlab_platform renderlab_rhi renderlab_sandbox_options renderlab_app_host ole32)
+target_link_libraries(renderlab_player PRIVATE renderlab_options renderlab_core
+    renderlab_platform renderlab_rhi renderlab_sandbox_options renderlab_app_host ole32)
+target_link_libraries(renderlab_app_host PRIVATE renderlab_options renderlab_core renderlab_platform
+    renderlab_rhi renderlab_renderer renderlab_sandbox_options renderlab_samples nlohmann_json::nlohmann_json ole32 gdi32 psapi)
+
+install(TARGETS renderlab_player RUNTIME DESTINATION .)
+install(FILES $<TARGET_FILE:renderlab_dxc> $<TARGET_FILE:renderlab_pix> DESTINATION .)
+install(DIRECTORY shaders/RenderLab DESTINATION shaders)
+install(DIRECTORY sample/m4/Assets DESTINATION project)
+install(FILES sample/m4/RenderLab.rlproject sample/m4/Pbr.rlproject sample/m4/Shadow.rlproject DESTINATION project)
 
 if(BUILD_TESTING)
     add_executable(renderlab_surface_tests tests/surface_tests.cpp)
@@ -205,6 +227,8 @@ if(BUILD_TESTING)
             $<TARGET_FILE_DIR:renderlab_core_tests> VERBATIM)
     add_test(NAME core.contracts COMMAND renderlab_core_tests)
     add_test(NAME cli.help COMMAND renderlab_sandbox --help)
+    add_test(NAME cli.player_requires_project COMMAND renderlab_player)
+    set_tests_properties(cli.player_requires_project PROPERTIES WILL_FAIL TRUE)
     add_test(NAME cli.invalid_backend COMMAND renderlab_sandbox --backend unknown)
     add_test(NAME cli.invalid_adapter COMMAND renderlab_sandbox --adapter -1)
     add_test(NAME cli.unknown_option COMMAND renderlab_sandbox --unknown)
@@ -212,6 +236,20 @@ if(BUILD_TESTING)
         PROPERTIES WILL_FAIL TRUE)
     if(RENDERLAB_GPU_TESTS)
         foreach(backend IN ITEMS dx12 vulkan)
+            add_test(NAME gpu.${backend}.tools_window COMMAND renderlab_sandbox
+                --backend ${backend} --validation on --window-test --debug-panel --fixed-camera
+                --project ${CMAKE_SOURCE_DIR}/sample/m4/Shadow.rlproject
+                --width 640 --height 360 --quality medium
+                --profile ${CMAKE_BINARY_DIR}/tools/${backend}-window.json
+                --log ${CMAKE_BINARY_DIR}/logs/${backend}-tools-window.log)
+            add_test(NAME gpu.${backend}.player COMMAND renderlab_player
+                --backend ${backend} --validation on --headless --benchmark 3
+                --project ${CMAKE_SOURCE_DIR}/sample/m4/Shadow.rlproject
+                --width 257 --height 193 --quality low --view shadow
+                --profile ${CMAKE_BINARY_DIR}/tools/${backend}-player.json
+                --output ${CMAKE_BINARY_DIR}/tools/player
+                --log ${CMAKE_BINARY_DIR}/logs/${backend}-player.log)
+            set_tests_properties(gpu.${backend}.tools_window gpu.${backend}.player PROPERTIES LABELS gpu RUN_SERIAL TRUE TIMEOUT 90)
             add_test(NAME gpu.${backend}.surface COMMAND renderlab_surface_tests ${backend}
                 ${CMAKE_SOURCE_DIR}/sample/m4/Shadow.rlproject ${CMAKE_SOURCE_DIR}/shaders
                 ${CMAKE_BINARY_DIR}/surface/${backend})

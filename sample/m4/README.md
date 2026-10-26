@@ -15,3 +15,5 @@ Use `--backend vulkan` for the other backend. See [build instructions](../../man
 ## 阴影与透明
 
 `Shadow.rlproject` 选择 `Shadow.scene`：实体球、带 AlphaGrid 测试纹理的 Masked 方块、透明薄片和接收地面。方向光启用单张 512² 阴影；WASD/QE/方向键与 Pbr 场景相同。运行与限制见 [构建手册](../../manual/build.md#m44-阴影与透明场景)。
+
+Add `--debug-panel` for native view/exposure/shadow controls, or press F1 in a scene window. `renderlab_player.exe --project ...` uses the same content. Fixed captures, quality presets, profiling and standalone installation are described in [M4.5](../../manual/build.md#m45-演示与-player).

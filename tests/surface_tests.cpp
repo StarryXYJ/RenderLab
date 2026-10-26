@@ -67,11 +67,13 @@ void Gpu(rhi::Runtime& runtime, shader::Target target, const std::filesystem::pa
     auto color =
         runtime.CreateTexture({257, 193, rhi::Format::Rgba8Srgb, false, true, "Surface.Display"});
     auto initial = rhi::State::Undefined;
-    const auto render = [&](const std::string& name)
+    renderer::SceneReadback lastFrame;
+    const auto render = [&](const std::string& name, renderer::SceneRenderOptions settings = {})
     {
         const auto result =
-            renderer.Render(color, initial, nullptr, true, output / (name + ".json"));
+            renderer.Render(color, initial, nullptr, true, output / (name + ".json"), settings);
         runtime.Wait(result.completion);
+        lastFrame = result;
         initial = rhi::State::CopySource;
         const auto pixels = result.pixels->Map();
         samples::SaveImage(output / (name + ".bmp"), pixels, 257, 193, rhi::TextureRowPitch(257));
@@ -86,6 +88,47 @@ void Gpu(rhi::Runtime& runtime, shader::Target target, const std::filesystem::pa
     { return *std::ranges::find(document.objects, name, &scene::Object::name); };
     const auto original = document;
     const auto shadowed = render("shadow-masked-transparent");
+    Require(render("profile-enabled", {.profile = true}) == shadowed,
+            "GPU profiling must preserve rendered output");
+    const auto timings = lastFrame.profile.Read(runtime);
+    Require(
+        timings.size() == 5 &&
+            std::ranges::all_of(
+                timings, [](const auto& timing)
+                { return std::isfinite(timing.nanoseconds) && timing.nanoseconds >= 0; }) &&
+            std::ranges::any_of(timings, [](const auto& timing) { return timing.nanoseconds > 0; }),
+        "Every live shadow/opaque/transparent/display/readback pass must have valid GPU "
+        "timestamps");
+    auto pending = lastFrame.profile;
+    pending.completion = runtime.LastSubmitted() + 1;
+    bool earlyRejected = false;
+    try
+    {
+        pending.Read(runtime);
+    }
+    catch (const std::invalid_argument&)
+    {
+        earlyRejected = true;
+    }
+    Require(earlyRejected, "GPU profiling must reject mapping an incomplete submission");
+    const auto depthView =
+        render("viewer-shadow", {.view = renderer::SceneView::Shadow, .profile = true});
+    Require(depthView != shadowed && lastFrame.profile.Read(runtime).size() == 3,
+            "Shadow viewer must retain shadow/display/readback and cull unused Forward draws");
+    for (size_t i = 0; i < depthView.size(); i += 4)
+        Require(depthView[i] == depthView[i + 1] && depthView[i] == depthView[i + 2],
+                "Shadow viewer must display grayscale stored depth");
+    Require(render("viewer-hdr", {.view = renderer::SceneView::Hdr}) != shadowed,
+            "HDR viewer must bypass the ACES display curve");
+    Require(render("viewer-environment", {.view = renderer::SceneView::Environment}) != shadowed &&
+                render("viewer-brdf", {.view = renderer::SceneView::Brdf}) != shadowed,
+            "Environment and BRDF texture previews must render");
+    renderer::SceneRenderOptions quality;
+    quality.shadowResolution = 128;
+    render("quality-low", quality);
+    Require(renderer.LastSnapshot().light.shadowResolution == 128 &&
+                document.Get(renderer.LastSnapshot().light.object).light->shadowResolution == 512,
+            "Quality override must affect rendering without mutating scene settings");
     document.Save(output / "roundtrip.scene");
     document = scene::Scene::Load(output / "roundtrip.scene");
     Require(render("roundtrip") == shadowed,
@@ -219,6 +262,18 @@ void Gpu(rhi::Runtime& runtime, shader::Target target, const std::filesystem::pa
     object("sun").light->shadows = false;
     Require(render("masked-no-cast-disabled") == clippedShadow,
             "Fully clipped material must not cast a shadow");
+    object("sun").light->shadows = true;
+    renderer::SceneRenderOptions largest;
+    largest.shadowResolution = 2048;
+    auto secondTarget = runtime.CreateTexture(
+        {257, 193, rhi::Format::Rgba8Srgb, false, true, "Surface.SecondFrame"});
+    const auto first = renderer.Render(color, initial, nullptr, false, {}, largest);
+    const auto second =
+        renderer.Render(secondTarget, rhi::State::Undefined, nullptr, false, {}, largest);
+    runtime.Wait(second.completion);
+    Require(second.completion > first.completion &&
+                runtime.GetMemoryStats().used <= runtime.GetMemoryStats().budget,
+            "Maximum shadow quality must support consecutive submissions within the native budget");
 }
 } // namespace
 int main(int argc, char** argv)

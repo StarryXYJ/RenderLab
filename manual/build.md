@@ -68,7 +68,7 @@ ctest --preset windows-release
 
 输出分别在 `out/build/windows-debug` 和 `out/build/windows-release`。默认注册 9 项不需要创建设备的测试，包含实际 DXC 双目标编译的 `shader.contracts`。预设与依赖版本纳入 Git，本机设置使用被忽略的 `CMakeUserPresets.json`。
 
-完整验收启用 GPU 测试，当前共 32 项（10 项 CPU/CLI、22 项 GPU）。GPU 测试要求验证层和桌面会话，会短暂打开原生窗口：
+完整验收启用 GPU 测试，当前共 37 项（11 项 CPU/CLI、26 项 GPU）。GPU 测试要求验证层和桌面会话，会短暂打开原生窗口：
 
 ```powershell
 cmake --preset windows-debug -DRENDERLAB_GPU_TESTS=ON
@@ -210,6 +210,32 @@ ctest --preset windows-debug -R 'surface|content.contracts' --output-on-failure
 ```
 
 专项参考图与 Graph JSON 在构建树 surface/后端；原始场景不会被测试修改。透明在 HDR 空间混合后统一显示变换，按物体中心从远到近排序，不支持相交面的正确排序。单张阴影、alpha 导入和硬件要求见 [契约](../docs/m4-shadows-alpha.md)。
+
+## M4.5 演示与 Player
+
+`--debug-panel` 打开原生调试面板，也可在场景窗口按 F1 显示/隐藏。面板可切换最终画面/HDR/阴影图/环境图集/BRDF LUT、阴影质量、主光阴影、曝光、冻结/重置相机；改动只作用于当前运行。WASD/QE 和方向键使用有焦点的渲染窗口。
+
+```powershell
+./out/build/windows-debug/renderlab_sandbox.exe --backend dx12 --validation on --project sample/m4/Shadow.rlproject --debug-panel --quality medium --width 1280 --height 720
+./out/build/windows-debug/renderlab_sandbox.exe --backend vulkan --validation on --project sample/m4/Shadow.rlproject --view shadow --fixed-camera
+ctest --preset windows-debug -R 'tools_window|player|surface|rendergraph.contracts|core.contracts' --output-on-failure
+```
+
+固定基线用 Release、关闭验证层并保留 profiling。`--benchmark 120` 先预热 5 帧再记录 120 帧，最后额外截图，输出 scene.bmp 和 scene-plan.json；JSON 包含 CPU、逐 Pass GPU、RHI 分配和进程内存。相同命令将 backend 改为 vulkan 可对照。
+
+```powershell
+./out/build/windows-release/renderlab_player.exe --backend dx12 --validation off --headless --project sample/m4/Shadow.rlproject --quality medium --width 1280 --height 720 --benchmark 120 --profile out/m4-baseline/shadow-dx12.json --output out/m4-baseline/shadow
+```
+
+Player 必须指定 --project，不运行 Sandbox 的 RHI/Graph 验收示例。安装为独立目录后，进入该目录运行同样的项目格式；无需 C# 或源码树，机器仍需当前 MSVC x64 运行库和图形驱动。
+
+```powershell
+cmake --install out/build/windows-release --prefix out/player
+cd out/player
+./renderlab_player.exe --backend dx12 --validation on --project project/Shadow.rlproject --debug-panel
+```
+
+安装包含 Player、DXC/PIX DLL、shaders/RenderLab 和示例项目 Assets/.meta/清单；不复制 Library，首次启动会重建。基线与边界见 [性能记录](../docs/performance/m4-rtx5060.md)，接口与计时范围见 [工具契约](../docs/m4-tools.md)。
 
 ## 验证结果与边界
 

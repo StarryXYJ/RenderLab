@@ -32,7 +32,7 @@ std::shared_ptr<Runtime::Submission> DxRuntime::Execute(const CommandList& comma
               "CommandList");
         D3D12_QUERY_HEAP_DESC queryDesc{};
         queryDesc.Type = D3D12_QUERY_HEAP_TYPE_TIMESTAMP;
-        queryDesc.Count = 2;
+        queryDesc.Count = MaxTimestampSlots;
         Check(device_->CreateQueryHeap(&queryDesc, IID_PPV_ARGS(&work->queries)),
               "Timestamp QueryHeap");
         contexts_.push_back(work);
@@ -180,8 +180,8 @@ std::shared_ptr<Runtime::Submission> DxRuntime::Execute(const CommandList& comma
                 else if constexpr (std::is_same_v<T, Timestamp>)
                     list->EndQuery(work->queries.Get(), D3D12_QUERY_TYPE_TIMESTAMP, c.index);
                 else if constexpr (std::is_same_v<T, ResolveTimestamps>)
-                    list->ResolveQueryData(work->queries.Get(), D3D12_QUERY_TYPE_TIMESTAMP, 0, 2,
-                                           As<DxBuffer>(c.destination).native.Get(), 0);
+                    list->ResolveQueryData(work->queries.Get(), D3D12_QUERY_TYPE_TIMESTAMP, 0,
+                                           c.count, As<DxBuffer>(c.destination).native.Get(), 0);
             },
             command);
     Check(list->Close(), "Close command list");

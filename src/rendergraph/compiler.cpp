@@ -14,6 +14,7 @@ const Plan& Graph::Compile(CompileOptions options)
     const auto started = std::chrono::steady_clock::now();
     auto& g = *impl_;
     g.Building();
+    g.profiling = options.profile;
     Require(g.active == UINT32_MAX, "Seal the active pass with Execute before Compile");
     try
     {

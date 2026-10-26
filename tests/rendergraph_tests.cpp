@@ -644,6 +644,43 @@ void ForwardContracts()
     runtime.WaitIdle();
 }
 
+void ProfilingContracts()
+{
+    FakeRuntime runtime;
+    Pool pool(runtime);
+    {
+        Pool hdr(runtime, 2, 1024);
+        Fails([&] { hdr.Acquire(rhi::TextureDesc{16, 16, rhi::Format::Rgba32Float}); },
+              "byte limit");
+        auto lease = hdr.Acquire(rhi::TextureDesc{8, 8, rhi::Format::Rgba32Float});
+        Require(hdr.Stats().estimatedBytes == 1024,
+                "RGBA32F pool budget must account for 16 bytes per texel");
+        Fails([&] { hdr.Acquire(rhi::TextureDesc{1, 1}); }, "pool is full");
+        Graph estimate;
+        auto texture = estimate.CreateTexture("HDR", {8, 8, rhi::Format::Rgba32Float, false, true});
+        auto pass = estimate.AddRasterPass("HDR.Clear");
+        texture = pass.ColorTarget(texture);
+        pass.Execute([](RasterContext&) {});
+        estimate.Export(texture, rhi::State::Sampled);
+        Require(estimate.Compile().resources.front().estimatedBytes == 1024,
+                "Graph resource diagnostics must use the actual HDR texel size");
+    }
+    Graph graph;
+    for (int i = 0; i < 33; ++i)
+    {
+        auto pass = graph.AddComputePass("Profile." + std::to_string(i));
+        pass.SideEffect();
+        pass.Execute([](ComputeContext&) {});
+    }
+    graph.Compile({.profile = true});
+    Fails([&] { graph.Execute(pool); }, "32 live passes");
+    Submission::GpuProfile profile;
+    Require(profile.Read(runtime).empty(), "Disabled profile must not access readback memory");
+    profile.ticks = runtime.CreateBuffer({16, rhi::Memory::Readback, "Profile"});
+    profile.names = {"test"};
+    profile.completion = 1;
+    Fails([&] { profile.Read(runtime); }, "completed submission");
+}
 } // namespace
 int main()
 {
@@ -656,6 +693,7 @@ int main()
         RecordingValidation();
         FeatureCreationContracts();
         ForwardContracts();
+        ProfilingContracts();
         std::cout << "Graph contracts passed: names, typed passes, versions, culling, hazards, "
                      "bindings and lifetime\n";
         return 0;

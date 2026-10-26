@@ -104,3 +104,7 @@ Lit/Unlit 保持普通 Shader 资产，表面值、光栅 SampleGrad 上下文�
 ## M4.4 单张阴影与 Alpha 角色
 
 先用颜色记录深度的单张正交阴影验证完整遮挡链路，D32 保持只用于附件，避免同时扩张深度采样与无颜色 PSO。RGBA32F 的存储代价显式记录；手动 3×3 PCF 采用接收平面深度修正。Caster 候选与相机可见集分开，防止离屏投影丢失。Masked/Transparent 作为 Lit/Unlit 普通 variant，沿用固定布局与 Forward 的 Opaque/Transparent 阶段；透明不投影且不解决相交排序。Sky、DepthPrepass、Bloom 和级联均等实际用例再增加。
+
+## M4.5 演示宿主与测量
+
+原生调试面板采用同线程 modeless Win32 控件，避免在 C# 编辑器前引入第二套 UI 框架。固定纹理入口沿用显示 Shader 与 Graph 资源声明，允许编译器剔除不再显示的 Forward 工作。Timestamp 以真实提交完成点保护读回，每个原生命令上下文独立复用 query 存储；窗口收集已退休的两帧结果，离线测量单独预热并在关闭验证层后采样。Player 复用同一宿主与项目格式，用独立安装目录检验运行时内容边界，不另建一套渲染流程。

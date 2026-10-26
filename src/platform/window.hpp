@@ -24,6 +24,7 @@ enum class Key
     TurnRight,
     LookUp,
     LookDown,
+    ToggleDebug,
     Count
 };
 

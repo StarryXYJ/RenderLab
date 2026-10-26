@@ -1,6 +1,9 @@
 #include "apps/sandbox/presentation.hpp"
 
+#include "apps/sandbox/capture.hpp"
+#include "apps/sandbox/debug_panel.hpp"
 #include "apps/sandbox/options.hpp"
+#include "apps/sandbox/statistics.hpp"
 #include "core/log.hpp"
 #include "platform/text.hpp"
 #include "platform/window.hpp"
@@ -42,10 +45,11 @@ void CheckWindow(platform::Window& window, Logger& logger)
 {
     CheckWindowApartment();
     const auto previousResizeEvents = window.GetState().resizeEvents;
-    window.Resize(640, 360);
+    const auto testWidth = window.GetState().width == 640 ? 641u : 640u;
+    window.Resize(testWidth, 360);
     window.PumpEvents();
     const auto& resized = window.GetState();
-    if (resized.width != 640 || resized.height != 360 ||
+    if (resized.width != testWidth || resized.height != 360 ||
         resized.resizeEvents <= previousResizeEvents)
     {
         throw std::runtime_error("Window resize smoke test failed");
@@ -63,7 +67,9 @@ void CheckWindow(platform::Window& window, Logger& logger)
     {
         throw std::runtime_error("Window restore smoke test failed");
     }
-    logger.Write(LogLevel::Info, "Window smoke: resize=640x360, minimize and restore passed");
+    logger.Write(
+        LogLevel::Info,
+        std::format("Window smoke: resize={}x360, minimize and restore passed", testWidth));
 }
 } // namespace
 
@@ -83,7 +89,9 @@ void RunRendering(platform::Window* window, rhi::Device& device, rhi::Runtime& r
                              std::filesystem::path(platform::Utf8ToWide(options.outputPath)) /
                                  options.backend,
                              logger);
-    if (!window && !options.projectPath.empty())
+    if (!window && !options.projectPath.empty() && !options.sceneTest)
+        CaptureScene(runtime, device.GetReport(), options, shaderRoot, logger);
+    if (!window && !options.projectPath.empty() && options.sceneTest)
         samples::VerifyScene(
             runtime, options.backend == "dx12" ? shader::Target::Dxil : shader::Target::Spirv,
             std::filesystem::path(platform::Utf8ToWide(options.projectPath)), shaderRoot,
@@ -105,9 +113,42 @@ void RunRendering(platform::Window* window, rhi::Device& device, rhi::Runtime& r
                                              window->GetState().height);
     if (demo)
         demo->Prepare(swapchain->GetFormat());
+    auto settings = RenderOptions(options);
+    Statistics statistics;
+    std::unique_ptr<DebugPanel> panel;
+    scene::Transform originalCamera;
+    std::string selectedLight;
+    if (scene)
+    {
+        originalCamera = scene->Document().Get(scene->Document().activeCamera).transform;
+        for (const auto& [id, transform] : scene->Document().WorldTransforms())
+        {
+            const auto& object = scene->Document().Get(id);
+            if (transform.enabled && object.light && object.light->enabled)
+            {
+                selectedLight = id;
+                break;
+            }
+        }
+    }
+    const auto createPanel = [&]
+    {
+        settings.profile = true;
+        panel = std::make_unique<DebugPanel>(
+            window->GetNativeSurface(),
+            DebugControls{settings, scene->Document().exposure,
+                          !selectedLight.empty() &&
+                              scene->Document().Get(selectedLight).light->shadows});
+        if (options.windowTest)
+            panel->VerifyControls();
+    };
+    if (options.debugPanel)
+        createPanel();
     struct FrameContext
     {
         uint64_t completion = 0;
+        renderer::SceneReadback rendered;
+        double cpuMs = 0;
     };
     std::array<FrameContext, 2> frames;
     uint32_t width = window->GetState().width, height = window->GetState().height;
@@ -115,6 +156,8 @@ void RunRendering(platform::Window* window, rhi::Device& device, rhi::Runtime& r
     const auto start = std::chrono::steady_clock::now();
     uint32_t frameNumber = 0, tick = 0, resizeCount = 0, suspendedTicks = 0;
     auto previousTime = start;
+    auto lastPanelUpdate = start;
+    bool debugKeyDown = false;
     while (window->PumpEvents())
     {
         device.PollDiagnostics();
@@ -134,6 +177,15 @@ void RunRendering(platform::Window* window, rhi::Device& device, rhi::Runtime& r
         const auto& state = window->GetState();
         if (state.closeRequested)
             break;
+        const auto debugKey = window->KeyDown(platform::Key::ToggleDebug);
+        if (scene && debugKey && !debugKeyDown)
+        {
+            if (panel)
+                panel->Toggle();
+            else
+                createPanel();
+        }
+        debugKeyDown = debugKey;
         const auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
                                  std::chrono::steady_clock::now() - start)
                                  .count();
@@ -165,6 +217,11 @@ void RunRendering(platform::Window* window, rhi::Device& device, rhi::Runtime& r
         }
         auto& frame = frames[frameNumber % frames.size()];
         runtime.Wait(frame.completion);
+        if (frame.rendered.completion)
+        {
+            statistics.Add(frame.rendered, runtime, frame.cpuMs);
+            frame.rendered = {};
+        }
         auto acquired = swapchain->Acquire();
         if (!acquired.texture)
         {
@@ -184,8 +241,25 @@ void RunRendering(platform::Window* window, rhi::Device& device, rhi::Runtime& r
             imageInitialized[acquired.index] ? rhi::State::Present : rhi::State::Undefined;
         if (scene)
         {
+            if (panel)
+            {
+                auto& controls = panel->Controls();
+                settings = controls.render;
+                scene->Document().exposure = controls.exposure;
+                if (!selectedLight.empty())
+                    scene->Document().Get(selectedLight).light->shadows = controls.shadows;
+                if (controls.resetCamera)
+                {
+                    scene->Document().Get(scene->Document().activeCamera).transform =
+                        originalCamera;
+                    controls.resetCamera = false;
+                }
+            }
             const auto now = std::chrono::steady_clock::now();
-            const auto dt = std::min(.1f, std::chrono::duration<float>(now - previousTime).count());
+            const auto dt =
+                options.fixedCamera || (panel && panel->Controls().freezeCamera)
+                    ? 0.f
+                    : std::min(.1f, std::chrono::duration<float>(now - previousTime).count());
             previousTime = now;
             const auto axis = [&](platform::Key positive, platform::Key negative)
             { return float(window->KeyDown(positive)) - float(window->KeyDown(negative)); };
@@ -195,8 +269,18 @@ void RunRendering(platform::Window* window, rhi::Device& device, rhi::Runtime& r
                  3 * dt * axis(platform::Key::Backward, platform::Key::Forward)},
                 {60 * dt * axis(platform::Key::LookUp, platform::Key::LookDown),
                  60 * dt * axis(platform::Key::TurnLeft, platform::Key::TurnRight), 0});
-            frame.completion =
-                scene->Render(acquired.texture, initial, swapchain.get(), false, dump).completion;
+            const auto renderStart = std::chrono::steady_clock::now();
+            frame.rendered =
+                scene->Render(acquired.texture, initial, swapchain.get(), false, dump, settings);
+            frame.cpuMs = std::chrono::duration<double, std::milli>(
+                              std::chrono::steady_clock::now() - renderStart)
+                              .count();
+            frame.completion = frame.rendered.completion;
+            if (panel && now - lastPanelUpdate > std::chrono::milliseconds(250))
+            {
+                panel->Update(statistics.Text(scene->LastSnapshot(), runtime.GetMemoryStats()));
+                lastPanelUpdate = now;
+            }
         }
         else
             frame.completion =
@@ -210,6 +294,15 @@ void RunRendering(platform::Window* window, rhi::Device& device, rhi::Runtime& r
         ++frameNumber;
     }
     runtime.WaitIdle();
+    for (auto& frame : frames)
+        if (frame.rendered.completion)
+        {
+            statistics.Add(frame.rendered, runtime, frame.cpuMs);
+            frame.rendered = {};
+        }
+    if (!options.profilePath.empty())
+        statistics.Save(std::filesystem::path(platform::Utf8ToWide(options.profilePath)), options,
+                        device.GetReport(), runtime.GetMemoryStats());
     if (options.windowTest && (!frameNumber || resizeCount < 8 || suspendedTicks < 2))
         throw std::runtime_error("In-flight presentation resize/minimize coverage incomplete");
     logger.Write(LogLevel::Info,

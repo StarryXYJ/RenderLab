@@ -9,6 +9,10 @@
 #include <string>
 #include <vector>
 
+namespace renderlab::rhi
+{
+class Runtime;
+}
 namespace renderlab::rendergraph
 {
 struct TextureTag;
@@ -89,6 +93,8 @@ struct ImportInfo
 struct CompileOptions
 {
     bool cull = true;
+    /// Adds two timestamp slots per live pass; maximum 32 passes per graph submission.
+    bool profile = false;
 };
 struct Edge
 {
@@ -149,6 +155,20 @@ struct Submission
 {
     uint64_t completion = 0;
     std::vector<ExportedResource> exports;
+    struct GpuProfile
+    {
+        struct Timing
+        {
+            std::string name;
+            double nanoseconds;
+        };
+        std::shared_ptr<rhi::Buffer> ticks;
+        std::vector<std::string> names;
+        uint64_t completion = 0;
+        double periodNs = 0;
+        /// Requires the same runtime and completed submission; never waits or maps early.
+        std::vector<Timing> Read(const rhi::Runtime& runtime) const;
+    } profile;
 };
 rhi::State StateFor(Use use);
 bool IsReadOnly(Use use);

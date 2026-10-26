@@ -194,7 +194,8 @@ void Graph::Impl::CheckBufferRange(uint32_t pass, BufferHandle handle, uint64_t 
 }
 uint64_t detail::EstimatedBytes(const Resource& r)
 {
-    return r.isTexture ? uint64_t(r.textureDesc.width) * r.textureDesc.height * 4
+    return r.isTexture ? uint64_t(r.textureDesc.width) * r.textureDesc.height *
+                             rhi::FormatBytes(r.textureDesc.format)
                        : r.bufferDesc.size;
 }
 } // namespace renderlab::rendergraph

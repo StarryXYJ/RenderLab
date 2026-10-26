@@ -54,7 +54,7 @@ std::shared_ptr<detail::Allocation> Pool::Acquire(const rhi::TextureDesc& desc)
                 return entry;
             }
         }
-    const auto bytes = uint64_t(desc.width) * desc.height * 4;
+    const auto bytes = uint64_t(desc.width) * desc.height * rhi::FormatBytes(desc.format);
     MakeRoom(bytes);
     auto entry = std::make_shared<detail::Allocation>();
     entry->texture = runtime_.CreateTexture(desc);

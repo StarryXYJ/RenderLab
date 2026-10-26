@@ -19,6 +19,9 @@ struct Options
     std::string reportPath;
     std::string projectPath;
     std::string outputPath = "out/m1";
+    std::string quality = "scene", view = "final", profilePath;
+    uint32_t width = 1280, height = 720, benchmarkFrames = 0;
+    bool debugPanel = false, fixedCamera = false;
     bool headless = false;
     bool windowTest = false;
     bool rhiTest = false;

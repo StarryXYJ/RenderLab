@@ -11,6 +11,7 @@
 
 namespace renderlab::rhi
 {
+inline constexpr uint32_t MaxTimestampSlots = 64;
 struct BufferBarrier
 {
     std::shared_ptr<Buffer> buffer;
@@ -85,6 +86,7 @@ struct Timestamp
 struct ResolveTimestamps
 {
     std::shared_ptr<Buffer> destination;
+    uint32_t count;
 };
 using Command =
     std::variant<BufferBarrier, TextureBarrier, BufferCopy, TextureCopy, TextureToTextureCopy,
@@ -104,7 +106,7 @@ public:
     void Barrier(std::shared_ptr<Texture> texture, State before, State after);
     void Copy(std::shared_ptr<Buffer> source, std::shared_ptr<Buffer> destination, uint64_t size,
               uint64_t sourceOffset = 0, uint64_t destinationOffset = 0);
-    /// RGBA8/BGRA8 only; rowPitch multiple of 256, offset multiple of 512 on both backends.
+    /// Color formats only; rowPitch multiple of 256, offset multiple of 512 on both backends.
     void CopyTexture(std::shared_ptr<Buffer> buffer, std::shared_ptr<Texture> texture,
                      uint32_t rowPitch, bool upload, uint64_t offset = 0);
     void CopyTexture(std::shared_ptr<Texture> source, std::shared_ptr<Texture> destination);
@@ -122,7 +124,7 @@ public:
     void BeginMarker(std::string name);
     void EndMarker();
     void WriteTimestamp(uint32_t index);
-    void ReadTimestamps(std::shared_ptr<Buffer> destination);
+    void ReadTimestamps(std::shared_ptr<Buffer> destination, uint32_t count = 2);
     void Cancel();
     const std::vector<Command>& GetCommands() const
     {
@@ -142,7 +144,7 @@ private:
     Format colorFormat_ = Format::Rgba8;
     bool hasDepth_ = false;
     uint32_t markers_ = 0;
-    uint32_t timestampMask_ = 0;
+    uint64_t timestampMask_ = 0;
     std::shared_ptr<Pipeline> pipeline_;
     std::shared_ptr<BindingGroup> group_;
     std::shared_ptr<Buffer> vertex_, index_;
