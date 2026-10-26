@@ -87,7 +87,9 @@ std::string Statistics::Text(const scene::Snapshot& snapshot, rhi::MemoryStats m
 void Statistics::Save(const std::filesystem::path& path, const Options& options,
                       const rhi::DeviceReport& device, rhi::MemoryStats memory,
                       const benchmark::Recording* recording,
-                      const rhi::CpuProfileSnapshot* cpuOperations) const
+                      const rhi::CpuProfileSnapshot* cpuOperations,
+                      const rhi::DescriptorStats* descriptors,
+                      const rhi::UploadPool::Statistics* uploads) const
 {
     const auto summary = [](const Samples& samples)
     {
@@ -126,6 +128,17 @@ void Statistics::Save(const std::filesystem::path& path, const Options& options,
     result["buildConfiguration"] = "Debug";
 #endif
     const auto& adapter = device.adapters.at(device.selectedAdapter);
+    if (descriptors)
+        result["resourceReuse"]["descriptors"] = {{"pages", descriptors->pages},
+                                                  {"capacitySlots", descriptors->capacity},
+                                                  {"inUseSlots", descriptors->inUse},
+                                                  {"highWaterSlots", descriptors->highWater},
+                                                  {"nativeCreations", descriptors->creations}};
+    if (uploads)
+        result["resourceReuse"]["frameUpload"] = {{"pages", uploads->pages},
+                                                  {"reservedBytes", uploads->reservedBytes},
+                                                  {"batchHighWaterBytes", uploads->highWaterBytes},
+                                                  {"batches", uploads->batches}};
     result["adapterIdentity"] = {{"vendorId", adapter.vendorId},
                                  {"deviceId", adapter.deviceId},
                                  {"software", adapter.software}};

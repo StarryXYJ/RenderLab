@@ -40,6 +40,8 @@ std::shared_ptr<Runtime::Submission> DxRuntime::Execute(const CommandList& comma
     auto* list = work->list.Get();
     bool compute = false;
     uint32_t vertexStride = 0;
+    ID3D12DescriptorHeap* resourceHeap = nullptr;
+    ID3D12DescriptorHeap* samplerHeap = nullptr;
     const auto barrier = [&](ID3D12Resource* resource, State before, State after)
     {
         D3D12_RESOURCE_BARRIER b{};
@@ -149,7 +151,14 @@ std::shared_ptr<Runtime::Submission> DxRuntime::Execute(const CommandList& comma
                         heaps[count++] = group.resources.Get();
                     if (group.samplers)
                         heaps[count++] = group.samplers.Get();
-                    list->SetDescriptorHeaps(count, heaps);
+                    if (resourceHeap != group.resources.Get() ||
+                        samplerHeap != group.samplers.Get())
+                    {
+                        auto cpuTimer = ProfileCpu(CpuOperation::DescriptorHeapBind);
+                        list->SetDescriptorHeaps(count, heaps);
+                        resourceHeap = group.resources.Get();
+                        samplerHeap = group.samplers.Get();
+                    }
                     for (UINT i = 0; i < group.handles.size(); ++i)
                         if (compute)
                             list->SetComputeRootDescriptorTable(i, group.handles[i]);

@@ -405,6 +405,10 @@ const std::map<std::string, assets::Model>& SceneRenderer::Models() const
 {
     return impl_->models;
 }
+rhi::UploadPool::Statistics SceneRenderer::UploadStatistics() const
+{
+    return impl_->uploadPool.Stats();
+}
 SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::State initial,
                                     rhi::Swapchain* swapchain, bool readback,
                                     const std::filesystem::path& dump, SceneRenderOptions options)

@@ -10,6 +10,7 @@
 namespace renderlab::rhi::vulkan
 {
 struct Allocation;
+struct VkDescriptorBlock;
 
 /** @brief Backend device services; owns queue completion and native command contexts. */
 class VulkanRuntime final : public Runtime
@@ -51,6 +52,8 @@ protected:
                                         Swapchain* presentation) override;
 
 private:
+    std::shared_ptr<VkDescriptorBlock> AcquireDescriptors(std::shared_ptr<BindingLayout> layout);
+    std::vector<std::shared_ptr<VkDescriptorBlock>> descriptorBlocks_;
     void Allocate(Allocation& allocation, const VkMemoryRequirements& requirements, Memory kind);
     void Name(VkObjectType type, uint64_t handle, const std::string& name);
     VkInstance instance_;

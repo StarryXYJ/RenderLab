@@ -27,7 +27,9 @@ public:
     void Save(const std::filesystem::path& path, const Options& options,
               const rhi::DeviceReport& device, rhi::MemoryStats memory,
               const benchmark::Recording* recording = nullptr,
-              const rhi::CpuProfileSnapshot* cpuOperations = nullptr) const;
+              const rhi::CpuProfileSnapshot* cpuOperations = nullptr,
+              const rhi::DescriptorStats* descriptors = nullptr,
+              const rhi::UploadPool::Statistics* uploads = nullptr) const;
 
 private:
     struct Samples

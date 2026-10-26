@@ -16,4 +16,12 @@ Debug/Release 完整 CTest 各 41/41、双后端 Validation 通过；新增上�
 
 相同的三次短测量配置，DX12/Vulkan 等权帧均值为 5.4230/1.2512ms。独立 CPU 探针确认每帧仅剩一次 Buffer 创建（timestamp），逻辑 BindingGroup 仍为 10 次。两组两后端 BMP 与 B2 均逐字节相同。
 
-Debug 全套其余 39 项通过，材质测试调整为仅检查材质块共享后双后端重跑通过；Release 全套 41/41。新增 70 个常量版本淘汰后重用旧 Prepared 和已录制命令，既有纹理编辑、热重载、窗口和双帧验证通过。原始组 out/benchmarks/b3-2-material{,-probe}，阶段二进制 out/benchmarks/b3-2-player.exe。最终长基线及后续阶段尚未执行。
+Debug 全套其余 39 项通过，材质测试调整为仅检查材质块共享后双后端重跑通过；Release 全套 41/41。新增 70 个常量版本淘汰后重用旧 Prepared 和已录制命令，既有纹理编辑、热重载、窗口和双帧验证通过。原始组 out/benchmarks/b3-2-material{,-probe}，阶段二进制 out/benchmarks/b3-2-player.exe。
+
+## B3.3 描述符
+
+相同三次短测量配置，DX12/Vulkan 等权帧均值 1.3112/1.0650ms。独立探针原生描述符创建为 0 次/帧；DX12 实际 heap 绑定为 2 次/帧，逻辑 GroupCreate 仍为 10 次/帧。此时 Buffer 仍为一次 timestamp，ViewCreate 仍为 12 次/帧。BMP 与 B2 相同。
+
+含预热的资源统计：上传页均为一页 64KiB，单批高水位 3328B；DX12 描述符为 2 页、4352 个保留 slot，Vulkan 为 10 块、120 个保留 slot；两者在用高水位均为 120，测量结束在用数为 0。描述符 slot 不等同于原生分配字节。两后端 Debug/Release 完整 CTest 各 41/41，Python 13/13；容量耗尽恢复及旧绑定组在 70 次绘制中保持正确。
+
+原始组 out/benchmarks/b3-3-descriptors{,-probe}，阶段二进制 out/benchmarks/b3-3-player.exe。最终长基线与 B3.4 尚未执行。

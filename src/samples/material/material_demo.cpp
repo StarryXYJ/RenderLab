@@ -104,11 +104,20 @@ void VerifyMaterial(rhi::Runtime& runtime, shader::Target target, Logger& logger
     // Evict cached values while keeping old CPU snapshots and unsubmitted commands alive.
     auto delayedOriginal = detail::RecordMaterial(runtime, first, vertices);
     auto churn = asset;
+    uint64_t steadyCreations = 0;
     for (uint32_t i = 0; i < 70; ++i)
     {
         material::Set(churn, materialTemplate, "base_color",
                       std::array<double, 4>{double(i) / 100, .1, .2, 1});
-        materials.Prepare(package, churn, raster, resolve);
+        const auto churnPrepared = materials.Prepare(package, churn, raster, resolve);
+        auto churnRead = detail::RecordMaterial(runtime, churnPrepared, vertices);
+        runtime.Wait(runtime.Submit(std::move(churnRead.commands)));
+        detail::CheckMaterialColor(churnRead.pixels, {float(i) / 100, .1f, .2f, 1});
+        if (i == 1)
+            steadyCreations = runtime.GetDescriptorStats().creations;
+        if (i > 1)
+            Require(runtime.GetDescriptorStats().creations == steadyCreations,
+                    "Steady descriptor churn must reuse native allocations");
     }
     runtime.Wait(runtime.Submit(std::move(delayedOriginal.commands)));
     detail::CheckMaterialColor(delayedOriginal.pixels, {.25f, .5f, .75f, 1});

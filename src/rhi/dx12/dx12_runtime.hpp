@@ -9,6 +9,8 @@
 
 namespace renderlab::rhi::dx12
 {
+struct DxDescriptorPage;
+struct DxDescriptorRange;
 /** @brief Backend device services; owns queue completion and native command contexts. */
 class DxRuntime final : public Runtime
 {
@@ -40,6 +42,9 @@ protected:
                                         Swapchain*) override;
 
 private:
+    std::shared_ptr<DxDescriptorRange> AllocateDescriptors(D3D12_DESCRIPTOR_HEAP_TYPE type,
+                                                           uint32_t count);
+    std::vector<std::shared_ptr<DxDescriptorPage>> descriptorPages_;
     ID3D12Device* device_;
     ID3D12CommandQueue* queue_;
     IDXGIFactory6* factory_;

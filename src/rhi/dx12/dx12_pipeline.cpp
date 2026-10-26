@@ -88,6 +88,46 @@ std::shared_ptr<BindingLayout> DxRuntime::CreateLayout(std::vector<BindingDesc> 
     return layout;
 }
 
+std::shared_ptr<DxDescriptorRange> DxRuntime::AllocateDescriptors(D3D12_DESCRIPTOR_HEAP_TYPE type,
+                                                                  uint32_t count)
+{
+    if (!count)
+        return {};
+    for (const auto& page : descriptorPages_)
+        if (page->type == type)
+        {
+            const auto found =
+                std::search_n(page->occupied.begin(), page->occupied.end(), count, uint8_t{0});
+            if (found != page->occupied.end())
+                return std::make_shared<DxDescriptorRange>(
+                    page, static_cast<uint32_t>(found - page->occupied.begin()), count);
+        }
+    if (std::ranges::count_if(descriptorPages_,
+                              [=](const auto& page) { return page->type == type; }) >= 8)
+        throw std::runtime_error(
+            "DX12 descriptor page budget exhausted; release groups or retire work");
+    const auto capacity = type == D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER ? 256u : 4096u;
+    if (count > capacity)
+        throw std::invalid_argument("Binding group exceeds descriptor page capacity");
+    auto page = std::make_shared<DxDescriptorPage>();
+    page->type = type;
+    page->occupied.resize(capacity);
+    D3D12_DESCRIPTOR_HEAP_DESC desc{};
+    desc.NumDescriptors = capacity;
+    desc.Type = type;
+    desc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
+    {
+        auto cpuTimer = ProfileCpu(CpuOperation::DescriptorPageCreate);
+        Check(device_->CreateDescriptorHeap(&desc, IID_PPV_ARGS(&page->native)), "Descriptor page");
+    }
+    page->stats = descriptorStats_;
+    ++descriptorStats_->pages;
+    ++descriptorStats_->creations;
+    descriptorStats_->capacity += capacity;
+    descriptorPages_.push_back(page);
+    return std::make_shared<DxDescriptorRange>(page, 0, count);
+}
+
 std::shared_ptr<BindingGroup> DxRuntime::CreateGroup(std::shared_ptr<BindingLayout> layout,
                                                      std::vector<Binding> bindings)
 {
@@ -97,19 +137,15 @@ std::shared_ptr<BindingGroup> DxRuntime::CreateGroup(std::shared_ptr<BindingLayo
     const auto samplerCount = static_cast<UINT>(std::ranges::count_if(
         layout->entries, [](auto e) { return e.kind == BindingKind::Sampler; }));
     const auto resourceCount = static_cast<UINT>(layout->entries.size()) - samplerCount;
-    const auto createHeap = [&](UINT count, D3D12_DESCRIPTOR_HEAP_TYPE type, auto& heap)
-    {
-        if (!count)
-            return;
-        D3D12_DESCRIPTOR_HEAP_DESC desc{};
-        desc.NumDescriptors = count;
-        desc.Type = type;
-        desc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
-        Check(device_->CreateDescriptorHeap(&desc, IID_PPV_ARGS(&heap)), "Binding heap");
-    };
-    createHeap(resourceCount, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, group->resources);
-    createHeap(samplerCount, D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER, group->samplers);
-    UINT resourceIndex = 0, samplerIndex = 0;
+    group->resourceRange =
+        AllocateDescriptors(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, resourceCount);
+    group->samplerRange = AllocateDescriptors(D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER, samplerCount);
+    if (group->resourceRange)
+        group->resources = group->resourceRange->page->native;
+    if (group->samplerRange)
+        group->samplers = group->samplerRange->page->native;
+    UINT resourceIndex = group->resourceRange ? group->resourceRange->first : 0;
+    UINT samplerIndex = group->samplerRange ? group->samplerRange->first : 0;
     for (auto entry : layout->entries)
     {
         const auto& binding =

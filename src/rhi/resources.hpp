@@ -100,6 +100,12 @@ struct MemoryStats
     uint64_t budget = 256ull * 1024 * 1024;
 };
 
+/// Descriptor slots, not allocation bytes. Shared bookkeeping outlives the allocator's leases.
+struct DescriptorStats
+{
+    uint64_t pages = 0, capacity = 0, inUse = 0, highWater = 0, creations = 0;
+};
+
 /** @brief Dedicated allocations in M1; budget counts native allocation sizes, not requested sizes.
  */
 struct AllocationLedger

@@ -48,6 +48,10 @@ public:
     {
         return ledger_->stats;
     }
+    DescriptorStats GetDescriptorStats() const
+    {
+        return *descriptorStats_;
+    }
     size_t PendingCount() const
     {
         return pending_.size();
@@ -87,6 +91,7 @@ protected:
                   const std::vector<Binding>& bindings) const;
     void CheckOwner(const std::shared_ptr<Object>& object) const;
     std::shared_ptr<AllocationLedger> ledger_ = std::make_shared<AllocationLedger>();
+    std::shared_ptr<DescriptorStats> descriptorStats_ = std::make_shared<DescriptorStats>();
 
 private:
     bool cpuProfiling_ = false;

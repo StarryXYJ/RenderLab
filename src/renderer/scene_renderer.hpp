@@ -2,6 +2,7 @@
 
 #include "rendergraph/types.hpp"
 #include "rhi/resources.hpp"
+#include "rhi/upload.hpp"
 #include "scene/scene.hpp"
 #include "shader/definition.hpp"
 
@@ -54,6 +55,7 @@ public:
     scene::Scene& Document();
     const scene::Snapshot& LastSnapshot() const;
     const std::map<std::string, assets::Model>& Models() const;
+    rhi::UploadPool::Statistics UploadStatistics() const;
     /** @brief Extracts scene values and submits the existing Forward/Graph composition.
      * initial must match the target state; output is Present for a swapchain, otherwise CopySource.
      * Normal frames do not wait for GPU completion. Optional readback uses a padded row pitch.

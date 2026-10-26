@@ -99,13 +99,24 @@ std::shared_ptr<BindingLayout> VulkanRuntime::CreateLayout(std::vector<BindingDe
     return layout;
 }
 
-std::shared_ptr<BindingGroup> VulkanRuntime::CreateGroup(std::shared_ptr<BindingLayout> layout,
-                                                         std::vector<Binding> bindings)
+std::shared_ptr<VkDescriptorBlock>
+VulkanRuntime::AcquireDescriptors(std::shared_ptr<BindingLayout> layout)
 {
-    auto cpuTimer = ProfileCpu(CpuOperation::GroupCreate);
-    Validate(layout, bindings);
-    auto group = std::make_shared<VkGroup>(layout, std::move(bindings));
-    group->device = device_;
+    for (const auto& allocation : descriptorBlocks_)
+        if (allocation.use_count() == 1 && allocation->layout == layout)
+            return allocation;
+    if (descriptorBlocks_.size() == 256)
+    {
+        const auto idle = std::ranges::find_if(descriptorBlocks_, [](const auto& item)
+                                               { return item.use_count() == 1; });
+        if (idle == descriptorBlocks_.end())
+            throw std::runtime_error(
+                "Vulkan descriptor block budget exhausted; release groups or retire work");
+        descriptorBlocks_.erase(idle);
+    }
+    auto allocation = std::make_shared<VkDescriptorBlock>();
+    allocation->device = device_;
+    allocation->layout = layout;
     std::vector<VkDescriptorPoolSize> sizes;
     for (auto type : {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
                       VK_DESCRIPTOR_TYPE_SAMPLER, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
@@ -121,13 +132,34 @@ std::shared_ptr<BindingGroup> VulkanRuntime::CreateGroup(std::shared_ptr<Binding
     pool.maxSets = 4;
     pool.poolSizeCount = static_cast<uint32_t>(sizes.size());
     pool.pPoolSizes = sizes.data();
-    Check(vkCreateDescriptorPool(device_, &pool, nullptr, &group->pool), "DescriptorPool");
+    {
+        auto cpuTimer = ProfileCpu(CpuOperation::DescriptorPageCreate);
+        Check(vkCreateDescriptorPool(device_, &pool, nullptr, &allocation->pool), "DescriptorPool");
+    }
     VkDescriptorSetAllocateInfo allocate{};
     allocate.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
-    allocate.descriptorPool = group->pool;
+    allocate.descriptorPool = allocation->pool;
     allocate.descriptorSetCount = 4;
     allocate.pSetLayouts = As<VkLayout>(layout).sets.data();
-    Check(vkAllocateDescriptorSets(device_, &allocate, group->native.data()), "DescriptorSet");
+    Check(vkAllocateDescriptorSets(device_, &allocate, allocation->native.data()), "DescriptorSet");
+    allocation->stats = descriptorStats_;
+    ++descriptorStats_->pages;
+    ++descriptorStats_->creations;
+    descriptorStats_->capacity += layout->entries.size();
+    descriptorBlocks_.push_back(allocation);
+    return allocation;
+}
+
+std::shared_ptr<BindingGroup> VulkanRuntime::CreateGroup(std::shared_ptr<BindingLayout> layout,
+                                                         std::vector<Binding> bindings)
+{
+    auto cpuTimer = ProfileCpu(CpuOperation::GroupCreate);
+    Validate(layout, bindings);
+    auto group = std::make_shared<VkGroup>(layout, std::move(bindings));
+    group->allocation = AcquireDescriptors(layout);
+    descriptorStats_->inUse += layout->entries.size();
+    descriptorStats_->highWater = std::max(descriptorStats_->highWater, descriptorStats_->inUse);
+    group->native = group->allocation->native;
     for (auto entry : layout->entries)
     {
         const auto& binding =

@@ -208,6 +208,41 @@ void CheckUploadPool(Runtime& runtime)
                 pool.Stats().highWaterBytes == 512,
             "upload pool reuse or bounded statistics");
 }
+void CheckDescriptorBudget(Runtime& runtime)
+{
+    const auto originalUse = runtime.GetDescriptorStats().inUse;
+    std::vector<BindingDesc> entries;
+    std::vector<Binding> bindings;
+    const auto sampler = runtime.CreateSampler();
+    for (uint32_t i = 0; i < 32; ++i)
+    {
+        entries.push_back({i, BindingKind::Sampler, 0});
+        Binding binding{i};
+        binding.sampler = sampler;
+        bindings.push_back(binding);
+    }
+    auto layout = runtime.CreateLayout(entries);
+    std::vector<std::shared_ptr<BindingGroup>> retained;
+    bool exhausted = false;
+    for (uint32_t i = 0; i < 257; ++i)
+        try
+        {
+            retained.push_back(runtime.CreateGroup(layout, bindings));
+        }
+        catch (const std::runtime_error&)
+        {
+            exhausted = true;
+            break;
+        }
+    Require(exhausted && !retained.empty(), "descriptor allocator must enforce its budget");
+    const auto creations = runtime.GetDescriptorStats().creations;
+    retained.clear();
+    Require(runtime.GetDescriptorStats().inUse == originalUse,
+            "descriptor leases leaked after cancellation");
+    retained.push_back(runtime.CreateGroup(layout, bindings));
+    Require(runtime.GetDescriptorStats().creations == creations,
+            "descriptor allocator must reuse released capacity after exhaustion");
+}
 } // namespace
 
 void CheckResourceContracts(Runtime& runtime)
@@ -216,5 +251,6 @@ void CheckResourceContracts(Runtime& runtime)
     CheckLifetime(runtime);
     CheckUploadRing(runtime);
     CheckUploadPool(runtime);
+    CheckDescriptorBudget(runtime);
 }
 } // namespace renderlab::samples

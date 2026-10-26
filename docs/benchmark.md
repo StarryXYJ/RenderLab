@@ -28,6 +28,8 @@ Sandbox/Player 共用 CaptureScene 的固定场景路径。`--benchmark N` 按�
 
 顶层 warmupFrames 保留请求帧数的兼容含义；实际预热次数和时间以 benchmark.warmupFrames/warmupMs 为准。
 
+B3 起 headless 报告可包含 `resourceReuse`：`frameUpload` 为 pages/reservedBytes/batchHighWaterBytes/batches，`descriptors` 为 pages/capacitySlots/inUseSlots/highWaterSlots/nativeCreations。在测量结束、截图前采集，包含启动/预热累计量；不同于仅覆盖测量帧的 cpuOperations。描述符项数不代表显存字节；接口与拥有权见 [资源复用](resource-reuse.md)。
+
 默认文件在 OUTPUT/BACKEND/benchmark.json 和 frames.jsonl。`--profile`、`--samples` 可独立指定路径，但不能指向同一文件。每行 JSONL 是一个完成帧：
 
 ```json
@@ -43,6 +45,8 @@ Sandbox/Player 共用 CaptureScene 的固定场景路径。`--benchmark N` 按�
 `--cpu-profile` 仅用于 benchmark，默认关闭。它在测量循环中启用 Runtime 的 owner-thread 累计计时，记录 Buffer 创建、BindingGroup 创建、TextureView 创建、原生录制/提交、Collect 回收和实际 Fence 等待。逐帧增量分别作为 rhiBufferCreateMs/rhiGroupCreateMs/rhiViewCreateMs/rhiNativeSubmitMs/rhiRetireMs/rhiFenceWaitMs 进入 metricsMs；报告 benchmark.cpuOperations 同时保存每项 calls/totalMs。预热、截图和测量结束后的清理不计入这些计数。
 
 这些是包含调用内部驱动/系统工作的 CPU 墙钟区间，有额外计时开销，适合定位而不替代关闭探针的基线。Buffer 创建不含调用方之后的 Map/拷贝；Retire 是 Collect 的调用时间和调用次数，包含已完成命令释放及资源析构，不是“释放资源数量”。原生 Submit 不含前后 Collect。gpuWaitMs 包含 Runtime.Wait 中的 Fence 等待及 Collect，因此不能直接视为 GPU 执行时间。CPU 开启/关闭状态参与分析器配置一致性检查。
+
+B3 另外记录 `rhiDescriptorPageCreateMs` 和 `rhiDescriptorHeapBindMs`，分别为实际原生描述符 heap/pool 创建和 DX12 SetDescriptorHeaps。前者包含在 GroupCreate 内，后者包含在 NativeSubmit 内，不能重复相加。稳定场景的逻辑 GroupCreate 可以保持非零，同时原生描述符创建次数为零。
 
 CPU 区间不覆盖所有对象析构，例如被 Graph 剔除的资源可能在 Render 返回前释放；它们不能作为完整线程 CPU profile。分析器核对各项 totalMs 与逐帧增量之和，并在报告/可选图表中展示操作时间和 calls/frame。扩展样本与实际定位见 [B2 记录](performance/b2-pbr-rtx5060.md)。
 

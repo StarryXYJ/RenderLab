@@ -21,3 +21,15 @@ Material Runtime 在每个 GPU 包代际中保留至多 64 个常量版本，以
 数值改变产生新版本；缓存 FIFO 淘汰仅释放缓存拥有权，Prepared 和命令持有的旧 Buffer 继续有效。CPU 强持有缓存使串行帧之间也能命中；上限对应最多 1MiB 打包数据（每块最多 16KiB），原生分配的实际字节由 RHI ledger 另计。整代热重载仍使用原有发布协议。
 
 常量 Buffer 创建后不再写入。`Prepared::constants` 包含缓存命中版本，供图外调用者继续发出保守 HostWrite→UniformRead 可见性依赖；这不表示每次 Prepare 都发生 CPU 写入。Upload Buffer 在 DX12 保持原生 GENERIC_READ，在 Vulkan 没有图像布局转换，重复的 HOST_WRITE 来源依赖覆盖最初上传；首版不为省去该依赖另建可变的全局状态表。
+
+## 描述符
+
+DX12 Runtime 持有资源 heap 页（每页 4096 项）和 sampler heap 页（每页 256 项），每类最多八页，均在基础 API 限制内。BindingGroup 以 first-fit 分配每类的连续区间，持有区间和原生 heap；区间释放不分配内存，也不搬迁存活内容。每组同类描述符只来自一页，设置新的 heap 组合后重新设置所有 root table。同命令列表内连续使用同一组合时省去重复 SetDescriptorHeaps。
+
+Vulkan 首版复用与 BindingLayout 身份关联的 pool/set 块，每块包含四个 set。最多保留 256 块，优先复用无外部引用的同布局块；达到预算时只淘汰空闲块，全部被引用则明确报错。不按 CPU 帧号 Reset pool，不改用 dynamic uniform offset 或 update-after-bind。
+
+两后端均由逻辑 BindingGroup 的拥有权保护分配：CPU 保存的组、已录制未提交命令和 Runtime 的待完成命令包都会阻止重用。取消只释放 CPU 引用；已提交组在真实完成后退休。缓存的分配页/块不拥有 Buffer/Texture，避免长期钉住 Graph 资源和上传页。构造失败通过 RAII 归还已取得的区间。
+
+`Runtime::GetDescriptorStats()` 返回当前原生页/块数、容量项数、在用项数、高水位和累计创建次数。这里的单位是 descriptor slot，不是字节；不并入 RHI Buffer/Texture 的分配 ledger。统计共享状态与租约同寿命，不捕获可能已失效的分配器地址。首版缓存至 Runtime 销毁；Vulkan 另有满预算时的空闲淘汰。
+
+Benchmark 报告增加可选 `resourceReuse.descriptors` 和 `resourceReuse.frameUpload`，在测量结束、截图前读取累计及当前统计（含预热）。CPU 探针另有 `rhiDescriptorPageCreateMs`（DX12 shader-visible heap / Vulkan pool 创建）和 `rhiDescriptorHeapBindMs`（DX12 实际 heap 绑定）；为包含关系的墙钟区间，不能与 GroupCreate/NativeSubmit 相加。
