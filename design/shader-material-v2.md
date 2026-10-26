@@ -1,6 +1,6 @@
 # Shader 与材质契约修订提案
 
-本提案描述 M4 之后的接口修订方向，尚未实现；下文声明语法均为草案，当前工具不能直接编译。实施状态与分步验收只维护在 [phaseplan.md](phaseplan.md)。现有接口见 [M2](../docs/m2-shader-material.md)、[M4 PBR](../docs/m4-forward-pbr.md) 和 [M4 阴影与 Alpha](../docs/m4-shadows-alpha.md)。
+本设计经复查后进入分步实施；下文作者语法仍为草案，不能据此认定当前工具已经支持。实施状态与分步验收只维护在 [phaseplan.md](phaseplan.md)。现有接口见 [M2](../docs/m2-shader-material.md)、[M4 PBR](../docs/m4-forward-pbr.md) 和 [M4 阴影与 Alpha](../docs/m4-shadows-alpha.md)。
 
 ## 问题与边界
 
@@ -50,6 +50,8 @@ role 是有限的管线契约，首期只实现已有角色；GBuffer、DepthOnl
 - Stencil：enabled、readMask/writeMask、front/back 的 CompareOp、Fail/DepthFail/PassOp，以及 reference。
 
 CompareOp 使用 Never/Less/Equal/LessEqual/Greater/NotEqual/GreaterEqual/Always；StencilOp 覆盖 Keep/Zero/Replace/IncrementClamp/DecrementClamp/Invert/IncrementWrap/DecrementWrap。BlendFactor/Op 先覆盖双后端基础集合，双源混合与逻辑操作不在首期范围，不能静默降级。
+
+复查补充：Pipeline 的可选 depthStencilFormat 独立于 Depth/Stencil 状态，关闭测试仍可绑定附件。Depth.test=false 且 write=true 映射为原生测试开启、compare=Always，保证 DX12/Vulkan 都确实写入；test/write 均关才关闭原生深度阶段。动态 StencilRef 由绘制命令传递，不属于不可变 PSO。
 
 解析顺序固定为：状态类型默认值 → 显式选择的标准 preset → 当前 Pass 的字段覆盖。覆盖可以是字面值或类型匹配的材质属性引用；不支持任意表达式。Renderer 消费最终状态，不根据 `blend=true` 推断 depthWrite，也不强制所有 Transparent 都禁止深度写入。Graph 按实际状态验证附件访问。
 

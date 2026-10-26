@@ -122,6 +122,8 @@ DeviceCapabilities 至少区分：
 
 ### 对象与命令
 
+固定功能状态采用类型化 Raster/Depth/Blend/Stencil，附件格式独立于测试/写开关；StencilRef 为每 Draw 动态命令。D32S8 及 Graph 的逐面 Load/Clear/写权限已接入双后端，资源版本暂保守跟踪整个组合附件；接口见 [渲染状态](../docs/render-states.md)。Shader 作者层的完整配方与静态轴仍在后续修订中。
+
 | 分类 | 主要对象与操作 |
 | --- | --- |
 | 设备与展示 | Adapter、Device、Surface、Swapchain |
@@ -204,7 +206,7 @@ M4 的首个场景闭环见 [项目、场景](../docs/m4-scene.md)，Forward PBR
 
 ### M4 后契约修订提案
 
-[Shader 与材质 v2 提案](shader-material-v2.md) 将 Pass role、队列分类、固定功能状态和静态属性轴分别声明；Renderer 通过类型化接口与绑定 handle 消费数据，HLSL 库通过结构体和显式参数求值。bool/enum 仅在带 keyword 特性时产生局部变体，Stencil 需覆盖 RHI、深度模板附件与 Graph 访问。该提案尚未实现；本节下述 M2/M4 具名变体与共享全局参数仍描述当前运行时，实际实施状态以阶段计划为准。
+[Shader 与材质 v2 提案](shader-material-v2.md) 将 Pass role、队列分类、固定功能状态和静态属性轴分别声明；Renderer 通过类型化接口与绑定 handle 消费数据，HLSL 库通过结构体和显式参数求值。bool/enum 仅在带 keyword 特性时产生局部变体，Stencil 覆盖 RHI、深度模板附件与 Graph 访问。RHI/Graph 状态基础已落地，作者层修订仍在实施；本节下述 M2/M4 具名变体与共享全局参数仍描述当前作者接口，实际实施状态以阶段计划为准。
 
 ### Shader 工具链
 

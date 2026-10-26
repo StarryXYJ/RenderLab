@@ -4,6 +4,8 @@ RenderLab 支持 Windows x64，使用 C++20、MSVC、Windows SDK、CMake 和 Nin
 
 ## 工具链
 
+固定功能状态与模板附件的独立 GPU 回归可运行 `ctest --preset windows-debug -R 'render_state|rendergraph.contracts' --output-on-failure`，需配置 `RENDERLAB_GPU_TESTS=ON`；状态与逐面访问接口见 [渲染状态](../docs/render-states.md)。
+
 本轮验证环境如下，第三方源码按提交固定，构建时自动下载到各构建树的 `_deps`。
 
 | 工具 | 实测版本 |

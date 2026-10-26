@@ -65,14 +65,15 @@ void VerifyForward(rhi::Runtime& runtime, const std::filesystem::path& shaders,
     desc.vertex = shader(ShaderStage::Vertex, "vertex.bin", "VSMain");
     desc.pixel = shader(ShaderStage::Pixel, "pixel.bin", "PSMain");
     desc.color = Format::Rgba8Srgb;
-    desc.depth = true;
+    desc.depthStencilFormat = rhi::Format::D32;
+    desc.depth = {true, true};
     desc.vertexStride = sizeof(detail::DemoVertex);
     desc.attributes = {{"POSITION", 0, VertexFormat::Float3, 0},
                        {"COLOR", 1, VertexFormat::Float4, 12},
                        {"TEXCOORD", 2, VertexFormat::Float2, 28}};
     const auto opaque = runtime.CreatePipeline(desc);
-    desc.blend = true;
-    desc.depthWrite = false;
+    desc.blend.enabled = true;
+    desc.depth.writeEnabled = false;
     const auto transparent = runtime.CreatePipeline(desc);
     detail::Require(opaque != transparent, "Depth/blend variants must have separate pipelines");
     Graph graph;

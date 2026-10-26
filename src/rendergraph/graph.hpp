@@ -65,7 +65,7 @@ protected:
     Use DefaultRead(bool texture) const;
     Use DefaultWrite() const;
     TextureHandle Color(TextureHandle, rhi::LoadOp, std::array<float, 4>);
-    TextureHandle Depth(TextureHandle, rhi::LoadOp, DepthAccess);
+    TextureHandle Depth(TextureHandle, AttachmentAspect, AttachmentAspect, uint32_t);
     Graph& graph_;
     uint32_t pass_;
 };
@@ -77,9 +77,14 @@ public:
     TextureHandle ColorTarget(std::string_view name, rhi::LoadOp load = rhi::LoadOp::Clear,
                               std::array<float, 4> clear = {.02f, .02f, .02f, 1});
     TextureHandle DepthTarget(TextureHandle handle, rhi::LoadOp load = rhi::LoadOp::Clear,
-                              DepthAccess access = DepthAccess::ReadWrite);
+                              AttachmentAccess access = AttachmentAccess::ReadWrite);
     TextureHandle DepthTarget(std::string_view name, rhi::LoadOp load = rhi::LoadOp::Clear,
-                              DepthAccess access = DepthAccess::ReadWrite);
+                              AttachmentAccess access = AttachmentAccess::ReadWrite);
+    /// @brief Explicit depth/stencil load operations and permissions; requires a stencil format.
+    TextureHandle DepthStencilTarget(TextureHandle handle, AttachmentAspect depth,
+                                     AttachmentAspect stencil, uint32_t clearStencil = 0);
+    TextureHandle DepthStencilTarget(std::string_view name, AttachmentAspect depth,
+                                     AttachmentAspect stencil, uint32_t clearStencil = 0);
     PassHandle Execute(std::function<void(RasterContext&)> callback);
 
 private:

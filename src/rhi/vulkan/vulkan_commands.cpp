@@ -86,10 +86,14 @@ std::shared_ptr<Runtime::Submission> VulkanRuntime::Execute(const CommandList& c
                     b.newLayout = after.layout;
                     b.srcQueueFamilyIndex = b.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
                     b.image = As<VkTexture>(c.texture).native;
-                    b.subresourceRange = {VkImageAspectFlags(c.texture->desc.format == Format::D32
-                                                                 ? VK_IMAGE_ASPECT_DEPTH_BIT
-                                                                 : VK_IMAGE_ASPECT_COLOR_BIT),
-                                          0, 1, 0, 1};
+                    b.subresourceRange = {
+                        VkImageAspectFlags(IsDepthFormat(c.texture->desc.format)
+                                               ? VK_IMAGE_ASPECT_DEPTH_BIT |
+                                                     (HasStencil(c.texture->desc.format)
+                                                          ? VK_IMAGE_ASPECT_STENCIL_BIT
+                                                          : 0)
+                                               : VK_IMAGE_ASPECT_COLOR_BIT),
+                        0, 1, 0, 1};
                     VkDependencyInfo dependency{};
                     dependency.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
                     dependency.imageMemoryBarrierCount = 1;
@@ -145,7 +149,7 @@ std::shared_ptr<Runtime::Submission> VulkanRuntime::Execute(const CommandList& c
                     if (c.depth)
                     {
                         depth.imageView = As<VkView>(c.depth).native;
-                        depth.imageLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL;
+                        depth.imageLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
                         depth.loadOp = c.depthLoad == LoadOp::Clear ? VK_ATTACHMENT_LOAD_OP_CLEAR
                                        : c.depthLoad == LoadOp::Load
                                            ? VK_ATTACHMENT_LOAD_OP_LOAD
@@ -153,6 +157,13 @@ std::shared_ptr<Runtime::Submission> VulkanRuntime::Execute(const CommandList& c
                         depth.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
                         depth.clearValue.depthStencil.depth = 0;
                     }
+                    auto stencil = depth;
+                    const bool hasStencil = c.depth && HasStencil(c.depth->texture->desc.format);
+                    stencil.loadOp = c.stencilLoad == LoadOp::Clear ? VK_ATTACHMENT_LOAD_OP_CLEAR
+                                     : c.stencilLoad == LoadOp::Load
+                                         ? VK_ATTACHMENT_LOAD_OP_LOAD
+                                         : VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+                    stencil.clearValue.depthStencil.stencil = c.clearStencil;
                     const auto& d = c.color->texture->desc;
                     VkRenderingInfo rendering{};
                     rendering.sType = VK_STRUCTURE_TYPE_RENDERING_INFO;
@@ -161,6 +172,7 @@ std::shared_ptr<Runtime::Submission> VulkanRuntime::Execute(const CommandList& c
                     rendering.colorAttachmentCount = 1;
                     rendering.pColorAttachments = &color;
                     rendering.pDepthAttachment = c.depth ? &depth : nullptr;
+                    rendering.pStencilAttachment = hasStencil ? &stencil : nullptr;
                     vkCmdBeginRendering(list, &rendering);
                     VkViewport viewport{0, float(d.height), float(d.width), -float(d.height), 0, 1};
                     VkRect2D scissor{{0, 0}, {d.width, d.height}};
@@ -177,7 +189,11 @@ std::shared_ptr<Runtime::Submission> VulkanRuntime::Execute(const CommandList& c
                                       compute ? VK_PIPELINE_BIND_POINT_COMPUTE
                                               : VK_PIPELINE_BIND_POINT_GRAPHICS,
                                       As<VkPipelineObject>(c.pipeline).native);
+                    if (!compute)
+                        vkCmdSetStencilReference(list, VK_STENCIL_FACE_FRONT_AND_BACK, 0);
                 }
+                else if constexpr (std::is_same_v<T, SetStencilReference>)
+                    vkCmdSetStencilReference(list, VK_STENCIL_FACE_FRONT_AND_BACK, c.reference);
                 else if constexpr (std::is_same_v<T, SetBindings>)
                     vkCmdBindDescriptorSets(
                         list,

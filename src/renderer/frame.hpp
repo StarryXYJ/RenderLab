@@ -48,6 +48,7 @@ struct DrawPacket
     DrawKind kind = DrawKind::Vertices;
     uint32_t count = 0, first = 0;
     uint64_t indirectOffset = 0;
+    uint32_t stencilReference = 0;
     float distance = 0;
 };
 /** @brief Per-frame immutable inputs; no graph handles or ownership of graph outputs. */

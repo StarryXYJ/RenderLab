@@ -9,6 +9,8 @@ uint32_t FormatBytes(Format format)
 {
     switch (format)
     {
+    case Format::D32S8:
+        return 8;
     case Format::Rgba32Float:
         return 16;
     case Format::Rgba8:

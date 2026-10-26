@@ -2,10 +2,70 @@
 #include "rhi/vulkan/vulkan_runtime.hpp"
 
 #include <algorithm>
+#include <array>
 #include <stdexcept>
 
 namespace renderlab::rhi::vulkan
 {
+namespace
+{
+VkCompareOp Native(CompareOp value)
+{
+    constexpr std::array values = {VK_COMPARE_OP_NEVER,
+                                   VK_COMPARE_OP_LESS,
+                                   VK_COMPARE_OP_EQUAL,
+                                   VK_COMPARE_OP_LESS_OR_EQUAL,
+                                   VK_COMPARE_OP_GREATER,
+                                   VK_COMPARE_OP_NOT_EQUAL,
+                                   VK_COMPARE_OP_GREATER_OR_EQUAL,
+                                   VK_COMPARE_OP_ALWAYS};
+    return values.at(static_cast<size_t>(value));
+}
+VkStencilOp Native(StencilOp value)
+{
+    constexpr std::array values = {VK_STENCIL_OP_KEEP,
+                                   VK_STENCIL_OP_ZERO,
+                                   VK_STENCIL_OP_REPLACE,
+                                   VK_STENCIL_OP_INCREMENT_AND_CLAMP,
+                                   VK_STENCIL_OP_DECREMENT_AND_CLAMP,
+                                   VK_STENCIL_OP_INVERT,
+                                   VK_STENCIL_OP_INCREMENT_AND_WRAP,
+                                   VK_STENCIL_OP_DECREMENT_AND_WRAP};
+    return values.at(static_cast<size_t>(value));
+}
+VkBlendFactor Native(BlendFactor value)
+{
+    constexpr std::array values = {VK_BLEND_FACTOR_ZERO,
+                                   VK_BLEND_FACTOR_ONE,
+                                   VK_BLEND_FACTOR_SRC_COLOR,
+                                   VK_BLEND_FACTOR_ONE_MINUS_SRC_COLOR,
+                                   VK_BLEND_FACTOR_DST_COLOR,
+                                   VK_BLEND_FACTOR_ONE_MINUS_DST_COLOR,
+                                   VK_BLEND_FACTOR_SRC_ALPHA,
+                                   VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA,
+                                   VK_BLEND_FACTOR_DST_ALPHA,
+                                   VK_BLEND_FACTOR_ONE_MINUS_DST_ALPHA,
+                                   VK_BLEND_FACTOR_SRC_ALPHA_SATURATE};
+    return values.at(static_cast<size_t>(value));
+}
+VkBlendOp Native(BlendOp value)
+{
+    constexpr std::array values = {VK_BLEND_OP_ADD, VK_BLEND_OP_SUBTRACT,
+                                   VK_BLEND_OP_REVERSE_SUBTRACT, VK_BLEND_OP_MIN, VK_BLEND_OP_MAX};
+    return values.at(static_cast<size_t>(value));
+}
+VkStencilOpState Native(const StencilFaceState& face, const StencilState& stencil)
+{
+    return {Native(face.fail),
+            Native(face.pass),
+            Native(face.depthFail),
+            Native(face.compare),
+            stencil.readMask,
+            stencil.writeMask,
+            0};
+}
+} // namespace
+
 std::shared_ptr<BindingLayout> VulkanRuntime::CreateLayout(std::vector<BindingDesc> entries)
 {
     auto layout = std::make_shared<VkLayout>(this, std::move(entries));
@@ -173,43 +233,56 @@ std::shared_ptr<Pipeline> VulkanRuntime::CreatePipelineNative(PipelineDesc desc)
         VkPipelineRasterizationStateCreateInfo raster{};
         raster.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
         raster.polygonMode = VK_POLYGON_MODE_FILL;
-        raster.cullMode = desc.cull ? VK_CULL_MODE_BACK_BIT : VK_CULL_MODE_NONE;
+        raster.cullMode = desc.raster.cull == CullMode::Back    ? VK_CULL_MODE_BACK_BIT
+                          : desc.raster.cull == CullMode::Front ? VK_CULL_MODE_FRONT_BIT
+                                                                : VK_CULL_MODE_NONE;
         // Negative viewport height matches DX12's clip-space Y; CCW is expressed in clip space.
-        raster.frontFace =
-            desc.frontCounterClockwise ? VK_FRONT_FACE_COUNTER_CLOCKWISE : VK_FRONT_FACE_CLOCKWISE;
+        raster.frontFace = desc.raster.frontFace == FrontFace::CounterClockwise
+                               ? VK_FRONT_FACE_COUNTER_CLOCKWISE
+                               : VK_FRONT_FACE_CLOCKWISE;
         raster.lineWidth = 1;
         VkPipelineMultisampleStateCreateInfo sample{};
         sample.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
         sample.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
         VkPipelineDepthStencilStateCreateInfo depth{};
         depth.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
-        depth.depthTestEnable = desc.depth;
-        depth.depthWriteEnable = desc.depth && desc.depthWrite;
-        depth.depthCompareOp = VK_COMPARE_OP_GREATER_OR_EQUAL;
+        depth.depthTestEnable = desc.depth.testEnabled || desc.depth.writeEnabled;
+        depth.depthWriteEnable = desc.depth.writeEnabled;
+        depth.depthCompareOp =
+            Native(desc.depth.testEnabled ? desc.depth.compare : CompareOp::Always);
+        depth.stencilTestEnable = desc.stencil.enabled;
+        depth.front = Native(desc.stencil.front, desc.stencil);
+        depth.back = Native(desc.stencil.back, desc.stencil);
         VkPipelineColorBlendAttachmentState attachment{};
-        attachment.blendEnable = desc.blend;
-        attachment.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
-        attachment.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
-        attachment.colorBlendOp = VK_BLEND_OP_ADD;
-        attachment.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
-        attachment.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;
-        attachment.alphaBlendOp = VK_BLEND_OP_ADD;
-        attachment.colorWriteMask = 15;
+        attachment.blendEnable = desc.blend.enabled;
+        attachment.srcColorBlendFactor = Native(desc.blend.srcColor);
+        attachment.dstColorBlendFactor = Native(desc.blend.dstColor);
+        attachment.colorBlendOp = Native(desc.blend.colorOp);
+        attachment.srcAlphaBlendFactor = Native(desc.blend.srcAlpha);
+        attachment.dstAlphaBlendFactor = Native(desc.blend.dstAlpha);
+        attachment.alphaBlendOp = Native(desc.blend.alphaOp);
+        attachment.colorWriteMask = desc.raster.colorWriteMask;
         VkPipelineColorBlendStateCreateInfo blend{};
         blend.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
         blend.attachmentCount = 1;
         blend.pAttachments = &attachment;
-        VkDynamicState states[] = {VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR};
+        VkDynamicState states[] = {VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR,
+                                   VK_DYNAMIC_STATE_STENCIL_REFERENCE};
         VkPipelineDynamicStateCreateInfo dynamic{};
         dynamic.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
-        dynamic.dynamicStateCount = 2;
+        dynamic.dynamicStateCount = 3;
         dynamic.pDynamicStates = states;
         const auto colorFormat = NativeFormat(desc.color);
         VkPipelineRenderingCreateInfo rendering{};
         rendering.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO;
         rendering.colorAttachmentCount = 1;
         rendering.pColorAttachmentFormats = &colorFormat;
-        rendering.depthAttachmentFormat = desc.depth ? VK_FORMAT_D32_SFLOAT : VK_FORMAT_UNDEFINED;
+        rendering.depthAttachmentFormat =
+            desc.depthStencilFormat ? NativeFormat(*desc.depthStencilFormat) : VK_FORMAT_UNDEFINED;
+        rendering.stencilAttachmentFormat =
+            desc.depthStencilFormat && HasStencil(*desc.depthStencilFormat)
+                ? rendering.depthAttachmentFormat
+                : VK_FORMAT_UNDEFINED;
         VkGraphicsPipelineCreateInfo info{};
         info.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
         info.pNext = &rendering;

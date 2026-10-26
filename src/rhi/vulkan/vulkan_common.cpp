@@ -22,6 +22,8 @@ VkFormat NativeFormat(Format format)
         return VK_FORMAT_R8G8B8A8_SRGB;
     case Format::Bgra8Srgb:
         return VK_FORMAT_B8G8R8A8_SRGB;
+    case Format::D32S8:
+        return VK_FORMAT_D32_SFLOAT_S8_UINT;
     case Format::D32:
         return VK_FORMAT_D32_SFLOAT;
     case Format::Rgba32Float:
@@ -80,7 +82,7 @@ Access NativeState(State state)
                     VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT,
                 VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_READ_BIT |
                     VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
-                VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL};
+                VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL};
     }
     throw std::invalid_argument("Unknown state");
 }

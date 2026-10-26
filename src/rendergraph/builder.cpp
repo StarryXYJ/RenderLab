@@ -13,7 +13,9 @@ void Range(const detail::Resource& r, TextureRange range)
     Require(range.firstMip == 0 && range.mipCount == 1 && range.firstLayer == 0 &&
                 range.layerCount == 1,
             "Texture mip/layer range exceeds current single-subresource RHI");
-    const auto aspect = r.textureDesc.format == rhi::Format::D32 ? Aspect::Depth : Aspect::Color;
+    const auto aspect = rhi::HasStencil(r.textureDesc.format)      ? Aspect::DepthStencil
+                        : rhi::IsDepthFormat(r.textureDesc.format) ? Aspect::Depth
+                                                                   : Aspect::Color;
     Require(range.aspect == Aspect::Auto || range.aspect == aspect, "Texture aspect mismatch");
 }
 void Range(const detail::Resource& r, BufferRange range)
@@ -124,22 +126,39 @@ TextureHandle PassBuilder::Color(TextureHandle handle, rhi::LoadOp load, std::ar
     pass.color = detail::Attachment{handle.resource, load, clear};
     return next;
 }
-TextureHandle PassBuilder::Depth(TextureHandle handle, rhi::LoadOp load, DepthAccess access)
+TextureHandle PassBuilder::Depth(TextureHandle handle, AttachmentAspect depth,
+                                 AttachmentAspect stencil, uint32_t clearStencil)
 {
     auto& g = *graph_.impl_;
     g.Builder(pass_);
+    auto& resource = g.Validate(handle.graph, handle.resource, handle.version, true);
     auto& pass = g.passes[pass_];
+    const bool hasStencil = rhi::HasStencil(resource.textureDesc.format);
     Require(pass.kind == PassKind::Raster && !pass.depth,
-            "Raster pass supports one depth attachment");
-    Require(load != rhi::LoadOp::Discard, "Depth attachment requires Clear or Load");
-    const bool readOnly = access == DepthAccess::ReadOnly;
-    Require(!readOnly || load == rhi::LoadOp::Load, "Read-only depth requires Load");
+            "Raster pass supports one depth/stencil attachment");
+    Require(clearStencil <= 255, "Stencil clear must be in [0,255]");
+    const auto validate = [](AttachmentAspect aspect)
+    {
+        Require(aspect.load != rhi::LoadOp::Discard, "Depth/stencil requires Clear or Load");
+        Require(aspect.access != AttachmentAccess::ReadOnly || aspect.load == rhi::LoadOp::Load,
+                "Read-only depth/stencil requires Load");
+    };
+    validate(depth);
+    if (hasStencil)
+        validate(stencil);
+    const bool readOnly = depth.access == AttachmentAccess::ReadOnly &&
+                          (!hasStencil || stencil.access == AttachmentAccess::ReadOnly);
+    const bool preserve =
+        depth.load == rhi::LoadOp::Load || (hasStencil && stencil.load == rhi::LoadOp::Load);
+    // Clearing one plane must not discard the other plane's producer or initialization.
     auto next = readOnly
                     ? ReadTexture(handle, Use::DepthRead)
-                    : Write(handle, Use::Depth,
-                            load == rhi::LoadOp::Load ? Coverage::Preserve : Coverage::Full, {});
-    pass.depthReadOnly = readOnly;
-    pass.depth = detail::Attachment{handle.resource, load, {}};
+                    : Write(handle, Use::Depth, preserve ? Coverage::Preserve : Coverage::Full, {});
+    pass.depthReadOnly = depth.access == AttachmentAccess::ReadOnly;
+    pass.stencilReadOnly = !hasStencil || stencil.access == AttachmentAccess::ReadOnly;
+    pass.stencilLoad = stencil.load;
+    pass.clearStencil = clearStencil;
+    pass.depth = detail::Attachment{handle.resource, depth.load, {}};
     return next;
 }
 void PassBuilder::SideEffect()
@@ -241,14 +260,27 @@ TextureHandle RasterPassBuilder::ColorTarget(std::string_view name, rhi::LoadOp 
 {
     return ColorTarget(graph_.GetTexture(name), load, clear);
 }
-TextureHandle RasterPassBuilder::DepthTarget(TextureHandle h, rhi::LoadOp load, DepthAccess access)
+TextureHandle RasterPassBuilder::DepthTarget(TextureHandle h, rhi::LoadOp load,
+                                             AttachmentAccess access)
 {
-    return Depth(h, load, access);
+    return Depth(h, {load, access}, {load, access}, 0);
 }
 TextureHandle RasterPassBuilder::DepthTarget(std::string_view name, rhi::LoadOp load,
-                                             DepthAccess access)
+                                             AttachmentAccess access)
 {
     return DepthTarget(graph_.GetTexture(name), load, access);
+}
+TextureHandle RasterPassBuilder::DepthStencilTarget(TextureHandle h, AttachmentAspect depth,
+                                                    AttachmentAspect stencil, uint32_t clearStencil)
+{
+    Require(rhi::HasStencil(graph_.GetTextureDesc(h).format),
+            "DepthStencilTarget requires a stencil format");
+    return Depth(h, depth, stencil, clearStencil);
+}
+TextureHandle RasterPassBuilder::DepthStencilTarget(std::string_view name, AttachmentAspect depth,
+                                                    AttachmentAspect stencil, uint32_t clearStencil)
+{
+    return DepthStencilTarget(graph_.GetTexture(name), depth, stencil, clearStencil);
 }
 PassHandle RasterPassBuilder::Execute(std::function<void(RasterContext&)> fn)
 {

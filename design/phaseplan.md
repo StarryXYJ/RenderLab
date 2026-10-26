@@ -5,7 +5,7 @@
 ## 当前状态
 
 - 当前实施阶段：M0–M4 DONE；M4.1–M4.5 全部完成。
-- 当前工作项：按本轮请求完成 Shader/Material 契约修订提案，仅设计；R1 实现 NOT_STARTED，M5 NOT_STARTED。
+- 当前工作项：R1 IN_PROGRESS，R1.1a RHI/Graph 状态基础已完成；下一工作项 R1.2 类型化属性/静态轴，再接 R1.1b Shader/材质角色和状态配方；M5 NOT_STARTED。
 - 用户约定：每个子阶段验收完成即提交 Git，无阻塞时在当前授权范围内继续推进；M4.3 提交 c50ee6a、M4.4 提交 40d0c12、M4.5 提交 9a4b2e4。
 - Demo 的 Custom 示例作为回归入口保留；M4 场景示例使用 Forward 组合与现有 Shader/Material 链路。
 
@@ -16,7 +16,7 @@
 | M2 | Shader 与材质数据链路 | M1 | DONE |
 | M3 | 单队列 Render Graph | M2 | DONE |
 | M4 | 场景资源与基础 Renderer | M3 | DONE |
-| R1 | Shader/Material 契约修订（提案，尚未实施） | M4 | NOT_STARTED |
+| R1 | Shader/Material 契约修订 | M4 | IN_PROGRESS |
 | M5 | Deferred 与光追基础 | M4 | NOT_STARTED |
 | M6 | GPU Driven 与执行优化 | M4；光追调度测试另需 M5 | NOT_STARTED |
 | M7 | C# 编辑器与完整项目工作流 | M4；默认在 M5、M6 的核心目标后开展 | NOT_STARTED |
@@ -24,7 +24,7 @@
 
 默认顺序为 M0 到 M8。M5 和 M6 在 M4 后可以独立推进；单阶段内按下列子阶段顺序执行，不同时建设多个高级系统。完整编辑器后置，M4 只实现运行内容所需的最小项目与资源能力。
 
-本轮仅授权 R1 设计；建议后续先完成 R1 再扩展 M5，避免把名称推断与共享全局参数带入更多角色。该建议不构成实现已获授权或已开始。
+用户已授权复查后实施 R1，按子阶段验证、提交并继续；M5 不在本轮实施范围。
 
 ## 状态与维护规则
 
@@ -157,15 +157,20 @@ DONE（2026 年 10 月 26 日）：同线程 modeless Win32 面板、F1、冻结
 
 ## R1 Shader/Material 契约修订
 
-状态：NOT_STARTED（实现）；本轮设计提案已完成，日期：2026 年 10 月 26 日。
+状态：IN_PROGRESS；设计复查通过并开始实施，日期：2026 年 10 月 26 日。
 
-设计入口：[Shader 与材质 v2](shader-material-v2.md)。本轮只修改设计文档，检查差异、文本编码和相对链接，不运行构建或 GPU 测试；M4 已完成能力没有代码变更。
+设计入口：[Shader 与材质 v2](shader-material-v2.md)。复查明确附件格式独立于测试/写开关、无测试但写深度映射 Always、Graph 先保守跟踪组合附件；先做 RHI/Graph，再接作者层，避免引入临时材质状态 DSL。M4 基线必须在迁移时持续回归。
 
 ### R1.1 类型化 Pass 与固定功能状态
 
+R1.1a DONE（2026 年 10 月 26 日）：类型化 Raster/Depth/Blend/Stencil、完整 PSO Key、动态 StencilRef、D32S8 双后端映射与能力查询；Graph 逐面 Load/Clear/权限及整附件保守依赖；Forward 不再强制透明禁止深度写入。接口：[渲染状态](../docs/render-states.md)。RTX 5060 / MSVC 19.51 / DXC 1.9，Debug/Release 全量各 39/39；追加 Fail/DepthFail/非法状态后两配置定向各 3/3，DX12/Vulkan Validation 错误为 0。格式化、UTF-8/LF 与差异检查通过。限制：无深度模板采样/复制/独立平面调度。
+
+R1.1b NOT_STARTED：Shader/材质类型化 role、属性状态配方和队列；依赖 R1.2 的类型化属性，故在 R1.2 后实施。准备 PSO 前选择场景附件格式仍属于此步，不能用 RHI 已支持 D32S8 代替作者层验收。
+
 - [ ] 显式 role/PassHandle、材质分类/队列与状态配方，移除按变体/Pass 名称推断行为和根据 Blend 推断 DepthWrite。
-- [ ] 完整 Raster/Depth/Blend/Stencil、PSO Key、每 Draw 动态 StencilRef；深度模板格式与双后端能力检查。
-- [ ] Graph 深度/模板访问与初始化闭环、准备 PSO 前解析附件需求；保留有界缓存和在途快照所有权。
+- [x] 完整 Raster/Depth/Blend/Stencil、PSO Key、每 Draw 动态 StencilRef；深度模板格式与双后端能力检查。
+- [x] Graph 深度/模板访问与初始化闭环；保留有界缓存和在途快照所有权。
+- [ ] 根据作者层解析状态，在准备场景 PSO 前汇总附件格式需求。
 
 验收：独立深度测试/写入、混合颜色与 Alpha、模板遮罩/双面操作、跨 Pass 保留、reference 隔离与非法配置；双后端 Validation 无错误。
 

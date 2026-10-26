@@ -48,11 +48,11 @@ void Graph::Impl::ValidateState(const detail::Resource& r, rhi::State state) con
         valid = state == rhi::State::Undefined || state == rhi::State::CopySource ||
                 state == rhi::State::CopyDest ||
                 (state == rhi::State::Storage && r.textureDesc.storage) ||
-                (state == rhi::State::Sampled && r.textureDesc.format != rhi::Format::D32) ||
+                (state == rhi::State::Sampled && !rhi::IsDepthFormat(r.textureDesc.format)) ||
                 (state == rhi::State::ColorAttachment && r.textureDesc.attachment &&
-                 r.textureDesc.format != rhi::Format::D32) ||
+                 !rhi::IsDepthFormat(r.textureDesc.format)) ||
                 (state == rhi::State::DepthWrite && r.textureDesc.attachment &&
-                 r.textureDesc.format == rhi::Format::D32) ||
+                 rhi::IsDepthFormat(r.textureDesc.format)) ||
                 (state == rhi::State::Present && r.imported);
     }
     else if (r.bufferDesc.memory == rhi::Memory::Upload)
@@ -90,13 +90,16 @@ void Graph::Impl::ValidateUse(uint32_t index, const detail::Resource& r, Use use
         Require(use != Use::Storage || r.textureDesc.storage,
                 "Texture lacks storage usage" + suffix);
         Require(use != Use::Color ||
-                    (r.textureDesc.attachment && r.textureDesc.format != rhi::Format::D32),
+                    (r.textureDesc.attachment && !rhi::IsDepthFormat(r.textureDesc.format)),
                 "Invalid color attachment" + suffix);
         Require((use != Use::Depth && use != Use::DepthRead) ||
-                    (r.textureDesc.attachment && r.textureDesc.format == rhi::Format::D32),
+                    (r.textureDesc.attachment && rhi::IsDepthFormat(r.textureDesc.format)),
                 "Invalid depth attachment" + suffix);
-        Require(use != Use::Sampled || r.textureDesc.format != rhi::Format::D32,
+        Require(use != Use::Sampled || !rhi::IsDepthFormat(r.textureDesc.format),
                 "Depth sampling is not implemented in current RHI" + suffix);
+        Require((use != Use::CopySource && use != Use::CopyDestination) ||
+                    !rhi::IsDepthFormat(r.textureDesc.format),
+                "Depth/stencil copies are not implemented" + suffix);
     }
     else
     {

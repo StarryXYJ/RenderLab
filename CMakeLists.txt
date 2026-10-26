@@ -175,6 +175,14 @@ install(DIRECTORY sample/m4/Assets DESTINATION project)
 install(FILES sample/m4/RenderLab.rlproject sample/m4/Pbr.rlproject sample/m4/Shadow.rlproject DESTINATION project)
 
 if(BUILD_TESTING)
+    add_executable(renderlab_render_state_tests tests/render_state_tests.cpp)
+    target_link_libraries(renderlab_render_state_tests PRIVATE renderlab_options renderlab_shader
+        renderlab_rendergraph renderlab_rhi renderlab_core renderlab_platform)
+    add_custom_command(TARGET renderlab_render_state_tests POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_FILE:renderlab_dxc>
+            $<TARGET_FILE_DIR:renderlab_render_state_tests>
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_FILE:renderlab_pix>
+            $<TARGET_FILE_DIR:renderlab_render_state_tests> VERBATIM)
     add_executable(renderlab_surface_tests tests/surface_tests.cpp)
     target_link_libraries(renderlab_surface_tests PRIVATE renderlab_options renderlab_renderer
         renderlab_material renderlab_rhi renderlab_content renderlab_core renderlab_platform
@@ -236,6 +244,9 @@ if(BUILD_TESTING)
         PROPERTIES WILL_FAIL TRUE)
     if(RENDERLAB_GPU_TESTS)
         foreach(backend IN ITEMS dx12 vulkan)
+            add_test(NAME gpu.${backend}.render_state COMMAND renderlab_render_state_tests
+                ${backend} ${CMAKE_BINARY_DIR}/render-state/${backend})
+            set_tests_properties(gpu.${backend}.render_state PROPERTIES LABELS gpu RUN_SERIAL TRUE TIMEOUT 60)
             add_test(NAME gpu.${backend}.tools_window COMMAND renderlab_sandbox
                 --backend ${backend} --validation on --window-test --debug-panel --fixed-camera
                 --project ${CMAKE_SOURCE_DIR}/sample/m4/Shadow.rlproject

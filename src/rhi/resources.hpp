@@ -1,8 +1,11 @@
 #pragma once
 
+#include "rhi/render_state.hpp"
+
 #include <cstddef>
 #include <cstdint>
 #include <memory>
+#include <optional>
 #include <span>
 #include <string>
 #include <utility>
@@ -23,10 +26,19 @@ enum class Format
     Rgba8Srgb,
     Bgra8Srgb,
     Rgba32Float,
-    D32
+    D32,
+    D32S8
 };
 /// @brief Uncompressed texel size used by upload/readback footprints.
 uint32_t FormatBytes(Format format);
+constexpr bool IsDepthFormat(Format format)
+{
+    return format == Format::D32 || format == Format::D32S8;
+}
+constexpr bool HasStencil(Format format)
+{
+    return format == Format::D32S8;
+}
 enum class State
 {
     Undefined,
@@ -195,11 +207,11 @@ struct PipelineDesc
     std::shared_ptr<ShaderModule> pixel;
     std::shared_ptr<ShaderModule> compute;
     Format color = Format::Rgba8;
-    bool depth = false;
-    bool depthWrite = true;
-    bool blend = false;
-    bool cull = true;
-    bool frontCounterClockwise = true;
+    std::optional<Format> depthStencilFormat;
+    RasterState raster;
+    DepthState depth;
+    BlendState blend;
+    StencilState stencil;
     uint32_t vertexStride = 0;
     std::vector<VertexAttribute> attributes;
 };

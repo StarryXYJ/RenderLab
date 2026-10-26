@@ -567,9 +567,10 @@ void ForwardContracts()
     auto vertices = runtime.CreateBuffer({256, rhi::Memory::Device, "Vertices"});
     rhi::PipelineDesc desc;
     desc.layout = runtime.CreateLayout({});
-    desc.depth = true;
-    desc.depthWrite = false;
-    desc.blend = true;
+    desc.depthStencilFormat = rhi::Format::D32;
+    desc.depth = {true, true};
+    desc.depth.writeEnabled = false;
+    desc.blend.enabled = true;
     desc.vertexStride = 4;
     DrawPacket draw;
     draw.pipeline = std::make_shared<rhi::Pipeline>(&runtime, desc);
@@ -632,9 +633,9 @@ void ForwardContracts()
         initialize.Execute([](RasterContext&) {});
         auto readonly = invalid.AddRasterPass("ReadOnlyDepth");
         color = readonly.ColorTarget(color, rhi::LoadOp::Load);
-        readonly.DepthTarget(depth, rhi::LoadOp::Load, DepthAccess::ReadOnly);
+        readonly.DepthTarget(depth, rhi::LoadOp::Load, AttachmentAccess::ReadOnly);
         auto writingDesc = desc;
-        writingDesc.depthWrite = true;
+        writingDesc.depth.writeEnabled = true;
         auto writing = std::make_shared<rhi::Pipeline>(&runtime, writingDesc);
         readonly.Execute([writing](RasterContext& c) { c.Bind(writing); });
         invalid.Export(color, rhi::State::Sampled);
@@ -644,6 +645,55 @@ void ForwardContracts()
     runtime.WaitIdle();
 }
 
+void StencilContracts()
+{
+    FakeRuntime runtime;
+    Pool pool(runtime);
+    {
+        Graph graph;
+        auto depth = graph.CreateTexture("Depth", {8, 8, rhi::Format::D32S8, false, true});
+        auto color = Texture(graph, "Color");
+        auto pass = graph.AddRasterPass("PartialClear");
+        pass.ColorTarget(color);
+        pass.DepthStencilTarget(depth, {rhi::LoadOp::Clear},
+                                {rhi::LoadOp::Load, AttachmentAccess::ReadOnly});
+        pass.SideEffect();
+        pass.Execute([](RasterContext&) {});
+        Fails([&] { graph.Compile(); }, "initialization");
+    }
+    {
+        Graph graph;
+        auto depth = graph.CreateTexture("Depth", {8, 8, rhi::Format::D32, false, true});
+        auto pass = graph.AddRasterPass("InvalidStencil");
+        Fails([&] { pass.DepthStencilTarget(depth, {}, {}); }, "stencil format");
+    }
+    {
+        Graph graph;
+        auto color = Texture(graph, "Color");
+        auto depth = graph.CreateTexture("Depth", {8, 8, rhi::Format::D32S8, false, true});
+        auto initialize = graph.AddRasterPass("Mask");
+        color = initialize.ColorTarget(color);
+        depth = initialize.DepthTarget(depth);
+        initialize.Execute([](RasterContext&) {});
+        auto read = graph.AddRasterPass("ReadOnlyStencil");
+        color = read.ColorTarget(color, rhi::LoadOp::Load);
+        read.DepthStencilTarget(depth, {rhi::LoadOp::Clear},
+                                {rhi::LoadOp::Load, AttachmentAccess::ReadOnly});
+        rhi::PipelineDesc desc;
+        desc.layout = runtime.CreateLayout({});
+        desc.depthStencilFormat = rhi::Format::D32S8;
+        desc.stencil.enabled = true;
+        desc.stencil.back.fail = rhi::StencilOp::Replace;
+        auto writing = std::make_shared<rhi::Pipeline>(&runtime, desc);
+        read.Execute([writing](RasterContext& context) { context.Bind(writing); });
+        graph.Export(color, rhi::State::Sampled);
+        graph.Compile();
+        Require(graph.GetPlan().passes[0].live,
+                "Stencil Load must retain the mask producer when depth is cleared");
+        Fails([&] { graph.Execute(pool); }, "stencil writes disabled");
+    }
+    runtime.WaitIdle();
+}
 void ProfilingContracts()
 {
     FakeRuntime runtime;
@@ -693,6 +743,7 @@ int main()
         RecordingValidation();
         FeatureCreationContracts();
         ForwardContracts();
+        StencilContracts();
         ProfilingContracts();
         std::cout << "Graph contracts passed: names, typed passes, versions, culling, hazards, "
                      "bindings and lifetime\n";

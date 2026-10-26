@@ -39,8 +39,9 @@ void GraphDemo::Prepare(rhi::Format format)
     desc.vertex = vertex_;
     desc.pixel = pixel_;
     desc.color = format;
-    desc.depth = true;
-    desc.blend = true;
+    desc.depthStencilFormat = rhi::Format::D32;
+    desc.depth = {true, true};
+    desc.blend.enabled = true;
     desc.vertexStride = sizeof(detail::DemoVertex);
     desc.attributes = {{"POSITION", 0, rhi::VertexFormat::Float3, 0},
                        {"COLOR", 1, rhi::VertexFormat::Float4, 12},

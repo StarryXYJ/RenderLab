@@ -67,7 +67,9 @@ struct Pass
     std::vector<Access> accesses;
     std::optional<Attachment> color, depth;
     Callback callback;
-    bool depthReadOnly = false;
+    bool depthReadOnly = false, stencilReadOnly = false;
+    rhi::LoadOp stencilLoad = rhi::LoadOp::Clear;
+    uint32_t clearStencil = 0;
 };
 inline void Require(bool condition, const std::string& message)
 {

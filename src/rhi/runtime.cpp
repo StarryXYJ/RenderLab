@@ -27,7 +27,7 @@ void Runtime::Validate(const TextureDesc& desc) const
 {
     Require(desc.width && desc.height && desc.width <= 16384 && desc.height <= 16384,
             "Texture dimensions must be in [1, 16384]");
-    Require(desc.format != Format::D32 || (desc.attachment && !desc.storage),
+    Require(!IsDepthFormat(desc.format) || (desc.attachment && !desc.storage),
             "Depth texture requires attachment usage and forbids storage usage");
     Require(!desc.storage || desc.format == Format::Rgba8,
             "M1 storage textures require RGBA8_UNORM");
@@ -43,6 +43,39 @@ void Runtime::Validate(const PipelineDesc& desc) const
     }
     else
     {
+        Require(!IsDepthFormat(desc.color), "Color pipeline format cannot be depth/stencil");
+        Require(!desc.depthStencilFormat || IsDepthFormat(*desc.depthStencilFormat),
+                "Invalid depth/stencil attachment format");
+        Require((!desc.depth.testEnabled && !desc.depth.writeEnabled && !desc.stencil.enabled) ||
+                    desc.depthStencilFormat.has_value(),
+                "Depth/stencil state requires an attachment");
+        Require(!desc.stencil.enabled || HasStencil(*desc.depthStencilFormat),
+                "Stencil testing requires a stencil attachment format");
+        Require(desc.raster.colorWriteMask <= 15, "Invalid color write mask");
+        const auto valid = [](auto value, auto last)
+        { return static_cast<uint32_t>(value) <= static_cast<uint32_t>(last); };
+        Require(valid(desc.raster.cull, CullMode::Back) &&
+                    valid(desc.raster.frontFace, FrontFace::Clockwise) &&
+                    valid(desc.depth.compare, CompareOp::Always),
+                "Invalid raster/depth state");
+        const auto alphaFactor = [](BlendFactor factor)
+        {
+            return factor == BlendFactor::Zero || factor == BlendFactor::One ||
+                   factor == BlendFactor::SrcAlpha || factor == BlendFactor::OneMinusSrcAlpha ||
+                   factor == BlendFactor::DstAlpha || factor == BlendFactor::OneMinusDstAlpha;
+        };
+        Require(valid(desc.blend.srcColor, BlendFactor::SrcAlphaSaturate) &&
+                    valid(desc.blend.dstColor, BlendFactor::SrcAlphaSaturate) &&
+                    alphaFactor(desc.blend.srcAlpha) && alphaFactor(desc.blend.dstAlpha) &&
+                    valid(desc.blend.colorOp, BlendOp::Max) &&
+                    valid(desc.blend.alphaOp, BlendOp::Max),
+                "Invalid blend state or unsupported alpha factor");
+        for (const auto& face : {desc.stencil.front, desc.stencil.back})
+            Require(valid(face.compare, CompareOp::Always) &&
+                        valid(face.fail, StencilOp::DecrementWrap) &&
+                        valid(face.depthFail, StencilOp::DecrementWrap) &&
+                        valid(face.pass, StencilOp::DecrementWrap),
+                    "Invalid stencil state");
         CheckOwner(desc.vertex);
         CheckOwner(desc.pixel);
         Require(desc.vertex->stage == ShaderStage::Vertex &&
@@ -115,7 +148,7 @@ void Runtime::Validate(const std::shared_ptr<BindingLayout>& layout,
             Require(!b.sampler, "Texture slot contains sampler");
             Require(entry.kind != BindingKind::StorageTexture || b.view->texture->desc.storage,
                     "Storage binding requires storage texture");
-            Require(b.view->texture->desc.format != Format::D32, "M1 depth sampling unsupported");
+            Require(!IsDepthFormat(b.view->texture->desc.format), "M1 depth sampling unsupported");
         }
     }
 }

@@ -56,10 +56,17 @@ enum class Use
     Index,
     Indirect
 };
-enum class DepthAccess
+enum class AttachmentAccess
 {
     ReadWrite,
     ReadOnly
+};
+/** @brief Per-aspect initialization and permissions; combined resources are tracked conservatively.
+ */
+struct AttachmentAspect
+{
+    rhi::LoadOp load = rhi::LoadOp::Clear;
+    AttachmentAccess access = AttachmentAccess::ReadWrite;
 };
 enum class Coverage
 {
@@ -70,7 +77,8 @@ enum class Aspect
 {
     Auto,
     Color,
-    Depth
+    Depth,
+    DepthStencil
 };
 struct TextureRange
 {

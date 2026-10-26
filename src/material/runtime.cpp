@@ -67,11 +67,16 @@ Prepared Runtime::Prepare(std::shared_ptr<const shader::Package> package, const 
     rhi::PipelineDesc desc;
     desc.layout = generation->layouts.at(pass.name);
     desc.color = preparation.color;
-    desc.depth = preparation.depth.value_or(pass.depth);
-    desc.blend = preparation.blend.value_or(pass.blend);
-    desc.depthWrite = preparation.depthWrite.value_or(!desc.blend);
-    desc.cull = preparation.cull.value_or(pass.cull);
-    desc.frontCounterClockwise = preparation.frontCounterClockwise.value_or(true);
+    desc.depth.testEnabled = preparation.depth.value_or(pass.depth);
+    desc.depth.writeEnabled = preparation.depthWrite.value_or(desc.depth.testEnabled);
+    if (desc.depth.testEnabled || desc.depth.writeEnabled)
+        desc.depthStencilFormat = rhi::Format::D32;
+    desc.blend.enabled = preparation.blend.value_or(pass.blend);
+    desc.raster.cull =
+        preparation.cull.value_or(pass.cull) ? rhi::CullMode::Back : rhi::CullMode::None;
+    desc.raster.frontFace = preparation.frontCounterClockwise.value_or(true)
+                                ? rhi::FrontFace::CounterClockwise
+                                : rhi::FrontFace::Clockwise;
     desc.vertexStride = preparation.vertexStride;
     desc.attributes = preparation.attributes;
     for (const auto& entry : pass.entries)

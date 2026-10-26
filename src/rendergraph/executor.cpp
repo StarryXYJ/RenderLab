@@ -90,7 +90,8 @@ void Graph::Record()
                 g.commands->Begin(color.view,
                                   pass.depth ? g.resources[pass.depth->resource].view : nullptr,
                                   pass.color->clear, pass.color->load,
-                                  pass.depth ? pass.depth->load : rhi::LoadOp::Clear);
+                                  pass.depth ? pass.depth->load : rhi::LoadOp::Clear,
+                                  pass.stencilLoad, pass.clearStencil);
             }
             g.active = scheduled.pass;
             if (pass.kind == PassKind::Raster)

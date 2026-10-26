@@ -24,8 +24,10 @@ void BindingContext::Bind(std::shared_ptr<rhi::Pipeline> pipeline)
     Require(pipeline && ((g.passes[pass_].kind == PassKind::Compute && pipeline->desc.compute) ||
                          (g.passes[pass_].kind == PassKind::Raster && !pipeline->desc.compute)),
             "Pipeline kind does not match pass");
-    Require(!g.passes[pass_].depthReadOnly || !pipeline->desc.depthWrite,
+    Require(!g.passes[pass_].depthReadOnly || !pipeline->desc.depth.writeEnabled,
             "Read-only depth attachment requires depth writes disabled");
+    Require(!g.passes[pass_].stencilReadOnly || !pipeline->desc.stencil.Writes(),
+            "Read-only stencil attachment requires stencil writes disabled");
     commands_.Bind(pipeline);
     pipeline_ = std::move(pipeline);
     bindings_.clear();
@@ -104,6 +106,11 @@ void BindingContext::FlushBindings()
         commands_.Bind(std::move(group));
         dirty_ = false;
     }
+}
+void RasterContext::StencilReference(uint32_t reference)
+{
+    graph_.impl_->Scope(pass_);
+    commands_.StencilReference(reference);
 }
 void RasterContext::Geometry(BufferHandle vertices, BufferHandle indices)
 {

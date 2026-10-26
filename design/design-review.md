@@ -113,4 +113,6 @@ Lit/Unlit 保持普通 Shader 资产，表面值、光栅 SampleGrad 上下文�
 
 用户指出精确名称匹配与共享 HLSL 全局名的耦合。[v2 提案](shader-material-v2.md) 参考 Unity 的固定状态、Surface/Blend 策略和结构体参数求值，采用类型化 Pass role、显式状态及接口绑定 handle。资源 symbol 仅是局部作者名称，稳定 PropertyId/SchemaId 承担数据身份；普通 bool/enum 为 uniform，keyword 特性才生成有界的局部静态轴。透明分类、Blend、DepthWrite 与静态变体分别管理，标准配方提供默认值，显式 Pass 覆盖保持权威。
 
-保留已有固定布局、不可变快照、整代热重载和有界 PSO 生命周期；不复制完整 ShaderLab，不加全局关键字或通用表达式 DSL。模板测试必须配套真实深度模板格式、动态 reference 与 Graph 的各面访问/初始化，不能以语法存在视为实现。当前仅完成提案，运行时与 M4 验收结果未改变，实施和回归要求统一登记在阶段计划。
+保留已有固定布局、不可变快照、整代热重载和有界 PSO 生命周期；不复制完整 ShaderLab，不加全局关键字或通用表达式 DSL。模板测试必须配套真实深度模板格式、动态 reference 与 Graph 的各面访问/初始化，不能以语法存在视为实现。实施和回归要求统一登记在阶段计划。
+
+实施复查将 R1.1 分为 RHI/Graph 和作者层两步。附件格式与状态正交；无深度测试但需写入时统一映射 Always。Graph 暂不拆模板平面的版本与布局，采用整附件保守依赖和逐面初始化/权限检查，任一 Load 都保留旧 producer，避免清深度时丢失模板。该基础独立验证后，再接入材质属性引用，减少临时兼容接口。

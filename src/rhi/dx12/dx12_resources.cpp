@@ -51,7 +51,7 @@ std::shared_ptr<Texture> DxRuntime::CreateTexture(const TextureDesc& desc)
     support.Format = resource.Format;
     Check(device_->CheckFeatureSupport(D3D12_FEATURE_FORMAT_SUPPORT, &support, sizeof(support)),
           "Texture format support");
-    const auto required = desc.format == Format::D32
+    const auto required = IsDepthFormat(desc.format)
                               ? D3D12_FORMAT_SUPPORT1_DEPTH_STENCIL
                               : D3D12_FORMAT_SUPPORT1_SHADER_LOAD |
                                     (desc.attachment ? D3D12_FORMAT_SUPPORT1_RENDER_TARGET
@@ -62,7 +62,7 @@ std::shared_ptr<Texture> DxRuntime::CreateTexture(const TextureDesc& desc)
     if (desc.storage)
         resource.Flags |= D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
     if (desc.attachment)
-        resource.Flags |= desc.format == Format::D32 ? D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL
+        resource.Flags |= IsDepthFormat(desc.format) ? D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL
                                                      : D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
     D3D12_HEAP_PROPERTIES heap{};
     heap.Type = D3D12_HEAP_TYPE_DEFAULT;
@@ -70,7 +70,7 @@ std::shared_ptr<Texture> DxRuntime::CreateTexture(const TextureDesc& desc)
                             device_->GetResourceAllocationInfo(0, 1, &resource).SizeInBytes);
     D3D12_CLEAR_VALUE clear{};
     clear.Format = resource.Format;
-    if (desc.format != Format::D32)
+    if (!IsDepthFormat(desc.format))
     {
         clear.Color[0] = clear.Color[1] = clear.Color[2] = .02f;
         clear.Color[3] = 1;
@@ -89,7 +89,7 @@ std::shared_ptr<TextureView> DxRuntime::CreateView(std::shared_ptr<Texture> text
     auto view = std::make_shared<DxView>(texture);
     if (texture->desc.attachment)
     {
-        const bool depth = texture->desc.format == Format::D32;
+        const bool depth = IsDepthFormat(texture->desc.format);
         D3D12_DESCRIPTOR_HEAP_DESC heap{};
         heap.NumDescriptors = 1;
         heap.Type = depth ? D3D12_DESCRIPTOR_HEAP_TYPE_DSV : D3D12_DESCRIPTOR_HEAP_TYPE_RTV;

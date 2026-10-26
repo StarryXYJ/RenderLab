@@ -106,8 +106,17 @@ std::shared_ptr<Runtime::Submission> DxRuntime::Execute(const CommandList& comma
                     list->OMSetRenderTargets(1, &rtv, FALSE, c.depth ? &dsv : nullptr);
                     if (c.colorLoad == LoadOp::Clear)
                         list->ClearRenderTargetView(rtv, c.clear.data(), 0, nullptr);
-                    if (c.depth && c.depthLoad == LoadOp::Clear)
-                        list->ClearDepthStencilView(dsv, D3D12_CLEAR_FLAG_DEPTH, 0, 0, 0, nullptr);
+                    if (c.depth)
+                    {
+                        UINT flags = c.depthLoad == LoadOp::Clear ? D3D12_CLEAR_FLAG_DEPTH : 0;
+                        if (HasStencil(c.depth->texture->desc.format) &&
+                            c.stencilLoad == LoadOp::Clear)
+                            flags |= D3D12_CLEAR_FLAG_STENCIL;
+                        if (flags)
+                            list->ClearDepthStencilView(dsv, static_cast<D3D12_CLEAR_FLAGS>(flags),
+                                                        0, static_cast<UINT8>(c.clearStencil), 0,
+                                                        nullptr);
+                    }
                     const auto& desc = c.color->texture->desc;
                     D3D12_VIEWPORT viewport{0, 0, float(desc.width), float(desc.height), 0, 1};
                     D3D12_RECT scissor{0, 0, static_cast<LONG>(desc.width),
@@ -124,8 +133,13 @@ std::shared_ptr<Runtime::Submission> DxRuntime::Execute(const CommandList& comma
                     if (compute)
                         list->SetComputeRootSignature(root);
                     else
+                    {
                         list->SetGraphicsRootSignature(root);
+                        list->OMSetStencilRef(0);
+                    }
                 }
+                else if constexpr (std::is_same_v<T, SetStencilReference>)
+                    list->OMSetStencilRef(c.reference);
                 else if constexpr (std::is_same_v<T, SetBindings>)
                 {
                     auto& group = As<DxGroup>(c.group);
