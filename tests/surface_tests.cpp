@@ -7,7 +7,7 @@
 #include "rhi/device.hpp"
 #include "rhi/runtime.hpp"
 #include "rhi/upload.hpp"
-#include "samples/image_io.hpp"
+#include "samples/common/image_io.hpp"
 #include "shader/compiler.hpp"
 
 #include <algorithm>

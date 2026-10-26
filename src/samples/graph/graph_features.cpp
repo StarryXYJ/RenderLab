@@ -1,4 +1,4 @@
-#include "samples/detail/graph_features.hpp"
+#include "samples/graph/graph_features.hpp"
 #include "rendergraph/graph.hpp"
 
 namespace renderlab::samples::detail

@@ -2,7 +2,7 @@
 #include "apps/sandbox/statistics.hpp"
 #include "platform/text.hpp"
 #include "rhi/upload.hpp"
-#include "samples/image_io.hpp"
+#include "samples/common/image_io.hpp"
 
 #include <chrono>
 

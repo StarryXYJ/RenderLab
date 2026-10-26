@@ -11,10 +11,10 @@
 #include "rhi/commands.hpp"
 #include "rhi/device.hpp"
 #include "rhi/runtime.hpp"
-#include "samples/graph_demo.hpp"
-#include "samples/rhi_acceptance.hpp"
-#include "samples/rhi_demo.hpp"
-#include "samples/scene_acceptance.hpp"
+#include "samples/graph/graph_demo.hpp"
+#include "samples/rhi/rhi_acceptance.hpp"
+#include "samples/rhi/rhi_demo.hpp"
+#include "samples/scene/scene_acceptance.hpp"
 
 #include <Windows.h>
 #include <objbase.h>

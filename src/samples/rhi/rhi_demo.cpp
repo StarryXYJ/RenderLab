@@ -1,13 +1,13 @@
-#include "samples/rhi_demo.hpp"
+#include "samples/rhi/rhi_demo.hpp"
 
 #include "core/log.hpp"
 #include "platform/text.hpp"
 #include "rhi/commands.hpp"
 #include "rhi/runtime.hpp"
 #include "rhi/upload.hpp"
-#include "samples/detail/check.hpp"
-#include "samples/detail/demo_geometry.hpp"
-#include "samples/shader_io.hpp"
+#include "samples/common/check.hpp"
+#include "samples/common/demo_geometry.hpp"
+#include "samples/common/shader_io.hpp"
 
 #include <array>
 #include <cstddef>

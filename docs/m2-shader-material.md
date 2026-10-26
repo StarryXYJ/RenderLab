@@ -140,7 +140,7 @@ Prepare 必须在 Runtime 创建线程执行。它复用当前代的 ShaderModul
 
 普通参数改变只更新常量/绑定，静态属性按 Pass 的 VariantKey 选择程序，depth/blend/cull/stencil 来自 Pass 配方和字段覆盖。Preparation 指定真实附件格式与镜像绕序修正。PSO key 包含不可变 Shader/布局身份、全部顶点属性/stride、附件格式和完整不可变状态；动态 StencilRef 不进入 key。新代创建新模块身份，不能命中旧代 PSO；普通数值变化不进入 key。缓存最多 256 个弱引用，GPU 代查找最多 64 个弱引用，淘汰查找项不影响仍被命令保活的对象。超限后再次请求可能重建，不保证永久命中。
 
-调用方显式录制 `snapshot.constants` 的 HostWrite → UniformRead 屏障，直接 RHI 路径使用 runtime.CreateGroup(snapshot.pipeline->desc.layout, snapshot.resources) 建立 BindingGroup，再绑定 Pipeline/BindingGroup。外部上传常量、只读缓冲、UAV 和纹理状态也由调用方负责；Prepare 不插入屏障，不维护第二套资源状态机。Execute 只使用准备好的对象录制命令。完整样例见 `src/samples/material_demo.cpp`。
+调用方显式录制 `snapshot.constants` 的 HostWrite → UniformRead 屏障，直接 RHI 路径使用 runtime.CreateGroup(snapshot.pipeline->desc.layout, snapshot.resources) 建立 BindingGroup，再绑定 Pipeline/BindingGroup。外部上传常量、只读缓冲、UAV 和纹理状态也由调用方负责；Prepare 不插入屏障，不维护第二套资源状态机。Execute 只使用准备好的对象录制命令。完整样例见 `src/samples/material/material_demo.cpp`。
 
 ## 热重载事务
 

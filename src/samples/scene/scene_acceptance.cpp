@@ -1,12 +1,12 @@
-#include "samples/scene_acceptance.hpp"
+#include "samples/scene/scene_acceptance.hpp"
 
 #include "assets/io.hpp"
 #include "core/log.hpp"
 #include "renderer/scene_renderer.hpp"
 #include "rhi/runtime.hpp"
 #include "rhi/upload.hpp"
-#include "samples/detail/check.hpp"
-#include "samples/image_io.hpp"
+#include "samples/common/check.hpp"
+#include "samples/common/image_io.hpp"
 
 #include <algorithm>
 #include <cstring>

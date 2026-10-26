@@ -1,12 +1,12 @@
-#include "samples/rhi_acceptance.hpp"
+#include "samples/rhi/rhi_acceptance.hpp"
 
 #include "rhi/commands.hpp"
 #include "rhi/runtime.hpp"
 #include "rhi/upload.hpp"
-#include "samples/detail/check.hpp"
-#include "samples/image_io.hpp"
-#include "samples/rhi_contract_checks.hpp"
-#include "samples/rhi_demo.hpp"
+#include "samples/common/check.hpp"
+#include "samples/common/image_io.hpp"
+#include "samples/rhi/rhi_contract_checks.hpp"
+#include "samples/rhi/rhi_demo.hpp"
 
 #include <array>
 #include <cmath>

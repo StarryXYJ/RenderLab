@@ -1,9 +1,9 @@
-#include "samples/rhi_contract_checks.hpp"
+#include "samples/rhi/rhi_contract_checks.hpp"
 
 #include "rhi/commands.hpp"
 #include "rhi/runtime.hpp"
 #include "rhi/upload.hpp"
-#include "samples/detail/check.hpp"
+#include "samples/common/check.hpp"
 
 #include <algorithm>
 #include <array>

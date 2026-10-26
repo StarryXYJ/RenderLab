@@ -129,8 +129,8 @@ target_include_directories(renderlab_material PUBLIC src)
 target_link_libraries(renderlab_material PRIVATE renderlab_options renderlab_shader renderlab_rhi
     renderlab_platform renderlab_core nlohmann_json::nlohmann_json)
 
-add_executable(renderlab_material_demo src/tools/material_demo/main.cpp src/samples/material_demo.cpp
-    src/samples/material_readback.cpp src/samples/material_compute.cpp src/samples/material_reload.cpp)
+add_executable(renderlab_material_demo src/tools/material_demo/main.cpp src/samples/material/material_demo.cpp
+    src/samples/material/material_readback.cpp src/samples/material/material_compute.cpp src/samples/material/material_reload.cpp)
 target_link_libraries(renderlab_material_demo PRIVATE renderlab_options renderlab_material
     renderlab_shader renderlab_rhi renderlab_core renderlab_platform)
 add_custom_command(TARGET renderlab_material_demo POST_BUILD
@@ -147,18 +147,18 @@ add_executable(renderlab_sandbox src/apps/sandbox/main.cpp)
 add_executable(renderlab_player src/apps/sandbox/main.cpp)
 target_compile_definitions(renderlab_player PRIVATE RENDERLAB_PLAYER=1)
 add_library(renderlab_samples STATIC
-    src/samples/rhi_demo.cpp
-    src/samples/demo_geometry.cpp
-    src/samples/image_io.cpp
-    src/samples/graph_demo.cpp
-    src/samples/graph_features.cpp
-    src/samples/scene_acceptance.cpp
-    src/samples/forward_acceptance.cpp
-    src/samples/graph_acceptance.cpp
-    src/samples/graph_buffer_checks.cpp
-    src/samples/rhi_acceptance.cpp
-    src/samples/rhi_contract_checks.cpp
-    src/samples/shader_io.cpp)
+    src/samples/rhi/rhi_demo.cpp
+    src/samples/common/demo_geometry.cpp
+    src/samples/common/image_io.cpp
+    src/samples/graph/graph_demo.cpp
+    src/samples/graph/graph_features.cpp
+    src/samples/scene/scene_acceptance.cpp
+    src/samples/graph/forward_acceptance.cpp
+    src/samples/graph/graph_acceptance.cpp
+    src/samples/graph/graph_buffer_checks.cpp
+    src/samples/rhi/rhi_acceptance.cpp
+    src/samples/rhi/rhi_contract_checks.cpp
+    src/samples/common/shader_io.cpp)
 target_include_directories(renderlab_samples PUBLIC src)
 target_link_libraries(renderlab_samples PRIVATE renderlab_options renderlab_rhi renderlab_core renderlab_platform renderlab_rendergraph renderlab_renderer)
 add_dependencies(renderlab_sandbox renderlab_m1_shaders renderlab_m3_shaders)

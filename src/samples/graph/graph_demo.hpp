@@ -3,7 +3,7 @@
 #include "core/log.hpp"
 #include "rendergraph/graph.hpp"
 #include "rendergraph/pool.hpp"
-#include "samples/detail/demo_geometry.hpp"
+#include "samples/common/demo_geometry.hpp"
 
 #include <filesystem>
 #include <map>

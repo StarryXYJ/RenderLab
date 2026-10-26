@@ -7,10 +7,10 @@
 #include "rendergraph/pool.hpp"
 #include "rhi/runtime.hpp"
 #include "rhi/upload.hpp"
-#include "samples/detail/check.hpp"
-#include "samples/detail/graph_features.hpp"
-#include "samples/rhi_demo.hpp"
-#include "samples/shader_io.hpp"
+#include "samples/common/check.hpp"
+#include "samples/graph/graph_features.hpp"
+#include "samples/rhi/rhi_demo.hpp"
+#include "samples/common/shader_io.hpp"
 
 #include <cstring>
 #include <filesystem>

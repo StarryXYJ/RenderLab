@@ -5,7 +5,7 @@
 ## 当前状态
 
 - 当前实施阶段：M0–M4、R1 DONE；M4.1–M4.5 与 R1.1–R1.4 全部完成。
-- 当前工作项：R1 DONE；类型化状态、静态轴、参数接口和资产迁移均完成，无进行中的实施子阶段；M5 NOT_STARTED。
+- 当前工作项：B1 IN_PROGRESS；先清理一次性脚本并整理 samples，再扩展可重复 benchmark/分析工具；M5 NOT_STARTED。
 - 用户约定：每个子阶段验收完成即提交 Git，无阻塞时在当前授权范围内继续推进；M4.3 提交 c50ee6a、M4.4 提交 40d0c12、M4.5 提交 9a4b2e4。
 - Demo 的 Custom 示例作为回归入口保留；M4 场景示例使用 Forward 组合与现有 Shader/Material 链路。
 
@@ -17,6 +17,7 @@
 | M3 | 单队列 Render Graph | M2 | DONE |
 | M4 | 场景资源与基础 Renderer | M3 | DONE |
 | R1 | Shader/Material 契约修订 | M4 | DONE |
+| B1 | 样例整理与可扩展 Benchmark | M4、R1 | IN_PROGRESS |
 | M5 | Deferred 与光追基础 | M4 | NOT_STARTED |
 | M6 | GPU Driven 与执行优化 | M4；光追调度测试另需 M5 | NOT_STARTED |
 | M7 | C# 编辑器与完整项目工作流 | M4；默认在 M5、M6 的核心目标后开展 | NOT_STARTED |
@@ -184,6 +185,28 @@ DONE：Schema ID/version/type/布局 hash、模块绑定别名、生成 C++ POD/
 ### R1.4 全量迁移与回归
 
 DONE：Shader sidecar UUID、材质 v2、类型化 MaterialSemantic 导入桥；内置/项目 Shader、M2 工具和 M4 样例统一迁移，缓存生成器升级，旧入口明确拒绝。Schema JSON 输出属性语义。shader.contracts 覆盖 sidecar 依赖/身份冲突、语义类型/唯一性、v1 拒绝；gpu.*.surface 在 Shader 显示名、路径、Pass、属性 symbol、模块/资源别名与 HLSL 文件全部改名、camera/shadow 启用恒等 stencil 后像素一致。完整 Debug/Release 与独立安装验收均通过，结果和限制见主阶段汇总。
+
+## B1 样例整理与可扩展 Benchmark
+
+状态：IN_PROGRESS；用户授权清理中间脚本、分类 src/samples，扩展场景性能测量和双后端 PBR 分析，M5 不在范围内。
+
+### B1.1 清理与目录整理
+
+DONE（2026 年 10 月 26 日）：删除 out 顶层 18 个一次性生成/迁移 Python 脚本；28 个样例文件分类到 common/rhi/graph/material/scene，更新 include/CMake/文档。RTX 5060 的标准 Debug 构建与完整 CTest 40/40 通过，DX12/Vulkan validation error 为 0。
+
+### B1.2 运行时测量与原始数据
+
+- [ ] 保留按帧模式，新增按秒测量、独立预热预算，固定相机与相同场景配置。
+- [ ] 明确 CPU render、GPU wait、离线帧时间和 GPU Pass 范围；流式 JSONL 原始样本与版本化 JSON 汇总、设备/构建/测量元数据。
+- [ ] CLI/测量边界及双后端 Debug/Release 验证。
+
+### B1.3 批量执行与分析
+
+- [ ] Python 配置驱动场景/后端/重复次数顺序执行，保存命令、退出状态、可核对的运行清单。
+- [ ] 聚合逐帧分布/分位数、每次运行与重复间差异，导出 JSON/CSV/报告及标准绘图库图表；缺失/失败/不匹配配置明确诊断。
+- [ ] 提供 PBR DX12/Vulkan 对比配置与实际 Release/validation off 运行记录。
+
+退出条件：上述行为验证通过；记录计时边界、实际硬件和结果，阶段完成后提交 Git。
 
 ## M5 Deferred 与光追基础
 

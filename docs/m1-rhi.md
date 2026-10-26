@@ -1,6 +1,6 @@
 # M1 最小双后端 RHI
 
-公共接口按下表组织，可运行的 API 使用示例位于 `src/samples/rhi_demo.cpp`，构建与复现见 [构建与运行](../manual/build.md)。本层不依赖 Shader 资产系统、Render Graph 或 Renderer。
+公共接口按下表组织，可运行的 API 使用示例位于 `src/samples/rhi/rhi_demo.cpp`，构建与复现见 [构建与运行](../manual/build.md)。本层不依赖 Shader 资产系统、Render Graph 或 Renderer。
 
 ## 文件职责与依赖
 
@@ -18,7 +18,7 @@ DX12/Vulkan 后端采用相同文件边界：`*_device.cpp` 做设备发现与�
 
 一个后端仍只有一个 Runtime 类，相关方法在对应职责的 `.cpp` 中以类外定义实现；每个 `.cpp` 独立编译，不包含其他 `.cpp` 或依赖文本拼接的 partial/inl 片段。没有新增 Manager、重复状态机或单独的队列/资源所有者。
 
-样例与验收分别组织：`rhi_demo.cpp` 准备和录制场景；`rhi_acceptance.cpp` 的 `VerifyRhi()` 读取场景输出并核验图像/查询；`rhi_contract_checks.cpp` 核验传输、保活和上传复用。场景通过 `GetNoiseTexture()` 提供处于 Sampled 状态的借用输出，验收执行后恢复该状态。Shader 文件读取位于 `samples/shader_io.cpp`，RHI 只接收已编译字节和入口名。Sandbox 的 `main.cpp` 负责启动、参数与报告，`presentation.cpp` 负责窗口事件、FrameContext 和展示循环。
+样例与验收分别组织：`rhi_demo.cpp` 准备和录制场景；`rhi_acceptance.cpp` 的 `VerifyRhi()` 读取场景输出并核验图像/查询；`rhi_contract_checks.cpp` 核验传输、保活和上传复用。场景通过 `GetNoiseTexture()` 提供处于 Sampled 状态的借用输出，验收执行后恢复该状态。Shader 文件读取位于 `samples/common/shader_io.cpp`，RHI 只接收已编译字节和入口名。Sandbox 的 `main.cpp` 负责启动、参数与报告，`presentation.cpp` 负责窗口事件、FrameContext 和展示循环。
 
 ## 设备、对象与提交
 

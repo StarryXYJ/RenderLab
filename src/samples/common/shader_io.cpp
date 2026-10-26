@@ -1,4 +1,4 @@
-#include "samples/shader_io.hpp"
+#include "samples/common/shader_io.hpp"
 
 #include "platform/text.hpp"
 

@@ -1,9 +1,9 @@
-#include "samples/graph_demo.hpp"
+#include "samples/graph/graph_demo.hpp"
 
 #include "core/file_io.hpp"
 #include "platform/text.hpp"
-#include "samples/detail/check.hpp"
-#include "samples/shader_io.hpp"
+#include "samples/common/check.hpp"
+#include "samples/common/shader_io.hpp"
 
 #include <array>
 #include <cstring>

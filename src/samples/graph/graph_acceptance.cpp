@@ -1,12 +1,12 @@
-#include "samples/graph_demo.hpp"
+#include "samples/graph/graph_demo.hpp"
 
 #include "core/file_io.hpp"
 #include "core/hash.hpp"
 #include "rhi/commands.hpp"
 #include "rhi/upload.hpp"
-#include "samples/detail/check.hpp"
-#include "samples/image_io.hpp"
-#include "samples/rhi_demo.hpp"
+#include "samples/common/check.hpp"
+#include "samples/common/image_io.hpp"
+#include "samples/rhi/rhi_demo.hpp"
 
 #include <cstring>
 #include <vector>

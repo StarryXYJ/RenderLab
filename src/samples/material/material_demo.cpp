@@ -1,9 +1,9 @@
-#include "samples/material_demo.hpp"
+#include "samples/material/material_demo.hpp"
 
 #include "rhi/commands.hpp"
 #include "rhi/upload.hpp"
-#include "samples/detail/check.hpp"
-#include "samples/detail/material_checks.hpp"
+#include "samples/common/check.hpp"
+#include "samples/material/material_checks.hpp"
 #include "shader/compiler.hpp"
 
 #include <array>

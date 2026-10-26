@@ -1,5 +1,5 @@
-#include "samples/detail/check.hpp"
-#include "samples/detail/material_checks.hpp"
+#include "samples/common/check.hpp"
+#include "samples/material/material_checks.hpp"
 
 #include "shader/reload.hpp"
 #include <chrono>

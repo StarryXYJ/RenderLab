@@ -1,4 +1,4 @@
-#include "samples/detail/demo_geometry.hpp"
+#include "samples/common/demo_geometry.hpp"
 #include "rhi/commands.hpp"
 #include "rhi/upload.hpp"
 

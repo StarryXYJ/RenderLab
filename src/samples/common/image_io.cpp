@@ -1,5 +1,5 @@
-#include "samples/image_io.hpp"
-#include "samples/detail/check.hpp"
+#include "samples/common/image_io.hpp"
+#include "samples/common/check.hpp"
 
 #include <array>
 #include <cstring>

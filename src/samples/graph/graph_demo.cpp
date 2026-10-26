@@ -1,11 +1,11 @@
-#include "samples/graph_demo.hpp"
+#include "samples/graph/graph_demo.hpp"
 
 #include "core/file_io.hpp"
 #include "platform/text.hpp"
 #include "renderer/pipeline.hpp"
 #include "rhi/upload.hpp"
-#include "samples/detail/graph_features.hpp"
-#include "samples/shader_io.hpp"
+#include "samples/graph/graph_features.hpp"
+#include "samples/common/shader_io.hpp"
 
 namespace renderlab::samples
 {

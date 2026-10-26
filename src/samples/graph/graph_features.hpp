@@ -2,7 +2,7 @@
 
 #include "renderer/feature.hpp"
 #include "rhi/resources.hpp"
-#include "samples/detail/demo_geometry.hpp"
+#include "samples/common/demo_geometry.hpp"
 
 #include <cstdint>
 #include <memory>
