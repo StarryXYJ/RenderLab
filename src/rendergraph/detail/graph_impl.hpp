@@ -65,7 +65,8 @@ struct Pass
     PassKind kind;
     bool sideEffect = false;
     std::vector<Access> accesses;
-    std::optional<Attachment> color, depth;
+    std::vector<Attachment> colors;
+    std::optional<Attachment> depth;
     Callback callback;
     bool depthReadOnly = false, stencilReadOnly = false;
     rhi::LoadOp stencilLoad = rhi::LoadOp::Clear;

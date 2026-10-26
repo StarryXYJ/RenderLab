@@ -17,6 +17,8 @@ namespace renderlab::sandbox
 renderer::SceneRenderOptions RenderOptions(const Options& options)
 {
     renderer::SceneRenderOptions render;
+    render.pipeline = options.pipeline == "deferred" ? renderer::PipelineType::Deferred
+                                                       : renderer::PipelineType::Forward;
     render.profile = options.debugPanel || !options.profilePath.empty() || options.Benchmark();
     if (options.quality != "scene")
         render.shadowResolution = options.quality == "low"      ? 128u
@@ -110,6 +112,7 @@ void Statistics::Save(const std::filesystem::path& path, const Options& options,
                           {"height", options.height},
                           {"quality", options.quality},
                           {"view", options.view},
+                          {"pipeline", options.pipeline},
                           {"warmupFrames", options.Benchmark() ? options.warmupFrames : 0},
                           {"cpuRender", summary(cpu_)},
                           {"graphCompile", summary(compile_)},

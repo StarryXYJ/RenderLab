@@ -48,7 +48,7 @@ void Graph::Impl::ValidateState(const detail::Resource& r, rhi::State state) con
         valid = state == rhi::State::Undefined || state == rhi::State::CopySource ||
                 state == rhi::State::CopyDest ||
                 (state == rhi::State::Storage && r.textureDesc.storage) ||
-                (state == rhi::State::Sampled && !rhi::IsDepthFormat(r.textureDesc.format)) ||
+                state == rhi::State::Sampled ||
                 (state == rhi::State::ColorAttachment && r.textureDesc.attachment &&
                  !rhi::IsDepthFormat(r.textureDesc.format)) ||
                 (state == rhi::State::DepthWrite && r.textureDesc.attachment &&
@@ -95,8 +95,6 @@ void Graph::Impl::ValidateUse(uint32_t index, const detail::Resource& r, Use use
         Require((use != Use::Depth && use != Use::DepthRead) ||
                     (r.textureDesc.attachment && rhi::IsDepthFormat(r.textureDesc.format)),
                 "Invalid depth attachment" + suffix);
-        Require(use != Use::Sampled || !rhi::IsDepthFormat(r.textureDesc.format),
-                "Depth sampling is not implemented in current RHI" + suffix);
         Require((use != Use::CopySource && use != Use::CopyDestination) ||
                     !rhi::IsDepthFormat(r.textureDesc.format),
                 "Depth/stencil copies are not implemented" + suffix);

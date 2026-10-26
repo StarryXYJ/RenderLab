@@ -16,7 +16,7 @@ namespace renderlab::samples
 {
 void VerifyScene(rhi::Runtime& runtime, shader::Target target, const std::filesystem::path& project,
                  const std::filesystem::path& engine, const std::filesystem::path& output,
-                 Logger& logger, bool validate)
+                 Logger& logger, renderer::PipelineType pipeline, bool validate)
 {
     std::filesystem::create_directories(output);
     renderer::SceneRenderer renderer(runtime, target, project, engine);
@@ -25,8 +25,10 @@ void VerifyScene(rhi::Runtime& runtime, shader::Target target, const std::filesy
     auto initial = rhi::State::Undefined;
     const auto render = [&](const std::string& name)
     {
-        auto result =
-            renderer.Render(color, initial, nullptr, true, output / (name + "-plan.json"));
+        ::renderlab::renderer::SceneRenderOptions options;
+        options.pipeline = pipeline;
+        auto result = renderer.Render(color, initial, nullptr, true,
+                                      output / (name + "-plan.json"), options);
         runtime.Wait(result.completion);
         initial = rhi::State::CopySource;
         const auto bytes = result.pixels->Map();

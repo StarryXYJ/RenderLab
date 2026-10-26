@@ -54,7 +54,7 @@ void BindingContext::BindTexture(uint32_t slot, TextureHandle h, uint32_t space)
     const auto use = kind == rhi::BindingKind::SampledTexture ? Use::Sampled : Use::Storage;
     auto& r = g.Resolve(pass_, h.graph, h.resource, h.version, true, use);
     rhi::Binding b{slot};
-    b.view = r.view;
+    b.view = g.pool->Device().CreateView(r.texture, rhi::TextureViewUsage::Sampled);
     b.space = space;
     SetBinding(std::move(b));
 }

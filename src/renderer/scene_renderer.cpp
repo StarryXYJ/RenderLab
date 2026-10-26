@@ -56,6 +56,7 @@ struct SceneRenderer::Impl
     std::string environmentKey;
     std::array<float, 3> environmentAmbient{};
     std::shared_ptr<const shader::Package> toneMapping;
+    std::shared_ptr<const shader::Package> deferredLighting;
     std::shared_ptr<rhi::Buffer> fullscreen;
     std::shared_ptr<rhi::TextureView> offscreenDisplayView;
     struct MaterialInput
@@ -72,8 +73,12 @@ struct SceneRenderer::Impl
     material::Runtime materials;
     rendergraph::Pool pool;
     rhi::UploadPool uploadPool;
-    RenderPipeline pipeline =
+    RenderPipeline forwardPipeline =
         CreatePipeline(PipelineType::Forward)
+            .AddFeature(std::make_shared<ShadowFeature>(), RenderStage::BeforeOpaque)
+            .Create();
+    RenderPipeline deferredPipeline =
+        CreatePipeline(PipelineType::Deferred)
             .AddFeature(std::make_shared<ShadowFeature>(), RenderStage::BeforeOpaque)
             .Create();
     math::Mat4 shadowMatrix = math::Mat4::Identity();
@@ -122,6 +127,11 @@ struct SceneRenderer::Impl
         if (!display)
             throw std::runtime_error(display.diagnostics);
         toneMapping = display.package;
+        const auto lighting =
+            shader::CompileShader(builtinPath(builtin::DeferredLighting), options);
+        if (!lighting)
+            throw std::runtime_error(lighting.diagnostics);
+        deferredLighting = lighting.package;
         const std::array<float, 6> triangle{-1, -1, 3, -1, -1, 3};
         fullscreen =
             Upload(std::as_bytes(std::span{triangle}), "Display.Triangle", rhi::State::Vertex);
@@ -438,6 +448,9 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
     graph.ImportTexture("DisplayColor", target, {initial, initial != rhi::State::Undefined});
     graph.CreateTexture("CameraColor", {target->desc.width, target->desc.height,
                                         rhi::Format::Rgba32Float, false, true});
+    if (options.pipeline != PipelineType::Forward && options.pipeline != PipelineType::Deferred)
+        throw std::invalid_argument("Unknown or unavailable scene render pipeline");
+    const bool deferred = options.pipeline == PipelineType::Deferred;
     auto cameraDepthFormat = rhi::Format::D32;
     RenderFrame frame;
     const auto scan = [&](const std::vector<scene::Instance>& instances, shader::PassRole role,
@@ -450,8 +463,18 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
             if (mesh == model.meshes.end())
                 throw std::logic_error("Snapshot references missing mesh");
             const auto material = self.MaterialFor(instance, model.materials.at(mesh->material));
+            const auto policy = material::ResolvePolicy(material.package->definition, material.asset);
+            if (role == shader::PassRole::GBuffer &&
+                policy.surface == shader::SurfaceType::Transparent)
+                continue;
+            if (role == shader::PassRole::Forward && deferred &&
+                policy.surface != shader::SurfaceType::Transparent)
+                continue;
             if (role == shader::PassRole::ShadowCaster && !material.package->HasRole(role))
                 continue;
+            if (role == shader::PassRole::GBuffer && !material.package->HasRole(role))
+                throw std::invalid_argument("Deferred pipeline requires a GBuffer role in shader " +
+                                            material.package->definition.name);
             const auto& pass = material.package->GetPass(material.package->ResolvePass(role));
             if (material::PassEnabled(material.package->definition, pass, material.asset) &&
                 material::ResolveState(material.package->definition, pass, material.asset)
@@ -459,7 +482,10 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
                 format = rhi::Format::D32S8;
         }
     };
-    scan(self.snapshot.instances, shader::PassRole::Forward, cameraDepthFormat);
+    scan(self.snapshot.instances,
+         deferred ? shader::PassRole::GBuffer : shader::PassRole::Forward, cameraDepthFormat);
+    if (deferred)
+        scan(self.snapshot.instances, shader::PassRole::Forward, cameraDepthFormat);
     scan(self.snapshot.shadowCasters, shader::PassRole::ShadowCaster, frame.shadowDepthFormat);
     graph.CreateTexture("CameraDepth",
                         {target->desc.width, target->desc.height, cameraDepthFormat, false, true});
@@ -515,7 +541,7 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
         }
         return binding;
     };
-    const auto prepareDraw = [&](const scene::Instance& instance, bool shadow)
+    const auto prepareDraw = [&](const scene::Instance& instance, shader::PassRole requestedRole)
     {
         const auto& model = self.models.at(instance.model);
         const auto mesh = std::ranges::find(model.meshes, instance.mesh, &assets::Mesh::id);
@@ -523,18 +549,30 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
             throw std::logic_error("Snapshot references missing mesh");
         const auto& surface = model.materials.at(mesh->material);
         const auto material = self.MaterialFor(instance, surface);
-        const auto role = shadow ? shader::PassRole::ShadowCaster : shader::PassRole::Forward;
-        if (shadow && !material.package->HasRole(role))
+        const auto policy = material::ResolvePolicy(material.package->definition, material.asset);
+        auto role = requestedRole;
+        if (role == shader::PassRole::GBuffer &&
+            policy.surface == shader::SurfaceType::Transparent)
+            role = shader::PassRole::Forward;
+        if (role == shader::PassRole::ShadowCaster && !material.package->HasRole(role))
             return;
+        if (role == shader::PassRole::GBuffer && !material.package->HasRole(role))
+            throw std::invalid_argument("Deferred pipeline requires a GBuffer role in shader " +
+                                        material.package->definition.name);
         const auto& pass = material.package->GetPass(material.package->ResolvePass(role));
         if (!material::PassEnabled(material.package->definition, pass, material.asset))
             return;
-        const auto policy = material::ResolvePolicy(material.package->definition, material.asset);
         const bool transparent = policy.surface == shader::SurfaceType::Transparent;
         material::Preparation prepare;
         prepare.pass = role;
-        prepare.color = rhi::Format::Rgba32Float;
-        prepare.depthStencilFormat = shadow ? frame.shadowDepthFormat : cameraDepthFormat;
+        prepare.colorFormats = role == shader::PassRole::GBuffer
+                                   ? std::vector<rhi::Format>{rhi::Format::Rgba32Float,
+                                                             rhi::Format::Rgba32Float,
+                                                             rhi::Format::Rgba32Float}
+                                   : std::vector<rhi::Format>{rhi::Format::Rgba32Float};
+        prepare.depthStencilFormat = role == shader::PassRole::ShadowCaster
+                                         ? frame.shadowDepthFormat
+                                         : cameraDepthFormat;
         const auto& w = instance.world;
         const math::Vec3 x{w.At(0, 0), w.At(1, 0), w.At(2, 0)},
             y{w.At(0, 1), w.At(1, 1), w.At(2, 1)}, z{w.At(0, 2), w.At(1, 2), w.At(2, 2)};
@@ -620,18 +658,98 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
             const auto& resource = material.package->GetResource(*bindings.shadowMap);
             draw.textures.push_back({resource.slot, "MainLightShadow", uint32_t(resource.scope)});
         }
-        if (shadow)
+        if (role == shader::PassRole::ShadowCaster)
             frame.shadowCasters.push_back(std::move(draw));
+        else if (role == shader::PassRole::GBuffer)
+            frame.gbuffer.push_back(std::move(draw));
         else if (transparent)
             frame.transparent.push_back(std::move(draw));
         else
             frame.opaque.push_back(std::move(draw));
     };
     for (const auto& instance : self.snapshot.shadowCasters)
-        prepareDraw(instance, true);
+        prepareDraw(instance, shader::PassRole::ShadowCaster);
     for (const auto& instance : self.snapshot.instances)
-        prepareDraw(instance, false);
-    self.pipeline.Build(graph, frame);
+        prepareDraw(instance,
+                    deferred ? shader::PassRole::GBuffer : shader::PassRole::Forward);
+    if (deferred)
+    {
+        material::Preparation prepare;
+        prepare.pass = "DeferredLighting";
+        prepare.colorFormats = {rhi::Format::Rgba32Float};
+        prepare.vertexStride = 8;
+        prepare.attributes = {{"POSITION", 0, rhi::VertexFormat::Float2, 0}};
+        const auto pass = self.deferredLighting->ResolvePass(prepare.pass);
+        const auto bind = [&](const shader::BlockContract& contract,
+                              const rhi::UploadArena::Slice& slice)
+        {
+            const auto handle = self.deferredLighting->SchemaBinding(pass, contract);
+            if (!handle)
+                throw std::logic_error("Deferred lighting shader is missing a scene parameter block");
+            rhi::Binding value{};
+            value.buffer = slice.buffer;
+            value.offset = slice.offset;
+            value.size = slice.size;
+            prepare.bindings[*handle] = std::move(value);
+        };
+        using namespace shader::generated;
+        bind(SceneViewDataContract, frameConstants.view);
+        bind(SceneLightingDataContract, frameConstants.lighting);
+        bind(SceneShadowDataContract, frameConstants.shadow);
+        const auto inverse = math::Inverse(self.snapshot.viewProjection);
+        const std::vector<double> inverseValues(inverse.values.begin(), inverse.values.end());
+        prepare.constants[self.deferredLighting->BlockBinding(pass,
+                                                              "DeferredLightingParameters")] = {
+            {"InverseViewProjection", {"float4x4", 1, inverseValues}}};
+        for (const auto name : {"GBufferAlbedoMetallic", "GBufferNormalRoughness",
+                                "GBufferEmissionOcclusion", "CameraDepth", "EnvironmentAtlas",
+                                "BrdfLut", "MainLightShadow"})
+            prepare.deferredResources.insert(self.deferredLighting->ResourceBinding(pass, name));
+        auto prepared = self.materials.Prepare(
+            self.deferredLighting,
+            material::Create(shader::MaterialTemplate(self.deferredLighting)), prepare);
+        self.generations[self.deferredLighting.get()] = prepared.generation;
+        auto& draw = frame.deferredLighting;
+        draw.pipeline = prepared.pipeline;
+        draw.kind = DrawKind::Vertices;
+        draw.count = 3;
+        draw.vertices = importBuffer(self.fullscreen, "Display.Triangle", rhi::State::Vertex);
+        for (const auto& binding : prepared.resources)
+        {
+            const auto entry = std::ranges::find_if(
+                prepared.pipeline->desc.layout->entries, [&](const auto& value)
+                { return value.slot == binding.slot && value.space == binding.space; });
+            if (entry == prepared.pipeline->desc.layout->entries.end() || !binding.buffer)
+                throw std::logic_error("Deferred lighting binding layout mismatch");
+            const auto name = importBuffer(
+                binding.buffer, "Deferred.Lighting.Constants." + std::to_string(binding.space) +
+                                   "." + std::to_string(binding.slot),
+                rhi::State::HostWrite);
+            draw.buffers.push_back({binding.slot, name, rendergraph::Use::Uniform,
+                                    {binding.offset, binding.size}, binding.stride, binding.space});
+        }
+        const std::map<std::string, std::string> textureNames{
+            {"GBufferAlbedoMetallic", "GBuffer.AlbedoMetallic"},
+            {"GBufferNormalRoughness", "GBuffer.NormalRoughness"},
+            {"GBufferEmissionOcclusion", "GBuffer.EmissionOcclusion"},
+            {"CameraDepth", "CameraDepth"},
+            {"EnvironmentAtlas", importTexture(self.environmentAtlas)},
+            {"BrdfLut", importTexture(self.brdfLut)},
+            {"MainLightShadow", "MainLightShadow"}};
+        for (const auto& handle : prepared.deferredResources)
+        {
+            const auto& resource = self.deferredLighting->GetResource(handle);
+            const auto found = textureNames.find(resource.property.symbol);
+            if (found == textureNames.end())
+                throw std::logic_error("Unknown deferred lighting resource");
+            draw.textures.push_back(
+                {resource.slot, found->second, static_cast<uint32_t>(resource.scope)});
+        }
+    }
+    if (deferred)
+        self.deferredPipeline.Build(graph, frame);
+    else
+        self.forwardPipeline.Build(graph, frame);
     std::string displaySource = "CameraColor";
     if (options.view == SceneView::Shadow)
         displaySource = "MainLightShadow";
@@ -641,7 +759,7 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
         displaySource = importTexture(self.brdfLut);
     material::Preparation displayPreparation;
     displayPreparation.pass = "Display";
-    displayPreparation.color = target->desc.format;
+    displayPreparation.colorFormats = {target->desc.format};
     displayPreparation.vertexStride = 8;
     displayPreparation.attributes = {{"POSITION", 0, rhi::VertexFormat::Float2, 0}};
     const auto displayHandle = self.toneMapping->ResolvePass(displayPreparation.pass);

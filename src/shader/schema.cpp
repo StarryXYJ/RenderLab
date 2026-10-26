@@ -51,6 +51,7 @@ std::string SchemaToJson(const Package& package)
         Json pass{{"name", package.definition.passes[i].name}};
         const auto& definition = package.definition.passes[i];
         pass["role"] = definition.role == PassRole::Forward        ? "Forward"
+                       : definition.role == PassRole::GBuffer       ? "GBuffer"
                        : definition.role == PassRole::ShadowCaster ? "ShadowCaster"
                                                                    : "Custom";
         pass["statePreset"] = static_cast<int>(definition.state.preset);

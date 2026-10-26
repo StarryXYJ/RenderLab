@@ -44,8 +44,7 @@ std::shared_ptr<Texture> VulkanRuntime::CreateTexture(const TextureDesc& desc)
     info.samples = VK_SAMPLE_COUNT_1_BIT;
     info.tiling = VK_IMAGE_TILING_OPTIMAL;
     info.usage = VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
-    if (!IsDepthFormat(desc.format))
-        info.usage |= VK_IMAGE_USAGE_SAMPLED_BIT;
+    info.usage |= VK_IMAGE_USAGE_SAMPLED_BIT;
     if (desc.storage)
         info.usage |= VK_IMAGE_USAGE_STORAGE_BIT;
     if (desc.attachment)
@@ -53,8 +52,7 @@ std::shared_ptr<Texture> VulkanRuntime::CreateTexture(const TextureDesc& desc)
                                                  : VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
     VkFormatProperties props{};
     vkGetPhysicalDeviceFormatProperties(physical_, info.format, &props);
-    VkFormatFeatureFlags required =
-        IsDepthFormat(desc.format) ? 0 : VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT;
+    VkFormatFeatureFlags required = VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT;
     if (desc.storage)
         required |= VK_FORMAT_FEATURE_STORAGE_IMAGE_BIT;
     if (desc.attachment)
@@ -72,13 +70,19 @@ std::shared_ptr<Texture> VulkanRuntime::CreateTexture(const TextureDesc& desc)
     return texture;
 }
 
-std::shared_ptr<TextureView> VulkanRuntime::CreateView(std::shared_ptr<Texture> texture)
+std::shared_ptr<TextureView> VulkanRuntime::CreateView(std::shared_ptr<Texture> texture,
+                                                      TextureViewUsage usage)
 {
     CheckOwner(texture);
-    if (auto cached = texture->defaultView.lock())
+    if (usage == TextureViewUsage::Sampled)
+    {
+        if (auto cached = texture->sampledView.lock())
+            return cached;
+    }
+    else if (auto cached = texture->defaultView.lock())
         return cached;
     auto cpuTimer = ProfileCpu(CpuOperation::ViewCreate);
-    auto view = std::make_shared<VkView>(texture);
+    auto view = std::make_shared<VkView>(texture, usage);
     view->device = device_;
     VkImageViewCreateInfo info{};
     info.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
@@ -88,12 +92,17 @@ std::shared_ptr<TextureView> VulkanRuntime::CreateView(std::shared_ptr<Texture> 
     info.subresourceRange = {
         VkImageAspectFlags(
             IsDepthFormat(texture->desc.format)
-                ? VK_IMAGE_ASPECT_DEPTH_BIT |
-                      (HasStencil(texture->desc.format) ? VK_IMAGE_ASPECT_STENCIL_BIT : 0)
+                ? usage == TextureViewUsage::Sampled
+                      ? VK_IMAGE_ASPECT_DEPTH_BIT
+                      : VK_IMAGE_ASPECT_DEPTH_BIT |
+                            (HasStencil(texture->desc.format) ? VK_IMAGE_ASPECT_STENCIL_BIT : 0)
                 : VK_IMAGE_ASPECT_COLOR_BIT),
         0, 1, 0, 1};
     Check(vkCreateImageView(device_, &info, nullptr, &view->native), "vkCreateImageView");
-    texture->defaultView = view;
+    if (usage == TextureViewUsage::Sampled)
+        texture->sampledView = view;
+    else
+        texture->defaultView = view;
     return view;
 }
 

@@ -211,7 +211,10 @@ std::shared_ptr<BindingGroup> DxRuntime::CreateGroup(std::shared_ptr<BindingLayo
         else
         {
             D3D12_SHADER_RESOURCE_VIEW_DESC desc{};
-            desc.Format = NativeFormat(binding.view->texture->desc.format);
+            const auto format = binding.view->texture->desc.format;
+            desc.Format = format == Format::D32       ? DXGI_FORMAT_R32_FLOAT
+                          : format == Format::D32S8   ? DXGI_FORMAT_R32_FLOAT_X8X24_TYPELESS
+                                                     : NativeFormat(format);
             desc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
             desc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
             desc.Texture2D.MipLevels = 1;
@@ -282,8 +285,9 @@ std::shared_ptr<Pipeline> DxRuntime::CreatePipelineNative(PipelineDesc desc)
         state.DepthStencilState.BackFace = Native(desc.stencil.back);
         state.DepthStencilState.StencilReadMask = desc.stencil.readMask;
         state.DepthStencilState.StencilWriteMask = desc.stencil.writeMask;
-        state.NumRenderTargets = 1;
-        state.RTVFormats[0] = NativeFormat(desc.color);
+        state.NumRenderTargets = static_cast<UINT>(desc.colorFormats.size());
+        for (UINT i = 0; i < state.NumRenderTargets; ++i)
+            state.RTVFormats[i] = NativeFormat(desc.colorFormats[i]);
         state.DSVFormat =
             desc.depthStencilFormat ? NativeFormat(*desc.depthStencilFormat) : DXGI_FORMAT_UNKNOWN;
         state.SampleDesc.Count = 1;

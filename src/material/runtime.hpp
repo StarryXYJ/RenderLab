@@ -19,7 +19,7 @@ namespace renderlab::material
 struct Preparation
 {
     shader::PassSelection pass;
-    rhi::Format color = rhi::Format::Rgba8Srgb;
+    std::vector<rhi::Format> colorFormats{rhi::Format::Rgba8Srgb};
     uint32_t vertexStride = 0;
     std::vector<rhi::VertexAttribute> attributes;
     std::optional<rhi::Format> depthStencilFormat;

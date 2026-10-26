@@ -64,7 +64,7 @@ void VerifyForward(rhi::Runtime& runtime, const std::filesystem::path& shaders,
         runtime.CreateLayout({{1, BindingKind::SampledTexture}, {2, BindingKind::Sampler}});
     desc.vertex = shader(ShaderStage::Vertex, "vertex.bin", "VSMain");
     desc.pixel = shader(ShaderStage::Pixel, "pixel.bin", "PSMain");
-    desc.color = Format::Rgba8Srgb;
+    desc.colorFormats = {Format::Rgba8Srgb};
     desc.depthStencilFormat = rhi::Format::D32;
     desc.depth = {true, true};
     desc.vertexStride = sizeof(detail::DemoVertex);

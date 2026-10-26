@@ -98,28 +98,47 @@ void CommandList::CopyTexture(std::shared_ptr<Texture> source, std::shared_ptr<T
             "Texture copy dimensions/format mismatch");
     commands_.emplace_back(TextureToTextureCopy{std::move(source), std::move(destination)});
 }
-void CommandList::Begin(std::shared_ptr<TextureView> color, std::shared_ptr<TextureView> depth,
+void CommandList::Begin(std::vector<std::shared_ptr<TextureView>> colors,
+                        std::shared_ptr<TextureView> depth,
                         std::array<float, 4> clear, LoadOp colorLoad, LoadOp depthLoad,
                         LoadOp stencilLoad, uint32_t clearStencil)
 {
-    Check(color);
-    Require(!rendering_ && color->texture->desc.attachment &&
-                !IsDepthFormat(color->texture->desc.format),
-            "Invalid color attachment");
+    Require(!rendering_ && !colors.empty() && colors.size() <= 8,
+            "Rendering requires one to eight color attachments");
+    for (const auto& color : colors)
+    {
+        Check(color);
+        Require(color->texture->desc.attachment && !IsDepthFormat(color->texture->desc.format),
+                "Invalid color attachment");
+        Require(color->texture->desc.width == colors.front()->texture->desc.width &&
+                    color->texture->desc.height == colors.front()->texture->desc.height,
+                "Color attachment dimensions must match");
+    }
     if (depth)
     {
         Check(depth);
         Require(IsDepthFormat(depth->texture->desc.format) &&
-                    depth->texture->desc.width == color->texture->desc.width &&
-                    depth->texture->desc.height == color->texture->desc.height,
+                    depth->texture->desc.width == colors.front()->texture->desc.width &&
+                    depth->texture->desc.height == colors.front()->texture->desc.height,
                 "Depth attachment mismatch");
     }
     Require(clearStencil <= 255, "Stencil clear must be in [0,255]");
     rendering_ = true;
-    colorFormat_ = color->texture->desc.format;
+    colorFormats_.clear();
+    for (const auto& color : colors)
+        colorFormats_.push_back(color->texture->desc.format);
     depthStencilFormat_ = depth ? std::optional{depth->texture->desc.format} : std::nullopt;
-    commands_.emplace_back(BeginRendering{std::move(color), std::move(depth), clear, colorLoad,
+    commands_.emplace_back(BeginRendering{std::move(colors), std::move(depth), clear, colorLoad,
                                           depthLoad, stencilLoad, clearStencil});
+}
+void CommandList::Begin(std::shared_ptr<TextureView> color, std::shared_ptr<TextureView> depth,
+                        std::array<float, 4> clear, LoadOp colorLoad, LoadOp depthLoad,
+                        LoadOp stencilLoad, uint32_t clearStencil)
+{
+    std::vector<std::shared_ptr<TextureView>> colors;
+    colors.push_back(std::move(color));
+    Begin(std::move(colors), std::move(depth), clear, colorLoad, depthLoad, stencilLoad,
+          clearStencil);
 }
 void CommandList::StencilReference(uint32_t reference)
 {
@@ -188,7 +207,7 @@ void CommandList::DrawReady(bool indexed) const
     Recording();
     Require(rendering_ && pipeline_ && !compute_ && group_ && vertex_ && (!indexed || index_),
             "Draw state incomplete");
-    Require(pipeline_->desc.color == colorFormat_ &&
+    Require(pipeline_->desc.colorFormats == colorFormats_ &&
                 pipeline_->desc.depthStencilFormat == depthStencilFormat_,
             "Pipeline attachment formats do not match rendering");
 }

@@ -375,9 +375,9 @@ Feature 使用 RenderFeature 基类，构造时声明稳定名称、Feature 依�
 
 Custom 与 Forward 仅是预先注入 Feature 的不同组合，共用 Create 和 Build。Forward 注入 Opaque、Transparent 与可选颜色快照；用户 Feature 可指定阶段。Feature 名称依赖解决构图先后，Graph 资源名称与读写声明解决本帧数据依赖，两者不混为一个全局资源表。执行回调仅保存本帧解析的 handle 与数据副本。
 
-CameraColor/CameraDepth 由宿主创建或导入，可选 OpaqueColor/AfterTransparentColor 使用真实复制。M4.3 场景宿主使用 RGBA32F CameraColor，Forward 结束后显式添加 Display.ToneMapping，写入导入的 sRGB DisplayColor；快照保留 HDR 值。Demo 使用空 Custom 组合注册 Noise、Scene 和 Readback，不传递 Feature 返回 handle，也不使用 Forward 内置流程。具体接口见 [Feature 与管线组合](../docs/forward-pipeline.md)。高级组合按计划推进。
+CameraColor/CameraDepth 由宿主创建或导入，可选 OpaqueColor/AfterTransparentColor 使用真实复制。M4.3 场景宿主使用 RGBA32F CameraColor，Forward 结束后显式添加 Display.ToneMapping，写入导入的 sRGB DisplayColor；快照保留 HDR 值。Demo 使用空 Custom 组合注册 Noise、Scene 和 Readback，不传递 Feature 返回 handle，也不使用 Forward 内置流程。Deferred 是第二个内置组合：三个 RGBA32F GBuffer 目标、可采样 Reversed-Z 深度和全屏 Deferred Lighting，透明仍在其后走 Forward。普通 Forward、Deferred、以及未来路径通过类型化 Pipeline 选项选择，不把未实现的管线暴露为可运行模式。接口见 [Feature 与管线组合](../docs/forward-pipeline.md) 与 [Deferred](../docs/deferred-pipeline.md)。
 
-M4.4 以 BeforeOpaque 的 ShadowFeature 生成单张方向光图，RGBA32F 记录 Reversed-Z 片元深度，D32/D32S8 只用于光栅可见性；保持单颜色附件与不可采样深度边界。Extractor 保留相机视野外的启用实例，Renderer 按材质 ShadowCaster 角色筛选投影。Masked 在主绘制/阴影中复用同一 alpha 裁剪；标准 Transparent 配方不投影、关闭深度写入，同队列按 view 深度排序，Pass 可显式覆盖状态。Lit 的 PCF 仅调制直接光。数据与限制见 [阴影与 Alpha](../docs/m4-shadows-alpha.md)。
+M4.4 的 ShadowFeature 以 BeforeOpaque 生成单张方向光图，RGBA32F 记录 Reversed-Z 片元深度。该阶段的 RHI 仅有单颜色附件且深度不可采样。M5.1 扩展至最多八个颜色附件并增加 D32/D32S8 的采样视图；阴影图仍用颜色存深度，CameraDepth 可用于 Deferred 世界位置重建。Extractor 保留相机视野外的启用实例，Renderer 按材质 ShadowCaster 角色筛选投影。Masked 在主绘制/阴影中复用同一 alpha 裁剪；标准 Transparent 配方不投影、关闭深度写入，同队列按 view 深度排序，Pass 可显式覆盖状态。Lit 的 PCF 仅调制直接光。数据与限制见 [阴影与 Alpha](../docs/m4-shadows-alpha.md)。
 
 一个后期混合示例是：
 

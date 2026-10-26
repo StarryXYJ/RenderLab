@@ -286,30 +286,36 @@ std::shared_ptr<Pipeline> VulkanRuntime::CreatePipelineNative(PipelineDesc desc)
         depth.stencilTestEnable = desc.stencil.enabled;
         depth.front = Native(desc.stencil.front, desc.stencil);
         depth.back = Native(desc.stencil.back, desc.stencil);
-        VkPipelineColorBlendAttachmentState attachment{};
-        attachment.blendEnable = desc.blend.enabled;
-        attachment.srcColorBlendFactor = Native(desc.blend.srcColor);
-        attachment.dstColorBlendFactor = Native(desc.blend.dstColor);
-        attachment.colorBlendOp = Native(desc.blend.colorOp);
-        attachment.srcAlphaBlendFactor = Native(desc.blend.srcAlpha);
-        attachment.dstAlphaBlendFactor = Native(desc.blend.dstAlpha);
-        attachment.alphaBlendOp = Native(desc.blend.alphaOp);
-        attachment.colorWriteMask = desc.raster.colorWriteMask;
+        std::vector<VkPipelineColorBlendAttachmentState> attachments(desc.colorFormats.size());
+        for (auto& attachment : attachments)
+        {
+            attachment.blendEnable = desc.blend.enabled;
+            attachment.srcColorBlendFactor = Native(desc.blend.srcColor);
+            attachment.dstColorBlendFactor = Native(desc.blend.dstColor);
+            attachment.colorBlendOp = Native(desc.blend.colorOp);
+            attachment.srcAlphaBlendFactor = Native(desc.blend.srcAlpha);
+            attachment.dstAlphaBlendFactor = Native(desc.blend.dstAlpha);
+            attachment.alphaBlendOp = Native(desc.blend.alphaOp);
+            attachment.colorWriteMask = desc.raster.colorWriteMask;
+        }
         VkPipelineColorBlendStateCreateInfo blend{};
         blend.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
-        blend.attachmentCount = 1;
-        blend.pAttachments = &attachment;
+        blend.attachmentCount = static_cast<uint32_t>(attachments.size());
+        blend.pAttachments = attachments.data();
         VkDynamicState states[] = {VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR,
                                    VK_DYNAMIC_STATE_STENCIL_REFERENCE};
         VkPipelineDynamicStateCreateInfo dynamic{};
         dynamic.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
         dynamic.dynamicStateCount = 3;
         dynamic.pDynamicStates = states;
-        const auto colorFormat = NativeFormat(desc.color);
+        std::vector<VkFormat> colorFormats;
+        colorFormats.reserve(desc.colorFormats.size());
+        for (const auto format : desc.colorFormats)
+            colorFormats.push_back(NativeFormat(format));
         VkPipelineRenderingCreateInfo rendering{};
         rendering.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO;
-        rendering.colorAttachmentCount = 1;
-        rendering.pColorAttachmentFormats = &colorFormat;
+        rendering.colorAttachmentCount = static_cast<uint32_t>(colorFormats.size());
+        rendering.pColorAttachmentFormats = colorFormats.data();
         rendering.depthAttachmentFormat =
             desc.depthStencilFormat ? NativeFormat(*desc.depthStencilFormat) : VK_FORMAT_UNDEFINED;
         rendering.stencilAttachmentFormat =

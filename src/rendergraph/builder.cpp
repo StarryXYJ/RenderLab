@@ -117,13 +117,16 @@ TextureHandle PassBuilder::Color(TextureHandle handle, rhi::LoadOp load, std::ar
     auto& g = *graph_.impl_;
     g.Builder(pass_);
     auto& pass = g.passes[pass_];
-    Require(pass.kind == PassKind::Raster && !pass.color,
-            "Raster pass supports one color attachment");
+    Require(pass.kind == PassKind::Raster && pass.colors.size() < 8,
+            "Raster pass supports at most eight color attachments");
+    Require(std::ranges::none_of(pass.colors, [&](const auto& attachment)
+                                 { return attachment.resource == handle.resource; }),
+            "Raster pass cannot attach one texture more than once");
     Require(load != rhi::LoadOp::Discard,
             "Use Clear or Load; discard with partial raster coverage is not initialized");
     auto next = Write(handle, Use::Color,
                       load == rhi::LoadOp::Load ? Coverage::Preserve : Coverage::Full, {});
-    pass.color = detail::Attachment{handle.resource, load, clear};
+    pass.colors.push_back(detail::Attachment{handle.resource, load, clear});
     return next;
 }
 TextureHandle PassBuilder::Depth(TextureHandle handle, AttachmentAspect depth,

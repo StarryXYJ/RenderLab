@@ -56,6 +56,8 @@ struct DrawPacket
 struct RenderFrame
 {
     std::vector<DrawPacket> opaque, transparent;
+    std::vector<DrawPacket> gbuffer;
+    DrawPacket deferredLighting;
     std::vector<DrawPacket> shadowCasters;
     uint32_t shadowResolution = 1;
     rhi::Format shadowDepthFormat = rhi::Format::D32;

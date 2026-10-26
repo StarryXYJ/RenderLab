@@ -101,13 +101,18 @@ std::shared_ptr<Runtime::Submission> DxRuntime::Execute(const CommandList& comma
                 }
                 else if constexpr (std::is_same_v<T, BeginRendering>)
                 {
-                    const auto rtv = As<DxView>(c.color).handle;
+                    std::vector<D3D12_CPU_DESCRIPTOR_HANDLE> rtvs;
+                    rtvs.reserve(c.colors.size());
+                    for (const auto& color : c.colors)
+                        rtvs.push_back(As<DxView>(color).handle);
                     D3D12_CPU_DESCRIPTOR_HANDLE dsv{};
                     if (c.depth)
                         dsv = As<DxView>(c.depth).handle;
-                    list->OMSetRenderTargets(1, &rtv, FALSE, c.depth ? &dsv : nullptr);
+                    list->OMSetRenderTargets(static_cast<UINT>(rtvs.size()), rtvs.data(), FALSE,
+                                             c.depth ? &dsv : nullptr);
                     if (c.colorLoad == LoadOp::Clear)
-                        list->ClearRenderTargetView(rtv, c.clear.data(), 0, nullptr);
+                        for (const auto& rtv : rtvs)
+                            list->ClearRenderTargetView(rtv, c.clear.data(), 0, nullptr);
                     if (c.depth)
                     {
                         UINT flags = c.depthLoad == LoadOp::Clear ? D3D12_CLEAR_FLAG_DEPTH : 0;
@@ -119,7 +124,7 @@ std::shared_ptr<Runtime::Submission> DxRuntime::Execute(const CommandList& comma
                                                         0, static_cast<UINT8>(c.clearStencil), 0,
                                                         nullptr);
                     }
-                    const auto& desc = c.color->texture->desc;
+                    const auto& desc = c.colors.front()->texture->desc;
                     D3D12_VIEWPORT viewport{0, 0, float(desc.width), float(desc.height), 0, 1};
                     D3D12_RECT scissor{0, 0, static_cast<LONG>(desc.width),
                                        static_cast<LONG>(desc.height)};

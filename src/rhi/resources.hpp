@@ -152,13 +152,22 @@ struct Texture : Object
     const TextureDesc desc;
     /// Owner-thread cache of the immutable default view; weak to avoid a Texture/View cycle.
     std::weak_ptr<TextureView> defaultView;
+    /// Depth sampling needs a distinct native view from the attachment view.
+    std::weak_ptr<TextureView> sampledView;
+};
+enum class TextureViewUsage
+{
+    Default,
+    Sampled
 };
 struct TextureView : Object
 {
-    TextureView(const std::shared_ptr<Texture>& texture) : Object(texture->owner), texture(texture)
+    TextureView(const std::shared_ptr<Texture>& texture, TextureViewUsage usage)
+        : Object(texture->owner), texture(texture), usage(usage)
     {
     }
     const std::shared_ptr<Texture> texture;
+    const TextureViewUsage usage;
 };
 struct Sampler : Object
 {
@@ -215,7 +224,7 @@ struct PipelineDesc
     std::shared_ptr<ShaderModule> vertex;
     std::shared_ptr<ShaderModule> pixel;
     std::shared_ptr<ShaderModule> compute;
-    Format color = Format::Rgba8;
+    std::vector<Format> colorFormats{Format::Rgba8};
     std::optional<Format> depthStencilFormat;
     RasterState raster;
     DepthState depth;

@@ -41,7 +41,8 @@ struct TextureToTextureCopy
 };
 struct BeginRendering
 {
-    std::shared_ptr<TextureView> color, depth;
+    std::vector<std::shared_ptr<TextureView>> colors;
+    std::shared_ptr<TextureView> depth;
     std::array<float, 4> clear;
     LoadOp colorLoad = LoadOp::Clear, depthLoad = LoadOp::Clear, stencilLoad = LoadOp::Clear;
     uint32_t clearStencil = 0;
@@ -115,6 +116,11 @@ public:
     void CopyTexture(std::shared_ptr<Buffer> buffer, std::shared_ptr<Texture> texture,
                      uint32_t rowPitch, bool upload, uint64_t offset = 0);
     void CopyTexture(std::shared_ptr<Texture> source, std::shared_ptr<Texture> destination);
+    void Begin(std::vector<std::shared_ptr<TextureView>> colors,
+               std::shared_ptr<TextureView> depth = {},
+               std::array<float, 4> clear = {0.02f, 0.02f, 0.02f, 1},
+               LoadOp colorLoad = LoadOp::Clear, LoadOp depthLoad = LoadOp::Clear,
+               LoadOp stencilLoad = LoadOp::Clear, uint32_t clearStencil = 0);
     void Begin(std::shared_ptr<TextureView> color, std::shared_ptr<TextureView> depth = {},
                std::array<float, 4> clear = {0.02f, 0.02f, 0.02f, 1},
                LoadOp colorLoad = LoadOp::Clear, LoadOp depthLoad = LoadOp::Clear,
@@ -148,7 +154,7 @@ private:
     bool consumed_ = false;
     bool rendering_ = false;
     bool compute_ = false;
-    Format colorFormat_ = Format::Rgba8;
+    std::vector<Format> colorFormats_;
     std::optional<Format> depthStencilFormat_;
     uint32_t markers_ = 0;
     uint64_t timestampMask_ = 0;

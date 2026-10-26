@@ -89,12 +89,16 @@ void Graph::Record()
             g.commands->BeginMarker(pass.name);
             if (g.timestamps)
                 g.commands->WriteTimestamp(timestamp++);
-            if (pass.color)
+            if (!pass.colors.empty())
             {
-                auto& color = g.resources[pass.color->resource];
-                g.commands->Begin(color.view,
+                std::vector<std::shared_ptr<rhi::TextureView>> colors;
+                colors.reserve(pass.colors.size());
+                for (const auto& attachment : pass.colors)
+                    colors.push_back(g.resources[attachment.resource].view);
+                const auto& color = pass.colors.front();
+                g.commands->Begin(std::move(colors),
                                   pass.depth ? g.resources[pass.depth->resource].view : nullptr,
-                                  pass.color->clear, pass.color->load,
+                                  color.clear, color.load,
                                   pass.depth ? pass.depth->load : rhi::LoadOp::Clear,
                                   pass.stencilLoad, pass.clearStencil);
             }
@@ -114,7 +118,7 @@ void Graph::Record()
                 CopyContext context(*this, g.active, *g.commands);
                 std::get<std::function<void(CopyContext&)>>(pass.callback)(context);
             }
-            if (pass.color)
+            if (!pass.colors.empty())
                 g.commands->End();
             if (g.timestamps)
                 g.commands->WriteTimestamp(timestamp++);

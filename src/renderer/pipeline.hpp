@@ -13,7 +13,8 @@ namespace renderlab::renderer
 enum class PipelineType
 {
     Custom,
-    Forward
+    Forward,
+    Deferred
 };
 enum class RenderStage
 {

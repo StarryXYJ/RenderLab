@@ -135,15 +135,19 @@ std::shared_ptr<Runtime::Submission> VulkanRuntime::Execute(const CommandList& c
                 }
                 else if constexpr (std::is_same_v<T, BeginRendering>)
                 {
-                    VkRenderingAttachmentInfo color{};
-                    color.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
-                    color.imageView = As<VkView>(c.color).native;
-                    color.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-                    color.loadOp = c.colorLoad == LoadOp::Clear  ? VK_ATTACHMENT_LOAD_OP_CLEAR
-                                   : c.colorLoad == LoadOp::Load ? VK_ATTACHMENT_LOAD_OP_LOAD
-                                                                 : VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-                    color.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-                    std::copy(c.clear.begin(), c.clear.end(), color.clearValue.color.float32);
+                    std::vector<VkRenderingAttachmentInfo> colors(c.colors.size());
+                    for (size_t i = 0; i < c.colors.size(); ++i)
+                    {
+                        auto& color = colors[i];
+                        color.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
+                        color.imageView = As<VkView>(c.colors[i]).native;
+                        color.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+                        color.loadOp = c.colorLoad == LoadOp::Clear  ? VK_ATTACHMENT_LOAD_OP_CLEAR
+                                       : c.colorLoad == LoadOp::Load ? VK_ATTACHMENT_LOAD_OP_LOAD
+                                                                     : VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+                        color.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+                        std::copy(c.clear.begin(), c.clear.end(), color.clearValue.color.float32);
+                    }
                     VkRenderingAttachmentInfo depth{};
                     depth.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
                     if (c.depth)
@@ -164,13 +168,13 @@ std::shared_ptr<Runtime::Submission> VulkanRuntime::Execute(const CommandList& c
                                          ? VK_ATTACHMENT_LOAD_OP_LOAD
                                          : VK_ATTACHMENT_LOAD_OP_DONT_CARE;
                     stencil.clearValue.depthStencil.stencil = c.clearStencil;
-                    const auto& d = c.color->texture->desc;
+                    const auto& d = c.colors.front()->texture->desc;
                     VkRenderingInfo rendering{};
                     rendering.sType = VK_STRUCTURE_TYPE_RENDERING_INFO;
                     rendering.renderArea.extent = {d.width, d.height};
                     rendering.layerCount = 1;
-                    rendering.colorAttachmentCount = 1;
-                    rendering.pColorAttachments = &color;
+                    rendering.colorAttachmentCount = static_cast<uint32_t>(colors.size());
+                    rendering.pColorAttachments = colors.data();
                     rendering.pDepthAttachment = c.depth ? &depth : nullptr;
                     rendering.pStencilAttachment = hasStencil ? &stencil : nullptr;
                     vkCmdBeginRendering(list, &rendering);

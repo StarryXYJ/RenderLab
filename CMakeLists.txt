@@ -74,7 +74,8 @@ target_include_directories(renderlab_rendergraph PUBLIC src)
 target_link_libraries(renderlab_rendergraph PRIVATE renderlab_options renderlab_rhi
     nlohmann_json::nlohmann_json)
 
-add_library(renderlab_renderer STATIC src/renderer/forward.cpp src/renderer/pipeline.cpp
+add_library(renderlab_renderer STATIC src/renderer/forward.cpp src/renderer/deferred.cpp
+    src/renderer/pipeline.cpp
     src/renderer/scene_renderer.cpp src/renderer/environment.cpp src/renderer/shadow.cpp)
 target_include_directories(renderlab_renderer PUBLIC src)
 target_link_libraries(renderlab_renderer PRIVATE renderlab_options renderlab_rendergraph renderlab_rhi
@@ -313,6 +314,13 @@ if(BUILD_TESTING)
                 --project ${CMAKE_SOURCE_DIR}/sample/m4/Pbr.rlproject
                 --log ${CMAKE_BINARY_DIR}/logs/${backend}-pbr-window.log)
             set_tests_properties(gpu.${backend}.pbr_window PROPERTIES LABELS gpu RUN_SERIAL TRUE TIMEOUT 60)
+            add_test(NAME gpu.${backend}.deferred COMMAND renderlab_sandbox
+                --backend ${backend} --headless --validation on --pipeline deferred
+                --project ${CMAKE_SOURCE_DIR}/sample/m4/Pbr.rlproject
+                --width 640 --height 360 --quality medium
+                --output ${CMAKE_BINARY_DIR}/deferred
+                --log ${CMAKE_BINARY_DIR}/logs/${backend}-deferred.log)
+            set_tests_properties(gpu.${backend}.deferred PROPERTIES LABELS gpu RUN_SERIAL TRUE TIMEOUT 90)
             add_test(NAME gpu.${backend}.pbr COMMAND renderlab_pbr_tests ${backend}
                 ${CMAKE_SOURCE_DIR}/sample/m4/Pbr.rlproject ${CMAKE_SOURCE_DIR}/shaders
                 ${CMAKE_BINARY_DIR}/pbr/${backend})

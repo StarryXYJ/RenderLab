@@ -120,6 +120,8 @@ Options ParseOptions(std::span<const std::string_view> arguments)
         }
         else if (arg == "--view")
             options.view = value();
+        else if (arg == "--pipeline")
+            options.pipeline = value();
         else if (arg == "--profile")
         {
             options.profilePath = value();
@@ -193,10 +195,13 @@ Options ParseOptions(std::span<const std::string_view> arguments)
     if (options.view != "final" && options.view != "hdr" && options.view != "shadow" &&
         options.view != "environment" && options.view != "brdf")
         throw std::invalid_argument("--view must be final, hdr, shadow, environment or brdf");
+    if (options.pipeline != "forward" && options.pipeline != "deferred")
+        throw std::invalid_argument("--pipeline must be forward or deferred");
     if (options.headless && options.debugPanel)
         throw std::invalid_argument("--debug-panel requires a window");
     if ((options.debugPanel || options.fixedCamera || options.Benchmark() ||
-         !options.profilePath.empty() || options.view != "final" || options.quality != "scene") &&
+         !options.profilePath.empty() || options.view != "final" || options.quality != "scene" ||
+         options.pipeline != "forward") &&
         options.projectPath.empty())
         throw std::invalid_argument("Scene tools require --project");
     if (options.benchmarkFrames && options.benchmarkSeconds)
@@ -234,6 +239,7 @@ std::string_view Usage()
            "  --width N --height N        Scene output size (default: 1280x720)\n"
            "  --quality scene|low|medium|high  Scene shadows, or 128/512/1024 resolution\n"
            "  --view final|hdr|shadow|environment|brdf  Select the displayed texture\n"
+           "  --pipeline forward|deferred  Select scene rendering path\n"
            "  --debug-panel               Open native scene controls (F1 toggles)\n"
            "  --fixed-camera              Ignore camera movement keys\n"
            "  --profile PATH              Save CPU/GPU pass timing and memory JSON\n"

@@ -38,7 +38,7 @@ void GraphDemo::Prepare(rhi::Format format)
     desc.layout = rasterLayout_;
     desc.vertex = vertex_;
     desc.pixel = pixel_;
-    desc.color = format;
+    desc.colorFormats = {format};
     desc.depthStencilFormat = rhi::Format::D32;
     desc.depth = {true, true};
     desc.blend.enabled = true;

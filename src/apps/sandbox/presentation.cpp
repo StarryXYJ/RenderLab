@@ -96,7 +96,7 @@ void RunRendering(platform::Window* window, rhi::Device& device, rhi::Runtime& r
             runtime, options.backend == "dx12" ? shader::Target::Dxil : shader::Target::Spirv,
             std::filesystem::path(platform::Utf8ToWide(options.projectPath)), shaderRoot,
             std::filesystem::path(platform::Utf8ToWide(options.outputPath)) / options.backend,
-            logger, options.sceneTest);
+            logger, RenderOptions(options).pipeline, options.sceneTest);
     if (!window)
         return;
     if (options.windowTest)

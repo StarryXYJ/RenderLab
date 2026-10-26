@@ -217,6 +217,8 @@ void detail::DeclarationParser::Load(const std::filesystem::path& input, bool mo
                     const auto role = lexer.Identifier().text;
                     if (role == "Forward")
                         pass.role = PassRole::Forward;
+                    else if (role == "GBuffer")
+                        pass.role = PassRole::GBuffer;
                     else if (role == "ShadowCaster")
                         pass.role = PassRole::ShadowCaster;
                     else if (role == "Custom")

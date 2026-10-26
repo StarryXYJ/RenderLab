@@ -43,7 +43,10 @@ void Runtime::Validate(const PipelineDesc& desc) const
     }
     else
     {
-        Require(!IsDepthFormat(desc.color), "Color pipeline format cannot be depth/stencil");
+        Require(!desc.colorFormats.empty() && desc.colorFormats.size() <= 8,
+                "Graphics pipeline requires one to eight color attachments");
+        Require(std::ranges::none_of(desc.colorFormats, IsDepthFormat),
+                "Color pipeline format cannot be depth/stencil");
         Require(!desc.depthStencilFormat || IsDepthFormat(*desc.depthStencilFormat),
                 "Invalid depth/stencil attachment format");
         Require((!desc.depth.testEnabled && !desc.depth.writeEnabled && !desc.stencil.enabled) ||
@@ -148,7 +151,9 @@ void Runtime::Validate(const std::shared_ptr<BindingLayout>& layout,
             Require(!b.sampler, "Texture slot contains sampler");
             Require(entry.kind != BindingKind::StorageTexture || b.view->texture->desc.storage,
                     "Storage binding requires storage texture");
-            Require(!IsDepthFormat(b.view->texture->desc.format), "M1 depth sampling unsupported");
+            Require(!IsDepthFormat(b.view->texture->desc.format) ||
+                        b.view->usage == TextureViewUsage::Sampled,
+                    "Sampled depth textures require a sampled view");
         }
     }
 }

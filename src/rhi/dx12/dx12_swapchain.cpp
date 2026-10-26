@@ -89,7 +89,7 @@ private:
                                                                false, true, "Swapchain.Image"});
             Check(native_->GetBuffer(i, IID_PPV_ARGS(&image->native)), "Swapchain GetBuffer");
             Check(image->native->SetName(L"Swapchain.Image"), "SetName");
-            views_.push_back(runtime_.CreateView(image));
+            views_.push_back(runtime_.CreateView(image, TextureViewUsage::Default));
             images_.push_back(std::move(image));
         }
     }

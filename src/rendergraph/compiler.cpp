@@ -22,7 +22,7 @@ const Plan& Graph::Compile(CompileOptions options)
         plan = {};
         for (auto& pass : g.passes)
         {
-            Require(pass.kind != PassKind::Raster || pass.color.has_value(),
+            Require(pass.kind != PassKind::Raster || !pass.colors.empty(),
                     "Raster pass needs a color attachment: " + pass.name + " (" + pass.source +
                         ")");
             plan.passes.push_back({pass.name, pass.source, "unused output", pass.kind, false});

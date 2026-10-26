@@ -62,7 +62,7 @@ Feature 名称与 Graph 资源名称是两个命名空间。样例通常用主�
 
 ## Preset 与阶段
 
-Custom 预先注入零个 Feature；Forward 注入 OpaqueFeature、TransparentFeature，以及配置启用的 ColorSnapshotFeature。两者使用相同 Builder、Create、阶段与 Build，不存在独立 ForwardPipeline 继承树或专用执行路径。
+Custom 预先注入零个 Feature；Forward 注入 OpaqueFeature、TransparentFeature，以及配置启用的 ColorSnapshotFeature。Deferred 注入 GBufferFeature、DeferredLightingFeature 和 Forward TransparentFeature。各组合使用相同 Builder、Create、阶段与 Build，不存在独立 ForwardPipeline 继承树或专用执行路径。
 
 ```cpp
 auto builder = renderer::CreatePipeline(
@@ -87,7 +87,7 @@ auto pipeline = builder.Create();
 | 8 | 可选 AfterTransparentColor 快照，依赖 Forward.Transparent |
 | 9 | 用户 AfterRendering，例如阶段快照读回 |
 
-内置与用户 Feature 都由同一 Create 处理。Opaque 无 Draw 时仍 Clear；Transparent 无 Draw 时不建 Pass，但该 Feature 的组合依赖仍存在。Forward+、Deferred 等尚未实现，不提供伪可用枚举或空实现，后续按同样机制注入 Feature。
+内置与用户 Feature 都由同一 Create 处理。Opaque 无 Draw 时仍 Clear；Transparent 无 Draw 时不建 Pass，但该 Feature 的组合依赖仍存在。Deferred 的资源契约、材质 Pass 角色和使用入口见 [Deferred Pipeline](deferred-pipeline.md)。Forward+ 与 Path Tracing 尚未实现；实现后再将对应组合加入 Pipeline 类型和选择列表。
 
 ## 名称连接与普通 Forward
 

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "rendergraph/types.hpp"
+#include "renderer/pipeline.hpp"
 #include "rhi/resources.hpp"
 #include "rhi/upload.hpp"
 #include "scene/scene.hpp"
@@ -28,6 +29,7 @@ enum class SceneView
 };
 struct SceneRenderOptions
 {
+    PipelineType pipeline = PipelineType::Forward;
     SceneView view = SceneView::Final;
     bool profile = false;
     /// Zero preserves the scene setting; otherwise a power of two in [128,2048].

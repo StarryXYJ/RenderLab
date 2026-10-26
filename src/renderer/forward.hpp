@@ -24,7 +24,10 @@ public:
 class TransparentFeature final : public RenderFeature
 {
 public:
-    TransparentFeature() : RenderFeature("Forward.Transparent", {"Forward.Opaque"}) {}
+    explicit TransparentFeature(std::string dependency = "Forward.Opaque")
+        : RenderFeature("Forward.Transparent", {std::move(dependency)})
+    {
+    }
     void Build(rendergraph::Graph&, const RenderFrame&) override;
 };
 /** @brief A physical color copy; destination remains independent of later source writes. */

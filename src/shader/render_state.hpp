@@ -14,6 +14,7 @@ enum class PassRole
 {
     Custom,
     Forward,
+    GBuffer,
     ShadowCaster
 };
 enum class SurfaceType

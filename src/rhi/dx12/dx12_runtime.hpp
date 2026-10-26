@@ -21,7 +21,8 @@ public:
     double TimestampPeriodNs() const override;
     std::shared_ptr<Buffer> CreateBuffer(const BufferDesc& desc) override;
     std::shared_ptr<Texture> CreateTexture(const TextureDesc& desc) override;
-    std::shared_ptr<TextureView> CreateView(std::shared_ptr<Texture> texture) override;
+    std::shared_ptr<TextureView> CreateView(std::shared_ptr<Texture> texture,
+                                            TextureViewUsage usage) override;
     std::shared_ptr<Sampler> CreateSampler() override;
     std::shared_ptr<BindingLayout> CreateLayout(std::vector<BindingDesc> entries) override;
     std::shared_ptr<BindingGroup> CreateGroup(std::shared_ptr<BindingLayout> layout,

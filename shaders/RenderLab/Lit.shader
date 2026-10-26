@@ -37,6 +37,14 @@ shader "RenderLab/Lit"
         pixel = "Lit.hlsl:PSMain";
         state { preset = SurfaceForward; cull = $Cull; }
     }
+    pass GBuffer
+    {
+        role = GBuffer;
+        features = { AlphaClip };
+        vertex = "LitGBuffer.hlsl:VSMain";
+        pixel = "LitGBuffer.hlsl:PSGBuffer";
+        state { preset = SurfaceForward; cull = $Cull; }
+    }
     pass Shadow
     {
         role = ShadowCaster;

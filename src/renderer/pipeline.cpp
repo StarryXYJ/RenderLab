@@ -1,6 +1,7 @@
 #include "renderer/pipeline.hpp"
 
 #include "renderer/forward.hpp"
+#include "renderer/deferred.hpp"
 #include "rendergraph/graph.hpp"
 
 #include <algorithm>
@@ -125,7 +126,8 @@ RenderPipeline RenderPipelineBuilder::Create() const
 }
 RenderPipelineBuilder CreatePipeline(PipelineType type, PipelineOptions options)
 {
-    if (type != PipelineType::Custom && type != PipelineType::Forward)
+    if (type != PipelineType::Custom && type != PipelineType::Forward &&
+        type != PipelineType::Deferred)
         throw std::invalid_argument("Unknown or unimplemented pipeline type");
     if (type == PipelineType::Custom &&
         (options.copyOpaqueColor || options.copyAfterTransparentColor))
@@ -145,6 +147,12 @@ RenderPipelineBuilder CreatePipeline(PipelineType type, PipelineOptions options)
                                 "CameraColor", "AfterTransparentColor",
                                 std::vector<std::string>{"Forward.Transparent"}),
                             7);
+    }
+    else if (type == PipelineType::Deferred)
+    {
+        pipeline.Append(std::make_shared<GBufferFeature>(), 1);
+        pipeline.Append(std::make_shared<DeferredLightingFeature>(), 3);
+        pipeline.Append(std::make_shared<TransparentFeature>("Deferred.Lighting"), 5);
     }
     return pipeline;
 }

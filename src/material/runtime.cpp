@@ -111,7 +111,7 @@ Prepared Runtime::Prepare(std::shared_ptr<const shader::Package> package, const 
     const auto state = ResolveState(package->definition, pass, validated);
     rhi::PipelineDesc desc;
     desc.layout = generation->layouts.at(pass.name);
-    desc.color = preparation.color;
+    desc.colorFormats = preparation.colorFormats;
     desc.raster = state.raster;
     desc.depth = state.depth;
     desc.blend = state.blend;

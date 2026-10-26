@@ -180,6 +180,20 @@ ctest --test-dir out/build/windows-debug -R 'content.contracts|gpu.*.scene' --ou
 
 项目窗口用 WASD 移动，Q/E 下降/上升；上下方向键绕相机自身右轴俯仰，左右方向键绕父空间上轴转向。失焦时清空按键。无 --project 仍是 Custom Graph Demo。--project --headless 输出一帧及 scene-plan.json；--scene-test 在参考场景上增加行为验收，普通项目无需开启。
 
+### Deferred Pipeline
+
+Deferred 与 Forward 可用同一 Scene 项目切换；窗口内启动 `--debug-panel` 后，在调节面板首项选择 Pipeline。Forward 是默认项。CLI 可在 `--pipeline forward|deferred` 中指定离线输出：
+
+```powershell
+cmake --build --preset windows-debug --target renderlab_sandbox
+out/build/windows-debug/renderlab_sandbox.exe --backend dx12 --headless --validation on `
+  --pipeline deferred --project sample/m4/Pbr.rlproject --width 640 --height 360
+out/build/windows-debug/renderlab_sandbox.exe --backend vulkan --headless --validation on `
+  --pipeline deferred --project sample/m4/Pbr.rlproject --width 640 --height 360
+```
+
+GBuffer 格式、深度重建、透明材质路径和限制见 [Deferred Pipeline](../docs/deferred-pipeline.md)。菜单只列出当前已实现的组合；Path Tracing 与 Forward+ 在各自阶段完成后再加入。
+
 参考项目包含原创 Cube/Sphere glTF、棋盘纹理、项目 Copper Shader/材质、父子对象和两个方向光；只选 UUID 最小的启用光。远处立方体用于剔除验证。数据格式与范围见 [M4 场景](../docs/m4-scene.md)。
 
 ```powershell

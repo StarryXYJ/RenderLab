@@ -159,7 +159,7 @@ void VulkanSwapchain::Resize(uint32_t width, uint32_t height)
         texture->allocation.device = device_;
         texture->native = image;
         texture->borrowed = true;
-        views_.push_back(runtime_.CreateView(texture));
+        views_.push_back(runtime_.CreateView(texture, TextureViewUsage::Default));
         images_.push_back(std::move(texture));
     }
     available_.resize(2);

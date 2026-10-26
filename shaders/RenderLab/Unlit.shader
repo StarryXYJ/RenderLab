@@ -24,6 +24,14 @@ shader "RenderLab/Unlit"
         pixel = "Unlit.hlsl:PSMain";
         state { preset = SurfaceForward; cull = $Cull; }
     }
+    pass GBuffer
+    {
+        role = GBuffer;
+        features = { AlphaClip };
+        vertex = "Unlit.hlsl:VSMain";
+        pixel = "Unlit.hlsl:PSGBuffer";
+        state { preset = SurfaceForward; cull = $Cull; }
+    }
     pass Shadow
     {
         role = ShadowCaster;

@@ -219,8 +219,17 @@ public:
             Check(device_->CheckFeatureSupport(D3D12_FEATURE_FORMAT_SUPPORT, &support,
                                                sizeof(support)),
                   "FormatSupport");
+            auto sampled = support;
+            if (format == DXGI_FORMAT_D32_FLOAT)
+                sampled.Format = DXGI_FORMAT_R32_FLOAT;
+            else if (format == DXGI_FORMAT_D32_FLOAT_S8X24_UINT)
+                sampled.Format = DXGI_FORMAT_R32_FLOAT_X8X24_TYPELESS;
+            if (sampled.Format != format)
+                Check(device_->CheckFeatureSupport(D3D12_FEATURE_FORMAT_SUPPORT, &sampled,
+                                                   sizeof(sampled)),
+                      "Depth sampled format support");
             report_.formats.push_back(
-                {name, (support.Support1 & D3D12_FORMAT_SUPPORT1_SHADER_SAMPLE) != 0,
+                {name, (sampled.Support1 & D3D12_FORMAT_SUPPORT1_SHADER_SAMPLE) != 0,
                  (support.Support2 & D3D12_FORMAT_SUPPORT2_UAV_TYPED_STORE) != 0,
                  (support.Support1 & D3D12_FORMAT_SUPPORT1_RENDER_TARGET) != 0,
                  (support.Support1 & D3D12_FORMAT_SUPPORT1_DEPTH_STENCIL) != 0});
