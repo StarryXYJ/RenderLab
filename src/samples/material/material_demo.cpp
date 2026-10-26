@@ -76,6 +76,16 @@ void VerifyMaterial(rhi::Runtime& runtime, shader::Target target, Logger& logger
         return binding;
     };
     auto first = materials.Prepare(package, asset, raster, resolve);
+    const auto same = materials.Prepare(package, asset, raster, resolve);
+    const auto materialBuffer = [](const material::Prepared& prepared)
+    {
+        for (const auto& binding : prepared.resources)
+            if (binding.buffer && binding.space == uint32_t(shader::Scope::Material))
+                return binding.buffer;
+        throw std::runtime_error("Missing material constant buffer");
+    };
+    Require(materialBuffer(same) == materialBuffer(first),
+            "Unchanged material must reuse immutable constants");
     auto firstRead = detail::RecordMaterial(runtime, first, vertices);
     runtime.Wait(runtime.Submit(std::move(firstRead.commands)));
     detail::CheckMaterialColor(firstRead.pixels, {.25f, .5f, .75f, 1});
@@ -84,11 +94,27 @@ void VerifyMaterial(rhi::Runtime& runtime, shader::Target target, Logger& logger
     material::Save(asset, output / "sample.material");
     asset = material::Load(output / "sample.material", materialTemplate);
     auto edited = materials.Prepare(package, asset, raster, resolve);
+    Require(materialBuffer(first) != materialBuffer(edited),
+            "Material edits must create a new immutable constant version");
     Require(first.pipeline == edited.pipeline, "Numeric edits must reuse PSO");
     auto editedRead = detail::RecordMaterial(runtime, edited, vertices);
     runtime.Wait(runtime.Submit(std::move(editedRead.commands)));
     detail::CheckMaterialColor(editedRead.pixels, {.5f, .25f, .125f, 1});
     detail::SaveMaterialImage(output / "material-edited.bmp", editedRead.pixels);
+    // Evict cached values while keeping old CPU snapshots and unsubmitted commands alive.
+    auto delayedOriginal = detail::RecordMaterial(runtime, first, vertices);
+    auto churn = asset;
+    for (uint32_t i = 0; i < 70; ++i)
+    {
+        material::Set(churn, materialTemplate, "base_color",
+                      std::array<double, 4>{double(i) / 100, .1, .2, 1});
+        materials.Prepare(package, churn, raster, resolve);
+    }
+    runtime.Wait(runtime.Submit(std::move(delayedOriginal.commands)));
+    detail::CheckMaterialColor(delayedOriginal.pixels, {.25f, .5f, .75f, 1});
+    auto retainedOriginal = detail::RecordMaterial(runtime, first, vertices);
+    runtime.Wait(runtime.Submit(std::move(retainedOriginal.commands)));
+    detail::CheckMaterialColor(retainedOriginal.pixels, {.25f, .5f, .75f, 1});
     auto alternate = raster;
     alternate.pass = "Alternate";
     auto alternatePrepared = materials.Prepare(package, asset, alternate, resolve);

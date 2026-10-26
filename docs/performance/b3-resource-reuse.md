@@ -10,4 +10,10 @@
 
 Debug/Release 完整 CTest 各 41/41、双后端 Validation 通过；新增上传测试包含 CPU 快照、取消、延后提交、GPU 退休后继续保留旧数据和页预算。资源页按引用与完成点共同复用，正常 Render 不增加 GPU Wait。
 
-原始结果：out/benchmarks/b3-1-upload 与 out/benchmarks/b3-1-upload-probe。阶段二进制：out/benchmarks/b3-1-player.exe。最终长基线及其他子阶段尚未执行。
+原始结果：out/benchmarks/b3-1-upload 与 out/benchmarks/b3-1-upload-probe。阶段二进制：out/benchmarks/b3-1-player.exe。
+
+## B3.2 不可变材质常量
+
+相同的三次短测量配置，DX12/Vulkan 等权帧均值为 5.4230/1.2512ms。独立 CPU 探针确认每帧仅剩一次 Buffer 创建（timestamp），逻辑 BindingGroup 仍为 10 次。两组两后端 BMP 与 B2 均逐字节相同。
+
+Debug 全套其余 39 项通过，材质测试调整为仅检查材质块共享后双后端重跑通过；Release 全套 41/41。新增 70 个常量版本淘汰后重用旧 Prepared 和已录制命令，既有纹理编辑、热重载、窗口和双帧验证通过。原始组 out/benchmarks/b3-2-material{,-probe}，阶段二进制 out/benchmarks/b3-2-player.exe。最终长基线及后续阶段尚未执行。

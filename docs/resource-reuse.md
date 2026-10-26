@@ -13,3 +13,11 @@
 SceneRenderer 的 View/Lighting/Shadow/Object 与 Display 常量使用此池，按真实 offset/size 传递到 DrawPacket 和 Graph。每页在同一图只导入一次，均为录制前 HostWrite、图内 UniformRead；Graph 继续保守按整 Buffer 跟踪状态。材质的长期 Prepared 数据另行管理，不放入帧上传页。
 
 双后端 RHI 验收覆盖非零偏移、取消后保留 Slice/录制命令、跨八批次后提交旧命令、GPU 完成后继续持有 CPU 数据、预算耗尽和非法 Seal；入口为 `gpu.dx12.rhi`、`gpu.vulkan.rhi`。
+
+## 不可变材质常量
+
+Material Runtime 在每个 GPU 包代际中保留至多 64 个常量版本，以 block 布局 hash 和完整打包字节查找。目标后端由 Runtime 固定；跨包代际不复用。Pack 的 padding 为确定的零值，内容比较不只依赖 hash。命中只共享只读 Buffer，纹理/采样器仍逐次解析，View/Object 和其他外部块不进入此缓存。
+
+数值改变产生新版本；缓存 FIFO 淘汰仅释放缓存拥有权，Prepared 和命令持有的旧 Buffer 继续有效。CPU 强持有缓存使串行帧之间也能命中；上限对应最多 1MiB 打包数据（每块最多 16KiB），原生分配的实际字节由 RHI ledger 另计。整代热重载仍使用原有发布协议。
+
+常量 Buffer 创建后不再写入。`Prepared::constants` 包含缓存命中版本，供图外调用者继续发出保守 HostWrite→UniformRead 可见性依赖；这不表示每次 Prepare 都发生 CPU 写入。Upload Buffer 在 DX12 保持原生 GENERIC_READ，在 Vulkan 没有图像布局转换，重复的 HOST_WRITE 来源依赖覆盖最初上传；首版不为省去该依赖另建可变的全局状态表。

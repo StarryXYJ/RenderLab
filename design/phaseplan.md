@@ -5,7 +5,7 @@
 ## 当前状态
 
 - 当前实施阶段：M0–M4、R1、B1、B2 DONE。
-- 当前工作项：B3.1 DONE，下一项 B3.2 不可变材质常量；按 B3 方案逐步实施与验收，M5 NOT_STARTED。
+- 当前工作项：B3.2 DONE，下一项 B3.3 描述符分配复用；M5 NOT_STARTED。
 - 用户约定：每个子阶段验收完成即提交 Git，无阻塞时在当前授权范围内继续推进；M4.3 提交 c50ee6a、M4.4 提交 40d0c12、M4.5 提交 9a4b2e4。
 - Demo 的 Custom 示例作为回归入口保留；M4 场景示例使用 Forward 组合与现有 Shader/Material 链路。
 
@@ -230,7 +230,7 @@ DONE：tools/benchmark 正式工具与 PBR 配置，顺序/交替后端及重复
 
 ## B3 逐帧资源复用优化
 
-状态：IN_PROGRESS。B3.1 DONE，B3.2–B3.4 尚未验收。
+状态：IN_PROGRESS。B3.1–B3.2 DONE，B3.3–B3.4 尚未验收。
 
 方案：[逐帧资源复用](resource-reuse.md)。拟按 B3.1 帧上传页、B3.2 不可变材质常量、B3.3 描述符分配复用、B3.4 读回/View 与回收收尾分别验证、提交；每步实测后调整后续优先级。不扩展到 M5/M6 的渲染算法、多线程或多队列。
 
@@ -239,6 +239,10 @@ DONE：tools/benchmark 正式工具与 PBR 配置，顺序/交替后端及重复
 ### B3.1 帧上传页
 
 DONE：有界 UploadPool/Batch 以整页引用和完成点保护复用，取消不伪造提交；SceneRenderer 的帧/对象/Display 常量保留非零 offset/size，未改变 Shader 和 Graph 调度。Debug/Release 完整 CTest 各 41/41，含双后端 Validation、窗口/双帧/resize、取消后保留 CPU 快照与八批次后提交旧命令、页预算/非法 Seal 验收。Release PBR 三次短测量各后端均值 9.1022/2.9743ms；独立探针 Buffer 创建由 23 降至 10 次/帧，包含材质和 timestamp。两后端截图与 B2 对应 BMP 逐字节相同。短测量不替代最终长基线，数据在 out/benchmarks/b3-1-upload{,-probe}；[接口](../docs/resource-reuse.md)、[结果](../docs/performance/b3-resource-reuse.md)。
+
+### B3.2 不可变材质常量
+
+DONE：同 GPU 包代际下，按布局 hash 与完整打包字节缓存至多 64 个只读常量版本；外部块和纹理解析保持独立，淘汰不修改旧快照。Debug 全套 41 项中的 39 项首次通过，修正验收误将非材质块也要求复用的断言后，两后端材质重跑均通过；Release 全套 41/41。覆盖 70 次编辑淘汰、延后提交/重用旧 Prepared、纹理编辑和整代热重载；Validation 通过。PBR 三次短测量各后端均值 5.4230/1.2512ms；独立探针 Buffer 创建降至 1 次/帧（timestamp），两后端 BMP 与 B2 相同。原始组 out/benchmarks/b3-2-material{,-probe}，阶段二进制 b3-2-player.exe；短测量仍不代替最终配对长基线。
 
 ## M5 Deferred 与光追基础
 

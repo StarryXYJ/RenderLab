@@ -9,12 +9,20 @@ namespace renderlab::material
 {
 struct GpuGeneration
 {
+    struct ConstantVersion
+    {
+        std::string layoutHash;
+        std::vector<std::byte> bytes;
+        std::shared_ptr<rhi::Buffer> buffer;
+    };
     std::shared_ptr<const shader::Package> package;
     std::map<std::string, std::shared_ptr<rhi::BindingLayout>> layouts;
     std::map<const shader::Program*, std::shared_ptr<rhi::ShaderModule>> modules;
     // RHI lookups are weak. Keep active state combinations resident even when all submitted
     // frames have retired before the next Prepare; otherwise owner-thread driver work repeats.
     std::vector<std::shared_ptr<rhi::Pipeline>> pipelines;
+    // Bounded strong ownership survives serial frame retirement. Eviction never mutates snapshots.
+    std::vector<ConstantVersion> constants;
 };
 Runtime::Runtime(rhi::Runtime& runtime, shader::Target target) : runtime_(runtime), target_(target)
 {
@@ -158,9 +166,26 @@ Prepared Runtime::Prepare(std::shared_ptr<const shader::Package> package, const 
                                      ? preparation.constants.at(handle)
                                      : empty;
             const auto bytes = Pack(block, values);
-            binding.buffer = runtime_.CreateBuffer(
-                {bytes.size(), rhi::Memory::Upload, "Constants." + block.name});
-            std::memcpy(binding.buffer->Map().data(), bytes.data(), bytes.size());
+            if (block.scope == shader::Scope::Material)
+            {
+                const auto found = std::ranges::find_if(
+                    generation->constants, [&](const auto& item)
+                    { return item.layoutHash == block.layoutHash && item.bytes == bytes; });
+                if (found != generation->constants.end())
+                    binding.buffer = found->buffer;
+            }
+            if (!binding.buffer)
+            {
+                binding.buffer = runtime_.CreateBuffer(
+                    {bytes.size(), rhi::Memory::Upload, "Constants." + block.name});
+                std::memcpy(binding.buffer->Map().data(), bytes.data(), bytes.size());
+                if (block.scope == shader::Scope::Material)
+                {
+                    if (generation->constants.size() == 64)
+                        generation->constants.erase(generation->constants.begin());
+                    generation->constants.push_back({block.layoutHash, bytes, binding.buffer});
+                }
+            }
             binding.size = bytes.size();
             result.constants.push_back(binding.buffer);
         }

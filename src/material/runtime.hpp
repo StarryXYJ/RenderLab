@@ -41,7 +41,8 @@ struct Prepared
     std::shared_ptr<rhi::Pipeline> pipeline;
     std::vector<rhi::Binding> resources;
     std::vector<shader::BindingHandle> deferredResources;
-    /// Newly uploaded constants require HostWrite -> UniformRead before their first shader use.
+    /// Immutable host-written constants; emit a conservative HostWrite -> UniformRead dependency
+    /// on use. Cached versions may be shared by multiple snapshots; no further CPU writes occur.
     std::vector<std::shared_ptr<rhi::Buffer>> constants;
 };
 /** @brief Owner-thread preparation; never compiles source and never records implicit barriers. */
