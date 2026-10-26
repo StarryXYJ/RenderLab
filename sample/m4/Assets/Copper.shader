@@ -12,10 +12,13 @@ shader "Project/Copper"
     variant Default {}
     pass Forward
     {
+        role = Forward;
         vertex = "Copper.hlsl:VSMain";
         pixel = "Copper.hlsl:PSMain";
-        depth = true;
-        blend = false;
-        cull = true;
+        state {
+            depth { test = true; write = true; }
+            blend { enabled = false; }
+            cull = Back;
+        }
     }
 }

@@ -92,6 +92,8 @@ add_library(renderlab_shader STATIC
     src/shader/value.cpp
     src/shader/layout.cpp
     src/shader/features.cpp
+    src/shader/render_state.cpp
+    src/shader/state_parser.cpp
     src/shader/dxc_compiler.cpp
     src/shader/dxil_reflection.cpp
     src/shader/schema.cpp
@@ -108,7 +110,7 @@ add_custom_command(TARGET renderlab_shaderc POST_BUILD
         $<TARGET_FILE_DIR:renderlab_shaderc> VERBATIM)
 
 add_library(renderlab_material STATIC
-    src/material/asset.cpp src/material/packing.cpp src/material/serialization.cpp src/material/runtime.cpp src/material/live_material.cpp)
+    src/material/asset.cpp src/material/packing.cpp src/material/serialization.cpp src/material/runtime.cpp src/material/render_state.cpp src/material/live_material.cpp)
 target_include_directories(renderlab_material PUBLIC src)
 target_link_libraries(renderlab_material PRIVATE renderlab_options renderlab_shader renderlab_rhi
     renderlab_platform renderlab_core nlohmann_json::nlohmann_json)

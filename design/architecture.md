@@ -206,7 +206,7 @@ M4 的首个场景闭环见 [项目、场景](../docs/m4-scene.md)，Forward PBR
 
 ### M4 后契约修订提案
 
-[Shader 与材质 v2 提案](shader-material-v2.md) 将 Pass role、队列分类、固定功能状态和静态属性轴分别声明；Renderer 通过类型化接口与绑定 handle 消费数据，HLSL 库通过结构体和显式参数求值。bool/enum 仅在带 keyword 特性时产生局部变体，Stencil 覆盖 RHI、深度模板附件与 Graph 访问。RHI/Graph 状态基础已落地，作者层修订仍在实施；本节下述 M2/M4 具名变体与共享全局参数仍描述当前作者接口，实际实施状态以阶段计划为准。
+[Shader 与材质 v2 提案](shader-material-v2.md) 将 Pass role、队列分类、固定功能状态和静态属性轴分别声明。RHI/Graph 与作者状态已落地：类型化 role 解析代际 PassHandle，Surface/Blend/AlphaClip 分离，有限状态配方支持显式覆盖；bool/enum 仅在带 keyword 特性时产生局部变体。接口见 [渲染状态](../docs/render-states.md)、[静态轴](../docs/shader-features.md)。绑定 handle、参数接口与 HLSL 显式传参仍在实施；本节下述共享全局参数仍描述过渡实现，M2 旧具名变体入口随全量迁移删除，实际状态以阶段计划为准。
 
 ### Shader 工具链
 

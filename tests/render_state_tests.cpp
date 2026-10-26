@@ -57,7 +57,9 @@ public:
         features = { Swap };
         vertex = "state.hlsl:VSMain";
         pixel = "state.hlsl:PSMain";
-        depth = false;
+        state {
+            depth { test = false; write = false; }
+        }
     }
 })";
         std::ofstream(output / "state.hlsl") << R"(#include <renderlab/generated/parameters.hlsli>

@@ -109,9 +109,12 @@ void VerifyMaterial(rhi::Runtime& runtime, shader::Target target, Logger& logger
     runtime.Wait(runtime.Submit(std::move(detailRead.commands)));
     detail::CheckMaterialColor(detailRead.pixels, {.25f * gray, .125f * gray, .0625f * gray, 1});
     auto blended = raster;
-    blended.blend = true;
-    Require(materials.Prepare(package, asset, blended, resolve).pipeline != detail.pipeline,
-            "Blend state is part of PSO key");
+    material::Set(asset, materialTemplate, "blend_test", std::array<double, 1>{1});
+    const auto blendedPrepared = materials.Prepare(package, asset, blended, resolve);
+    Require(blendedPrepared.pipeline != detail.pipeline &&
+                blendedPrepared.pipeline->desc.pixel == detail.pipeline->desc.pixel &&
+                blendedPrepared.pipeline->desc.vertex == detail.pipeline->desc.vertex,
+            "State edits must change PSO while reusing shader programs");
 
     asset = material::Create(materialTemplate);
     detail::VerifyMaterialCompute(runtime, materials, package, asset, resolve);

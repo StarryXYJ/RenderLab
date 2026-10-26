@@ -85,7 +85,7 @@ void ShadowFeature::Build(rendergraph::Graph& graph, const RenderFrame& frame)
 {
     const auto size = frame.shadowResolution;
     graph.CreateTexture("MainLightShadow", {size, size, rhi::Format::Rgba32Float, false, true});
-    graph.CreateTexture("MainLightShadowDepth", {size, size, rhi::Format::D32, false, true});
+    graph.CreateTexture("MainLightShadowDepth", {size, size, frame.shadowDepthFormat, false, true});
     auto pass = graph.AddRasterPass("MainLight.Shadow");
     pass.ColorTarget("MainLightShadow", rhi::LoadOp::Clear, {0, 0, 0, 0});
     pass.DepthTarget("MainLightShadowDepth");
@@ -106,12 +106,18 @@ void OpaqueFeature::Build(rendergraph::Graph& graph, const RenderFrame& frame)
     Require(color.attachment && !rhi::IsDepthFormat(color.format) && depth.attachment &&
                 rhi::IsDepthFormat(depth.format) && color.width == depth.width &&
                 color.height == depth.height,
-            "Forward requires matching color and D32 attachments");
+            "Forward requires matching color and depth/stencil attachments");
     auto pass = graph.AddRasterPass("Forward.Opaque");
     pass.ColorTarget("CameraColor", rhi::LoadOp::Clear, frame.clearColor);
     pass.DepthTarget("CameraDepth");
     std::vector<ResolvedDraw> draws;
-    for (const auto& draw : frame.opaque)
+    auto input = frame.opaque;
+    for (const auto& draw : input)
+        Require(std::isfinite(draw.distance) && draw.distance >= 0,
+                "Opaque draw distance must be finite and nonnegative");
+    std::stable_sort(input.begin(), input.end(), [](const auto& a, const auto& b)
+                     { return a.queue == b.queue ? a.distance < b.distance : a.queue < b.queue; });
+    for (const auto& draw : input)
         draws.push_back(Declare(pass, draw));
     pass.Execute(
         [draws = std::move(draws)](RasterContext& context)
@@ -128,8 +134,8 @@ void TransparentFeature::Build(rendergraph::Graph& graph, const RenderFrame& fra
     for (const auto& draw : input)
         Require(std::isfinite(draw.distance) && draw.distance >= 0,
                 "Transparent draw distance must be finite and nonnegative");
-    std::stable_sort(input.begin(), input.end(),
-                     [](const auto& a, const auto& b) { return a.distance > b.distance; });
+    std::stable_sort(input.begin(), input.end(), [](const auto& a, const auto& b)
+                     { return a.queue == b.queue ? a.distance > b.distance : a.queue < b.queue; });
     auto pass = graph.AddRasterPass("Forward.Transparent");
     pass.ColorTarget("CameraColor", rhi::LoadOp::Load);
     const auto depthAccess =

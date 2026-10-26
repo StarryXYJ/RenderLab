@@ -16,11 +16,11 @@ pass Beauty
     features = { Clip, Normal };
     vertex = "Surface.hlsl:VSMain";
     pixel = "Surface.hlsl:PSMain";
-    depth = false;
+    state { depth { test = false; write = false; } }
 }
 ```
 
-本页只说明已接入的属性/变体机制；Pass role 和完整 state 作者语法随 [阶段计划](../design/phaseplan.md) 后续修订。
+本页说明属性/变体机制，Pass role 和完整 state 作者语法见 [渲染状态](render-states.md)。
 
 ## 规则
 

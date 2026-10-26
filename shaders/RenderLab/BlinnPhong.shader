@@ -12,10 +12,13 @@ shader "RenderLab/BlinnPhong"
     variant Default {}
     pass Forward
     {
+        role = Forward;
         vertex = "BlinnPhong.hlsl:VSMain";
         pixel = "BlinnPhong.hlsl:PSMain";
-        depth = true;
-        blend = false;
-        cull = true;
+        state {
+            depth { test = true; write = true; }
+            blend { enabled = false; }
+            cull = Back;
+        }
     }
 }

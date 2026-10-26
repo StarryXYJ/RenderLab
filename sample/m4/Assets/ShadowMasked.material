@@ -1,7 +1,7 @@
 {
   "version": 1,
   "shader": "RenderLab/Lit",
-  "variant": "Masked",
+  "variant": "Default",
   "values": {
     "base_color": {
       "type": "float4",
@@ -28,6 +28,22 @@
       "array": false,
       "value": [
         0.5
+      ]
+    },
+    "surface": {
+      "type": "SurfaceType",
+      "count": 1,
+      "array": false,
+      "value": [
+        0
+      ]
+    },
+    "alpha_clip": {
+      "type": "bool",
+      "count": 1,
+      "array": false,
+      "value": [
+        1
       ]
     }
   },

@@ -200,6 +200,38 @@ const Interface& Package::Layout(const std::string& pass) const
             return interfaces.at(i);
     throw std::invalid_argument("Shader lacks pass " + pass);
 }
+PassHandle Package::ResolvePass(const PassSelection& selection) const
+{
+    std::optional<uint32_t> match;
+    for (uint32_t i = 0; i < definition.passes.size(); ++i)
+    {
+        const auto& pass = definition.passes[i];
+        const bool selected = std::holds_alternative<std::string>(selection)
+                                  ? pass.name == std::get<std::string>(selection)
+                                  : std::get<PassRole>(selection) != PassRole::Custom &&
+                                        pass.role == std::get<PassRole>(selection);
+        if (!selected)
+            continue;
+        if (match)
+            throw std::invalid_argument("Ambiguous shader pass role");
+        match = i;
+    }
+    if (!match)
+        throw std::invalid_argument("Shader lacks pass or required role");
+    return {this, *match};
+}
+const Pass& Package::GetPass(PassHandle handle) const
+{
+    if (handle.package != this || handle.index >= definition.passes.size())
+        throw std::invalid_argument("Stale or foreign shader pass handle");
+    return definition.passes[handle.index];
+}
+bool Package::HasRole(PassRole role) const
+{
+    return role != PassRole::Custom &&
+           std::ranges::any_of(definition.passes,
+                               [role](const auto& pass) { return pass.role == role; });
+}
 const Program& Package::Find(const std::string& pass, const std::string& variant,
                              rhi::ShaderStage stage, Target target) const
 {

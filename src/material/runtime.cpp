@@ -1,4 +1,5 @@
 #include "material/runtime.hpp"
+#include "material/render_state.hpp"
 
 #include <algorithm>
 #include <cstring>
@@ -26,7 +27,10 @@ Prepared Runtime::Prepare(std::shared_ptr<const shader::Package> package, const 
     if (!package)
         throw std::invalid_argument("Material preparation needs a shader package");
     const auto validated = Migrate(asset, shader::MaterialTemplate(package));
-    const auto& interface = package->Layout(preparation.pass);
+    const auto& pass = package->GetPass(package->ResolvePass(preparation.pass));
+    if (!PassEnabled(package->definition, pass, validated))
+        throw std::invalid_argument("Cannot prepare disabled shader pass " + pass.name);
+    const auto& interface = package->Layout(pass.name);
     for (const auto& name : preparation.deferredResources)
     {
         const auto found =
@@ -51,9 +55,10 @@ Prepared Runtime::Prepare(std::shared_ptr<const shader::Package> package, const 
     {
         generation = std::make_shared<GpuGeneration>();
         generation->package = package;
-        for (const auto& pass : package->definition.passes)
+        for (const auto& declaredPass : package->definition.passes)
             generation->layouts.emplace(
-                pass.name, runtime_.CreateLayout(package->Layout(pass.name).Bindings()));
+                declaredPass.name,
+                runtime_.CreateLayout(package->Layout(declaredPass.name).Bindings()));
         for (const auto& program : package->programs)
             if (program.target == target_)
                 generation->modules.emplace(
@@ -62,21 +67,22 @@ Prepared Runtime::Prepare(std::shared_ptr<const shader::Package> package, const 
             generations_.erase(generations_.begin());
         generations_.push_back(generation);
     }
-    const auto& pass =
-        *std::ranges::find(package->definition.passes, preparation.pass, &shader::Pass::name);
+    const auto state = ResolveState(package->definition, pass, validated);
     rhi::PipelineDesc desc;
     desc.layout = generation->layouts.at(pass.name);
     desc.color = preparation.color;
-    desc.depth.testEnabled = preparation.depth.value_or(pass.depth);
-    desc.depth.writeEnabled = preparation.depthWrite.value_or(desc.depth.testEnabled);
-    if (desc.depth.testEnabled || desc.depth.writeEnabled)
-        desc.depthStencilFormat = rhi::Format::D32;
-    desc.blend.enabled = preparation.blend.value_or(pass.blend);
-    desc.raster.cull =
-        preparation.cull.value_or(pass.cull) ? rhi::CullMode::Back : rhi::CullMode::None;
-    desc.raster.frontFace = preparation.frontCounterClockwise.value_or(true)
-                                ? rhi::FrontFace::CounterClockwise
-                                : rhi::FrontFace::Clockwise;
+    desc.raster = state.raster;
+    desc.depth = state.depth;
+    desc.blend = state.blend;
+    desc.stencil = state.stencil;
+    desc.depthStencilFormat = preparation.depthStencilFormat;
+    if (!desc.depthStencilFormat &&
+        (state.depth.testEnabled || state.depth.writeEnabled || state.stencil.enabled))
+        desc.depthStencilFormat = state.stencil.enabled ? rhi::Format::D32S8 : rhi::Format::D32;
+    if (preparation.mirrored)
+        desc.raster.frontFace = desc.raster.frontFace == rhi::FrontFace::CounterClockwise
+                                    ? rhi::FrontFace::Clockwise
+                                    : rhi::FrontFace::CounterClockwise;
     desc.vertexStride = preparation.vertexStride;
     desc.attributes = preparation.attributes;
     std::map<std::string, uint32_t> featureValues;
@@ -97,6 +103,7 @@ Prepared Runtime::Prepare(std::shared_ptr<const shader::Package> package, const 
             desc.compute = module;
     }
     Prepared result;
+    result.stencilReference = state.stencilReference;
     result.generation = generation;
     result.pipeline = runtime_.CreatePipeline(std::move(desc));
     if (std::ranges::find(generation->pipelines, result.pipeline) == generation->pipelines.end())

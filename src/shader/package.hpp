@@ -7,10 +7,19 @@
 #include <filesystem>
 #include <memory>
 #include <string>
+#include <variant>
 #include <vector>
 
 namespace renderlab::shader
 {
+struct Package;
+/** @brief Selection re-resolves per package generation; Custom uses a local pass name. */
+using PassSelection = std::variant<std::string, PassRole>;
+struct PassHandle
+{
+    const Package* package = nullptr;
+    uint32_t index = UINT32_MAX;
+};
 struct FieldLayout
 {
     Property property;
@@ -64,6 +73,9 @@ struct Program
 /** @brief Immutable compiled generation; contains CPU data only and never owns RHI objects. */
 struct Package
 {
+    PassHandle ResolvePass(const PassSelection& selection) const;
+    const Pass& GetPass(PassHandle handle) const;
+    bool HasRole(PassRole role) const;
     uint64_t generation = 0;
     std::string key;
     Definition definition;

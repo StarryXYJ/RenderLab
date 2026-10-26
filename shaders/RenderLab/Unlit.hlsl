@@ -12,6 +12,8 @@ Varyings VSMain(Attributes input)
 float4 PSMain(Varyings input) : SV_Target
 {
     float4 color = Material.BaseColor * BaseMap.Sample(BaseSampler, input.uv);
-    ApplyAlphaCutoff(color.a);
-    return float4(color.rgb, SurfaceAlpha(color.a));
+#if RENDERLAB_ALPHA_CLIP
+    ApplyAlphaCutoff(color.a, Material.AlphaCutoff);
+#endif
+    return EncodeSurfaceOutput(color.rgb, color.a, Material.Surface, Material.Blend);
 }

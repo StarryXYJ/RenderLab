@@ -18,11 +18,12 @@ namespace renderlab::material
 /// @brief Per-draw pass selection, vertex layout and external values; no recording occurs here.
 struct Preparation
 {
-    std::string pass;
+    shader::PassSelection pass;
     rhi::Format color = rhi::Format::Rgba8Srgb;
     uint32_t vertexStride = 0;
     std::vector<rhi::VertexAttribute> attributes;
-    std::optional<bool> depth, depthWrite, blend, cull, frontCounterClockwise;
+    std::optional<rhi::Format> depthStencilFormat;
+    bool mirrored = false;
     /// External resources or prepacked cbuffers, keyed by generated HLSL symbol.
     std::map<std::string, rhi::Binding> bindings;
     std::map<std::string, std::map<std::string, Value>> constants;
@@ -35,6 +36,7 @@ struct GpuGeneration;
 /** @brief Immutable recording snapshot. Commands retain its pipeline and resources when bound. */
 struct Prepared
 {
+    uint32_t stencilReference = 0;
     std::shared_ptr<const GpuGeneration> generation;
     std::shared_ptr<rhi::Pipeline> pipeline;
     std::vector<rhi::Binding> resources;

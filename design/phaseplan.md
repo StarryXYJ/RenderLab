@@ -5,7 +5,7 @@
 ## 当前状态
 
 - 当前实施阶段：M0–M4 DONE；M4.1–M4.5 全部完成。
-- 当前工作项：R1 IN_PROGRESS，R1.1a 已提交 a1147d5；正在实施 R1.2 类型化属性/静态轴，随后接 R1.1b role/状态配方；M5 NOT_STARTED。
+- 当前工作项：R1 IN_PROGRESS，R1.1a 已提交 a1147d5、R1.2a 已提交 65879ad；R1.1b role/状态配方已完成，下一工作项 R1.3 参数接口与显式 HLSL 库；M5 NOT_STARTED。
 - 用户约定：每个子阶段验收完成即提交 Git，无阻塞时在当前授权范围内继续推进；M4.3 提交 c50ee6a、M4.4 提交 40d0c12、M4.5 提交 9a4b2e4。
 - Demo 的 Custom 示例作为回归入口保留；M4 场景示例使用 Forward 组合与现有 Shader/Material 链路。
 
@@ -165,14 +165,9 @@ DONE（2026 年 10 月 26 日）：同线程 modeless Win32 面板、F1、冻结
 
 R1.1a DONE（2026 年 10 月 26 日）：类型化 Raster/Depth/Blend/Stencil、完整 PSO Key、动态 StencilRef、D32S8 双后端映射与能力查询；Graph 逐面 Load/Clear/权限及整附件保守依赖；Forward 不再强制透明禁止深度写入。接口：[渲染状态](../docs/render-states.md)。RTX 5060 / MSVC 19.51 / DXC 1.9，Debug/Release 全量各 39/39；追加 Fail/DepthFail/非法状态后两配置定向各 3/3，DX12/Vulkan Validation 错误为 0。格式化、UTF-8/LF 与差异检查通过。限制：无深度模板采样/复制/独立平面调度。
 
-R1.1b NOT_STARTED：Shader/材质类型化 role、属性状态配方和队列；依赖 R1.2 的类型化属性，故在 R1.2 后实施。准备 PSO 前选择场景附件格式仍属于此步，不能用 RHI 已支持 D32S8 代替作者层验收。
+R1.1b DONE（2026 年 10 月 26 日）：显式 role/代际 PassHandle、完整 state 作者块/名义类型属性引用、有限配方与覆盖、Surface/Blend/AlphaClip 分类和队列；导入默认 Cull 与作者覆盖分离，镜像只调整 FrontFace。Lit/Unlit 改用静态 AlphaClip 与普通 Surface/Blend 属性，入口显式编码混合输出；SceneRenderer 准备 PSO 前按 camera/shadow 汇总模板格式需求。文档：[渲染状态](../docs/render-states.md)。
 
-- [ ] 显式 role/PassHandle、材质分类/队列与状态配方，移除按变体/Pass 名称推断行为和根据 Blend 推断 DepthWrite。
-- [x] 完整 Raster/Depth/Blend/Stencil、PSO Key、每 Draw 动态 StencilRef；深度模板格式与双后端能力检查。
-- [x] Graph 深度/模板访问与初始化闭环；保留有界缓存和在途快照所有权。
-- [ ] 根据作者层解析状态，在准备场景 PSO 前汇总附件格式需求。
-
-验收：独立深度测试/写入、混合颜色与 Alpha、模板遮罩/双面操作、跨 Pass 保留、reference 隔离与非法配置；双后端 Validation 无错误。
+R1.1 验收：RTX 5060，Debug/Release 全量各 39/39；追加严格作者检查后 Debug 定向 6/6。双后端场景在任意 Pass 改名并启用 camera/shadow 恒等 stencil 后像素一致；状态修改复用 Shader 模块、角色歧义/过期 handle/错误属性类型诊断通过，Validation 错误为 0。R1.1 整体 DONE；参数绑定名称与旧变体资源格式的后续修订仍分别归 R1.3/R1.4。
 
 ### R1.2 类型化属性与静态轴
 
@@ -180,12 +175,14 @@ R1.1b NOT_STARTED：Shader/材质类型化 role、属性状态配方和队列；
 
 R1.2a 结果：显式 uint32 enum、普通 bool/enum uniform、keyword 静态属性、每 Pass features/稳定键、64 组合预算、固定 GPU 布局、逻辑 Schema 与字段分离。验证：RTX 5060，Debug/Release 定向各 5/5（shader.contracts、双后端 material/render_state）；DXIL/SPIR-V 编译验证 6+2 组合，读回证明静态值选择实际程序且静态独占材质无 uniform 分配，改名/保存/非法枚举迁移/超额诊断通过，Validation 错误为 0。文档：[静态轴](../docs/shader-features.md)。
 
-- [ ] enum 稳定数值、普通 bool/enum uniform 与 keyword 特性；每 Pass 显式 features、稳定 VariantKey 和组合预算。
+- [x] enum 稳定数值、普通 bool/enum uniform 与 keyword 特性；每 Pass 显式 features、稳定 VariantKey 和组合预算。
 - [ ] 材质序列化/Inspector/热重载统一属性值，替换任意 variant 字符串；状态修改不重编译，静态属性整代切换。
 
 验收：组合数量、枚举互斥、非法值/缺失组合/超额诊断、固定布局与异步发布一致性。
 
 ### R1.3 参数接口与显式 HLSL 库
+
+状态：IN_PROGRESS；按接口 Schema/生成和绑定、场景/HLSL 迁移两步实施，分别验证提交。
 
 - [ ] `.params` 接口身份/版本/布局校验、生成 C++ 数据/打包接口及 HLSL 类型、类型化绑定 handle 与标准资源语义。
 - [ ] 拆分 View/Object/Lighting/Shadow，入口绑定适配与纯函数库分离；纹理参数和光栅梯度显式传递。

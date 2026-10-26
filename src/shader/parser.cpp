@@ -106,6 +106,8 @@ void detail::DeclarationParser::Load(const std::filesystem::path& input, bool mo
                 }
             Load(modulePath, true);
         }
+        else if (!module && lexer.Accept("render"))
+            Render(lexer);
         else if (lexer.Accept("enum"))
             Enum(lexer);
         else if (lexer.Accept("material"))
@@ -166,7 +168,7 @@ void detail::DeclarationParser::Load(const std::filesystem::path& input, bool mo
         else if (!module && lexer.Accept("pass"))
         {
             Pass pass;
-            auto token = lexer.Identifier();
+            auto token = lexer.Peek().quoted ? lexer.Take() : lexer.Identifier();
             pass.name = token.text;
             pass.source = token.source;
             if (definition.passes.size() >= 16 ||
@@ -174,16 +176,50 @@ void detail::DeclarationParser::Load(const std::filesystem::path& input, bool mo
                                     [&](auto& p) { return p.name == pass.name; }))
                 lexer.Fail("Duplicate pass or pass limit exceeded");
             lexer.Expect("{");
+            std::set<std::string> passOptions;
             while (!lexer.Accept("}"))
             {
                 auto key = lexer.Identifier().text;
+                if (!passOptions.insert(key).second)
+                    lexer.Fail("Duplicate pass option " + key);
                 if (key == "parameters")
                 {
                     pass.blocks.push_back(Block(lexer, pass.name + "Parameters", Scope::Pass));
                     continue;
                 }
+                if (key == "state")
+                {
+                    State(lexer, pass.state);
+                    continue;
+                }
                 lexer.Expect("=");
-                if (key == "features")
+                if (key == "role")
+                {
+                    const auto role = lexer.Identifier().text;
+                    if (role == "Forward")
+                        pass.role = PassRole::Forward;
+                    else if (role == "ShadowCaster")
+                        pass.role = PassRole::ShadowCaster;
+                    else if (role == "Custom")
+                        pass.role = PassRole::Custom;
+                    else
+                        lexer.Fail("Unknown pass role " + role);
+                }
+                else if (key == "enabled")
+                {
+                    if (lexer.Accept("true"))
+                        pass.enabled = PassEnable::Always;
+                    else if (lexer.Accept("false"))
+                        pass.enabled = PassEnable::Never;
+                    else
+                    {
+                        lexer.Expect("OpaqueShadow");
+                        pass.enabled = PassEnable::OpaqueShadow;
+                    }
+                }
+                else if (key == "castShadows")
+                    pass.castShadows = StateSource(lexer, "bool");
+                else if (key == "features")
                 {
                     lexer.Expect("{");
                     if (!lexer.Accept("}"))
@@ -212,19 +248,7 @@ void detail::DeclarationParser::Load(const std::filesystem::path& input, bool mo
                          entry.substr(colon + 1)});
                 }
                 else
-                {
-                    const bool value = lexer.Accept("true");
-                    if (!value)
-                        lexer.Expect("false");
-                    if (key == "depth")
-                        pass.depth = value;
-                    else if (key == "blend")
-                        pass.blend = value;
-                    else if (key == "cull")
-                        pass.cull = value;
-                    else
-                        lexer.Fail("Unknown pass option " + key);
-                }
+                    lexer.Fail("Unknown pass option " + key);
                 lexer.Expect(";");
             }
             const auto computes = std::ranges::count_if(
@@ -232,6 +256,10 @@ void detail::DeclarationParser::Load(const std::filesystem::path& input, bool mo
             if (!((computes == 1 && pass.entries.size() == 1) ||
                   (computes == 0 && pass.entries.size() == 2)))
                 lexer.Fail("Pass needs compute or vertex+pixel entries");
+            if (computes &&
+                (pass.role != PassRole::Custom || !pass.state.overrides.empty() ||
+                 pass.state.preset != StatePreset::Explicit || pass.enabled != PassEnable::Always))
+                lexer.Fail("Compute passes cannot declare raster roles, state or enabled policies");
             definition.passes.push_back(std::move(pass));
         }
         else
@@ -249,6 +277,7 @@ Definition ParseDefinition(const std::filesystem::path& path,
 {
     detail::DeclarationParser parser;
     parser.includeDirectories = includeDirectories;
+    parser.definition.enums = BuiltinEnums();
     parser.definition.source = std::filesystem::weakly_canonical(path);
     parser.Load(path, false);
     if (parser.definition.passes.empty())
@@ -283,6 +312,7 @@ Definition ParseDefinition(const std::filesystem::path& path,
         }
         std::ranges::sort(pass.features);
     }
+    parser.ValidateStateSources();
     return std::move(parser.definition);
 }
 } // namespace renderlab::shader

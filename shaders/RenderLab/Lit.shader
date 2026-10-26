@@ -3,6 +3,11 @@ shader "RenderLab/Lit"
     use "Scene.params";
     material
     {
+        [id("surface")] SurfaceType Surface = Opaque;
+        [id("blend")] BlendMode Blend = Alpha;
+        [id("cull")] CullMode Cull = Back;
+        [id("cast_shadows")] bool CastShadows = true;
+        [id("alpha_clip"), keyword("RENDERLAB_ALPHA_CLIP")] bool AlphaClip = false;
         [id("base_color"), color] float4 BaseColor = (1, 1, 1, 1);
         [id("metallic"), range(0, 1)] float Metallic = 0;
         [id("roughness"), range(0, 1)] float Roughness = 0.5;
@@ -17,11 +22,11 @@ shader "RenderLab/Lit"
         [srgb] Texture2D<float4> EmissionMap = white;
         SamplerState BaseSampler = point_clamp;
     }
-    variant Default { ALPHA_MASK = 0; ALPHA_BLEND = 0; }
-    variant Masked { ALPHA_MASK = 1; ALPHA_BLEND = 0; }
-    variant Transparent { ALPHA_MASK = 0; ALPHA_BLEND = 1; }
+    render { surface = $Surface; blend = $Blend; alphaClip = $AlphaClip; }
     pass Forward
     {
+        role = Forward;
+        features = { AlphaClip };
         parameters
         {
             Texture2D<float4> EnvironmentAtlas;
@@ -30,16 +35,16 @@ shader "RenderLab/Lit"
         }
         vertex = "Lit.hlsl:VSMain";
         pixel = "Lit.hlsl:PSMain";
-        depth = true;
-        blend = false;
-        cull = true;
+        state { preset = SurfaceForward; cull = $Cull; }
     }
     pass Shadow
     {
+        role = ShadowCaster;
+        enabled = OpaqueShadow;
+        castShadows = $CastShadows;
+        features = { AlphaClip };
         vertex = "Shadow.hlsl:VSMain";
         pixel = "Shadow.hlsl:PSMain";
-        depth = true;
-        blend = false;
-        cull = true;
+        state { preset = ShadowCaster; cull = $Cull; }
     }
 }

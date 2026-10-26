@@ -26,12 +26,14 @@ float4 PSMain(Varyings input, bool frontFace : SV_IsFrontFace) : SV_Target
     context.normalWS = frontFace ? input.normalWS : -input.normalWS;
     MaterialSurface surface = EvaluateMaterial(context);
     float visibility = MainLightVisibility(input.positionWS, SafeNormalize(context.normalWS));
-    ApplyAlphaCutoff(surface.alpha);
+#if RENDERLAB_ALPHA_CLIP
+    ApplyAlphaCutoff(surface.alpha, Material.AlphaCutoff);
+#endif
     float3 viewDirWS = GetWorldSpaceViewDir(input.positionWS);
     DirectionalLight light = GetMainLight();
     float3 direct = EvaluateBRDF(surface.baseColor, surface.metallic, surface.perceptualRoughness,
         surface.normalWS, SafeNormalize(viewDirWS), light.direction) * light.color
         * visibility;
-    return float4(direct + EvaluateImageBasedLighting(surface, viewDirWS) + surface.emission,
-        SurfaceAlpha(surface.alpha));
+    return EncodeSurfaceOutput(direct + EvaluateImageBasedLighting(surface, viewDirWS) + surface.emission,
+        surface.alpha, Material.Surface, Material.Blend);
 }

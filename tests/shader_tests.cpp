@@ -1,4 +1,5 @@
 #include "material/asset.hpp"
+#include "material/render_state.hpp"
 #include "shader/compiler.hpp"
 #include "shader/reload.hpp"
 
@@ -74,14 +75,18 @@ void FeatureContracts(const std::filesystem::path& root)
         features = { Normal, Clip };
         vertex = "features.hlsl:VSMain";
         pixel = "features.hlsl:PSMain";
-        depth = false;
+        state {
+            depth { test = false; write = false; }
+        }
     }
     pass Sun
     {
         features = { Clip };
         vertex = "features.hlsl:VSMain";
         pixel = "features.hlsl:PSMain";
-        depth = false;
+        state {
+            depth { test = false; write = false; }
+        }
     }
 })";
     Write(source, text);
@@ -181,6 +186,97 @@ float4 PSMain(P p) : SV_Target
     rejected(budget, "limit (64)");
     Write(source, text);
 }
+void StateContracts(const std::filesystem::path& root)
+{
+    const auto source = root / "policy.shader";
+    const std::string text = R"(shader "Test/Policy"
+{
+    material
+    {
+        [id("surface")] SurfaceType Surface = Transparent;
+        [id("blend")] BlendMode Blend = Alpha;
+        [id("face")] CullMode Face = Front;
+        [id("reference"), range(0, 255)] uint Reference = 7;
+        [id("test")] bool Test = false;
+        [id("write")] bool Write = true;
+    }
+    render { surface = $Surface; blend = $Blend; }
+    pass "ArbitraryBeautyLabel"
+    {
+        role = Forward;
+        state
+        {
+            preset = SurfaceForward;
+            cull = $Face;
+            depth { test = $Test; write = $Write; compare = Less; }
+            stencil
+            {
+                enabled = true; reference = $Reference;
+                front { compare = Less; pass = Invert; }
+                compare = Equal; pass = Replace;
+            }
+        }
+        vertex = "policy.hlsl:VSMain";
+        pixel = "policy.hlsl:PSMain";
+    }
+})";
+    Write(source, text);
+    Write(root / "policy.hlsl", R"(#include <renderlab/generated/parameters.hlsli>
+float4 VSMain(float3 p : POSITION) : SV_Position { return float4(p, 1); }
+float4 PSMain() : SV_Target { return float4(Material.Surface, Material.Blend, 0, 1); }
+)");
+    shader::CompileOptions options;
+    options.cacheDirectory = root / "policy-cache";
+    auto built = shader::CompileShader(source, options);
+    Require(bool(built), built.diagnostics);
+    const auto handle = built.package->ResolvePass(shader::PassRole::Forward);
+    const auto& pass = built.package->GetPass(handle);
+    const shader::MaterialTemplate schema(built.package);
+    auto asset = material::Create(schema);
+    Require(pass.name == "ArbitraryBeautyLabel" &&
+                built.package->HasRole(shader::PassRole::Forward),
+            "Pass role must be independent of the author's label");
+    Fails([&] { built.package->ResolvePass(shader::PassRole::ShadowCaster); }, "required role");
+    auto ambiguous = *built.package;
+    ambiguous.definition.passes.push_back(pass);
+    ambiguous.definition.passes.back().name = "SecondBeauty";
+    Fails([&] { ambiguous.ResolvePass(shader::PassRole::Forward); }, "Ambiguous");
+    const auto policy = material::ResolvePolicy(built.package->definition, asset);
+    const auto state = material::ResolveState(built.package->definition, pass, asset);
+    Require(
+        policy.queue == 3000 && policy.surface == shader::SurfaceType::Transparent &&
+            state.blend.enabled && state.depth.writeEnabled && !state.depth.testEnabled &&
+            state.depth.compare == rhi::CompareOp::Less &&
+            state.raster.cull == rhi::CullMode::Front && state.stencilReference == 7,
+        "State property references and overrides must be independent of surface classification");
+    Require(state.stencil.front.compare == rhi::CompareOp::Less &&
+                state.stencil.back.compare == rhi::CompareOp::Equal &&
+                state.stencil.front.pass == rhi::StencilOp::Invert &&
+                state.stencil.back.pass == rhi::StencilOp::Replace,
+            "Explicit per-face state must override common fields regardless of source order");
+    material::Set(asset, schema, "blend", std::array<double, 1>{2});
+    const auto additive = material::ResolveState(built.package->definition, pass, asset);
+    Require(additive.blend.dstColor == rhi::BlendFactor::One &&
+                additive.blend.srcAlpha == rhi::BlendFactor::Zero &&
+                additive.blend.dstAlpha == rhi::BlendFactor::One,
+            "Additive preset must preserve target alpha");
+    auto renamed = text;
+    Replace(renamed, "ArbitraryBeautyLabel", "RenamedBeauty");
+    Write(source, renamed);
+    auto next = shader::CompileShader(source, options);
+    Require(bool(next), next.diagnostics);
+    Require(next.package->GetPass(next.package->ResolvePass(shader::PassRole::Forward)).name ==
+                "RenamedBeauty",
+            "Renamed pass must retain its role");
+    Fails([&] { next.package->GetPass(handle); }, "Stale or foreign");
+    auto invalid = text;
+    Replace(invalid, "cull = $Face", "cull = $Surface");
+    Write(source, invalid);
+    auto rejected = shader::CompileShader(source, options);
+    Require(!rejected && rejected.diagnostics.find("type mismatch") != std::string::npos,
+            "State references must enforce nominal enum types");
+    Write(source, text);
+}
 } // namespace
 int wmain(int argc, wchar_t** argv)
 {
@@ -212,7 +308,7 @@ int wmain(int argc, wchar_t** argv)
         Require(bool(repaired) && !repaired.package->cacheHit, "Corrupt cache must rebuild");
         const shader::MaterialTemplate materialTemplate(package);
         auto asset = material::Create(materialTemplate);
-        Require(asset.values.contains("unused") && materialTemplate.Fields().size() == 9,
+        Require(asset.values.contains("unused") && materialTemplate.Fields().size() == 10,
                 "Unused declared fields must remain in schema");
         const std::array<double, 4> color{.5, .25, .125, 1};
         material::Set(asset, materialTemplate, "base_color", color);
@@ -338,6 +434,7 @@ int wmain(int argc, wchar_t** argv)
         worker.Request(source, options);
         Require(bool(Await(worker)), "Background failure recovery");
         FeatureContracts(root);
+        StateContracts(root);
         std::cout << "M2 CPU acceptance passed: declarations, metadata, packing, dual reflection, "
                      "cache invalidation/corruption, material round trip/migration, background "
                      "coalescing/failure/recovery\n";

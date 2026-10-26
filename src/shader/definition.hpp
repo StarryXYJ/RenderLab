@@ -1,6 +1,7 @@
 #pragma once
 
 #include "rhi/resources.hpp"
+#include "shader/render_state.hpp"
 
 #include <cstdint>
 #include <filesystem>
@@ -96,7 +97,10 @@ struct Pass
     std::string name;
     std::vector<Entry> entries;
     std::vector<ParameterBlock> blocks;
-    bool depth = true, blend = false, cull = true;
+    PassRole role = PassRole::Custom;
+    StateDefinition state;
+    PassEnable enabled = PassEnable::Always;
+    StateValue castShadows{1, {}};
     std::vector<std::string> features;
     SourceLocation source;
 };
@@ -122,7 +126,9 @@ struct Definition
     std::vector<Variant> variants;
     std::vector<EnumDefinition> enums;
     std::vector<Dependency> declarations;
+    RenderPolicy render;
 };
+std::vector<EnumDefinition> BuiltinEnums();
 bool HasKeywords(const Definition& definition);
 std::string VariantLabel(const VariantKey& key);
 std::vector<Variant> EnumerateVariants(const Definition& definition, const Pass& pass);

@@ -1,17 +1,16 @@
 #ifndef RENDERLAB_ALPHA_INCLUDED
 #define RENDERLAB_ALPHA_INCLUDED
-void ApplyAlphaCutoff(float alpha)
+void ApplyAlphaCutoff(float alpha, float cutoff)
 {
-#if ALPHA_MASK
-    clip(alpha - Material.AlphaCutoff);
-#endif
+    clip(alpha - cutoff);
 }
-float SurfaceAlpha(float alpha)
+// Surface/Blend use the stable numeric codes of the material policy interface.
+float4 EncodeSurfaceOutput(float3 color, float alpha, uint surface, uint blend)
 {
-#if ALPHA_BLEND
-    return saturate(alpha);
-#else
-    return 1;
-#endif
+    if (surface == 0) return float4(color, 1);
+    alpha = saturate(alpha);
+    if (blend == 1) color *= alpha;
+    else if (blend == 3) color = lerp(1.0.xxx, color, alpha);
+    return float4(color, alpha);
 }
 #endif

@@ -1,4 +1,5 @@
 #include "renderer/scene_renderer.hpp"
+#include "material/render_state.hpp"
 
 #include "assets/io.hpp"
 #include "assets/json_io.hpp"
@@ -228,10 +229,21 @@ struct SceneRenderer::Impl
                     const auto build = shader::CompileShader(shaderEntry.path, options);
                     if (!build)
                         throw std::runtime_error(build.diagnostics);
-                    const auto& actual = build.package->Layout("Forward").blocks;
+                    const auto& actual =
+                        build.package
+                            ->Layout(
+                                build.package
+                                    ->GetPass(build.package->ResolvePass(shader::PassRole::Forward))
+                                    .name)
+                            .blocks;
                     const auto frame =
                         std::ranges::find(actual, std::string("Frame"), &shader::BlockLayout::name);
-                    const auto& standard = package->Layout("Forward").blocks;
+                    const auto& standard =
+                        package
+                            ->Layout(
+                                package->GetPass(package->ResolvePass(shader::PassRole::Forward))
+                                    .name)
+                            .blocks;
                     const auto expected = std::ranges::find(standard, std::string("Frame"),
                                                             &shader::BlockLayout::name);
                     if (frame == actual.end() || frame->size != expected->size ||
@@ -276,10 +288,12 @@ struct SceneRenderer::Impl
             return input;
         }
         auto result = material::Create(materialTemplate);
-        if (surface.alphaMode == "MASK")
-            material::SelectVariant(result, materialTemplate, "Masked");
-        else if (surface.alphaMode == "BLEND")
-            material::SelectVariant(result, materialTemplate, "Transparent");
+        material::Set(result, materialTemplate, "surface",
+                      std::array<double, 1>{surface.alphaMode == "BLEND" ? 1.0 : 0.0});
+        material::Set(result, materialTemplate, "alpha_clip",
+                      std::array<double, 1>{surface.alphaMode == "MASK" ? 1.0 : 0.0});
+        material::Set(result, materialTemplate, "cull",
+                      std::array<double, 1>{surface.doubleSided ? 0.0 : 2.0});
         material::Set(result, materialTemplate, "alpha_cutoff",
                       std::array<double, 1>{surface.alphaCutoff});
         material::Set(result, materialTemplate, "base_color",
@@ -311,7 +325,8 @@ struct SceneRenderer::Impl
     }
     std::shared_ptr<rhi::Buffer> FrameBuffer()
     {
-        const auto& layout = package->Layout("Forward");
+        const auto& layout =
+            package->Layout(package->GetPass(package->ResolvePass(shader::PassRole::Forward)).name);
         const auto& block =
             *std::ranges::find(layout.blocks, std::string("Frame"), &shader::BlockLayout::name);
         const auto bytes = material::Pack(
@@ -385,9 +400,31 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
     graph.ImportTexture("DisplayColor", target, {initial, initial != rhi::State::Undefined});
     graph.CreateTexture("CameraColor", {target->desc.width, target->desc.height,
                                         rhi::Format::Rgba32Float, false, true});
-    graph.CreateTexture("CameraDepth",
-                        {target->desc.width, target->desc.height, rhi::Format::D32, false, true});
+    auto cameraDepthFormat = rhi::Format::D32;
     RenderFrame frame;
+    const auto scan = [&](const std::vector<scene::Instance>& instances, shader::PassRole role,
+                          rhi::Format& format)
+    {
+        for (const auto& instance : instances)
+        {
+            const auto& model = self.models.at(instance.model);
+            const auto mesh = std::ranges::find(model.meshes, instance.mesh, &assets::Mesh::id);
+            if (mesh == model.meshes.end())
+                throw std::logic_error("Snapshot references missing mesh");
+            const auto material = self.MaterialFor(instance, model.materials.at(mesh->material));
+            if (role == shader::PassRole::ShadowCaster && !material.package->HasRole(role))
+                continue;
+            const auto& pass = material.package->GetPass(material.package->ResolvePass(role));
+            if (material::PassEnabled(material.package->definition, pass, material.asset) &&
+                material::ResolveState(material.package->definition, pass, material.asset)
+                    .stencil.enabled)
+                format = rhi::Format::D32S8;
+        }
+    };
+    scan(self.snapshot.instances, shader::PassRole::Forward, cameraDepthFormat);
+    scan(self.snapshot.shadowCasters, shader::PassRole::ShadowCaster, frame.shadowDepthFormat);
+    graph.CreateTexture("CameraDepth",
+                        {target->desc.width, target->desc.height, cameraDepthFormat, false, true});
     frame.clearColor = {.02f, .02f, .02f, 1};
     frame.shadowResolution =
         self.snapshot.shadowCasters.empty() ? 1 : self.snapshot.light.shadowResolution;
@@ -447,21 +484,22 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
             throw std::logic_error("Snapshot references missing mesh");
         const auto& surface = model.materials.at(mesh->material);
         const auto material = self.MaterialFor(instance, surface);
-        const auto transparent = material.asset.variant == "Transparent";
-        if (shadow && (transparent || !std::ranges::any_of(material.package->definition.passes,
-                                                           [](const auto& pass)
-                                                           { return pass.name == "Shadow"; })))
+        const auto role = shadow ? shader::PassRole::ShadowCaster : shader::PassRole::Forward;
+        if (shadow && !material.package->HasRole(role))
             return;
+        const auto& pass = material.package->GetPass(material.package->ResolvePass(role));
+        if (!material::PassEnabled(material.package->definition, pass, material.asset))
+            return;
+        const auto policy = material::ResolvePolicy(material.package->definition, material.asset);
+        const bool transparent = policy.surface == shader::SurfaceType::Transparent;
         material::Preparation prepare;
-        prepare.pass = shadow ? "Shadow" : "Forward";
+        prepare.pass = role;
         prepare.color = rhi::Format::Rgba32Float;
-        prepare.blend = !shadow && transparent;
-        prepare.depthWrite = shadow || !transparent;
-        prepare.cull = !surface.doubleSided;
+        prepare.depthStencilFormat = shadow ? frame.shadowDepthFormat : cameraDepthFormat;
         const auto& w = instance.world;
         const math::Vec3 x{w.At(0, 0), w.At(1, 0), w.At(2, 0)},
             y{w.At(0, 1), w.At(1, 1), w.At(2, 1)}, z{w.At(0, 2), w.At(1, 2), w.At(2, 2)};
-        prepare.frontCounterClockwise = math::Dot(math::Cross(x, y), z) > 0;
+        prepare.mirrored = math::Dot(math::Cross(x, y), z) < 0;
         prepare.vertexStride = sizeof(assets::Vertex);
         prepare.attributes = {{"POSITION", 0, rhi::VertexFormat::Float3, 0},
                               {"NORMAL", 1, rhi::VertexFormat::Float3, 12},
@@ -470,7 +508,7 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
         prepare.constants["Draw"] = {{"ObjectToWorld", Matrix(instance.world)},
                                      {"NormalToWorld", Matrix(instance.normal)},
                                      {"PreviousObjectToWorld", Matrix(instance.previousWorld)}};
-        for (const auto& resource : material.package->Layout(prepare.pass).resources)
+        for (const auto& resource : material.package->Layout(pass.name).resources)
             if (resource.property.symbol == "EnvironmentAtlas")
                 prepare.bindings["EnvironmentAtlas"] = {0, self.environmentAtlas};
             else if (resource.property.symbol == "BrdfLut")
@@ -481,6 +519,8 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
         self.generations[material.package.get()] = prepared.generation;
         DrawPacket draw;
         draw.pipeline = prepared.pipeline;
+        draw.stencilReference = prepared.stencilReference;
+        draw.queue = policy.queue;
         draw.kind = DrawKind::Indexed;
         draw.count = static_cast<uint32_t>(mesh->indices.size());
         const auto center = (instance.bounds.minimum + instance.bounds.maximum) * .5f;
@@ -501,7 +541,7 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
             {
                 const auto name = importBuffer(
                     binding.buffer,
-                    instance.id + "/" + prepare.pass + "/" + std::to_string(binding.space) + "/" +
+                    instance.id + "/" + pass.name + "/" + std::to_string(binding.space) + "/" +
                         std::to_string(binding.slot),
                     binding.buffer->desc.memory == rhi::Memory::Upload ? rhi::State::HostWrite
                                                                        : rhi::State::ShaderRead);
@@ -521,7 +561,7 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
         }
         if (prepare.deferredResources.contains("MainLightShadow"))
         {
-            const auto& resources = material.package->Layout(prepare.pass).resources;
+            const auto& resources = material.package->Layout(pass.name).resources;
             const auto& resource =
                 *std::ranges::find_if(resources, [](const auto& value)
                                       { return value.property.symbol == "MainLightShadow"; });

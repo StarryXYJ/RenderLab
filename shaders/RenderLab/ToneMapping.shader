@@ -12,7 +12,9 @@ shader "RenderLab/ToneMapping"
         }
         vertex = "ToneMapping.hlsl:VSMain";
         pixel = "ToneMapping.hlsl:PSMain";
-        depth = false;
-        cull = false;
+        state {
+            depth { test = false; write = false; }
+            cull = None;
+        }
     }
 }

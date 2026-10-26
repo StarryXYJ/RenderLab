@@ -40,6 +40,15 @@ std::string SchemaToJson(const Package& package)
         const auto& interface = package.interfaces[i];
         Json pass{{"name", package.definition.passes[i].name}};
         const auto& definition = package.definition.passes[i];
+        pass["role"] = definition.role == PassRole::Forward        ? "Forward"
+                       : definition.role == PassRole::ShadowCaster ? "ShadowCaster"
+                                                                   : "Custom";
+        pass["statePreset"] = static_cast<int>(definition.state.preset);
+        pass["state"] = Json::array();
+        for (const auto& field : definition.state.overrides)
+            pass["state"].push_back({{"field", StateFields()[field.field].path},
+                                     {"property", field.value.property},
+                                     {"literal", field.value.literal}});
         pass["features"] = definition.features;
         pass["variants"] = Json::array();
         for (const auto& variant : EnumerateVariants(package.definition, definition))

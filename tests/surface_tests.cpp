@@ -198,7 +198,10 @@ void Gpu(rhi::Runtime& runtime, shader::Target target, const std::filesystem::pa
         const auto& selected = useLit ? litSchema : schema;
         auto asset = material::Create(selected);
         material::Set(asset, selected, "base_color", rgba);
-        material::SelectVariant(asset, selected, variant);
+        material::Set(asset, selected, "surface",
+                      std::array<double, 1>{variant == "Transparent" ? 1.0 : 0.0});
+        material::Set(asset, selected, "alpha_clip",
+                      std::array<double, 1>{variant == "Masked" ? 1.0 : 0.0});
         const auto& path = database.Get(id).path;
         material::Save(asset, path);
         std::filesystem::last_write_time(path, std::filesystem::file_time_type::clock::now() +
@@ -263,6 +266,45 @@ void Gpu(rhi::Runtime& runtime, shader::Target target, const std::filesystem::pa
     Require(render("masked-no-cast-disabled") == clippedShadow,
             "Fully clipped material must not cast a shadow");
     object("sun").light->shadows = true;
+    {
+        document = original;
+        const auto baseline = render("policy-before-rename");
+        const auto isolatedEngine = root / "engine";
+        std::filesystem::create_directories(isolatedEngine);
+        std::filesystem::copy(engine / "RenderLab", isolatedEngine / "RenderLab",
+                              std::filesystem::copy_options::recursive);
+        for (const auto name : {"Lit", "Unlit"})
+        {
+            const auto path = isolatedEngine / "RenderLab" / (std::string(name) + ".shader");
+            auto source = shader::ReadText(path);
+            const auto replace = [&](const std::string& from, const std::string& to)
+            {
+                size_t position = 0;
+                while ((position = source.find(from, position)) != std::string::npos)
+                {
+                    source.replace(position, from.size(), to);
+                    position += to.size();
+                }
+            };
+            replace("pass Forward", "pass ArbitraryBeautyName");
+            replace("pass Shadow", "pass ArbitraryCasterName");
+            replace("cull = $Cull;",
+                    "cull = $Cull; stencil { enabled = true; compare = Always; writeMask = 0; }");
+            WriteFileAtomically(path, std::as_bytes(std::span{source.data(), source.size()}));
+        }
+        renderer::SceneRenderer renamed(runtime, target, root / "Shadow.rlproject", isolatedEngine);
+        renamed.Document() = document;
+        auto destination = runtime.CreateTexture(
+            {257, 193, rhi::Format::Rgba8Srgb, false, true, "Policy.Renamed"});
+        const auto result = renamed.Render(destination, rhi::State::Undefined, nullptr, true,
+                                           output / "policy-renamed-stencil.json");
+        runtime.Wait(result.completion);
+        const auto bytes = result.pixels->Map();
+        for (size_t y = 0; y < 193; ++y)
+            Require(std::memcmp(bytes.data() + y * rhi::TextureRowPitch(257),
+                                baseline.data() + y * 257 * 4, 257 * 4) == 0,
+                    "Pass renaming and enabled identity stencil must preserve scene pixels");
+    }
     renderer::SceneRenderOptions largest;
     largest.shadowResolution = 2048;
     auto secondTarget = runtime.CreateTexture(

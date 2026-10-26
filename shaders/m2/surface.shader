@@ -16,6 +16,7 @@ shader "Demo/Surface"
         float3 Direction = (1, 2, 3);
         float Weights[2] = (0.2, 0.8);
         float3x2 Basis = (1, 2, 3, 4, 5, 6);
+        [id("blend_test")] bool BlendTest = false;
         [id("base_map"), srgb]
         Texture2D<float4> BaseMap = white;
         SamplerState BaseSampler = point_clamp;
@@ -28,15 +29,21 @@ shader "Demo/Surface"
     {
         vertex = "surface.hlsl:VSMain";
         pixel = "surface.hlsl:PSMain";
-        depth = false;
-        cull = false;
+        state {
+            depth { test = false; write = false; }
+            cull = None;
+            blend { enabled = $BlendTest; }
+        }
     }
     pass Alternate
     {
         vertex = "surface.hlsl:VSMain";
         pixel = "surface.hlsl:PSAlternate";
-        depth = false;
-        cull = false;
+        state {
+            depth { test = false; write = false; }
+            cull = None;
+            blend { enabled = $BlendTest; }
+        }
     }
     pass Probe
     {

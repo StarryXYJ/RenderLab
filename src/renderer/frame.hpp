@@ -50,6 +50,7 @@ struct DrawPacket
     uint64_t indirectOffset = 0;
     uint32_t stencilReference = 0;
     float distance = 0;
+    int32_t queue = 2000;
 };
 /** @brief Per-frame immutable inputs; no graph handles or ownership of graph outputs. */
 struct RenderFrame
@@ -57,6 +58,7 @@ struct RenderFrame
     std::vector<DrawPacket> opaque, transparent;
     std::vector<DrawPacket> shadowCasters;
     uint32_t shadowResolution = 1;
+    rhi::Format shadowDepthFormat = rhi::Format::D32;
     std::array<float, 4> clearColor = {.02f, .02f, .02f, 1};
 };
 } // namespace renderlab::renderer
