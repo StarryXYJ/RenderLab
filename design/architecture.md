@@ -202,6 +202,10 @@ M4 的首个场景闭环见 [项目、场景](../docs/m4-scene.md)，Forward PBR
 
 ## Shader 与材质
 
+### M4 后契约修订提案
+
+[Shader 与材质 v2 提案](shader-material-v2.md) 将 Pass role、队列分类、固定功能状态和静态属性轴分别声明；Renderer 通过类型化接口与绑定 handle 消费数据，HLSL 库通过结构体和显式参数求值。bool/enum 仅在带 keyword 特性时产生局部变体，Stencil 需覆盖 RHI、深度模板附件与 Graph 访问。该提案尚未实现；本节下述 M2/M4 具名变体与共享全局参数仍描述当前运行时，实际实施状态以阶段计划为准。
+
 ### Shader 工具链
 
 ShaderDefinition 是作者维护的 Shader 资产，包含 HLSL 来源、入口点、材质属性、合法变体、Pass 角色和状态选择。M2 采用简洁声明语法作为唯一作者入口，共享参数模块由 use 引入，HLSL 函数与工具仍由普通 Include 组织。内部描述统一，不并存另一份手写 JSON 元数据。

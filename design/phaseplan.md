@@ -5,8 +5,8 @@
 ## 当前状态
 
 - 当前实施阶段：M0–M4 DONE；M4.1–M4.5 全部完成。
-- 当前工作项：M4 交付与验收完成，按子阶段提交 Git；下一计划阶段 M5 NOT_STARTED。
-- 用户约定：每个子阶段验收完成即提交 Git，无阻塞时在当前授权范围内继续推进；M4.3 提交 c50ee6a、M4.4 提交 40d0c12，M4.5 随本轮提交。
+- 当前工作项：按本轮请求完成 Shader/Material 契约修订提案，仅设计；R1 实现 NOT_STARTED，M5 NOT_STARTED。
+- 用户约定：每个子阶段验收完成即提交 Git，无阻塞时在当前授权范围内继续推进；M4.3 提交 c50ee6a、M4.4 提交 40d0c12、M4.5 提交 9a4b2e4。
 - Demo 的 Custom 示例作为回归入口保留；M4 场景示例使用 Forward 组合与现有 Shader/Material 链路。
 
 | 阶段 | 目标 | 前置依赖 | 状态 |
@@ -16,12 +16,15 @@
 | M2 | Shader 与材质数据链路 | M1 | DONE |
 | M3 | 单队列 Render Graph | M2 | DONE |
 | M4 | 场景资源与基础 Renderer | M3 | DONE |
+| R1 | Shader/Material 契约修订（提案，尚未实施） | M4 | NOT_STARTED |
 | M5 | Deferred 与光追基础 | M4 | NOT_STARTED |
 | M6 | GPU Driven 与执行优化 | M4；光追调度测试另需 M5 | NOT_STARTED |
 | M7 | C# 编辑器与完整项目工作流 | M4；默认在 M5、M6 的核心目标后开展 | NOT_STARTED |
 | M8 | 一个深入的渲染专题与作品交付 | 所选专题依赖已满足 | NOT_STARTED |
 
 默认顺序为 M0 到 M8。M5 和 M6 在 M4 后可以独立推进；单阶段内按下列子阶段顺序执行，不同时建设多个高级系统。完整编辑器后置，M4 只实现运行内容所需的最小项目与资源能力。
+
+本轮仅授权 R1 设计；建议后续先完成 R1 再扩展 M5，避免把名称推断与共享全局参数带入更多角色。该建议不构成实现已获授权或已开始。
 
 ## 状态与维护规则
 
@@ -151,6 +154,43 @@ DONE（2026 年 10 月 26 日）：BeforeOpaque ShadowFeature、RGBA32F 记录 R
 DONE（2026 年 10 月 26 日）：同线程 modeless Win32 面板、F1、冻结/重置相机、曝光/阴影质量、最终/HDR/阴影/环境/LUT 查看；Graph 可选逐 Pass Timestamp，64 slot/最多 32 个存活 Pass，完成后读取。固定宽高/质量/项目与 5 帧预热测量，独立 Player 与安装目录，共用现有宿主和渲染流程。
 
 补充修复：Graph/Pool 改用真实 FormatBytes 估算，修正 HDR 按 4 字节低估的问题；SceneRenderer 的池上限明确设为 64 项/224MiB，RHI 仍独立检查 256MiB。CPU 回归覆盖格式预算/溢出/未完成计时读取；双后端验证连续提交的 2048² 阴影、计时不改变画面、查看器图剔除和控件命令/布局边界。最终 Debug/Release 各 37/37 与固定基线见汇总；不把自动控件测试当作手动 UI 验收。
+
+## R1 Shader/Material 契约修订
+
+状态：NOT_STARTED（实现）；本轮设计提案已完成，日期：2026 年 10 月 26 日。
+
+设计入口：[Shader 与材质 v2](shader-material-v2.md)。本轮只修改设计文档，检查差异、文本编码和相对链接，不运行构建或 GPU 测试；M4 已完成能力没有代码变更。
+
+### R1.1 类型化 Pass 与固定功能状态
+
+- [ ] 显式 role/PassHandle、材质分类/队列与状态配方，移除按变体/Pass 名称推断行为和根据 Blend 推断 DepthWrite。
+- [ ] 完整 Raster/Depth/Blend/Stencil、PSO Key、每 Draw 动态 StencilRef；深度模板格式与双后端能力检查。
+- [ ] Graph 深度/模板访问与初始化闭环、准备 PSO 前解析附件需求；保留有界缓存和在途快照所有权。
+
+验收：独立深度测试/写入、混合颜色与 Alpha、模板遮罩/双面操作、跨 Pass 保留、reference 隔离与非法配置；双后端 Validation 无错误。
+
+### R1.2 类型化属性与静态轴
+
+- [ ] enum 稳定数值、普通 bool/enum uniform 与 keyword 特性；每 Pass 显式 features、稳定 VariantKey 和组合预算。
+- [ ] 材质序列化/Inspector/热重载统一属性值，替换任意 variant 字符串；状态修改不重编译，静态属性整代切换。
+
+验收：组合数量、枚举互斥、非法值/缺失组合/超额诊断、固定布局与异步发布一致性。
+
+### R1.3 参数接口与显式 HLSL 库
+
+- [ ] `.params` 接口身份/版本/布局校验、生成 C++ 数据/打包接口及 HLSL 类型、类型化绑定 handle 与标准资源语义。
+- [ ] 拆分 View/Object/Lighting/Shadow，入口绑定适配与纯函数库分离；纹理参数和光栅梯度显式传递。
+- [ ] 移除 Renderer 的 Frame 逐字段名称匹配、内置 Shader 名称白名单和资源 symbol 分支；绑定仍经过 Graph 访问声明。
+
+验收：项目自定义 Shader 的最小接口、资源/常量别名独立性、DXIL/SPIR-V 函数传参和布局校验、缺少必需接口的准备期诊断。
+
+### R1.4 全量迁移与回归
+
+- [ ] 迁移内置/项目 Shader、示例材质、glTF 语义映射和工具；显式格式升级与缓存失效，不长期维护两套路径。
+- [ ] 稳定 ID 不变时重命名 Pass/属性 symbol/资源别名/HLSL 文件，画面与分类保持一致；用户覆盖材质状态不被导入器重写。
+- [ ] Debug/Release 双后端回归 M4 PBR/HDR/IBL/阴影/透明、热重载、窗口交互、工具及独立 Player。
+
+退出条件：以上契约实际实现并通过行为验证，记录硬件、配置、命令和限制后才能标记 DONE；文档与语法设计不构成退出条件。
 
 ## M5 Deferred 与光追基础
 

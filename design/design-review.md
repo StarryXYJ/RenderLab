@@ -108,3 +108,9 @@ Lit/Unlit 保持普通 Shader 资产，表面值、光栅 SampleGrad 上下文�
 ## M4.5 演示宿主与测量
 
 原生调试面板采用同线程 modeless Win32 控件，避免在 C# 编辑器前引入第二套 UI 框架。固定纹理入口沿用显示 Shader 与 Graph 资源声明，允许编译器剔除不再显示的 Forward 工作。Timestamp 以真实提交完成点保护读回，每个原生命令上下文独立复用 query 存储；窗口收集已退休的两帧结果，离线测量单独预热并在关闭验证层后采样。Player 复用同一宿主与项目格式，用独立安装目录检验运行时内容边界，不另建一套渲染流程。
+
+## M4 后 Shader/Material 契约修订提案
+
+用户指出精确名称匹配与共享 HLSL 全局名的耦合。[v2 提案](shader-material-v2.md) 参考 Unity 的固定状态、Surface/Blend 策略和结构体参数求值，采用类型化 Pass role、显式状态及接口绑定 handle。资源 symbol 仅是局部作者名称，稳定 PropertyId/SchemaId 承担数据身份；普通 bool/enum 为 uniform，keyword 特性才生成有界的局部静态轴。透明分类、Blend、DepthWrite 与静态变体分别管理，标准配方提供默认值，显式 Pass 覆盖保持权威。
+
+保留已有固定布局、不可变快照、整代热重载和有界 PSO 生命周期；不复制完整 ShaderLab，不加全局关键字或通用表达式 DSL。模板测试必须配套真实深度模板格式、动态 reference 与 Graph 的各面访问/初始化，不能以语法存在视为实现。当前仅完成提案，运行时与 M4 验收结果未改变，实施和回归要求统一登记在阶段计划。
