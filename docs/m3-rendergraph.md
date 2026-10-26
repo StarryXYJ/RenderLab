@@ -52,7 +52,7 @@ AddRasterPass / AddComputePass / AddCopyPass 返回对应 Builder。直接声明
 
 一个 Pass 可访问多个资源。同一资源只允许一种用途和一个版本关系；同版本、同用途的重复只读可合并，Buffer 只读范围合并为覆盖区间。ReadWrite 直接声明保留写，不分别 Read 和 Write。Buffer 调度保守按整资源处理，范围用于校验；TextureRange 目前只允许 mip0/layer0 与匹配 aspect。
 
-完整覆盖是作者承诺，图无法证明 Shader 写满资源；局部写入必须保留旧内容。Raster 支持单颜色、可选一个 D32、固定 Store，不支持 Discard。深度只读仍使用保守的 RHI DepthWrite 附件状态，通过 PSO 禁止实际写入，不能同时采样深度。
+完整覆盖是作者承诺，图无法证明 Shader 写满资源；局部写入必须保留旧内容。Raster 支持单颜色、可选一个 D32/D32S8、固定 Store，不支持 Discard。深度模板仍使用保守的 RHI DepthWrite 附件状态，逻辑只读通过录制校验和 PSO 禁止实际写入，不能同时采样深度。组合附件按整资源跟踪，DepthStencilTarget 支持各面独立 Load/Clear/权限，详见 [深度模板契约](render-states.md#graph)。
 
 | Context | 命令 |
 | --- | --- |

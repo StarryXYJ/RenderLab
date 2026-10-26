@@ -116,3 +116,5 @@ Lit/Unlit 保持普通 Shader 资产，表面值、光栅 SampleGrad 上下文�
 保留已有固定布局、不可变快照、整代热重载和有界 PSO 生命周期；不复制完整 ShaderLab，不加全局关键字或通用表达式 DSL。模板测试必须配套真实深度模板格式、动态 reference 与 Graph 的各面访问/初始化，不能以语法存在视为实现。实施和回归要求统一登记在阶段计划。
 
 实施复查将 R1.1 分为 RHI/Graph 和作者层两步。附件格式与状态正交；无深度测试但需写入时统一映射 Always。Graph 暂不拆模板平面的版本与布局，采用整附件保守依赖和逐面初始化/权限检查，任一 Load 都保留旧 producer，避免清深度时丢失模板。该基础独立验证后，再接入材质属性引用，减少临时兼容接口。
+
+收尾复查确认每类身份各有单一来源：资产 UUID 管引用，PropertyId 管保存，Schema ID/version/hash 管参数兼容性，包/Pass handle 管当前代绑定；显示名、路径和 HLSL symbol 仍可局部使用，不承担宿主行为策略。glTF 通过类型化 MaterialSemantic 映射，外部 IBL/阴影另用 BindingSemantic；两者不会形成全局可变参数表。静态值和普通值共用材质属性存储，旧具名变体与材质 v1 明确拒绝，避免两套选择状态长期并存。独立无 sidecar 工具允许路径派生的临时身份，持久资产要求登记 sidecar；限制和显式迁移步骤见 [资产契约](../docs/shader-assets.md)。

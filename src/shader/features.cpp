@@ -26,14 +26,6 @@ std::vector<uint32_t> Choices(const Property& property)
     return result;
 }
 } // namespace
-bool HasKeywords(const Definition& definition)
-{
-    for (const auto& block : definition.blocks)
-        for (const auto& property : block.properties)
-            if (!property.keyword.empty())
-                return true;
-    return false;
-}
 std::string VariantLabel(const VariantKey& key)
 {
     if (key.empty())
@@ -45,12 +37,6 @@ std::string VariantLabel(const VariantKey& key)
 }
 std::vector<Variant> EnumerateVariants(const Definition& definition, const Pass& pass)
 {
-    // Existing source assets migrate in R1.4; a shader cannot mix both authoring systems.
-    if (!HasKeywords(definition))
-        return definition.variants;
-    if (definition.variants.size() != 1 || definition.variants.front().name != "Default" ||
-        !definition.variants.front().defines.empty())
-        throw std::invalid_argument("Static keyword properties cannot mix with named variants");
     std::vector<Variant> variants{{"Default", {}, {}}};
     for (const auto& id : pass.features)
     {

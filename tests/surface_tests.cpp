@@ -288,6 +288,12 @@ void Gpu(rhi::Runtime& runtime, shader::Target target, const std::filesystem::pa
             };
             replace("pass Forward", "pass ArbitraryBeautyName");
             replace("pass Shadow", "pass ArbitraryCasterName");
+            replace(std::string("shader \"RenderLab/") + name + "\"",
+                    std::string("shader \"DisplayName/") + name + "\"");
+            replace(std::string(name) + ".hlsl:", std::string("Renamed") + name + ".hlsl:");
+            replace("Shadow.hlsl:", "RenamedShadow.hlsl:");
+            replace("float4 BaseColor =", "float4 TintAlias =");
+            replace("Texture2D<float4> BaseMap =", "Texture2D<float4> SurfaceMap =");
             for (const auto module : {"Scene", "View", "Object", "Shadow"})
                 replace(std::string("use \"") + module + ".params\";",
                         std::string("use \"") + module + ".params\" as Renamed;");
@@ -297,6 +303,10 @@ void Gpu(rhi::Runtime& runtime, shader::Target target, const std::filesystem::pa
             replace("cull = $Cull;",
                     "cull = $Cull; stencil { enabled = true; compare = Always; writeMask = 0; }");
             WriteFileAtomically(path, std::as_bytes(std::span{source.data(), source.size()}));
+            const auto renamedShader =
+                path.parent_path() / (std::string("Renamed") + name + ".shader");
+            std::filesystem::rename(path, renamedShader);
+            std::filesystem::rename(path.string() + ".meta", renamedShader.string() + ".meta");
         }
         for (const auto name : {"Lit", "Unlit", "Shadow"})
         {
@@ -315,7 +325,11 @@ void Gpu(rhi::Runtime& runtime, shader::Target target, const std::filesystem::pa
                 replace(block, std::string("Renamed_") + block);
             replace(", MainLightShadow,", ", SunTexture,");
             replace(", EnvironmentAtlas, BrdfLut", ", SkyTexture, LookupTexture");
+            replace("Material.BaseColor", "Material.TintAlias");
+            replace("BaseMap", "SurfaceMap");
             WriteFileAtomically(path, std::as_bytes(std::span{source.data(), source.size()}));
+            std::filesystem::rename(path,
+                                    path.parent_path() / (std::string("Renamed") + name + ".hlsl"));
         }
         renderer::SceneRenderer renamed(runtime, target, root / "Shadow.rlproject", isolatedEngine);
         renamed.Document() = document;
@@ -328,7 +342,8 @@ void Gpu(rhi::Runtime& runtime, shader::Target target, const std::filesystem::pa
         for (size_t y = 0; y < 193; ++y)
             Require(std::memcmp(bytes.data() + y * rhi::TextureRowPitch(257),
                                 baseline.data() + y * 257 * 4, 257 * 4) == 0,
-                    "Pass/module/resource aliases and identity stencil must preserve scene pixels");
+                    "Shader identity and renamed passes/properties/modules/resources/files must "
+                    "preserve scene pixels");
     }
     renderer::SceneRenderOptions largest;
     largest.shadowResolution = 2048;

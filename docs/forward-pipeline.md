@@ -93,12 +93,12 @@ auto pipeline = builder.Create();
 
 Feature 之间按名称连接资源。DrawPacket 的 vertices/indices/indirect、TextureBinding.texture 和 BufferBinding.buffer 也都为本帧资源名称。Feature 内部在建图时解析成类型化 handle，执行回调保存解析结果和数据副本，不再查名称，也不依赖 Feature 裸 this 或临时 Frame 引用。
 
-Opaque 需要关闭混合、开启深度测试和写入；Transparent 需要开启混合和深度测试、关闭深度写入。distance 是有限非负视空间距离，按从远到近稳定排序；不处理相交透明面或 OIT。支持普通、索引和间接绘制，Shader Buffer 绑定为 Uniform/ShaderRead；存储写入通过独立 Pass 声明。
+Opaque/Transparent 按已解析的材质策略分类，标准配方分别给出不透明与混合/只读深度的默认值；Pass 可独立覆盖 Depth/Blend/Stencil，Forward 按实际状态汇总附件权限。先按队列排序，再在同队列按不透明近到远、透明远到近稳定排序；distance 是有限非负视空间距离。不处理相交透明面或 OIT。支持普通、索引和间接绘制，Shader Buffer 绑定为 Uniform/ShaderRead；存储写入通过独立 Pass 声明。状态细节见 [渲染状态](render-states.md)。
 
 | 资源名称 | 契约 |
 | --- | --- |
 | CameraColor | 调用者创建或导入的当前颜色附件，可用 SetTexture 重定向 |
-| CameraDepth | 调用者创建或导入的同尺寸 D32 |
+| CameraDepth | 调用者创建或导入的同尺寸 D32/D32S8，与已准备 PSO 的附件格式一致 |
 | OpaqueColor | AfterOpaque 用户 Feature 之后的独立真实颜色复制 |
 | AfterTransparentColor | AfterTransparent 用户 Feature 之后的独立真实颜色复制 |
 

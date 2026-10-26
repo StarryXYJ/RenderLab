@@ -112,8 +112,6 @@ struct Package
     std::vector<std::filesystem::path> dependencies;
     bool cacheHit = false;
     const Interface& Layout(const std::string& pass) const;
-    const Program& Find(const std::string& pass, const std::string& variant, rhi::ShaderStage stage,
-                        Target target) const;
     const Program& Find(const std::string& pass, const VariantKey& key, rhi::ShaderStage stage,
                         Target target) const;
 };

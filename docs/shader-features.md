@@ -34,6 +34,6 @@ pass Beauty
 
 `SchemaToJson` 的 properties 输出全部逻辑属性及 keyword/choices，每个 Pass 的 features/variants 输出真实组合。静态属性改 symbol 但保持 ID，可以保留材质值和选择键；删除 enum 数值会在迁移时拒绝旧值。
 
-现有 M2/M4 的具名变体资产仍处于分步迁移中；同一个 Shader 禁止将具名变体与 keyword 属性混用。旧入口与资产在后续全量迁移步骤删除，不作为新 Shader 的设计方向。
+旧具名变体语法与独立材质 variant 字符串已移除；旧格式明确报错。全部 M2/M4 样例均采用同一属性状态，资产身份与材质 v2 迁移见 [Shader 资产](shader-assets.md)。
 
 验证入口：`shader.contracts` 对双目标编译、布局、组合预算、精确查找、保存与改名/枚举迁移作检查；`gpu.*.render_state` 通过静态 bool 改变片元输出并读回像素，验证实际 Material Runtime 程序选择，静态属性独占材质不分配常量 Buffer。

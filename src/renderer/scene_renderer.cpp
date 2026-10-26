@@ -1,5 +1,6 @@
 #include "renderer/scene_renderer.hpp"
 #include "material/render_state.hpp"
+#include "renderer/builtin_shaders.hpp"
 
 #include "assets/io.hpp"
 #include "assets/json_io.hpp"
@@ -49,6 +50,7 @@ struct SceneRenderer::Impl
     std::shared_ptr<rhi::Sampler> sampler;
     std::shared_ptr<const shader::Package> package;
     std::map<std::string, std::shared_ptr<const shader::Package>> packages;
+    std::map<std::string, std::filesystem::path> engineShaders;
     std::map<const shader::Package*, std::shared_ptr<const material::GpuGeneration>> generations;
     std::shared_ptr<rhi::TextureView> environmentAtlas, brdfLut;
     std::string environmentKey;
@@ -82,17 +84,39 @@ struct SceneRenderer::Impl
           // Two 2048 shadow color/depth pairs plus 720p HDR/depth fit below the RHI budget.
           pool(r, 64, 224ull * 1024 * 1024)
     {
+        for (const auto& file : std::filesystem::recursive_directory_iterator(project.engine))
+        {
+            if (!file.is_regular_file() || file.path().extension() != ".shader")
+                continue;
+            auto meta = file.path();
+            meta += ".meta";
+            if (!std::filesystem::is_regular_file(meta))
+                continue;
+            const auto metadata = assets::detail::LoadJson(meta);
+            const auto id = metadata.at("id").get<std::string>();
+            if (metadata.at("version") != 1 || !project::ValidId(id) || database.Contains(id))
+                throw std::invalid_argument("Invalid or conflicting engine Shader asset identity");
+            const auto path =
+                project::Inside(project.engine, file.path().lexically_relative(project.engine));
+            if (!engineShaders.emplace(id, path).second)
+                throw std::invalid_argument("Duplicate engine Shader asset ID " + id);
+        }
         shader::CompileOptions options;
         options.cacheDirectory = project.library / "Shaders";
         options.includeDirectories = {project.engine};
-        const auto compiled =
-            shader::CompileShader(project.ResolveEngine("RenderLab/Lit.shader"), options);
+        const auto builtinPath = [&](std::string_view id) -> const std::filesystem::path&
+        {
+            const auto found = engineShaders.find(std::string(id));
+            if (found == engineShaders.end())
+                throw std::invalid_argument("Missing built-in Shader asset ID " + std::string(id));
+            return found->second;
+        };
+        const auto compiled = shader::CompileShader(builtinPath(builtin::Lit), options);
         if (!compiled)
             throw std::runtime_error(compiled.diagnostics);
         package = compiled.package;
-        packages.emplace("RenderLab/Lit", package);
-        const auto display =
-            shader::CompileShader(project.ResolveEngine("RenderLab/ToneMapping.shader"), options);
+        packages.emplace(package->definition.assetId, package);
+        const auto display = shader::CompileShader(builtinPath(builtin::ToneMapping), options);
         if (!display)
             throw std::runtime_error(display.diagnostics);
         toneMapping = display.package;
@@ -210,79 +234,73 @@ struct SceneRenderer::Impl
             if (auto found = materialAssets.find(instance.material);
                 found != materialAssets.end() && found->second.version == modified)
                 return found->second.input;
-            auto selected = package;
-            if (const auto shaderId = entry.dependencies.find("shader");
-                shaderId != entry.dependencies.end())
+            const auto materialDocument = assets::detail::LoadJson(entry.path);
+            if (materialDocument.at("version") != 2)
+                throw std::invalid_argument(
+                    "Material v1 is obsolete; migrate shader IDs and feature properties to v2");
+            const auto shaderId = materialDocument.at("shader").get<std::string>();
+            if (!project::ValidId(shaderId))
+                throw std::invalid_argument("Material requires a Shader asset ID");
+            if (const auto dependency = entry.dependencies.find("shader");
+                dependency != entry.dependencies.end() && dependency->second != shaderId)
+                throw std::invalid_argument(
+                    "Material Shader dependency disagrees with its asset reference");
+            if (!packages.contains(shaderId))
             {
-                if (!packages.contains(shaderId->second))
-                {
-                    const auto& shaderEntry = database.Get(shaderId->second);
-                    if (shaderEntry.path.extension() != ".shader")
-                        throw std::invalid_argument(
-                            "Material shader dependency must reference .shader");
-                    shader::CompileOptions options;
-                    options.cacheDirectory = project.library / "Shaders";
-                    options.includeDirectories = {project.engine, project.assets};
-                    const auto build = shader::CompileShader(shaderEntry.path, options);
-                    if (!build)
-                        throw std::runtime_error(build.diagnostics);
-                    packages.emplace(shaderId->second, build.package);
-                }
-                selected = packages.at(shaderId->second);
+                const auto path = engineShaders.contains(shaderId) ? engineShaders.at(shaderId)
+                                                                   : database.Get(shaderId).path;
+                if (path.extension() != ".shader")
+                    throw std::invalid_argument("Material Shader ID must reference .shader");
+                shader::CompileOptions options;
+                options.cacheDirectory = project.library / "Shaders";
+                options.includeDirectories = {project.engine, project.assets};
+                options.assetId = shaderId;
+                const auto build = shader::CompileShader(path, options);
+                if (!build)
+                    throw std::runtime_error(build.diagnostics);
+                packages.emplace(shaderId, build.package);
             }
-            else
-            {
-                const auto name =
-                    assets::detail::LoadJson(entry.path).at("shader").get<std::string>();
-                if (!packages.contains(name))
-                {
-                    shader::CompileOptions options;
-                    options.cacheDirectory = project.library / "Shaders";
-                    options.includeDirectories = {project.engine};
-                    const auto build =
-                        shader::CompileShader(project.ResolveEngine(name + ".shader"), options);
-                    if (!build)
-                        throw std::runtime_error(build.diagnostics);
-                    packages.emplace(name, build.package);
-                }
-                selected = packages.at(name);
-            }
+            const auto selected = packages.at(shaderId);
             MaterialInput input{selected,
                                 material::Load(entry.path, shader::MaterialTemplate(selected))};
             materialAssets.insert_or_assign(instance.material, CachedMaterial{modified, input});
             return input;
         }
         auto result = material::Create(materialTemplate);
-        material::Set(result, materialTemplate, "surface",
-                      std::array<double, 1>{surface.alphaMode == "BLEND" ? 1.0 : 0.0});
-        material::Set(result, materialTemplate, "alpha_clip",
+        material::Set(result, materialTemplate, shader::MaterialSemantic::Surface,
+                      std::array<double, 1>{static_cast<double>(
+                          surface.alphaMode == "BLEND" ? shader::SurfaceType::Transparent
+                                                       : shader::SurfaceType::Opaque)});
+        material::Set(result, materialTemplate, shader::MaterialSemantic::AlphaClip,
                       std::array<double, 1>{surface.alphaMode == "MASK" ? 1.0 : 0.0});
-        material::Set(result, materialTemplate, "cull",
-                      std::array<double, 1>{surface.doubleSided ? 0.0 : 2.0});
-        material::Set(result, materialTemplate, "alpha_cutoff",
+        material::Set(result, materialTemplate, shader::MaterialSemantic::Cull,
+                      std::array<double, 1>{static_cast<double>(
+                          surface.doubleSided ? rhi::CullMode::None : rhi::CullMode::Back)});
+        material::Set(result, materialTemplate, shader::MaterialSemantic::AlphaCutoff,
                       std::array<double, 1>{surface.alphaCutoff});
-        material::Set(result, materialTemplate, "base_color",
+        material::Set(result, materialTemplate, shader::MaterialSemantic::BaseColor,
                       std::array<double, 4>{surface.color[0], surface.color[1], surface.color[2],
                                             surface.color[3]});
-        material::Set(result, materialTemplate, "metallic",
+        material::Set(result, materialTemplate, shader::MaterialSemantic::Metallic,
                       std::array<double, 1>{surface.metallic});
-        material::Set(result, materialTemplate, "roughness",
+        material::Set(result, materialTemplate, shader::MaterialSemantic::Roughness,
                       std::array<double, 1>{surface.roughness});
-        material::Set(result, materialTemplate, "normal_scale",
+        material::Set(result, materialTemplate, shader::MaterialSemantic::NormalScale,
                       std::array<double, 1>{surface.normalScale});
-        material::Set(result, materialTemplate, "occlusion_strength",
+        material::Set(result, materialTemplate, shader::MaterialSemantic::OcclusionStrength,
                       std::array<double, 1>{surface.occlusionStrength});
         material::Set(
-            result, materialTemplate, "emission",
+            result, materialTemplate, shader::MaterialSemantic::Emission,
             std::array<double, 3>{surface.emission[0], surface.emission[1], surface.emission[2]});
         if (surface.image >= 0)
-            material::SetResource(result, materialTemplate, "base_map",
+            material::SetResource(result, materialTemplate, shader::MaterialSemantic::BaseMap,
                                   instance.model + "/Image/" + std::to_string(surface.image));
-        for (const auto& [property, image] : std::array<std::pair<const char*, int>, 4>{
-                 {{"MetallicRoughnessMap", surface.metallicRoughnessImage},
-                  {"NormalMap", surface.normalImage},
-                  {"OcclusionMap", surface.occlusionImage},
-                  {"EmissionMap", surface.emissionImage}}})
+        for (const auto& [property, image] :
+             std::array<std::pair<shader::MaterialSemantic, int>, 4>{
+                 {{shader::MaterialSemantic::MetallicRoughnessMap, surface.metallicRoughnessImage},
+                  {shader::MaterialSemantic::NormalMap, surface.normalImage},
+                  {shader::MaterialSemantic::OcclusionMap, surface.occlusionImage},
+                  {shader::MaterialSemantic::EmissionMap, surface.emissionImage}}})
             if (image >= 0)
                 material::SetResource(result, materialTemplate, property,
                                       instance.model + "/Image/" + std::to_string(image));

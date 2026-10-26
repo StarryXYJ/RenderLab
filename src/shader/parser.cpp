@@ -182,35 +182,8 @@ void detail::DeclarationParser::Load(const std::filesystem::path& input, bool mo
         }
         else if (lexer.Peek().text == "[" || lexer.Peek().text == "cbuffer")
             Cbuffer(lexer);
-        else if (!module && lexer.Accept("variant"))
-        {
-            Variant variant;
-            variant.name = lexer.Identifier().text;
-            lexer.Expect("{");
-            while (!lexer.Accept("}"))
-            {
-                auto key = lexer.Identifier().text;
-                lexer.Expect("=");
-                std::string value;
-                if (lexer.Peek().text == "-" ||
-                    (!lexer.Peek().text.empty() &&
-                     std::isdigit(static_cast<unsigned char>(lexer.Peek().text.front()))))
-                {
-                    const bool negative = lexer.Accept("-");
-                    value = (negative ? "-" : "") + lexer.Take().text;
-                }
-                else
-                    value = lexer.Identifier().text;
-                lexer.Expect(";");
-                if (!variant.defines.emplace(key, value).second)
-                    lexer.Fail("Duplicate variant define");
-            }
-            if (definition.variants.size() >= 16 ||
-                std::ranges::any_of(definition.variants,
-                                    [&](auto& v) { return v.name == variant.name; }))
-                lexer.Fail("Duplicate variant or variant limit (16) exceeded");
-            definition.variants.push_back(std::move(variant));
-        }
+        else if (!module && lexer.Peek().text == "variant")
+            lexer.Fail("Named variants are obsolete; use keyword properties and per-pass features");
         else if (!module && lexer.Accept("pass"))
         {
             Pass pass;
@@ -328,8 +301,6 @@ Definition ParseDefinition(const std::filesystem::path& path,
     parser.Load(path, false);
     if (parser.definition.passes.empty())
         throw std::runtime_error(ToUtf8(path) + ": Shader needs at least one pass");
-    if (parser.definition.variants.empty())
-        parser.definition.variants.push_back({"Default", {}});
     std::set<std::string> macros;
     for (const auto& block : parser.definition.blocks)
         for (const auto& property : block.properties)

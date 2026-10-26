@@ -1,6 +1,6 @@
 # M4：项目与场景数据
 
-链路为 Project → AssetDatabase → glTF/材质 → Scene → Snapshot/CPU Culling → RenderFrame/DrawPacket → Forward → Graph → RHI。M4.3 已接入 [Forward PBR、HDR 与 IBL](m4-forward-pbr.md)；阴影、动画/蒙皮与编辑器仍在后续阶段。
+链路为 Project → AssetDatabase → glTF/材质 → Scene → Snapshot/CPU Culling → RenderFrame/DrawPacket → Forward → Graph → RHI。已接入 [Forward PBR、HDR 与 IBL](m4-forward-pbr.md)、[阴影与 Alpha](m4-shadows-alpha.md) 和 [调试工具/Player](m4-tools.md)；动画/蒙皮与编辑器仍在后续阶段。
 
 ## 模块与入口
 
@@ -55,29 +55,31 @@ Extractor 从 CPU 文档提取相机、主光和实例值快照，延迟回调�
 
 MeshRenderer.model 为模型 UUID，mesh 可指定 primitive 子资源 UUID；materials 将导入材质子资源 UUID 映射到用户 .material UUID。GPU Mesh/图像为可重建投影；静态资源准备时上传，常量按帧创建，命令引用/完成点保护在途资源。普通帧不调用 WaitIdle。
 
-Frame 常量每帧一次创建并共享，包含视图/投影、相机、主光和环境光；Draw 保存模型、法线、上一帧模型矩阵。Material 返回 PSO 与绑定值，适配成 Graph 名称/声明，由 Graph 建立绑定组；保留 generation 以复用 ShaderModule/Layout/PSO，不重复准备两份 BindingGroup。
+View/Lighting/Shadow 常量每帧创建并共享，分别包含相机、主光/环境与阴影数据；Object 保存模型、法线、上一帧模型矩阵，同实例多 Pass 复用。Material 返回 PSO 与绑定值，适配成 Graph 名称/声明，由 Graph 建立绑定组；保留 generation 以复用 ShaderModule/Layout/PSO，不重复准备两份 BindingGroup。
 
 ## HLSL 库与项目 Shader
 
-.shader 通过 use "RenderLab/Scene.params" 引入现有参数声明，Core.hlsli 引入生成头并提供：
+.shader 按需 use View/Object/Scene/Shadow.params 引入带 Schema 的接口；Scene.params 只提供照明。入口 include 生成绑定头，Core.hlsli 通过显式矩阵/相机参数提供：
 
 - TransformObjectToWorld / TransformWorldToView
 - TransformObjectToHClip / TransformWorldToHClip
 - TransformObjectToWorldDir / TransformObjectToWorldNormal
 - GetWorldSpaceViewDir（未归一化）与 SafeNormalize
 
-Lighting.hlsli 引入 Core，提供 GetMainLight 和 LightingBlinnPhong。主光来自 Frame 全局数据，无需材质逐一绑定，没有额外 LightManager。参数为 base_color/base_map、specular_color、shininess；计算漫反射和半程向量高光，背向光时无高光贡献。
+Lighting.hlsli 提供 GetMainLight 和 LightingBlinnPhong，显式接收生成的 SceneLightingData，没有额外 LightManager。Blinn–Phong 参数为 base_color/base_map、specular_color、shininess；计算漫反射和半程向量高光，背向光时无高光贡献。Lit 使用同一照明接口求值 PBR，Unlit 不要求 Lighting。
 
 ```hlsl
+#include <renderlab/generated/parameters.hlsli>
 #include "RenderLab/Lighting.hlsli"
-output.positionCS = TransformObjectToHClip(input.positionOS);
-output.normalWS = TransformObjectToWorldNormal(input.normalOS);
-DirectionalLight light = GetMainLight();
+output.positionCS = TransformObjectToHClip(input.positionOS,
+    SceneObject.ObjectToWorld, SceneView.ViewProjection);
+output.normalWS = TransformObjectToWorldNormal(input.normalOS, SceneObject.NormalToWorld);
+DirectionalLight light = GetMainLight(SceneLighting);
 ```
 
 CompileOptions.includeDirectories 挂载引擎根，shaderc 对应重复 --include DIRECTORY。use 先查当前模块目录，再查这些根，依赖内容参与缓存。
 
-.material 保持 M2 的 Shader 定义名称和 Schema；.meta 的 dependencies.shader 指向项目 .shader UUID；没有该依赖时根据文件 shader 名称选择内置 Lit、Unlit 或 BlinnPhong，无覆盖的导入材质默认 Lit。项目 Shader 需提供 Forward 光栅 Pass、当前顶点语义和 Scene.params Frame 布局，Renderer 校验共享布局，不猜测另一套全局数据。
+.material v2 直接保存 Shader UUID，内置与项目 Shader 使用同一引用规则；若 .meta 有 dependencies.shader 则必须相符。无覆盖的导入材质默认采用内置 Lit 的资源 ID。项目 Shader 需提供 Forward role、当前顶点语义和所需 Schema/资源语义；Renderer 按包/Pass 验证生成契约并缓存 BindingHandle，不检查显示名称、资源 symbol 或整个 Frame 字段列表。详见 [资产身份](shader-assets.md) 和 [参数接口](shader-parameters.md)。
 
 材质值文件按修改时间重新读取；模型与项目 Shader 在创建 SceneRenderer 时加载。当前没有文件监视、模型实时重导入、编辑器或完整自动热重载集成。
 

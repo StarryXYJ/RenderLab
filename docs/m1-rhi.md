@@ -36,7 +36,7 @@ FrameContext 的索引由 CPU 帧序号选择，与交换链图像索引独立�
 
 ## 资源、内存与屏障
 
-M1 仅实现当前用到的 2D、单 mip、单 layer、单采样纹理：RGBA8/BGRA8 UNORM、对应 sRGB 格式和 D32。Storage 纹理限定 RGBA8_UNORM；M2 补充常量缓冲、只读与可写结构化缓冲，Binding 使用固定 space 0..3。管线显式声明单顶点流的 stride、semantic、location、float2/3/4 和 offset，RHI 不依赖样例的顶点结构。样例在自身模块定义 36 字节 position/color/uv，索引为 uint32。绑定图形管线后再绑定 Geometry；切换管线后重新绑定 Group 和 Geometry。
+当前实现 2D、单 mip、单 layer、单采样纹理：RGBA8/BGRA8 UNORM、对应 sRGB、D32，以及 M4 的 RGBA32F 和 R1 的 D32S8；后两者分别用于 HDR 与深度模板附件。Storage 纹理限定 RGBA8_UNORM，深度模板不可采样/复制；完整状态契约见 [渲染状态](render-states.md)。M2 补充常量缓冲、只读与可写结构化缓冲，Binding 使用固定 space 0..3。管线显式声明单顶点流的 stride、semantic、location、float2/3/4 和 offset，RHI 不依赖样例的顶点结构。样例在自身模块定义 36 字节 position/color/uv，索引为 uint32。绑定图形管线后再绑定 Geometry；切换管线后重新绑定 Group 和 Geometry。
 
 Buffer 的内存类别为 Device、Upload、Readback。仅后两类允许映射；读回前必须完成 CopyDest→HostRead 屏障并等待提交。Upload 的映射内容在消费它的提交完成前不得改写。Vulkan 首版要求 HostVisible + HostCoherent 内存类型，不引入隐藏的非一致内存刷新行为。设备资源初始状态为 Undefined，Upload 为 HostWrite，Readback 为 CopyDest。
 

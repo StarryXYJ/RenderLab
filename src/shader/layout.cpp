@@ -275,15 +275,6 @@ bool Package::HasRole(PassRole role) const
            std::ranges::any_of(definition.passes,
                                [role](const auto& pass) { return pass.role == role; });
 }
-const Program& Package::Find(const std::string& pass, const std::string& variant,
-                             rhi::ShaderStage stage, Target target) const
-{
-    for (const auto& program : programs)
-        if (program.pass == pass && program.variant == variant && program.stage == stage &&
-            program.target == target)
-            return program;
-    throw std::invalid_argument("Missing prepared shader program: " + pass + "/" + variant);
-}
 const Program& Package::Find(const std::string& pass, const VariantKey& selectedAxes,
                              rhi::ShaderStage stage, Target target) const
 {

@@ -4,6 +4,7 @@ shader "Demo/Surface"
 
     material
     {
+        [id("detail"), keyword("DETAIL")] bool Detail = false;
         [id("base_color"), label("基础色"), color, group("表面")]
         float4 BaseColor = (0.25, 0.5, 0.75, 1);
         [id("roughness"), range(0, 1), tooltip("用于验收参数元数据")]
@@ -22,11 +23,10 @@ shader "Demo/Surface"
         SamplerState BaseSampler = point_clamp;
     }
 
-    variant Default { DETAIL = 0; }
-    variant Detail { DETAIL = 1; }
 
     pass Forward
     {
+        features = { Detail };
         vertex = "surface.hlsl:VSMain";
         pixel = "surface.hlsl:PSMain";
         state {
@@ -37,6 +37,7 @@ shader "Demo/Surface"
     }
     pass Alternate
     {
+        features = { Detail };
         vertex = "surface.hlsl:VSMain";
         pixel = "surface.hlsl:PSAlternate";
         state {

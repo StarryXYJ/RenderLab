@@ -1,7 +1,6 @@
 {
-  "version": 1,
-  "shader": "RenderLab/Lit",
-  "variant": "Default",
+  "version": 2,
+  "shader": "5c17b47011bf555285a61b887634f8d1",
   "values": {
     "base_color": {
       "type": "float4",
@@ -48,7 +47,7 @@
     }
   },
   "resources": {
-    "NormalMap": {
+    "normal_map": {
       "type": "Texture2D<float4>",
       "reference": "885083ec259254ffb43e44bb3d31ec01"
     }

@@ -28,6 +28,10 @@ public:
         return project_;
     }
     const Entry& Get(const std::string& id) const;
+    bool Contains(const std::string& id) const
+    {
+        return entries_.contains(id);
+    }
     const Entry& AtPath(const std::filesystem::path& path) const;
     /// @brief Resolves an existing URI mapping by UUID, or records its current relative target.
     std::string Dependency(const std::string& owner, const std::string& uri);

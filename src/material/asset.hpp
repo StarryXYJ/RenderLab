@@ -27,8 +27,7 @@ struct ResourceReference
  */
 struct Asset
 {
-    std::string shader;
-    std::string variant = "Default";
+    std::string shader; ///< Stable Shader asset ID, independent of its display name and path.
     std::map<std::string, Value> values;
     std::map<std::string, ResourceReference> resources;
 };
@@ -38,8 +37,10 @@ void Set(Asset& asset, const shader::MaterialTemplate& materialTemplate, const s
          std::span<const double> values);
 void SetResource(Asset& asset, const shader::MaterialTemplate& materialTemplate,
                  const std::string& id, std::string reference);
-void SelectVariant(Asset& asset, const shader::MaterialTemplate& materialTemplate,
-                   const std::string& variant);
+void Set(Asset& asset, const shader::MaterialTemplate& materialTemplate,
+         shader::MaterialSemantic semantic, std::span<const double> values);
+void SetResource(Asset& asset, const shader::MaterialTemplate& materialTemplate,
+                 shader::MaterialSemantic semantic, std::string reference);
 void ValidateResourceReference(const std::string& reference);
 void Save(const Asset& asset, const std::filesystem::path& path);
 Asset Load(const std::filesystem::path& path, const shader::MaterialTemplate& materialTemplate);

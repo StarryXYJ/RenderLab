@@ -5,15 +5,15 @@ shader "RenderLab/Unlit"
     use "Shadow.params";
     material
     {
-        [id("surface")] SurfaceType Surface = Opaque;
+        [id("surface"), semantic(Surface)] SurfaceType Surface = Opaque;
         [id("blend")] BlendMode Blend = Alpha;
-        [id("cull")] CullMode Cull = Back;
+        [id("cull"), semantic(Cull)] CullMode Cull = Back;
         [id("cast_shadows")] bool CastShadows = true;
-        [id("alpha_clip"), keyword("RENDERLAB_ALPHA_CLIP")] bool AlphaClip = false;
-        [id("base_color"), color, hdr] float4 BaseColor = (1, 1, 1, 1);
-        [id("alpha_cutoff"), range(0, 1)] float AlphaCutoff = 0.5;
-        [id("base_map"), srgb] Texture2D<float4> BaseMap = white;
-        SamplerState BaseSampler = point_clamp;
+        [id("alpha_clip"), semantic(AlphaClip), keyword("RENDERLAB_ALPHA_CLIP")] bool AlphaClip = false;
+        [id("base_color"), semantic(BaseColor), color, hdr] float4 BaseColor = (1, 1, 1, 1);
+        [id("alpha_cutoff"), semantic(AlphaCutoff), range(0, 1)] float AlphaCutoff = 0.5;
+        [id("base_map"), semantic(BaseMap), srgb] Texture2D<float4> BaseMap = white;
+        [id("base_sampler")] SamplerState BaseSampler = point_clamp;
     }
     render { surface = $Surface; blend = $Blend; alphaClip = $AlphaClip; }
     pass Forward

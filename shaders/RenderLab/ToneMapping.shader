@@ -1,6 +1,5 @@
 shader "RenderLab/ToneMapping"
 {
-    variant Default {}
     pass Display
     {
         parameters

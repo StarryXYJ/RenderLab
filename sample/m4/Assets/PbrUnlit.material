@@ -1,7 +1,6 @@
 {
-  "version": 1,
-  "shader": "RenderLab/Unlit",
-  "variant": "Default",
+  "version": 2,
+  "shader": "9120dfaac72c5c1c88f3a41e3ac22447",
   "values": {
     "base_color": {
       "type": "float4",

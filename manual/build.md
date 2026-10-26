@@ -70,9 +70,9 @@ cmake --build --preset windows-release --parallel 4
 ctest --preset windows-release
 ```
 
-输出分别在 `out/build/windows-debug` 和 `out/build/windows-release`。默认注册 9 项不需要创建设备的测试，包含实际 DXC 双目标编译的 `shader.contracts`。预设与依赖版本纳入 Git，本机设置使用被忽略的 `CMakeUserPresets.json`。
+输出分别在 `out/build/windows-debug` 和 `out/build/windows-release`。默认注册 12 项不需要创建设备的测试，包含实际 DXC 双目标编译的 `shader.contracts` 和生成 C++ 契约的 `parameters.contracts`。预设与依赖版本纳入 Git，本机设置使用被忽略的 `CMakeUserPresets.json`。
 
-完整验收启用 GPU 测试，当前共 37 项（11 项 CPU/CLI、26 项 GPU）。GPU 测试要求验证层和桌面会话，会短暂打开原生窗口：
+完整验收启用 GPU 测试，当前共 40 项（12 项 CPU/CLI、28 项 GPU）。GPU 测试要求验证层和桌面会话，会短暂打开原生窗口：
 
 ```powershell
 cmake --preset windows-debug -DRENDERLAB_GPU_TESTS=ON
@@ -205,7 +205,7 @@ ctest --preset windows-debug -R 'pbr|content.contracts|gpu.*.scene' --output-on-
 
 ## M4.4 阴影与透明场景
 
-Shadow.rlproject 选择带实体、网格裁剪和透明薄片的固定场景，地面用于观察阴影。内置 Lit/Unlit 的 Default、Masked、Transparent variant 分别对应不透明、alpha 裁剪和 straight alpha 混合；Masked 的 alpha_cutoff 默认 0.5。方向光组件保存 shadows、shadowResolution、shadowBias、shadowNormalBias；旧场景默认关闭阴影。
+Shadow.rlproject 选择带实体、网格裁剪和透明薄片的固定场景，地面用于观察阴影。内置 Lit/Unlit 使用 Surface/Blend/AlphaClip 属性：Opaque、Opaque+AlphaClip、Transparent+Alpha 分别对应不透明、alpha 裁剪和 straight alpha 混合；alpha_cutoff 默认 0.5。方向光组件保存 shadows、shadowResolution、shadowBias、shadowNormalBias；旧场景默认关闭阴影。材质为 v2 并引用 Shader UUID，旧资产迁移见 [Shader 资产](../docs/shader-assets.md)。
 
 ```powershell
 ./out/build/windows-debug/renderlab_sandbox.exe --backend dx12 --validation on --project sample/m4/Shadow.rlproject

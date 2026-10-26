@@ -68,7 +68,7 @@ void FeatureContracts(const std::filesystem::path& root)
         [id("normal"), keyword("NORMAL_MODE")] NormalMode Normal = Tangent;
         NormalMode DynamicMode = Detail;
         bool Enabled = true;
-        float4 Tint = (1, 1, 1, 1);
+        [id("arbitrary_color_id"), semantic(BaseColor)] float4 Tint = (1, 1, 1, 1);
     }
     pass Beauty
     {
@@ -90,6 +90,8 @@ void FeatureContracts(const std::filesystem::path& root)
     }
 })";
     Write(source, text);
+    const std::string assetId = "1234567890abcdef1234567890abcdef";
+    Write(root / "features.shader.meta", "{\"version\":1,\"id\":\"" + assetId + "\"}");
     Write(root / "features.hlsl", R"(#include <renderlab/generated/parameters.hlsli>
 struct P { float4 position : SV_Position; };
 P VSMain(float3 p : POSITION) { P v; v.position = float4(p, 1); return v; }
@@ -105,6 +107,18 @@ float4 PSMain(P p) : SV_Target
     options.cacheDirectory = root / "feature-cache";
     auto built = shader::CompileShader(source, options);
     Require(bool(built), built.diagnostics);
+    Require(built.package->definition.assetId == assetId &&
+                std::ranges::find(built.package->dependencies, root / "features.shader.meta") !=
+                    built.package->dependencies.end(),
+            "Shader sidecar identity must be tracked as a compilation dependency");
+    auto mismatched = options;
+    mismatched.assetId = "abcdef1234567890abcdef1234567890";
+    const auto mismatch = shader::CompileShader(source, mismatched);
+    Require(!mismatch && mismatch.diagnostics.find("identity mismatch") != std::string::npos,
+            "Explicit and sidecar asset identities must agree");
+    Require(shader::SchemaToJson(*built.package).find("\"materialSemantic\": \"BaseColor\"") !=
+                std::string::npos,
+            "Schema must expose material import semantics independently of symbols");
     const auto& definition = built.package->definition;
     Require(built.package->programs.size() == 32,
             "Forward 6 + Shadow 2 combinations, each with two stages and two targets");
@@ -115,6 +129,10 @@ float4 PSMain(P p) : SV_Target
                 built.package->interfaces[1].Material()->size,
             "Different pass feature sets must preserve material layout");
     auto asset = material::Create(materialTemplate);
+    material::Set(asset, materialTemplate, shader::MaterialSemantic::BaseColor,
+                  std::array<double, 4>{.5, .4, .3, 1});
+    Require(asset.values.at("arbitrary_color_id").numbers.front() == .5,
+            "Material semantics must map to arbitrary stable property IDs");
     material::Set(asset, materialTemplate, "clip", std::array<double, 1>{1});
     material::Set(asset, materialTemplate, "normal", std::array<double, 1>{7});
     const auto selected =
@@ -136,6 +154,10 @@ float4 PSMain(P p) : SV_Target
     Fails([&] { shader::SelectVariantKey(definition, definition.passes[0], {{"clip", 1}}); },
           "feature value");
     material::Save(asset, root / "features.material");
+    auto legacy = shader::ReadText(root / "features.material");
+    Replace(legacy, "\"version\": 2", "\"version\": 1");
+    Write(root / "legacy.material", legacy);
+    Fails([&] { material::Load(root / "legacy.material", materialTemplate); }, "migrate v1");
     Require(
         material::Load(root / "features.material", materialTemplate).values.at("normal").numbers ==
             std::vector<double>{7},
@@ -169,6 +191,16 @@ float4 PSMain(P p) : SV_Target
                     result.diagnostics);
     };
     auto invalid = text;
+    Replace(invalid, "    pass Beauty", "    variant Legacy {}\n    pass Beauty");
+    rejected(invalid, "obsolete");
+    invalid = text;
+    Replace(invalid, "semantic(BaseColor)", "semantic(NormalMap)");
+    rejected(invalid, "exact type");
+    invalid = text;
+    Replace(invalid, "bool Enabled = true;",
+            "bool Enabled = true; [semantic(BaseColor)] float4 AnotherTint = (1, 1, 1, 1);");
+    rejected(invalid, "unique mapping");
+    invalid = text;
     Replace(invalid, "bool Clip", "float Clip");
     rejected(invalid, "material bool/enum");
     invalid = text;
@@ -298,7 +330,7 @@ int wmain(int argc, wchar_t** argv)
         auto result = shader::CompileShader(source, options);
         Require(bool(result), result.diagnostics);
         const auto package = result.package;
-        Require(!package->cacheHit && package->programs.size() == 20,
+        Require(!package->cacheHit && package->programs.size() == 18,
                 "Expected complete finite pass/variant/target combinations");
         auto cached = shader::CompileShader(source, options);
         Require(bool(cached) && cached.package->cacheHit && cached.package->key == package->key,
@@ -321,7 +353,8 @@ int wmain(int argc, wchar_t** argv)
               "range");
         Fails([&] { material::SetResource(asset, materialTemplate, "base_map", "C:/invalid.png"); },
               "relative");
-        Fails([&] { material::SelectVariant(asset, materialTemplate, "Unknown"); }, "variant");
+        Fails([&] { material::Set(asset, materialTemplate, "detail", std::array<double, 1>{2}); },
+              "bool");
         const auto& block = *package->Layout("Forward").Material();
         const auto bytes = material::Pack(block, asset.values);
         for (const auto& field : block.fields)

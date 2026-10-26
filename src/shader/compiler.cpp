@@ -6,6 +6,7 @@
 
 #include <nlohmann/json.hpp>
 
+#include <algorithm>
 #include <cstring>
 #include <fstream>
 #include <map>
@@ -17,8 +18,9 @@ namespace renderlab::shader
 namespace
 {
 using Json = nlohmann::json;
-constexpr const char* GeneratorVersion = "renderlab-declarations-3-static-axes;sm6.0;-HV2021;-Ges;-"
-                                         "WX;-O3;-Zpc;vulkan1.3;-fvk-use-dx-layout";
+constexpr const char* GeneratorVersion =
+    "renderlab-declarations-4-asset-contracts;sm6.0;-HV2021;-Ges;-"
+    "WX;-O3;-Zpc;vulkan1.3;-fvk-use-dx-layout";
 std::vector<std::byte> ReadBinary(const std::filesystem::path& path)
 {
     std::ifstream file(path, std::ios::binary | std::ios::ate);
@@ -56,6 +58,30 @@ BuildResult CompileShader(const std::filesystem::path& source, const CompileOpti
         DxcCompiler dxc;
         std::string key = std::string(GeneratorVersion) + dxc.Version();
         std::set<std::filesystem::path> dependencies;
+        auto meta = package->definition.source;
+        meta += ".meta";
+        std::string assetId = options.assetId;
+        if (std::filesystem::is_regular_file(meta))
+        {
+            const auto content = ReadText(meta);
+            const auto document = Json::parse(content);
+            if (document.at("version") != 1)
+                throw std::invalid_argument("Unsupported shader metadata version");
+            const auto registered = document.at("id").get<std::string>();
+            if (!assetId.empty() && assetId != registered)
+                throw std::invalid_argument("Shader metadata identity mismatch");
+            assetId = registered;
+            key += Sha256(content);
+            dependencies.insert(meta);
+        }
+        if (assetId.empty())
+            assetId = Sha256(ToUtf8(package->definition.source)).substr(0, 32);
+        if (assetId.size() != 32 ||
+            !std::ranges::all_of(assetId, [](char c)
+                                 { return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f'); }))
+            throw std::invalid_argument("Shader asset ID must be 32 lowercase hex digits");
+        package->definition.assetId = std::move(assetId);
+        key += package->definition.assetId;
         for (const auto& dependency : package->definition.declarations)
         {
             key += ToUtf8(dependency.path) + Sha256(dependency.content);

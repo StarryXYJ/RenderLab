@@ -142,18 +142,19 @@ void Gpu(rhi::Runtime& runtime, shader::Target target, const std::filesystem::pa
     material::Set(material, litTemplate, "roughness", std::array<double, 1>{1});
     save();
     Require(render("rough") != metal, "Roughness must change specular lobe/IBL");
-    material::SetResource(material, litTemplate, "NormalMap",
+    material::SetResource(material, litTemplate, shader::MaterialSemantic::NormalMap,
                           database.AtPath(project.assets / "PbrNormal.png").id);
     save();
     const auto normal = render("normal-map");
     material::Set(material, litTemplate, "normal_scale", std::array<double, 1>{0});
     save();
     Require(render("normal-disabled") != normal, "Linear normal map must change lighting");
-    material::SetResource(material, litTemplate, "MetallicRoughnessMap",
+    material::SetResource(material, litTemplate, shader::MaterialSemantic::MetallicRoughnessMap,
                           database.AtPath(project.assets / "PbrMetallicRoughness.png").id);
     save();
     const auto mapped = render("metallic-roughness-map");
-    material::SetResource(material, litTemplate, "MetallicRoughnessMap", "white");
+    material::SetResource(material, litTemplate, shader::MaterialSemantic::MetallicRoughnessMap,
+                          "white");
     save();
     Require(render("metallic-roughness-white") != mapped, "Linear MR channels must change surface");
     for (auto& object : document.objects)

@@ -7,7 +7,9 @@
 #include <filesystem>
 #include <map>
 #include <optional>
+#include <span>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -65,6 +67,31 @@ struct EnumDefinition
     std::string name;
     std::vector<EnumItem> items;
 };
+enum class MaterialSemantic
+{
+    None,
+    BaseColor,
+    Metallic,
+    Roughness,
+    NormalScale,
+    OcclusionStrength,
+    Emission,
+    AlphaCutoff,
+    Surface,
+    Cull,
+    AlphaClip,
+    BaseMap,
+    MetallicRoughnessMap,
+    NormalMap,
+    OcclusionMap,
+    EmissionMap
+};
+struct MaterialSemanticInfo
+{
+    MaterialSemantic semantic;
+    std::string_view name, type;
+};
+std::span<const MaterialSemanticInfo> MaterialSemantics();
 struct Property
 {
     std::string id, symbol;
@@ -85,6 +112,7 @@ struct Property
         MainLightShadow
     };
     BindingSemantic binding = BindingSemantic::None;
+    MaterialSemantic semantic = MaterialSemantic::None;
     SourceLocation source;
 };
 struct ParameterBlock
@@ -129,17 +157,15 @@ struct Dependency
 };
 struct Definition
 {
-    std::string name;
+    std::string name, assetId;
     std::filesystem::path source;
     std::vector<ParameterBlock> blocks;
     std::vector<Pass> passes;
-    std::vector<Variant> variants;
     std::vector<EnumDefinition> enums;
     std::vector<Dependency> declarations;
     RenderPolicy render;
 };
 std::vector<EnumDefinition> BuiltinEnums();
-bool HasKeywords(const Definition& definition);
 std::string VariantLabel(const VariantKey& key);
 std::vector<Variant> EnumerateVariants(const Definition& definition, const Pass& pass);
 VariantKey SelectVariantKey(const Definition& definition, const Pass& pass,

@@ -48,7 +48,16 @@ Property DeclarationParser::Attributes(Lexer& lexer)
                 lexer.Expect("(");
                 std::string value = lexer.Peek().quoted ? lexer.String() : lexer.Identifier().text;
                 lexer.Expect(")");
-                if (attribute == "binding")
+                if (attribute == "semantic")
+                {
+                    const auto types = MaterialSemantics();
+                    const auto semantic =
+                        std::ranges::find(types, value, &MaterialSemanticInfo::name);
+                    if (semantic == types.end())
+                        lexer.Fail("Unknown material semantic " + value);
+                    property.semantic = semantic->semantic;
+                }
+                else if (attribute == "binding")
                 {
                     if (value == "EnvironmentAtlas")
                         property.binding = Property::BindingSemantic::EnvironmentAtlas;
@@ -109,6 +118,7 @@ ParameterBlock DeclarationParser::Block(Lexer& lexer, std::string name, Scope sc
     ParameterBlock block{std::move(name), scope, {}, lexer.Peek().source};
     lexer.Expect("{");
     std::set<std::string> ids, symbols;
+    std::set<MaterialSemantic> semantics;
     while (!lexer.Accept("}"))
     {
         auto property = Attributes(lexer);
@@ -218,6 +228,16 @@ ParameterBlock DeclarationParser::Block(Lexer& lexer, std::string name, Scope sc
             (scope == Scope::Material ||
              property.type.resource != rhi::BindingKind::SampledTexture))
             lexer.Fail("Standard binding semantics require external sampled textures");
+        if (property.semantic != MaterialSemantic::None)
+        {
+            const auto types = MaterialSemantics();
+            const auto semantic =
+                std::ranges::find(types, property.semantic, &MaterialSemanticInfo::semantic);
+            if (scope != Scope::Material || property.type.name != semantic->type ||
+                property.type.array || !semantics.insert(property.semantic).second)
+                lexer.Fail("Material semantic requires its exact type, material scope and a unique "
+                           "mapping");
+        }
         block.properties.push_back(std::move(property));
     }
     lexer.Accept(";");

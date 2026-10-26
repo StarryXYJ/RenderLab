@@ -204,9 +204,9 @@ M4 的首个场景闭环见 [项目、场景](../docs/m4-scene.md)，Forward PBR
 
 ## Shader 与材质
 
-### M4 后契约修订提案
+### M4 后契约修订
 
-[Shader 与材质 v2 提案](shader-material-v2.md) 将 Pass role、队列分类、固定功能状态和静态属性轴分别声明。RHI/Graph 与作者状态已落地：类型化 role 解析代际 PassHandle，Surface/Blend/AlphaClip 分离，有限状态配方支持显式覆盖；bool/enum 仅在带 keyword 特性时产生局部变体。接口见 [渲染状态](../docs/render-states.md)、[静态轴](../docs/shader-features.md)。绑定 handle、参数接口与 HLSL 显式传参已接入；M2 旧具名变体与 Shader 资产身份在全量迁移步骤收尾，实际状态以阶段计划为准。
+[Shader 与材质 v2](shader-material-v2.md) 将 Pass role、队列分类、固定功能状态和静态属性轴分别声明。类型化 role 解析代际 PassHandle，Surface/Blend/AlphaClip 分离，有限状态配方支持显式覆盖；bool/enum 仅在带 keyword 特性时产生局部变体。绑定 handle、生成参数契约与 HLSL 显式传参贯穿同一链路。Shader 以资产 ID 引用，glTF 按类型化属性语义映射；旧具名变体和独立 variant 字符串已删除。接口见 [渲染状态](../docs/render-states.md)、[静态轴](../docs/shader-features.md)、[资产身份与迁移](../docs/shader-assets.md)，实际验收以阶段计划为准。
 
 ### Shader 工具链
 
@@ -216,7 +216,7 @@ ShaderDefinition 是作者维护的 Shader 资产，包含 HLSL 来源、入口�
 
 普通 material 数值自动生成 Material 常量缓冲，显式 cbuffer 声明共享数据块及 frame/view/draw/pass 作用域。参数 Schema、绑定映射和 PackingPlan 从同一声明生成。Shader 编译层仅产生 CPU 程序/接口数据，不依赖 RHI Device；DXC 处理 HLSL 预处理、Include 和程序编译，反射验证保留字段与资源接口。生成头按编译任务隔离，缓存覆盖共享声明及传递 Include。后台编译成功后，由设备所有线程在准备阶段创建 GPU 对象并在帧边界整体切换，失败保留旧代。Material 返回不可变绑定值：直接 RHI 建立绑定组，Graph 适配先导入并声明资源，由 Graph 录制时组装绑定，避免重复准备。
 
-M2 的具体声明、布局和准备/发布接口见 [Shader 与材质](../docs/m2-shader-material.md)。RHI 的唯一 CreatePipeline 入口按不可变程序/布局身份、顶点布局、附件格式和完整状态查找有界弱引用缓存。数值/纹理修改创建不可变绑定快照，静态功能选择有限具名变体，新代编译包创建新的程序身份。热重载通过 LiveMaterial 成组 Stage，调用方在帧边界 Publish；依赖监视器只负责请求编译，不进入 RHI。
+M2 的具体声明、布局和准备/发布接口见 [Shader 与材质](../docs/m2-shader-material.md)。RHI 的唯一 CreatePipeline 入口按不可变程序/布局身份、顶点布局、附件格式和完整状态查找有界弱引用缓存。数值/纹理修改创建不可变绑定快照，静态属性选择每 Pass 的有限 VariantKey，新代编译包创建新的程序身份。热重载通过 LiveMaterial 成组 Stage，调用方在帧边界 Publish；依赖监视器只负责请求编译，不进入 RHI。
 
 材质 GPU generation 最多驻留 64 个 PSO，跨帧保活以避免提交退休后重复创建；PSO 查找仍统一走 RHI 弱缓存。驻留淘汰或 generation 释放不影响命令快照对在途对象的保活。
 
@@ -371,7 +371,7 @@ Custom 与 Forward 仅是预先注入 Feature 的不同组合，共用 Create �
 
 CameraColor/CameraDepth 由宿主创建或导入，可选 OpaqueColor/AfterTransparentColor 使用真实复制。M4.3 场景宿主使用 RGBA32F CameraColor，Forward 结束后显式添加 Display.ToneMapping，写入导入的 sRGB DisplayColor；快照保留 HDR 值。Demo 使用空 Custom 组合注册 Noise、Scene 和 Readback，不传递 Feature 返回 handle，也不使用 Forward 内置流程。具体接口见 [Feature 与管线组合](../docs/forward-pipeline.md)。高级组合按计划推进。
 
-M4.4 以 BeforeOpaque 的 ShadowFeature 生成单张方向光图，RGBA32F 记录 Reversed-Z 片元深度，D32 只用于光栅可见性；保持现有单颜色附件与不可采样深度边界。Extractor 保留相机视野外的启用实例，Renderer 按材质 Shadow 角色筛选投影。Masked 在主绘制/阴影中复用同一 alpha 裁剪，Transparent 不投影并按 view 深度排序、关闭深度写入；Lit 的 PCF 仅调制直接光。数据与限制见 [阴影与 Alpha](../docs/m4-shadows-alpha.md)。
+M4.4 以 BeforeOpaque 的 ShadowFeature 生成单张方向光图，RGBA32F 记录 Reversed-Z 片元深度，D32/D32S8 只用于光栅可见性；保持单颜色附件与不可采样深度边界。Extractor 保留相机视野外的启用实例，Renderer 按材质 ShadowCaster 角色筛选投影。Masked 在主绘制/阴影中复用同一 alpha 裁剪；标准 Transparent 配方不投影、关闭深度写入，同队列按 view 深度排序，Pass 可显式覆盖状态。Lit 的 PCF 仅调制直接光。数据与限制见 [阴影与 Alpha](../docs/m4-shadows-alpha.md)。
 
 一个后期混合示例是：
 

@@ -1,10 +1,10 @@
-# Shader 与材质契约修订提案
+# Shader 与材质契约修订
 
-本设计经复查后进入分步实施；下文作者语法仍为草案，不能据此认定当前工具已经支持。实施状态与分步验收只维护在 [phaseplan.md](phaseplan.md)。现有接口见 [M2](../docs/m2-shader-material.md)、[M4 PBR](../docs/m4-forward-pbr.md) 和 [M4 阴影与 Alpha](../docs/m4-shadows-alpha.md)。
+本设计的作者状态、静态轴、参数接口和资产身份已接入同一运行时；实施状态与真实验收只维护在 [phaseplan.md](phaseplan.md)。当前作者/API 细节见 [渲染状态](../docs/render-states.md)、[静态轴](../docs/shader-features.md)、[参数接口](../docs/shader-parameters.md)、[资产与迁移](../docs/shader-assets.md)。下文函数签名用于说明职责，实际 HLSL 参数以库源码为准。
 
 ## 问题与边界
 
-当前 SceneRenderer 用 `variant == "Transparent"` 分类，按 `"Forward"` / `"Shadow"` 查 Pass，以 `EnvironmentAtlas`、`BrdfLut`、`MainLightShadow` 等 HLSL symbol 补绑定，并逐字段检查整个 `Frame` 布局。Core/Lighting 等库还直接读取全局 `Frame`、`Draw`、`Material` 和纹理。改名或拆分文件就可能改变运行行为，项目 Shader 也被迫模仿内置 Shader 的内部结构。
+修订前 SceneRenderer 用 `variant == "Transparent"` 分类，按 `"Forward"` / `"Shadow"` 查 Pass，以 `EnvironmentAtlas`、`BrdfLut`、`MainLightShadow` 等 HLSL symbol 补绑定，并逐字段检查整个 `Frame` 布局。Core/Lighting 等库直接读取全局 `Frame`、`Draw`、`Material` 和纹理。改名或拆分文件可能改变运行行为，项目 Shader 也被迫模仿内置 Shader 的内部结构。
 
 修订目标是把程序用途、材质策略、固定功能状态、静态功能选择和 GPU 参数接口分别声明。保留 `.shader` 唯一作者入口、普通 HLSL 库、稳定属性 ID、固定布局、异步热重载和不可变 GPU 快照。不引入完整 ShaderLab、通用表达式语言、全局关键字系统或新的材质模板资产。
 
@@ -59,12 +59,14 @@ CompareOp 使用 Never/Less/Equal/LessEqual/Greater/NotEqual/GreaterEqual/Always
 
 glTF 导入把 alphaMode、doubleSided 等转换为生成材质的属性默认值；用户覆盖材质具有最终权威，不能在 Draw 准备时重新覆盖 Cull。镜像变换导致的绕序翻转由明确的几何 FrontFace 修正处理。
 
-## 作者入口草案
+## 作者入口
 
 ```text
 shader "Project/Coated"
 {
-    use "RenderLab/Scene.params" as Scene;
+    use "RenderLab/View.params";
+    use "RenderLab/Object.params";
+    use "RenderLab/Scene.params";
     enum NormalMode { Off = 0; Tangent = 1; Detail = 2; }
     material
     {
@@ -128,7 +130,7 @@ state
 
 ## bool/enum 特性与变体
 
-普通 bool 是运行时 uint32 参数，普通 enum 是具有显式稳定数值的类型化 uint32 参数，默认生成 Inspector 控件。`color`、`range` 等编辑特性与编译特性分别处理。只有 `[keyword(...)]` 才声明材质局部静态轴，仅允许 bool/enum；float 等无限取值类型不支持。
+普通 bool 是运行时 uint32 参数，普通 enum 是具有显式稳定数值的类型化 uint32 参数，Schema 为后续 Inspector 输出类型/选项信息；当前没有材质编辑器 UI。`color`、`range` 等编辑特性与编译特性分别处理。只有 `[keyword(...)]` 才声明材质局部静态轴，仅允许 bool/enum；float 等无限取值类型不支持。
 
 - bool 生成 0/1 宏；enum 生成一个数值选择宏和具名枚举常量，不生成可同时启用的若干独立 bool。
 - 属性值只按 PropertyId 存储一次。静态值从全部 Pass 的 Material cbuffer 中一致排除，编译时通过常量/宏使用；普通属性保持 uniform。静态属性不改变固定资源布局，禁止用条件宏删 cbuffer 字段或绑定。
@@ -159,8 +161,8 @@ Math/BRDF/Surface 等值计算库不 include 绑定文件；Lighting/Sampling �
 `.params` 从声明文本复用升级为明确的接口模块：
 
 1. 每个标准块定义稳定 SchemaId、版本、字段类型和生成布局 hash，生成 C++ 数据/打包接口与 HLSL 类型。View/Object/Lighting/Shadow 分块，Unlit 只声明真正需要的块。
-2. Shader 通过模块实例引用接口，可自由取 HLSL 局部别名。标准资源声明携带类型化语义，例如主光源阴影、IBL 图集；这类语义是引擎 API，不由资源变量拼写推断。
-3. 编译/加载将 SchemaId、资源语义与 PropertyId 解析为 BlockHandle/BindingHandle。Renderer 一次验证所需版本/布局，再按 handle 绑定；帧内不逐字段比较 `Frame`，也不 `if (symbol == "MainLightShadow")`。
+2. Shader 通过 use 引用模块，可自由取 HLSL 局部绑定别名；别名不重复实例化同一模块。标准资源声明携带类型化语义，例如主光源阴影、IBL 图集；这类语义是引擎 API，不由资源变量拼写推断。
+3. 编译/加载将 SchemaId、资源语义与 PropertyId 解析为代际 BindingHandle。Renderer 一次验证所需版本/布局，再按 handle 绑定；帧内不逐字段比较 `Frame`，也不 `if (symbol == "MainLightShadow")`。
 4. 项目自定义块由调用方显式提供生成的接口 handle，Renderer 不猜内容。未知必需语义、接口冲突或重复绑定报错；可选资源必须声明默认策略，不偷偷补占位资源。
 5. Graph 构建先把 handle 对应到资源版本并声明访问，再冻结绑定快照。接口语义不绕过 Graph，也不成为全局可变纹理仓库。
 
@@ -168,7 +170,7 @@ Math/BRDF/Surface 等值计算库不 include 绑定文件；Lighting/Sampling �
 
 ## Stencil、PSO 与 Graph 的闭环
 
-现有 D32 没有模板面。真正支持 Stencil 需要新增可检测的深度模板格式（如 D32S8），完成 DX12/Vulkan 的格式、视图、PSO、屏障和命令映射；设备不支持时明确报告。
+D32 没有模板面，Stencil 使用新增的可检测 D32S8 格式，配套 DX12/Vulkan 的视图、PSO、屏障和命令映射；设备不支持时明确报告。
 
 - 先解析材质/Pass 状态，汇总当前视图所需附件，再选 Depth/DepthStencil 格式，最后准备对应 PSO，避免准备完 D32 PSO 才发现需要模板。
 - PSO Key 包含不可变 Raster/Depth/Blend/Stencil 字段及真实附件格式。reference 为每 Draw 动态状态，不进入 PSO Key；每个 PreparedDraw 显式设置，包括从上个 Draw 的非零值恢复为零。
@@ -180,7 +182,7 @@ Math/BRDF/Surface 等值计算库不 include 绑定文件；Lighting/Sampling �
 
 ## 迁移与验证原则
 
-这是尚未发布接口的有版本替换，不建设两套长期并存的路径。先建立类型化运行时契约，再扩展作者入口并迁移全部内置/项目 Shader、示例材质、导入器和工具。现有具名变体仅在显式迁移映射中转换为静态属性值；未知旧值报错，不通过名称包含 Transparent 等启发式猜测。缓存/格式版本随接口更新，Library 可重建。
+这是尚未发布接口的有版本替换，不建设两套长期并存的路径。类型化运行时契约、作者入口、内置/项目 Shader、示例材质、导入桥和工具使用同一模型。旧具名变体与材质 v1 明确拒绝，迁移时按 [显式映射](../docs/shader-assets.md) 转换为属性值，不通过名称包含 Transparent 等启发式猜测，也没有自动迁移器。缓存/格式版本随接口更新，Library 可重建。
 
 验收必须证明：任意重命名 Pass、属性 symbol、绑定别名与 HLSL 文件后，保持资源/属性/接口 ID 时行为不变；状态更改不编译程序，静态轴更改选择准确程序；混合颜色/Alpha、Reversed-Z、独立 depthWrite、模板双面操作及动态 reference 隔离正确。模板遮罩和读取场景覆盖 Load/Clear、跨 Pass 保留和 Graph 剔除，双后端 Validation 为零。M4 PBR/HDR/IBL/阴影/透明、热重载、窗口交互和独立 Player 均需回归，不以文档完成代替实现验收。
 

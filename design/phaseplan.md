@@ -4,8 +4,8 @@
 
 ## 当前状态
 
-- 当前实施阶段：M0–M4 DONE；M4.1–M4.5 全部完成。
-- 当前工作项：R1 IN_PROGRESS，R1.1 已完成（a1147d5/f09c321），R1.2a 已提交 65879ad、R1.3a 已提交 6f20062；R1.3 已完成，正在收尾 R1.4 资产身份/语义与旧入口移除；M5 NOT_STARTED。
+- 当前实施阶段：M0–M4、R1 DONE；M4.1–M4.5 与 R1.1–R1.4 全部完成。
+- 当前工作项：R1 DONE；类型化状态、静态轴、参数接口和资产迁移均完成，无进行中的实施子阶段；M5 NOT_STARTED。
 - 用户约定：每个子阶段验收完成即提交 Git，无阻塞时在当前授权范围内继续推进；M4.3 提交 c50ee6a、M4.4 提交 40d0c12、M4.5 提交 9a4b2e4。
 - Demo 的 Custom 示例作为回归入口保留；M4 场景示例使用 Forward 组合与现有 Shader/Material 链路。
 
@@ -16,7 +16,7 @@
 | M2 | Shader 与材质数据链路 | M1 | DONE |
 | M3 | 单队列 Render Graph | M2 | DONE |
 | M4 | 场景资源与基础 Renderer | M3 | DONE |
-| R1 | Shader/Material 契约修订 | M4 | IN_PROGRESS |
+| R1 | Shader/Material 契约修订 | M4 | DONE |
 | M5 | Deferred 与光追基础 | M4 | NOT_STARTED |
 | M6 | GPU Driven 与执行优化 | M4；光追调度测试另需 M5 | NOT_STARTED |
 | M7 | C# 编辑器与完整项目工作流 | M4；默认在 M5、M6 的核心目标后开展 | NOT_STARTED |
@@ -157,48 +157,33 @@ DONE（2026 年 10 月 26 日）：同线程 modeless Win32 面板、F1、冻结
 
 ## R1 Shader/Material 契约修订
 
-状态：IN_PROGRESS；设计复查通过并开始实施，日期：2026 年 10 月 26 日。
+状态：DONE，日期：2026 年 10 月 26 日。
 
-设计入口：[Shader 与材质 v2](shader-material-v2.md)。复查明确附件格式独立于测试/写开关、无测试但写深度映射 Always、Graph 先保守跟踪组合附件；先做 RHI/Graph，再接作者层，避免引入临时材质状态 DSL。M4 基线必须在迁移时持续回归。
+结果：Pass 用途、材质分类、固定功能状态、静态轴与 GPU 参数接口分别声明；Shader 名称/路径与 HLSL symbol 不再作为宿主行为约定。保留固定布局、不可变快照、整代热重载、有界 PSO 缓存与原 M4 渲染链路。
+
+最终验证：RTX 5060 / MSVC 19.51.36257 / DXC 1.9.0.5512，标准 windows-debug/windows-release 构建与完整 CTest 各 40/40（12 CPU/CLI、28 GPU），DX12/Vulkan Validation 错误为 0。覆盖真实状态像素、生成 C++ 契约编译、静态程序选择、改名等价、材质保存/迁移、热重载与退休、M4 PBR/HDR/IBL/阴影/透明、窗口生命周期和工具。自动窗口验证不等于本轮手动键鼠验收，其他 GPU 未完整复验。
+
+独立安装：`cmake --install out/build/windows-release --prefix out/r1-player`，从安装目录分别用 DX12/Vulkan、validation on、257×193/Low、headless benchmark 3 运行 project/Pbr.rlproject 和 project/Shadow.rlproject，四次均成功，Validation 错误为 0；引擎 sidecar 随包安装，Library 从部署内容重建。日志/报告见 out/r1-player/validation，完整测试记录见各配置 Testing/Temporary/LastTest.log；该短跑不作为新性能基线。
+
+限制：每 Pass 最多 64 个静态组合，固定 Material 布局、单 Graphics Queue；组合深度模板附件保守跟踪，无深度模板采样/复制或独立平面调度。材质 v1/旧具名 variant 语法明确拒绝，无自动迁移器；无 sidecar 的工具临时 ID 随路径改变。Schema 为后续 Inspector 提供信息，尚无材质编辑器 UI。M4 既有 IBL/阴影/透明与硬件边界保持，M5 不在本轮实施范围。
+
+设计与接口：[设计理由](shader-material-v2.md)、[渲染状态](../docs/render-states.md)、[静态轴](../docs/shader-features.md)、[参数接口](../docs/shader-parameters.md)、[资产身份与迁移](../docs/shader-assets.md)。
 
 ### R1.1 类型化 Pass 与固定功能状态
 
-R1.1a DONE（2026 年 10 月 26 日）：类型化 Raster/Depth/Blend/Stencil、完整 PSO Key、动态 StencilRef、D32S8 双后端映射与能力查询；Graph 逐面 Load/Clear/权限及整附件保守依赖；Forward 不再强制透明禁止深度写入。接口：[渲染状态](../docs/render-states.md)。RTX 5060 / MSVC 19.51 / DXC 1.9，Debug/Release 全量各 39/39；追加 Fail/DepthFail/非法状态后两配置定向各 3/3，DX12/Vulkan Validation 错误为 0。格式化、UTF-8/LF 与差异检查通过。限制：无深度模板采样/复制/独立平面调度。
-
-R1.1b DONE（2026 年 10 月 26 日）：显式 role/代际 PassHandle、完整 state 作者块/名义类型属性引用、有限配方与覆盖、Surface/Blend/AlphaClip 分类和队列；导入默认 Cull 与作者覆盖分离，镜像只调整 FrontFace。Lit/Unlit 改用静态 AlphaClip 与普通 Surface/Blend 属性，入口显式编码混合输出；SceneRenderer 准备 PSO 前按 camera/shadow 汇总模板格式需求。文档：[渲染状态](../docs/render-states.md)。
-
-R1.1 验收：RTX 5060，Debug/Release 全量各 39/39；追加严格作者检查后 Debug 定向 6/6。双后端场景在任意 Pass 改名并启用 camera/shadow 恒等 stencil 后像素一致；状态修改复用 Shader 模块、角色歧义/过期 handle/错误属性类型诊断通过，Validation 错误为 0。R1.1 整体 DONE；参数绑定名称与旧变体资源格式的后续修订仍分别归 R1.3/R1.4。
+DONE：Raster/Depth/Blend/Stencil、动态 StencilRef、可选附件格式与 D32S8 双后端映射；Graph 各面 Load/Clear/权限。类型化 role/代际 PassHandle、名义类型属性引用、有限配方与显式覆盖，Surface/Blend/AlphaClip 分离，队列优先排序；镜像只翻转 FrontFace。原子阶段 Debug/Release 各 39/39，最终回归见汇总；提交 a1147d5/f09c321。
 
 ### R1.2 类型化属性与静态轴
 
-状态：IN_PROGRESS；R1.2a 类型化属性/静态轴基础 DONE（2026 年 10 月 26 日），随后接 R1.1b 作者状态。具名变体入口/资产的移除与材质格式升级留在后续迁移步骤，未完成前不把 R1.2 整体标记 DONE。
-
-R1.2a 结果：显式 uint32 enum、普通 bool/enum uniform、keyword 静态属性、每 Pass features/稳定键、64 组合预算、固定 GPU 布局、逻辑 Schema 与字段分离。验证：RTX 5060，Debug/Release 定向各 5/5（shader.contracts、双后端 material/render_state）；DXIL/SPIR-V 编译验证 6+2 组合，读回证明静态值选择实际程序且静态独占材质无 uniform 分配，改名/保存/非法枚举迁移/超额诊断通过，Validation 错误为 0。文档：[静态轴](../docs/shader-features.md)。
-
-- [x] enum 稳定数值、普通 bool/enum uniform 与 keyword 特性；每 Pass 显式 features、稳定 VariantKey 和组合预算。
-- [ ] 材质序列化/Inspector/热重载统一属性值，替换任意 variant 字符串；状态修改不重编译，静态属性整代切换。
-
-验收：组合数量、枚举互斥、非法值/缺失组合/超额诊断、固定布局与异步发布一致性。
+DONE：普通 bool/显式 uint32 enum 为 uniform，keyword 属性才生成每 Pass features/稳定 VariantKey；逻辑属性与 GPU 字段分离，静态值不占 cbuffer。材质序列化/工具/热重载只存同一份属性值，旧 variant 字符串与具名宏集合入口已删除。shader.contracts 与双后端 render_state/material 验证预算、精确组合、实际像素、固定布局、非法值和迁移；基础提交 65879ad，最终迁移随 R1.4 交付。
 
 ### R1.3 参数接口与显式 HLSL 库
 
-状态：DONE，日期：2026 年 10 月 26 日。
-
-结果：Schema ID/version/type 与独立布局 hash、模块别名、生成 C++ POD/打包与纯类型 HLSL 头、代际绑定 handle/标准资源语义；Material 准备全部使用 handle。SceneRenderer 缓存接口适配，View/Object/Lighting/Shadow 分块，Object 常量在同实例各 Pass 复用；移除 Frame 逐字段名称匹配、内置 Shader 白名单和 IBL/阴影资源 symbol 分支。HLSL 库只接收值与显式纹理参数，表面/阴影导数在入口裁剪前计算，Unlit 无 Lighting 接口。
-
-验证：RTX 5060 / MSVC 19.51 / DXC 1.9，Debug/Release 全量各 40/40；追加别名/错 Pass/最小接口检查后 Debug 定向 7/7、Release 全量 40/40。生成头实际编译、矩阵/数组/bool/enum/范围/NaN、错误版本/代际、模块与 IBL/阴影资源改名的场景像素一致性、M4 窗口/Player/热重载通过，双后端 Validation 错误为 0。R1.3a 提交 6f20062，场景与库接入随本子阶段提交。
-
-文档：[参数接口](../docs/shader-parameters.md)。限制：整包 ABI 校验、单队列/固定布局；Shader 资产身份与旧具名变体/材质格式的最终替换仍归 R1.4。
+DONE：Schema ID/version/type/布局 hash、模块绑定别名、生成 C++ POD/Pack 与纯类型 HLSL 头、代际 BindingHandle/外部资源语义。Scene 按包/Pass 缓存适配，View/Object/Lighting/Shadow 分块、Object 跨 Pass 复用；移除 Frame 逐字段匹配与资源 symbol 分支。库通过显式值/纹理参数求值，入口在裁剪前计算导数，Unlit 无 Lighting 接口。生成头真实编译、ABI/代际/范围检查与双后端改名像素回归通过；提交 6f20062/97c9059。
 
 ### R1.4 全量迁移与回归
 
-状态：IN_PROGRESS；移除旧具名变体与独立 variant 字符串，Shader 身份改为资产 ID，glTF 通过类型化属性语义映射，再完整回归与独立安装验收。
-
-- [ ] 迁移内置/项目 Shader、示例材质、glTF 语义映射和工具；显式格式升级与缓存失效，不长期维护两套路径。
-- [ ] 稳定 ID 不变时重命名 Pass/属性 symbol/资源别名/HLSL 文件，画面与分类保持一致；用户覆盖材质状态不被导入器重写。
-- [ ] Debug/Release 双后端回归 M4 PBR/HDR/IBL/阴影/透明、热重载、窗口交互、工具及独立 Player。
-
-退出条件：以上契约实际实现并通过行为验证，记录硬件、配置、命令和限制后才能标记 DONE；文档与语法设计不构成退出条件。
+DONE：Shader sidecar UUID、材质 v2、类型化 MaterialSemantic 导入桥；内置/项目 Shader、M2 工具和 M4 样例统一迁移，缓存生成器升级，旧入口明确拒绝。Schema JSON 输出属性语义。shader.contracts 覆盖 sidecar 依赖/身份冲突、语义类型/唯一性、v1 拒绝；gpu.*.surface 在 Shader 显示名、路径、Pass、属性 symbol、模块/资源别名与 HLSL 文件全部改名、camera/shadow 启用恒等 stencil 后像素一致。完整 Debug/Release 与独立安装验收均通过，结果和限制见主阶段汇总。
 
 ## M5 Deferred 与光追基础
 

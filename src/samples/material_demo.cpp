@@ -102,7 +102,7 @@ void VerifyMaterial(rhi::Runtime& runtime, shader::Target target, Logger& logger
     runtime.Wait(runtime.Submit(std::move(texturedRead.commands)));
     const float gray = std::pow((128 / 255.f + .055f) / 1.055f, 2.4f);
     detail::CheckMaterialColor(texturedRead.pixels, {.5f * gray, .25f * gray, .125f * gray, 1});
-    material::SelectVariant(asset, materialTemplate, "Detail");
+    material::Set(asset, materialTemplate, "detail", std::array<double, 1>{1});
     auto detail = materials.Prepare(package, asset, raster, resolve);
     Require(detail.pipeline != edited.pipeline, "Variant must choose distinct PSO");
     auto detailRead = detail::RecordMaterial(runtime, detail, vertices);

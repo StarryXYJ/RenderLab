@@ -9,7 +9,6 @@ shader "RenderLab/BlinnPhong"
         [id("base_map"), srgb] Texture2D<float4> BaseMap = white;
         SamplerState BaseSampler = point_clamp;
     }
-    variant Default {}
     pass Forward
     {
         role = Forward;
