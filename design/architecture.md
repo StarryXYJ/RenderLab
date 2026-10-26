@@ -200,17 +200,17 @@ DX12 与 Vulkan 的 DrawID、InstanceID、firstInstance 和间接 Count 能力�
 
 Hi-Z 使用跨帧历史时，规定首帧、相机跳变和分辨率变化下的失效策略。GPU Scene 的更新、剔除结果和间接参数全部进入 Render Graph 访问声明。
 
-M4 的首个场景闭环见 [项目、场景](../docs/m4-scene.md)，Forward PBR/HDR 见 [M4.3](../docs/m4-forward-pbr.md)。Scene 使用值类型组件和层级 Transform，不引入 ECS 管理器。DirectionalLight 可有多个，按稳定 UUID 选择一个启用对象，其世界旋转、颜色和强度提取到共享 Frame 常量。HLSL Lighting 读取全局主光，点光源和面光源后置。
+M4 的首个场景闭环见 [项目、场景](../docs/m4-scene.md)，Forward PBR/HDR 见 [M4.3](../docs/m4-forward-pbr.md)。Scene 使用值类型组件和层级 Transform，不引入 ECS 管理器。DirectionalLight 可有多个，按稳定 UUID 选择一个启用对象，其世界旋转、颜色和强度提取到显式 Lighting 数据；View/Object/Shadow 分块，入口把数据传给 HLSL 库。点光源和面光源后置。
 
 ## Shader 与材质
 
 ### M4 后契约修订提案
 
-[Shader 与材质 v2 提案](shader-material-v2.md) 将 Pass role、队列分类、固定功能状态和静态属性轴分别声明。RHI/Graph 与作者状态已落地：类型化 role 解析代际 PassHandle，Surface/Blend/AlphaClip 分离，有限状态配方支持显式覆盖；bool/enum 仅在带 keyword 特性时产生局部变体。接口见 [渲染状态](../docs/render-states.md)、[静态轴](../docs/shader-features.md)。绑定 handle、参数接口与 HLSL 显式传参仍在实施；本节下述共享全局参数仍描述过渡实现，M2 旧具名变体入口随全量迁移删除，实际状态以阶段计划为准。
+[Shader 与材质 v2 提案](shader-material-v2.md) 将 Pass role、队列分类、固定功能状态和静态属性轴分别声明。RHI/Graph 与作者状态已落地：类型化 role 解析代际 PassHandle，Surface/Blend/AlphaClip 分离，有限状态配方支持显式覆盖；bool/enum 仅在带 keyword 特性时产生局部变体。接口见 [渲染状态](../docs/render-states.md)、[静态轴](../docs/shader-features.md)。绑定 handle、参数接口与 HLSL 显式传参已接入；M2 旧具名变体与 Shader 资产身份在全量迁移步骤收尾，实际状态以阶段计划为准。
 
 ### Shader 工具链
 
-参数块可声明稳定 Schema ID、版本和数据类型名，布局 hash 排除绑定别名与槽；同一声明生成 C++ 数据/打包代码及独立 HLSL 类型头。Package 解析代际 BindingHandle，按 Schema 或固定资源语义验证接口。场景适配与共享库正在迁移；已实现的基础契约见 [参数接口](../docs/shader-parameters.md)。
+参数块声明稳定 Schema ID、版本和数据类型名，布局 hash 排除绑定别名与槽；同一声明生成 C++ 数据/打包代码及独立 HLSL 类型头。Package 解析代际 BindingHandle，按 Schema 或固定资源语义验证接口。Material 准备使用 handle，Scene 按包/Pass 缓存适配并绑定分块数据；共享 HLSL 库通过显式参数求值。契约见 [参数接口](../docs/shader-parameters.md)。
 
 ShaderDefinition 是作者维护的 Shader 资产，包含 HLSL 来源、入口点、材质属性、合法变体、Pass 角色和状态选择。M2 采用简洁声明语法作为唯一作者入口，共享参数模块由 use 引入，HLSL 函数与工具仍由普通 Include 组织。内部描述统一，不并存另一份手写 JSON 元数据。
 
@@ -423,7 +423,7 @@ Assets 和元数据、ProjectSettings、Source、项目文件纳入版本管理�
 
 投影、Viewport Y、屏幕 UV 和正面绕序统一在平台适配规则中处理，上层不分散添加 Vulkan 或 DX12 修正。纹理上传、渲染附件和屏幕采样的原点转换用测试图验证。深度重建、阴影和 Hi-Z 都遵守相同约定。
 
-光照在统一的线性工作空间计算，颜色纹理按声明进行 sRGB 解码，法线和普通数据纹理使用线性数据。M4.2 先用 Blinn–Phong/sRGB LDR 验证场景，M4.3 改为 Shader/Material 驱动的 Lit/Unlit 与 RGBA32F HDR；Core/Lighting HLSL 库共用 .params Frame/Draw 声明，不重复手写 cbuffer。Surface/BRDF 与光栅采样上下文分开，环境采用 CPU 准备的低分辨率 2D 预滤波图集和 split-sum LUT。HDR 中间结果在输出阶段执行曝光、ACES fitted Tone Mapping，最后由 sRGB 附件编码。此阶段环境输入是 sRGB 图像加线性强度，原生 HDR 图像、cubemap/mip 和高级 IBL 后置。
+光照在统一的线性工作空间计算，颜色纹理按声明进行 sRGB 解码，法线和普通数据纹理使用线性数据。M4.2 先用 Blinn–Phong/sRGB LDR 验证场景，M4.3 改为 Shader/Material 驱动的 Lit/Unlit 与 RGBA32F HDR；View/Object/Lighting/Shadow 从 .params 生成 CPU/HLSL 数据，Core/Lighting 等库接受显式参数，不重复手写 cbuffer。Surface/BRDF 与光栅采样上下文分开，环境采用 CPU 准备的低分辨率 2D 预滤波图集和 split-sum LUT。HDR 中间结果在输出阶段执行曝光、ACES fitted Tone Mapping，最后由 sRGB 附件编码。此阶段环境输入是 sRGB 图像加线性强度，原生 HDR 图像、cubemap/mip 和高级 IBL 后置。
 
 Object、View、Projection 的历史值、相机 jitter 和运动矢量采用明确语义。即使 TAA 后置，也避免在接口中混淆当前与历史变换。
 

@@ -4,6 +4,7 @@
 #include <cmath>
 #include <cstring>
 #include <fstream>
+#include <stdexcept>
 
 namespace renderlab::samples::detail
 {
@@ -22,14 +23,32 @@ void VerifyMaterialCompute(rhi::Runtime& runtime, material::Runtime& materials,
     auto textureRead = runtime.CreateBuffer({256, Memory::Readback, "Probe.Texture.Readback"});
     material::Preparation probe;
     probe.pass = "Probe";
-    probe.constants["Draw"]["Offset"] = {"float4", 1, {1, 2, 3, 4}};
-    probe.bindings["Input"] = {0, {}, {}, input, 256, 16, 16};
-    probe.bindings["Results"] = {0, {}, {}, results, 256, 80, 16};
-    probe.bindings["Output"] = {0, runtime.CreateView(outputTexture)};
+    const auto pass = package->ResolvePass(probe.pass);
+    probe.constants[package->BlockBinding(pass, "Draw")]["Offset"] = {"float4", 1, {1, 2, 3, 4}};
+    probe.bindings[package->ResourceBinding(pass, "Input")] = {0, {}, {}, input, 256, 16, 16};
+    probe.bindings[package->ResourceBinding(pass, "Results")] = {0, {}, {}, results, 256, 80, 16};
+    probe.bindings[package->ResourceBinding(pass, "Output")] = {0,
+                                                                runtime.CreateView(outputTexture)};
     auto viewConstants = runtime.CreateBuffer({512, Memory::Upload, "Probe.ExternalView"});
     const auto viewBytes = material::Pack(package->Layout("Probe").blocks.front(), {});
     std::memcpy(viewConstants->Map().data() + 256, viewBytes.data(), viewBytes.size());
-    probe.bindings["View"] = {0, {}, {}, viewConstants, 256, 256};
+    probe.bindings[package->BlockBinding(pass, "View")] = {0, {}, {}, viewConstants, 256, 256};
+    auto wrongPass = probe;
+    const auto viewHandle = package->BlockBinding(pass, "View");
+    wrongPass.bindings.erase(viewHandle);
+    wrongPass
+        .bindings[package->BlockBinding(package->ResolvePass(std::string("Forward")), "View")] =
+        probe.bindings.at(viewHandle);
+    bool rejected = false;
+    try
+    {
+        materials.Prepare(package, asset, wrongPass, resolve);
+    }
+    catch (const std::invalid_argument&)
+    {
+        rejected = true;
+    }
+    Require(rejected, "Preparation must reject a binding handle from another pass");
     auto compute = materials.Prepare(package, asset, probe, resolve);
     auto commands = runtime.CreateCommands();
     MaterialConstants(*commands, compute);

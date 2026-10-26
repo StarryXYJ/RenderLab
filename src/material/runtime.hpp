@@ -24,12 +24,12 @@ struct Preparation
     std::vector<rhi::VertexAttribute> attributes;
     std::optional<rhi::Format> depthStencilFormat;
     bool mirrored = false;
-    /// External resources or prepacked cbuffers, keyed by generated HLSL symbol.
-    std::map<std::string, rhi::Binding> bindings;
-    std::map<std::string, std::map<std::string, Value>> constants;
+    /// Explicit generation/pass-local interface handles; constant members use stable PropertyId.
+    std::map<shader::BindingHandle, rhi::Binding> bindings;
+    std::map<shader::BindingHandle, std::map<std::string, Value>> constants;
     /// Graph-owned pass resources, resolved during recording rather than preparation.
-    /// Only external texture/buffer/sampler symbols are accepted; constants remain prepared.
-    std::set<std::string> deferredResources;
+    /// Only external resource handles are accepted; constants remain prepared.
+    std::set<shader::BindingHandle> deferredResources;
 };
 using ResourceResolver = std::function<rhi::Binding(const shader::Property&, const std::string&)>;
 struct GpuGeneration;
@@ -40,6 +40,7 @@ struct Prepared
     std::shared_ptr<const GpuGeneration> generation;
     std::shared_ptr<rhi::Pipeline> pipeline;
     std::vector<rhi::Binding> resources;
+    std::vector<shader::BindingHandle> deferredResources;
     /// Newly uploaded constants require HostWrite -> UniformRead before their first shader use.
     std::vector<std::shared_ptr<rhi::Buffer>> constants;
 };

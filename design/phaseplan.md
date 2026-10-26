@@ -5,7 +5,7 @@
 ## 当前状态
 
 - 当前实施阶段：M0–M4 DONE；M4.1–M4.5 全部完成。
-- 当前工作项：R1 IN_PROGRESS，R1.1 已完成（a1147d5/f09c321），R1.2a 已提交 65879ad；R1.3a 参数契约/代码生成基础已完成，下一工作项 R1.3b 场景绑定与显式 HLSL 库迁移；M5 NOT_STARTED。
+- 当前工作项：R1 IN_PROGRESS，R1.1 已完成（a1147d5/f09c321），R1.2a 已提交 65879ad、R1.3a 已提交 6f20062；R1.3 已完成，正在收尾 R1.4 资产身份/语义与旧入口移除；M5 NOT_STARTED。
 - 用户约定：每个子阶段验收完成即提交 Git，无阻塞时在当前授权范围内继续推进；M4.3 提交 c50ee6a、M4.4 提交 40d0c12、M4.5 提交 9a4b2e4。
 - Demo 的 Custom 示例作为回归入口保留；M4 场景示例使用 Forward 组合与现有 Shader/Material 链路。
 
@@ -182,17 +182,17 @@ R1.2a 结果：显式 uint32 enum、普通 bool/enum uniform、keyword 静态属
 
 ### R1.3 参数接口与显式 HLSL 库
 
-状态：IN_PROGRESS；R1.3a 参数契约/代码生成基础 DONE（2026 年 10 月 26 日）；R1.3b 场景绑定/HLSL 迁移尚未完成。
+状态：DONE，日期：2026 年 10 月 26 日。
 
-R1.3a 结果：cbuffer Schema ID/version/type、独立布局 hash、模块别名、HLSL 类型头/绑定头分离、C++ POD/显式打包生成、代际 BindingHandle 与 Schema/资源语义解析。验证：RTX 5060，Debug/Release 定向各 6/6（parameters/shader、双后端 surface/material），生成头实际编译；矩阵/数组/bool/稀疏枚举/范围/NaN、错误版本/代际、模块与资源别名独立性通过，Validation 错误为 0。文档：[参数接口](../docs/shader-parameters.md)。Material/Scene 的准备输入仍使用原适配，完整接入留给 R1.3b，不将基础 handle API 等同于迁移完成。
+结果：Schema ID/version/type 与独立布局 hash、模块别名、生成 C++ POD/打包与纯类型 HLSL 头、代际绑定 handle/标准资源语义；Material 准备全部使用 handle。SceneRenderer 缓存接口适配，View/Object/Lighting/Shadow 分块，Object 常量在同实例各 Pass 复用；移除 Frame 逐字段名称匹配、内置 Shader 白名单和 IBL/阴影资源 symbol 分支。HLSL 库只接收值与显式纹理参数，表面/阴影导数在入口裁剪前计算，Unlit 无 Lighting 接口。
 
-- [ ] `.params` 接口身份/版本/布局校验、生成 C++ 数据/打包接口及 HLSL 类型、类型化绑定 handle 与标准资源语义。
-- [ ] 拆分 View/Object/Lighting/Shadow，入口绑定适配与纯函数库分离；纹理参数和光栅梯度显式传递。
-- [ ] 移除 Renderer 的 Frame 逐字段名称匹配、内置 Shader 名称白名单和资源 symbol 分支；绑定仍经过 Graph 访问声明。
+验证：RTX 5060 / MSVC 19.51 / DXC 1.9，Debug/Release 全量各 40/40；追加别名/错 Pass/最小接口检查后 Debug 定向 7/7、Release 全量 40/40。生成头实际编译、矩阵/数组/bool/enum/范围/NaN、错误版本/代际、模块与 IBL/阴影资源改名的场景像素一致性、M4 窗口/Player/热重载通过，双后端 Validation 错误为 0。R1.3a 提交 6f20062，场景与库接入随本子阶段提交。
 
-验收：项目自定义 Shader 的最小接口、资源/常量别名独立性、DXIL/SPIR-V 函数传参和布局校验、缺少必需接口的准备期诊断。
+文档：[参数接口](../docs/shader-parameters.md)。限制：整包 ABI 校验、单队列/固定布局；Shader 资产身份与旧具名变体/材质格式的最终替换仍归 R1.4。
 
 ### R1.4 全量迁移与回归
+
+状态：IN_PROGRESS；移除旧具名变体与独立 variant 字符串，Shader 身份改为资产 ID，glTF 通过类型化属性语义映射，再完整回归与独立安装验收。
 
 - [ ] 迁移内置/项目 Shader、示例材质、glTF 语义映射和工具；显式格式升级与缓存失效，不长期维护两套路径。
 - [ ] 稳定 ID 不变时重命名 Pass/属性 symbol/资源别名/HLSL 文件，画面与分类保持一致；用户覆盖材质状态不被导入器重写。

@@ -56,6 +56,11 @@ void Cpu(const std::filesystem::path& engine, const std::filesystem::path& outpu
             shader::CompileShader(engine / "RenderLab" / (std::string(name) + ".shader"), options);
         Require(bool(build), build.diagnostics.c_str());
         Require(!build.package->programs.empty(), "Both-target shader compilation");
+        if (std::string_view(name) == "Unlit")
+            for (const auto& interface : build.package->interfaces)
+                Require(std::ranges::none_of(interface.blocks, [](const auto& block)
+                                             { return block.schemaId == "renderlab.lighting"; }),
+                        "Unlit must not require a Lit lighting interface");
     }
 }
 uint8_t Display(float linear, float exposure)
@@ -175,7 +180,11 @@ void Gpu(rhi::Runtime& runtime, shader::Target target, const std::filesystem::pa
     {
         material::Runtime materialRuntime(runtime, target);
         material::Preparation preparation;
-        preparation.pass = "Forward";
+        preparation.pass = shader::PassRole::Forward;
+        const auto pass = unlit.package->ResolvePass(preparation.pass);
+        for (const auto& block : unlit.package->Layout(unlit.package->GetPass(pass).name).blocks)
+            if (!block.schemaId.empty())
+                preparation.constants[unlit.package->BlockBinding(pass, block.name)] = {};
         preparation.color = rhi::Format::Rgba32Float;
         preparation.vertexStride = sizeof(assets::Vertex);
         preparation.attributes = {{"POSITION", 0, rhi::VertexFormat::Float3, 0},

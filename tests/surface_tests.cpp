@@ -288,8 +288,33 @@ void Gpu(rhi::Runtime& runtime, shader::Target target, const std::filesystem::pa
             };
             replace("pass Forward", "pass ArbitraryBeautyName");
             replace("pass Shadow", "pass ArbitraryCasterName");
+            for (const auto module : {"Scene", "View", "Object", "Shadow"})
+                replace(std::string("use \"") + module + ".params\";",
+                        std::string("use \"") + module + ".params\" as Renamed;");
+            replace("Texture2D<float4> EnvironmentAtlas;", "Texture2D<float4> SkyTexture;");
+            replace("Texture2D<float4> BrdfLut;", "Texture2D<float4> LookupTexture;");
+            replace("Texture2D<float4> MainLightShadow;", "Texture2D<float4> SunTexture;");
             replace("cull = $Cull;",
                     "cull = $Cull; stencil { enabled = true; compare = Always; writeMask = 0; }");
+            WriteFileAtomically(path, std::as_bytes(std::span{source.data(), source.size()}));
+        }
+        for (const auto name : {"Lit", "Unlit", "Shadow"})
+        {
+            const auto path = isolatedEngine / "RenderLab" / (std::string(name) + ".hlsl");
+            auto source = shader::ReadText(path);
+            const auto replace = [&](const std::string& from, const std::string& to)
+            {
+                size_t position = 0;
+                while ((position = source.find(from, position)) != std::string::npos)
+                {
+                    source.replace(position, from.size(), to);
+                    position += to.size();
+                }
+            };
+            for (const auto block : {"SceneView", "SceneObject", "SceneLighting", "SceneShadow"})
+                replace(block, std::string("Renamed_") + block);
+            replace(", MainLightShadow,", ", SunTexture,");
+            replace(", EnvironmentAtlas, BrdfLut", ", SkyTexture, LookupTexture");
             WriteFileAtomically(path, std::as_bytes(std::span{source.data(), source.size()}));
         }
         renderer::SceneRenderer renamed(runtime, target, root / "Shadow.rlproject", isolatedEngine);
@@ -303,7 +328,7 @@ void Gpu(rhi::Runtime& runtime, shader::Target target, const std::filesystem::pa
         for (size_t y = 0; y < 193; ++y)
             Require(std::memcmp(bytes.data() + y * rhi::TextureRowPitch(257),
                                 baseline.data() + y * 257 * 4, 257 * 4) == 0,
-                    "Pass renaming and enabled identity stencil must preserve scene pixels");
+                    "Pass/module/resource aliases and identity stencil must preserve scene pixels");
     }
     renderer::SceneRenderOptions largest;
     largest.shadowResolution = 2048;

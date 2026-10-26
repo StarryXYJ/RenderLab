@@ -1,6 +1,8 @@
 shader "RenderLab/Unlit"
 {
-    use "Scene.params";
+    use "View.params";
+    use "Object.params";
+    use "Shadow.params";
     material
     {
         [id("surface")] SurfaceType Surface = Opaque;

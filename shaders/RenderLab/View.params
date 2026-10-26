@@ -1,0 +1,7 @@
+[scope(view), schema("renderlab.view", 1), type(SceneViewData)] cbuffer SceneView
+{
+    [id("View")] float4x4 View = (1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1);
+    [id("Projection")] float4x4 Projection = (1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1);
+    [id("ViewProjection")] float4x4 ViewProjection = (1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1);
+    [id("CameraPosition")] float4 CameraPosition = (0, 0, 0, 1);
+}

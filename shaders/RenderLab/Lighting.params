@@ -1,0 +1,7 @@
+[scope(view), schema("renderlab.lighting", 1), type(SceneLightingData)] cbuffer SceneLighting
+{
+    [id("MainLightDirection")] float4 MainLightDirection = (0, 0, 1, 0);
+    [id("MainLightColor")] float4 MainLightColor = (0, 0, 0, 0);
+    [id("AmbientColor")] float4 AmbientColor = (0.035, 0.035, 0.035, 0);
+    [id("EnvironmentParameters")] float4 EnvironmentParameters = (1, 0, 0, 0);
+}

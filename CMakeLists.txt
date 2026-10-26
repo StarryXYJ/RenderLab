@@ -111,6 +111,18 @@ add_custom_command(TARGET renderlab_shaderc POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_FILE:renderlab_dxc>
         $<TARGET_FILE_DIR:renderlab_shaderc> VERBATIM)
 
+file(GLOB renderlab_scene_shader_sources CONFIGURE_DEPENDS
+    "${CMAKE_SOURCE_DIR}/shaders/RenderLab/*.params" "${CMAKE_SOURCE_DIR}/shaders/RenderLab/*.shader"
+    "${CMAKE_SOURCE_DIR}/shaders/RenderLab/*.hlsl" "${CMAKE_SOURCE_DIR}/shaders/RenderLab/*.hlsli")
+set(renderlab_scene_parameters "${CMAKE_BINARY_DIR}/generated/scene_parameters.hpp")
+add_custom_command(OUTPUT "${renderlab_scene_parameters}"
+    COMMAND $<TARGET_FILE:renderlab_shaderc> "${CMAKE_SOURCE_DIR}/shaders/RenderLab/Lit.shader"
+        --target dxil --cache "${CMAKE_BINARY_DIR}/scene-parameter-cache"
+        --schema "${CMAKE_BINARY_DIR}/generated/scene_parameters.json" --cpp "${renderlab_scene_parameters}"
+    DEPENDS renderlab_shaderc ${renderlab_scene_shader_sources} VERBATIM)
+target_sources(renderlab_renderer PRIVATE "${renderlab_scene_parameters}")
+target_include_directories(renderlab_renderer PRIVATE "${CMAKE_BINARY_DIR}/generated")
+
 add_library(renderlab_material STATIC
     src/material/asset.cpp src/material/packing.cpp src/material/serialization.cpp src/material/runtime.cpp src/material/render_state.cpp src/material/live_material.cpp)
 target_include_directories(renderlab_material PUBLIC src)

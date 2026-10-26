@@ -1,3 +1,4 @@
+#include <renderlab/generated/parameters.hlsli>
 #include "Core.hlsli"
 #include "Alpha.hlsli"
 struct Attributes { float3 positionOS : POSITION; float3 normalOS : NORMAL; float2 uv : TEXCOORD0; };
@@ -5,7 +6,7 @@ struct Varyings { float4 positionCS : SV_Position; float2 uv : TEXCOORD0; };
 Varyings VSMain(Attributes input)
 {
     Varyings output;
-    output.positionCS = TransformObjectToHClip(input.positionOS);
+    output.positionCS = TransformObjectToHClip(input.positionOS, SceneObject.ObjectToWorld, SceneView.ViewProjection);
     output.uv = input.uv;
     return output;
 }

@@ -29,9 +29,9 @@ shader "RenderLab/Lit"
         features = { AlphaClip };
         parameters
         {
-            Texture2D<float4> EnvironmentAtlas;
-            Texture2D<float4> BrdfLut;
-            Texture2D<float4> MainLightShadow;
+            [binding(EnvironmentAtlas)] Texture2D<float4> EnvironmentAtlas;
+            [binding(BrdfLut)] Texture2D<float4> BrdfLut;
+            [binding(MainLightShadow)] Texture2D<float4> MainLightShadow;
         }
         vertex = "Lit.hlsl:VSMain";
         pixel = "Lit.hlsl:PSMain";

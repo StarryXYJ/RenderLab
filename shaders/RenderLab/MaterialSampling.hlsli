@@ -1,6 +1,6 @@
 #ifndef RENDERLAB_MATERIAL_SAMPLING_INCLUDED
 #define RENDERLAB_MATERIAL_SAMPLING_INCLUDED
-#include "Core.hlsli"
+#include "Math.hlsli"
 #include "Surface.hlsli"
 
 // Raster entry computes derivatives before divergent branches. Future ray entry points must
@@ -28,24 +28,32 @@ float3 NormalFromMap(RasterSamplingContext context, float3 normalTS)
     b = cross(n, t) * handedness;
     return SafeNormalize(t * normalTS.x + b * normalTS.y + n * normalTS.z);
 }
-MaterialSurface EvaluateMaterial(RasterSamplingContext context)
+struct MaterialFactors
+{
+    float4 baseColor;
+    float metallic, roughness, normalScale, occlusionStrength;
+    float3 emission;
+};
+MaterialSurface EvaluateMaterial(MaterialFactors factors, RasterSamplingContext context,
+    Texture2D<float4> baseMap, Texture2D<float4> metallicRoughnessMap, Texture2D<float4> normalMap,
+    Texture2D<float4> occlusionMap, Texture2D<float4> emissionMap, SamplerState surfaceSampler)
 {
     MaterialSurface surface;
-    float4 base = Material.BaseColor * BaseMap.SampleGrad(BaseSampler, context.uv,
+    float4 base = factors.baseColor * baseMap.SampleGrad(surfaceSampler, context.uv,
         context.uvDx, context.uvDy);
-    float4 mr = MetallicRoughnessMap.SampleGrad(BaseSampler, context.uv,
+    float4 mr = metallicRoughnessMap.SampleGrad(surfaceSampler, context.uv,
         context.uvDx, context.uvDy);
-    float3 normalTS = NormalMap.SampleGrad(BaseSampler, context.uv,
+    float3 normalTS = normalMap.SampleGrad(surfaceSampler, context.uv,
         context.uvDx, context.uvDy).xyz * 2 - 1;
-    normalTS.xy *= Material.NormalScale;
+    normalTS.xy *= factors.normalScale;
     surface.baseColor = max(base.rgb, 0);
     surface.alpha = saturate(base.a);
     surface.normalWS = NormalFromMap(context, normalTS);
-    surface.metallic = saturate(Material.Metallic * mr.b);
-    surface.perceptualRoughness = clamp(Material.Roughness * mr.g, 0.045, 1);
-    surface.occlusion = lerp(1, OcclusionMap.SampleGrad(BaseSampler, context.uv,
-        context.uvDx, context.uvDy).r, Material.OcclusionStrength);
-    surface.emission = Material.Emission * EmissionMap.SampleGrad(BaseSampler, context.uv,
+    surface.metallic = saturate(factors.metallic * mr.b);
+    surface.perceptualRoughness = clamp(factors.roughness * mr.g, 0.045, 1);
+    surface.occlusion = lerp(1, occlusionMap.SampleGrad(surfaceSampler, context.uv,
+        context.uvDx, context.uvDy).r, factors.occlusionStrength);
+    surface.emission = factors.emission * emissionMap.SampleGrad(surfaceSampler, context.uv,
         context.uvDx, context.uvDy).rgb;
     return surface;
 }

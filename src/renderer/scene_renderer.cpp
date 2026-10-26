@@ -12,6 +12,7 @@
 #include "rendergraph/pool.hpp"
 #include "rhi/commands.hpp"
 #include "rhi/upload.hpp"
+#include "scene_parameters.hpp"
 #include "shader/compiler.hpp"
 
 #include <algorithm>
@@ -25,13 +26,9 @@ namespace renderlab::renderer
 {
 namespace
 {
-material::Value Matrix(const math::Mat4& value)
+std::array<float, 4> Vector(math::Vec3 value, float w = 0)
 {
-    return {"float4x4", 1, {value.values.begin(), value.values.end()}};
-}
-material::Value Vector(math::Vec3 value, float w = 0)
-{
-    return {"float4", 1, {value.x, value.y, value.z, w}};
+    return {value.x, value.y, value.z, w};
 }
 } // namespace
 struct SceneRenderer::Impl
@@ -229,34 +226,6 @@ struct SceneRenderer::Impl
                     const auto build = shader::CompileShader(shaderEntry.path, options);
                     if (!build)
                         throw std::runtime_error(build.diagnostics);
-                    const auto& actual =
-                        build.package
-                            ->Layout(
-                                build.package
-                                    ->GetPass(build.package->ResolvePass(shader::PassRole::Forward))
-                                    .name)
-                            .blocks;
-                    const auto frame =
-                        std::ranges::find(actual, std::string("Frame"), &shader::BlockLayout::name);
-                    const auto& standard =
-                        package
-                            ->Layout(
-                                package->GetPass(package->ResolvePass(shader::PassRole::Forward))
-                                    .name)
-                            .blocks;
-                    const auto expected = std::ranges::find(standard, std::string("Frame"),
-                                                            &shader::BlockLayout::name);
-                    if (frame == actual.end() || frame->size != expected->size ||
-                        frame->fields.size() != expected->fields.size())
-                        throw std::invalid_argument(
-                            "Scene shaders must use RenderLab/Scene.params Frame layout");
-                    for (size_t i = 0; i < frame->fields.size(); ++i)
-                        if (frame->fields[i].offset != expected->fields[i].offset ||
-                            frame->fields[i].property.symbol !=
-                                expected->fields[i].property.symbol ||
-                            frame->fields[i].property.type != expected->fields[i].property.type)
-                            throw std::invalid_argument(
-                                "Scene shader global Frame layout mismatch");
                     packages.emplace(shaderId->second, build.package);
                 }
                 selected = packages.at(shaderId->second);
@@ -265,10 +234,6 @@ struct SceneRenderer::Impl
             {
                 const auto name =
                     assets::detail::LoadJson(entry.path).at("shader").get<std::string>();
-                if (name != "RenderLab/Lit" && name != "RenderLab/Unlit" &&
-                    name != "RenderLab/BlinnPhong")
-                    throw std::invalid_argument(
-                        "Project shaders require a .meta shader dependency");
                 if (!packages.contains(name))
                 {
                     shader::CompileOptions options;
@@ -323,38 +288,86 @@ struct SceneRenderer::Impl
                                       instance.model + "/Image/" + std::to_string(image));
         return {package, std::move(result)};
     }
-    std::shared_ptr<rhi::Buffer> FrameBuffer()
+    struct SceneBindings
     {
-        const auto& layout =
-            package->Layout(package->GetPass(package->ResolvePass(shader::PassRole::Forward)).name);
-        const auto& block =
-            *std::ranges::find(layout.blocks, std::string("Frame"), &shader::BlockLayout::name);
-        const auto bytes = material::Pack(
-            block, {{"View", Matrix(snapshot.view)},
-                    {"Projection", Matrix(snapshot.projection)},
-                    {"ViewProjection", Matrix(snapshot.viewProjection)},
-                    {"CameraPosition", Vector(snapshot.cameraPosition, 1)},
-                    {"MainLightDirection", Vector(snapshot.light.direction)},
-                    {"MainLightColor", Vector(snapshot.light.color, snapshot.light.intensity)},
-                    {"AmbientColor", Vector(snapshot.ambient)},
-                    {"MainLightShadowMatrix", Matrix(shadowMatrix)},
-                    {"MainLightShadowParameters",
-                     {"float4",
-                      1,
-                      {1.0 / snapshot.light.shadowResolution, snapshot.light.shadowBias,
-                       snapshot.light.shadowNormalBias,
-                       snapshot.light.shadows && snapshot.light.intensity > 0 &&
-                               !snapshot.shadowCasters.empty()
-                           ? 1.0
-                           : 0.0}}},
-                    {"EnvironmentParameters",
-                     {"float4",
-                      1,
-                      {snapshot.environmentIntensity,
-                       snapshot.environmentRotation * 3.141592653589793 / 180, 0, 0}}}});
-        auto buffer = runtime.CreateBuffer({bytes.size(), rhi::Memory::Upload, "Frame.Constants"});
+        std::optional<shader::BindingHandle> view, object, lighting, shadow;
+        std::optional<shader::BindingHandle> environment, brdf, shadowMap;
+    };
+    std::map<std::pair<const shader::Package*, uint32_t>, SceneBindings> sceneBindings;
+    const SceneBindings& Bindings(const std::shared_ptr<const shader::Package>& selected,
+                                  shader::PassRole role)
+    {
+        const auto pass = selected->ResolvePass(role);
+        const auto key = std::pair{selected.get(), pass.index};
+        if (const auto old = sceneBindings.find(key); old != sceneBindings.end())
+            return old->second;
+        using namespace shader::generated;
+        SceneBindings bindings;
+        bindings.view = selected->SchemaBinding(pass, SceneViewDataContract);
+        bindings.object = selected->SchemaBinding(pass, SceneObjectDataContract);
+        bindings.lighting = selected->SchemaBinding(pass, SceneLightingDataContract);
+        bindings.shadow = selected->SchemaBinding(pass, SceneShadowDataContract);
+        const auto& layout = selected->interfaces.at(pass.index);
+        for (uint32_t i = 0; i < layout.blocks.size(); ++i)
+        {
+            if (layout.blocks[i].scope == shader::Scope::Material)
+                continue;
+            const shader::BindingHandle handle{pass, i, true};
+            if (bindings.view != handle && bindings.object != handle &&
+                bindings.lighting != handle && bindings.shadow != handle)
+                throw std::invalid_argument("Unsupported required scene parameter schema: " +
+                                            layout.blocks[i].schemaId);
+        }
+        using Semantic = shader::Property::BindingSemantic;
+        bindings.environment = selected->SemanticBinding(pass, Semantic::EnvironmentAtlas);
+        bindings.brdf = selected->SemanticBinding(pass, Semantic::BrdfLut);
+        bindings.shadowMap = selected->SemanticBinding(pass, Semantic::MainLightShadow);
+        for (const auto& resource : layout.resources)
+            if (resource.scope != shader::Scope::Material &&
+                resource.property.binding == Semantic::None)
+                throw std::invalid_argument(
+                    "Scene resource requires an explicit standard binding semantic");
+        return sceneBindings.emplace(key, std::move(bindings)).first->second;
+    }
+    template <class Data>
+    std::shared_ptr<rhi::Buffer> ParameterBuffer(const Data& data, const std::string& name)
+    {
+        const auto bytes = shader::generated::Pack(data);
+        auto buffer = runtime.CreateBuffer({bytes.size(), rhi::Memory::Upload, name});
         std::memcpy(buffer->Map().data(), bytes.data(), bytes.size());
         return buffer;
+    }
+    struct FrameBuffers
+    {
+        std::shared_ptr<rhi::Buffer> view, lighting, shadow;
+    };
+    FrameBuffers Parameters()
+    {
+        using namespace shader::generated;
+        SceneViewData view;
+        view.View = snapshot.view.values;
+        view.Projection = snapshot.projection.values;
+        view.ViewProjection = snapshot.viewProjection.values;
+        view.CameraPosition = Vector(snapshot.cameraPosition, 1);
+        SceneLightingData lighting;
+        lighting.MainLightDirection = Vector(snapshot.light.direction);
+        lighting.MainLightColor = Vector(snapshot.light.color, snapshot.light.intensity);
+        lighting.AmbientColor = Vector(snapshot.ambient);
+        lighting.EnvironmentParameters = {
+            snapshot.environmentIntensity,
+            static_cast<float>(snapshot.environmentRotation * 3.141592653589793 / 180), 0, 0};
+        SceneShadowData shadow;
+        shadow.MainLightShadowMatrix = shadowMatrix.values;
+        shadow.MainLightShadowParameters = {
+            1.f / snapshot.light.shadowResolution, snapshot.light.shadowBias,
+            snapshot.light.shadowNormalBias,
+            snapshot.light.shadows && snapshot.light.intensity > 0 &&
+                    !snapshot.shadowCasters.empty()
+                ? 1.f
+                : 0.f};
+        return {ParameterBuffer(view, "View.Constants"),
+                ParameterBuffer(lighting, "Lighting.Constants"),
+                ParameterBuffer(shadow, "Shadow.Constants")};
     }
 };
 SceneRenderer::SceneRenderer(rhi::Runtime& runtime, shader::Target target,
@@ -428,7 +441,8 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
     frame.clearColor = {.02f, .02f, .02f, 1};
     frame.shadowResolution =
         self.snapshot.shadowCasters.empty() ? 1 : self.snapshot.light.shadowResolution;
-    const auto frameConstants = self.FrameBuffer();
+    const auto frameConstants = self.Parameters();
+    std::map<std::string, std::shared_ptr<rhi::Buffer>> objectConstants;
     std::map<const rhi::Object*, std::string> imported;
     const auto importBuffer =
         [&](const std::shared_ptr<rhi::Buffer>& buffer, const std::string& name, rhi::State state)
@@ -504,17 +518,35 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
         prepare.attributes = {{"POSITION", 0, rhi::VertexFormat::Float3, 0},
                               {"NORMAL", 1, rhi::VertexFormat::Float3, 12},
                               {"TEXCOORD", 2, rhi::VertexFormat::Float2, 24}};
-        prepare.bindings["Frame"] = {0, {}, {}, frameConstants, 0, frameConstants->desc.size};
-        prepare.constants["Draw"] = {{"ObjectToWorld", Matrix(instance.world)},
-                                     {"NormalToWorld", Matrix(instance.normal)},
-                                     {"PreviousObjectToWorld", Matrix(instance.previousWorld)}};
-        for (const auto& resource : material.package->Layout(pass.name).resources)
-            if (resource.property.symbol == "EnvironmentAtlas")
-                prepare.bindings["EnvironmentAtlas"] = {0, self.environmentAtlas};
-            else if (resource.property.symbol == "BrdfLut")
-                prepare.bindings["BrdfLut"] = {0, self.brdfLut};
-            else if (resource.property.symbol == "MainLightShadow")
-                prepare.deferredResources.insert("MainLightShadow");
+        const auto& bindings = self.Bindings(material.package, role);
+        const auto bind = [&](const std::optional<shader::BindingHandle>& handle,
+                              const std::shared_ptr<rhi::Buffer>& buffer)
+        {
+            if (handle)
+                prepare.bindings[*handle] = {0, {}, {}, buffer, 0, buffer->desc.size};
+        };
+        bind(bindings.view, frameConstants.view);
+        bind(bindings.lighting, frameConstants.lighting);
+        bind(bindings.shadow, frameConstants.shadow);
+        if (bindings.object)
+        {
+            if (!objectConstants.contains(instance.id))
+            {
+                shader::generated::SceneObjectData object;
+                object.ObjectToWorld = instance.world.values;
+                object.NormalToWorld = instance.normal.values;
+                object.PreviousObjectToWorld = instance.previousWorld.values;
+                objectConstants.emplace(
+                    instance.id, self.ParameterBuffer(object, instance.id + "/Object.Constants"));
+            }
+            bind(bindings.object, objectConstants.at(instance.id));
+        }
+        if (bindings.environment)
+            prepare.bindings[*bindings.environment] = {0, self.environmentAtlas};
+        if (bindings.brdf)
+            prepare.bindings[*bindings.brdf] = {0, self.brdfLut};
+        if (bindings.shadowMap)
+            prepare.deferredResources.insert(*bindings.shadowMap);
         auto prepared = self.materials.Prepare(material.package, material.asset, prepare, resolve);
         self.generations[material.package.get()] = prepared.generation;
         DrawPacket draw;
@@ -559,12 +591,9 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
             else if (binding.sampler)
                 draw.samplers.push_back({binding.slot, binding.sampler, binding.space});
         }
-        if (prepare.deferredResources.contains("MainLightShadow"))
+        if (bindings.shadowMap)
         {
-            const auto& resources = material.package->Layout(pass.name).resources;
-            const auto& resource =
-                *std::ranges::find_if(resources, [](const auto& value)
-                                      { return value.property.symbol == "MainLightShadow"; });
+            const auto& resource = material.package->GetResource(*bindings.shadowMap);
             draw.textures.push_back({resource.slot, "MainLightShadow", uint32_t(resource.scope)});
         }
         if (shadow)
@@ -591,7 +620,9 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
     displayPreparation.color = target->desc.format;
     displayPreparation.vertexStride = 8;
     displayPreparation.attributes = {{"POSITION", 0, rhi::VertexFormat::Float2, 0}};
-    displayPreparation.constants["DisplayParameters"] = {
+    const auto displayHandle = self.toneMapping->ResolvePass(displayPreparation.pass);
+    displayPreparation
+        .constants[self.toneMapping->BlockBinding(displayHandle, "DisplayParameters")] = {
         {"Exposure", {"float", 1, {self.snapshot.exposure}}},
         {"RawView",
          {"uint",
@@ -599,7 +630,8 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
           {options.view != SceneView::Final && options.view != SceneView::Environment ? 1.0
                                                                                       : 0.0}}},
         {"ViewportSize", {"float2", 1, {double(target->desc.width), double(target->desc.height)}}}};
-    displayPreparation.deferredResources.insert("HdrColor");
+    displayPreparation.deferredResources.insert(
+        self.toneMapping->ResourceBinding(displayHandle, "HdrColor"));
     const auto display = self.materials.Prepare(
         self.toneMapping, material::Create(shader::MaterialTemplate(self.toneMapping)),
         displayPreparation);

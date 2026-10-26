@@ -27,21 +27,54 @@ Prepared Runtime::Prepare(std::shared_ptr<const shader::Package> package, const 
     if (!package)
         throw std::invalid_argument("Material preparation needs a shader package");
     const auto validated = Migrate(asset, shader::MaterialTemplate(package));
-    const auto& pass = package->GetPass(package->ResolvePass(preparation.pass));
+    const auto passHandle = package->ResolvePass(preparation.pass);
+    const auto& pass = package->GetPass(passHandle);
     if (!PassEnabled(package->definition, pass, validated))
         throw std::invalid_argument("Cannot prepare disabled shader pass " + pass.name);
     const auto& interface = package->Layout(pass.name);
-    for (const auto& name : preparation.deferredResources)
+    const auto check = [&](shader::BindingHandle handle)
     {
-        const auto found =
-            std::ranges::find_if(interface.resources,
-                                 [&](const auto& resource)
-                                 {
-                                     return resource.scope != shader::Scope::Material &&
-                                            resource.property.symbol == name;
-                                 });
-        if (found == interface.resources.end() || preparation.bindings.contains(name))
-            throw std::invalid_argument("Invalid or already bound deferred resource: " + name);
+        if (handle.pass != passHandle)
+            throw std::invalid_argument("Foreign or stale material preparation binding");
+        const auto scope =
+            handle.constant ? package->GetBlock(handle).scope : package->GetResource(handle).scope;
+        if (scope == shader::Scope::Material)
+            throw std::invalid_argument(
+                "Material preparation cannot override saved property bindings");
+    };
+    for (const auto& [handle, binding] : preparation.bindings)
+    {
+        check(handle);
+        if (preparation.constants.contains(handle))
+            throw std::invalid_argument("Duplicate external constant source");
+    }
+    for (const auto& [handle, values] : preparation.constants)
+    {
+        check(handle);
+        if (!handle.constant)
+            throw std::invalid_argument("Constants require a block handle");
+    }
+    for (const auto& handle : preparation.deferredResources)
+    {
+        check(handle);
+        if (handle.constant || preparation.bindings.contains(handle))
+            throw std::invalid_argument("Invalid or already bound deferred resource");
+    }
+    for (uint32_t index = 0; index < interface.blocks.size(); ++index)
+    {
+        const auto& block = interface.blocks[index];
+        const shader::BindingHandle handle{passHandle, index, true};
+        if (!block.schemaId.empty() && !preparation.bindings.contains(handle) &&
+            !preparation.constants.contains(handle))
+            throw std::invalid_argument("Missing required parameter schema: " + block.schemaId);
+    }
+    for (uint32_t index = 0; index < interface.resources.size(); ++index)
+    {
+        const auto& resource = interface.resources[index];
+        const shader::BindingHandle handle{passHandle, index, false};
+        if (resource.scope != shader::Scope::Material && !preparation.bindings.contains(handle) &&
+            !preparation.deferredResources.contains(handle))
+            throw std::invalid_argument("Missing external resource: " + resource.property.id);
     }
     std::erase_if(generations_, [](const auto& generation) { return generation.expired(); });
     std::shared_ptr<GpuGeneration> generation;
@@ -113,17 +146,19 @@ Prepared Runtime::Prepare(std::shared_ptr<const shader::Package> package, const 
         generation->pipelines.push_back(result.pipeline);
     }
     std::vector<rhi::Binding> bindings;
-    for (const auto& block : interface.blocks)
+    for (uint32_t index = 0; index < interface.blocks.size(); ++index)
     {
+        const auto& block = interface.blocks[index];
+        const shader::BindingHandle handle{passHandle, index, true};
         rhi::Binding binding{};
-        if (block.scope != shader::Scope::Material && preparation.bindings.contains(block.name))
-            binding = preparation.bindings.at(block.name);
+        if (block.scope != shader::Scope::Material && preparation.bindings.contains(handle))
+            binding = preparation.bindings.at(handle);
         else
         {
             static const std::map<std::string, Value> empty;
             const auto& values = block.scope == shader::Scope::Material ? validated.values
-                                 : preparation.constants.contains(block.name)
-                                     ? preparation.constants.at(block.name)
+                                 : preparation.constants.contains(handle)
+                                     ? preparation.constants.at(handle)
                                      : empty;
             const auto bytes = Pack(block, values);
             binding.buffer = runtime_.CreateBuffer(
@@ -136,8 +171,10 @@ Prepared Runtime::Prepare(std::shared_ptr<const shader::Package> package, const 
         binding.space = uint32_t(block.scope);
         bindings.push_back(std::move(binding));
     }
-    for (const auto& resource : interface.resources)
+    for (uint32_t index = 0; index < interface.resources.size(); ++index)
     {
+        const auto& resource = interface.resources[index];
+        const shader::BindingHandle handle{passHandle, index, false};
         const auto& property = resource.property;
         rhi::Binding binding{};
         if (resource.scope == shader::Scope::Material)
@@ -149,9 +186,12 @@ Prepared Runtime::Prepare(std::shared_ptr<const shader::Package> package, const 
         }
         else
         {
-            if (preparation.deferredResources.contains(property.symbol))
+            if (preparation.deferredResources.contains(handle))
+            {
+                result.deferredResources.push_back(handle);
                 continue;
-            const auto found = preparation.bindings.find(property.symbol);
+            }
+            const auto found = preparation.bindings.find(handle);
             if (found == preparation.bindings.end())
                 throw std::invalid_argument("Missing pass resource: " + property.symbol);
             binding = found->second;

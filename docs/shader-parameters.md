@@ -51,4 +51,14 @@ Package 以 PassHandle 解析 BindingHandle，handle 包含所属包/Pass、接�
 
 宿主为 Shader 明确声明的接口提供数据。资源绑定依然必须先在 Graph 声明访问与版本，handle 不绕过同步、生命周期或不可变快照。场景适配与库迁移的实施记录见 [阶段计划](../design/phaseplan.md)。
 
+## 场景与 Material Runtime
+
+`Preparation.bindings/constants/deferredResources` 均使用 BindingHandle。准备时拒绝其他 Pass/包的 handle、Material 属性覆盖、重复常量来源和缺少的必需接口；自定义无 Schema 块可使用声明默认值，带 Schema 的块必须显式提供 buffer 或 constants。constants 的成员键是稳定 PropertyId。Shader 重载后，调用方需要为新包重新解析外部句柄，再整体 Stage/Publish；旧快照继续持有旧包与资源。
+
+标准场景数据分为 View/Object/Lighting/Shadow 四个 `.params` 模块，使用生成的 Scene*Data 与 Pack；View/Lighting/Shadow 每帧准备，Object 按本帧实例准备并在其不同 Pass 间复用。Shader 可只引入所需块，Unlit 不声明 Lighting。SceneRenderer 按包/Pass 缓存 Schema/标准资源适配，绑定时不检查 Frame 字段拼写，不根据 HLSL 资源变量名补 IBL/阴影资源。未知必需场景 Schema 和未声明标准语义的外部资源会明确报错。
+
+Core 变换接受矩阵/相机位置，Lighting 接受显式照明值，MaterialSampling 接受 MaterialFactors、采样上下文、各纹理和采样器，IBL/阴影同样显式传入资源。纹理使用独立函数参数，避免依赖含资源成员的结构体。库不读取全局 Material/View/Object；光栅入口在裁剪前计算表面梯度与阴影坐标导数，库内部不隐式调用 ddx/ddy。
+
+标准 C++ 场景头由构建期 Shader 工具从内置声明生成到构建目录；修改声明或依赖后重新生成，输出未变时不触发无关 C++ 重编译。独立 Player 仍使用相同的运行时、生成 ABI 与 Shader 源资产。
+
 验证入口 `parameters.contracts` 实际编译生成头，并与通用 PackingPlan 及双目标 HLSL 反射对照；覆盖模块/资源改名、错误版本/代际、矩阵/数组/bool/enum/范围与 NaN。`shader.contracts` 与双后端材质/阴影回归同时保留。
