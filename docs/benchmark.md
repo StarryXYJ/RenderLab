@@ -15,7 +15,7 @@ Sandbox/Player 共用 CaptureScene 的固定场景路径。`--benchmark N` 按�
 | elapsedMs | 测量起点到本帧 GPU 等待结束的单调时间，包含先前样本的采集/输出开销 |
 | wallTimeMs / throughputFps | 整个测量循环耗时/实际完成帧数除以该耗时；包含样本采集与流式输出开销 |
 
-此模式逐帧等待，没有 Present、VSync 或窗口两帧重叠。它用于可重复的串行帧延迟比较，不代表交互窗口的最大流水吞吐。逐帧 profile 读取、JSONL 编码/写出和在线统计在 frameTimeMs 之外，仍消耗 wallTimeMs。初始化、预热、最后的参考截图/Graph 导出和汇总写盘均在测量循环之外。profiling 本身的 GPU 查询开销仍在被测程序中。
+此模式逐帧等待，没有 Present、VSync 或窗口两帧重叠。它用于可重复的串行帧延迟比较，不代表交互窗口的最大流水吞吐。逐帧 profile 读取、JSONL 编码/写出和在线统计在 frameTimeMs 之外，仍消耗 wallTimeMs。初始化、预热、最后的流 flush/关闭、参考截图/Graph 导出和汇总写盘均在测量循环之外。profiling 本身的 GPU 查询开销仍在被测程序中。
 
 ## 数据与生命周期
 
@@ -25,6 +25,8 @@ Sandbox/Player 共用 CaptureScene 的固定场景路径。`--benchmark N` 按�
 - benchmark.complete、timingMode=`headless-serial`、请求和实际预热预算、请求帧数/时长、实际 sampleCount/wallTimeMs/throughputFps。
 - benchmark.metricsMs：每个计时指标的样本数、均值、最小/最大值。
 - benchmark.samplesFile：相对报告目录的原始样本路径；sampleSchemaVersion 当前为 1。
+
+顶层 warmupFrames 保留请求帧数的兼容含义；实际预热次数和时间以 benchmark.warmupFrames/warmupMs 为准。
 
 默认文件在 OUTPUT/BACKEND/benchmark.json 和 frames.jsonl。`--profile`、`--samples` 可独立指定路径，但不能指向同一文件。每行 JSONL 是一个完成帧：
 
@@ -42,7 +44,7 @@ Sandbox/Player 共用 CaptureScene 的固定场景路径。`--benchmark N` 按�
 
 Runner 顺序执行子进程，不并发占用 GPU；每次重复反转后端顺序。每次运行保存命令数组、cwd、退出码、console/player 日志、最终设备报告、计时报告、逐帧数据及测量外截图。manifest 保存工作区 revision/脏状态、真实 exe SHA-256、部署 Shader 与项目源资产 hash；工作区 revision 不冒充编译时 revision。整组结束再次核对内容，变化则拒绝将整组标记 complete。失败/超时/中断记录到清单并退出，不用成功样本掩盖失败。
 
-分析器可接受一个或多个完成清单/单次 v2 报告。它检查样本 schema、连续帧号、有限值、单调时间、完整样本数及原始值与 C++ 汇总的一致性；相同 case 必须具有相同项目、尺寸/质量/视图、设备、构建、validation 和测量预算。缺失/失败/混合配置拒绝比较。输入文件必须保留引用结构；移动结果时整体移动每次运行目录/清单。
+分析器可接受一个或多个完成清单/单次 v2 报告。它检查样本 schema、连续帧号、有限值、单调时间、完整样本数、预热/测量预算和 GPU Pass 合计与 C++ 汇总的一致性；相同 case 必须具有相同项目、尺寸/质量/视图、设备、构建、validation 和测量预算。清单聚合还核对 exe/Shader/项目输入 hash，同后端驱动版本必须一致。独立 report 没有整组来源 hash，不与带来源的清单混合；需要跨版本比较时应明确使用不同 case 标签。缺失/失败/混合配置拒绝比较。输入文件必须保留引用结构；移动结果时整体移动每次运行目录/清单。
 
 分析输出 analysis.json、长表 metrics.csv、report.md。每次运行从完整原始样本计算 min/max/mean/stdev、P50/P95/P99，分位数按 `(N-1)×p` 线性插值。重复间等权聚合每次均值和 P95，单独报告 run mean 标准差；不会把帧数更多的运行隐式赋予更高权重。只有一次重复时，重复间标准差为 null/n/a。没有假定统计显著性，电源/温度/后台负载仍影响结果。
 

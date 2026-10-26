@@ -4,8 +4,8 @@
 
 ## 当前状态
 
-- 当前实施阶段：M0–M4、R1 DONE；M4.1–M4.5 与 R1.1–R1.4 全部完成。
-- 当前工作项：B1 IN_PROGRESS；先清理一次性脚本并整理 samples，再扩展可重复 benchmark/分析工具；M5 NOT_STARTED。
+- 当前实施阶段：M0–M4、R1、B1 DONE。
+- 当前工作项：B1 DONE；样例分类、一次性脚本清理、场景 Benchmark 与分析工具均交付；M5 NOT_STARTED。
 - 用户约定：每个子阶段验收完成即提交 Git，无阻塞时在当前授权范围内继续推进；M4.3 提交 c50ee6a、M4.4 提交 40d0c12、M4.5 提交 9a4b2e4。
 - Demo 的 Custom 示例作为回归入口保留；M4 场景示例使用 Forward 组合与现有 Shader/Material 链路。
 
@@ -17,7 +17,7 @@
 | M3 | 单队列 Render Graph | M2 | DONE |
 | M4 | 场景资源与基础 Renderer | M3 | DONE |
 | R1 | Shader/Material 契约修订 | M4 | DONE |
-| B1 | 样例整理与可扩展 Benchmark | M4、R1 | IN_PROGRESS |
+| B1 | 样例整理与可扩展 Benchmark | M4、R1 | DONE |
 | M5 | Deferred 与光追基础 | M4 | NOT_STARTED |
 | M6 | GPU Driven 与执行优化 | M4；光追调度测试另需 M5 | NOT_STARTED |
 | M7 | C# 编辑器与完整项目工作流 | M4；默认在 M5、M6 的核心目标后开展 | NOT_STARTED |
@@ -25,7 +25,7 @@
 
 默认顺序为 M0 到 M8。M5 和 M6 在 M4 后可以独立推进；单阶段内按下列子阶段顺序执行，不同时建设多个高级系统。完整编辑器后置，M4 只实现运行内容所需的最小项目与资源能力。
 
-用户已授权复查后实施 R1，按子阶段验证、提交并继续；M5 不在本轮实施范围。
+用户已授权 R1 契约修订与 B1 样例整理/Benchmark，均按子阶段验证、提交；M5 不在本轮实施范围。
 
 ## 状态与维护规则
 
@@ -188,23 +188,29 @@ DONE：Shader sidecar UUID、材质 v2、类型化 MaterialSemantic 导入桥；
 
 ## B1 样例整理与可扩展 Benchmark
 
-状态：IN_PROGRESS；用户授权清理中间脚本、分类 src/samples，扩展场景性能测量和双后端 PBR 分析，M5 不在范围内。
+状态：DONE，日期：2026 年 10 月 26 日。
+
+结果：清理一次性生成/迁移脚本，样例分类；按帧/时长的固定场景测量、独立预热预算、流式原始数据与版本化汇总，Python 配置驱动重复运行、严格聚合和 Matplotlib 图表。M5 不在本轮范围。
+
+最终验证：RTX 5060 / MSVC 19.51 / DXC 1.9，标准 Debug/Release 构建与完整 CTest 各 41/41，双后端 Validation 错误为 0；Python 数据完整性、分位数、重复等权、来源/配置、预算与失败处理测试 12/12。Debug/Validation、1280×720/Medium 的 PBR 按时长双后端端到端通过；独立安装 out/b1-player-validation 的 Release/Validation、257×193/Low 按秒测量、默认 raw 路径与独立报告分析也通过，错误为 0。记录见各配置 Testing/Temporary/LastTest.log、out/benchmarks/b1-debug-smoke 和安装目录 validation。
+
+实测：Release/validation off、1280×720/Medium/Final，PBR 两后端各 3 次、每次预热 ≥5 帧且 ≥2 秒、测量 ≥10 秒，交替顺序，共 6908 帧；原始样本与汇总一致、exe/Shader/项目源内容保持，完整清单/JSONL/报告/图在 out/benchmarks/b1-pbr-release。串行帧均值 DX12 14.2542ms、Vulkan 6.3030ms，重复间标准差 2.7365/1.4499ms；GPU Pass 合计均值 0.0435/0.0385ms。波动和长尾较大，未归因于 API 固有差异；数值与图的版本化证据见 [实测记录](../docs/performance/b1-pbr-rtx5060.md)。
+
+边界：headless 逐帧等待完成点，无 Present/窗口帧重叠；CPU render、GPU wait、GPU 范围之和与墙钟吞吐各有边界，不互换。原始记录器内存随指标种类而非帧数增长，Python 为精确分位数加载样本；图表依赖可选、固定版本的 Matplotlib。相同 case 的来源/设备/预算/画面配置不一致时拒绝聚合。后台负载/电源/温度未受控，其他 GPU 与窗口流水基准未验收。
+
+入口：[接口与格式](../docs/benchmark.md)、[运行手册](../manual/build.md#benchmark-与双后端分析)、[PBR 配置](../sample/benchmark/pbr.json)。
 
 ### B1.1 清理与目录整理
 
-DONE（2026 年 10 月 26 日）：删除 out 顶层 18 个一次性生成/迁移 Python 脚本；28 个样例文件分类到 common/rhi/graph/material/scene，更新 include/CMake/文档。RTX 5060 的标准 Debug 构建与完整 CTest 40/40 通过，DX12/Vulkan validation error 为 0。
+DONE：删除 out 顶层 18 个一次性 Python 脚本；28 个样例文件分类到 common/rhi/graph/material/scene，同步 include/CMake/文档。Debug 原有全量 40/40 通过；提交 3cc0ce2。
 
 ### B1.2 运行时测量与原始数据
 
-DONE（2026 年 10 月 26 日）：保留按帧模式，新增按秒/独立双预热预算；src/benchmark 流式 JSONL、在线均值/极值与 v2 完成报告，记录设备/构建/原始路径/真实预算。CPU render、GPU wait、串行帧延迟/墙钟吞吐、Graph 子区间与逐 GPU Pass 分开。接口：[Benchmark](../docs/benchmark.md)。RTX 5060 / MSVC 19.51 / DXC 1.9，标准 Debug/Release 构建与完整 CTest 各 41/41，双后端 validation error 为 0；追加 Debug/Validation、1280×720/Medium、PBR 按时长端到端两次通过，原始样本与汇总一致（out/benchmarks/b1-debug-smoke）。窗口仍使用原有统计，未新增逐帧等待；离线串行模式不作为窗口流水性能结论。
+DONE：按秒/按帧与双预热预算、独立 src/benchmark 流式 JSONL/在线计时统计、v2 报告及完成契约。CPU/等待/串行帧/Graph 子区间/逐 GPU Pass 分开，窗口仍沿用原有两帧流程。Debug/Release 全量各 41/41、按时长 PBR 双后端验证通过；提交 7222aff。
 
 ### B1.3 批量执行与分析
 
-- [ ] Python 配置驱动场景/后端/重复次数顺序执行，保存命令、退出状态、可核对的运行清单。
-- [ ] 聚合逐帧分布/分位数、每次运行与重复间差异，导出 JSON/CSV/报告及标准绘图库图表；缺失/失败/不匹配配置明确诊断。
-- [ ] 提供 PBR DX12/Vulkan 对比配置与实际 Release/validation off 运行记录。
-
-退出条件：上述行为验证通过；记录计时边界、实际硬件和结果，阶段完成后提交 Git。
+DONE：tools/benchmark 正式工具与 PBR 配置，顺序/交替后端及重复，完整进程清单/内容 hash 与失败保留；JSON/CSV/Markdown、逐次分位数与重复间差异、PNG/SVG 帧曲线/分布/Pass 图表。Python 12/12、实际六次 Release 运行、原始数据复核与图表检查通过。结果和限制见本阶段汇总。
 
 ## M5 Deferred 与光追基础
 
