@@ -1,0 +1,19 @@
+{
+  "version": 1,
+  "shader": "RenderLab/Unlit",
+  "variant": "Default",
+  "values": {
+    "base_color": {
+      "type": "float4",
+      "count": 1,
+      "array": false,
+      "value": [
+        4,
+        1,
+        0.25,
+        1
+      ]
+    }
+  },
+  "resources": {}
+}

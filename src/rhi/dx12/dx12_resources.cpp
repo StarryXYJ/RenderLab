@@ -47,6 +47,17 @@ std::shared_ptr<Texture> DxRuntime::CreateTexture(const TextureDesc& desc)
     resource.DepthOrArraySize = 1;
     resource.MipLevels = 1;
     resource.Format = NativeFormat(desc.format);
+    D3D12_FEATURE_DATA_FORMAT_SUPPORT support{};
+    support.Format = resource.Format;
+    Check(device_->CheckFeatureSupport(D3D12_FEATURE_FORMAT_SUPPORT, &support, sizeof(support)),
+          "Texture format support");
+    const auto required = desc.format == Format::D32
+                              ? D3D12_FORMAT_SUPPORT1_DEPTH_STENCIL
+                              : D3D12_FORMAT_SUPPORT1_SHADER_LOAD |
+                                    (desc.attachment ? D3D12_FORMAT_SUPPORT1_RENDER_TARGET
+                                                     : D3D12_FORMAT_SUPPORT1_NONE);
+    if ((support.Support1 & required) != required)
+        throw std::runtime_error("Texture format lacks requested usage");
     resource.SampleDesc.Count = 1;
     if (desc.storage)
         resource.Flags |= D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;

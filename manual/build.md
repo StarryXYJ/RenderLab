@@ -66,9 +66,9 @@ cmake --build --preset windows-release --parallel 4
 ctest --preset windows-release
 ```
 
-输出分别在 `out/build/windows-debug` 和 `out/build/windows-release`。默认注册 7 项不需要创建设备的测试，包含实际 DXC 双目标编译的 `shader.contracts`。预设与依赖版本纳入 Git，本机设置使用被忽略的 `CMakeUserPresets.json`。
+输出分别在 `out/build/windows-debug` 和 `out/build/windows-release`。默认注册 9 项不需要创建设备的测试，包含实际 DXC 双目标编译的 `shader.contracts`。预设与依赖版本纳入 Git，本机设置使用被忽略的 `CMakeUserPresets.json`。
 
-完整验收启用 GPU 测试，共 19 项。GPU 测试要求验证层和桌面会话，会短暂打开原生窗口：
+完整验收启用 GPU 测试，当前共 27 项（9 项 CPU/CLI、18 项 GPU）。GPU 测试要求验证层和桌面会话，会短暂打开原生窗口：
 
 ```powershell
 cmake --preset windows-debug -DRENDERLAB_GPU_TESTS=ON
@@ -100,6 +100,7 @@ GPU 测试使用 `--validation on`，层不可用时失败，不静默降级。�
 默认使用 `--validation auto`，验证层缺失会给出警告并在报告中标记禁用；`on` 要求可用，`off` 明确关闭。能力表表示硬件支持，不代表引擎已启用光追、Mesh Shader 或 GPU Driven。
 
 `--adapter N` 使用当前后端报告中的索引，默认优先硬件高性能适配器，不自动选择软件适配器。两种 API 的枚举顺序可能不同。`--exit-after-ms N` 或 `--frames N` 自动关闭窗口。`--window-test` 在呈现中执行十次尺寸/暂停变化与两次最小化恢复，不要用过短的退出时间截断它。不提供 `--headless` 时才运行窗口循环；`--headless` 单独使用仍只输出设备报告。
+
 
 验收并保存读回图像：
 
@@ -182,6 +183,21 @@ ctest --test-dir out/build/windows-debug -R 'content.contracts|gpu.*.scene' --ou
 ```
 
 Assets 与 .meta 纳入版本管理，Library 可以清除重建。不要原地改写命令正在使用的 Upload 数据。资产首次上传可等待，普通帧仍使用现有完成点与帧管理。
+
+## M4.3 PBR 参考场景
+
+Pbr.rlproject 与原场景共用 Assets，独立选择固定材质球场景。上排从左至右是粗糙度 0.08/0.3/0.65/1 的金属，下排是对应非金属；下排第三个含 Normal Map，第四个含 Metallic-Roughness 图，底部小球演示 Unlit HDR。Studio、Normal 与 MR 图是原创程序测试纹理。
+
+```powershell
+./out/build/windows-debug/renderlab_sandbox.exe --backend dx12 --validation on --project sample/m4/Pbr.rlproject
+./out/build/windows-debug/renderlab_sandbox.exe --backend vulkan --validation on --project sample/m4/Pbr.rlproject
+./out/build/windows-debug/renderlab_sandbox.exe --backend dx12 --headless --validation on --project sample/m4/Pbr.rlproject --output out/m4-pbr
+ctest --preset windows-debug -R 'pbr|content.contracts|gpu.*.scene' --output-on-failure
+```
+
+场景文件可保存 exposure（stops）及 environment 的 image UUID、intensity、rotation（度）。空环境图使用 ambient 均匀 radiance；环境源为 sRGB lat-long 图，尚无 .hdr/.exr 导入。材质使用普通 .material，可指定 RenderLab/Lit 或 RenderLab/Unlit；项目 Copper Shader 继续保留。运行中改材质值会按文件时间重新读取；场景文件修改后需重启项目。WASD/QE/方向键控制不变。
+
+新增 pbr.contracts、gpu.{dx12,vulkan}.pbr 与 gpu.{dx12,vulkan}.pbr_window；输出在各构建树 pbr/后端，包含材质球与单项参考 BMP、Graph JSON、日志和隔离测试资产。测试不会修改 sample。双后端图像对照需相同配置，物理模型与支持限制见 [Forward PBR 契约](../docs/m4-forward-pbr.md)。
 
 ## 验证结果与边界
 

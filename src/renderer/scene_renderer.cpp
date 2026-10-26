@@ -1,7 +1,9 @@
 #include "renderer/scene_renderer.hpp"
 
 #include "assets/io.hpp"
+#include "assets/json_io.hpp"
 #include "material/runtime.hpp"
+#include "renderer/environment.hpp"
 #include "renderer/pipeline.hpp"
 #include "rendergraph/graph.hpp"
 #include "rendergraph/pool.hpp"
@@ -36,6 +38,8 @@ struct SceneRenderer::Impl
     assets::Database database;
     scene::Scene document;
     std::map<std::string, assets::Model> models;
+    // Models own the images; map nodes and their image vectors stay stable after insertion.
+    std::map<std::string, const assets::Image*> modelImages;
     struct Geometry
     {
         std::shared_ptr<rhi::Buffer> vertices, indices;
@@ -46,6 +50,11 @@ struct SceneRenderer::Impl
     std::shared_ptr<const shader::Package> package;
     std::map<std::string, std::shared_ptr<const shader::Package>> packages;
     std::map<const shader::Package*, std::shared_ptr<const material::GpuGeneration>> generations;
+    std::shared_ptr<rhi::TextureView> environmentAtlas, brdfLut;
+    std::string environmentKey;
+    std::array<float, 3> environmentAmbient{};
+    std::shared_ptr<const shader::Package> toneMapping;
+    std::shared_ptr<rhi::Buffer> fullscreen;
     struct MaterialInput
     {
         std::shared_ptr<const shader::Package> package;
@@ -72,12 +81,25 @@ struct SceneRenderer::Impl
         options.cacheDirectory = project.library / "Shaders";
         options.includeDirectories = {project.engine};
         const auto compiled =
-            shader::CompileShader(project.ResolveEngine("RenderLab/BlinnPhong.shader"), options);
+            shader::CompileShader(project.ResolveEngine("RenderLab/Lit.shader"), options);
         if (!compiled)
             throw std::runtime_error(compiled.diagnostics);
         package = compiled.package;
+        packages.emplace("RenderLab/Lit", package);
+        const auto display =
+            shader::CompileShader(project.ResolveEngine("RenderLab/ToneMapping.shader"), options);
+        if (!display)
+            throw std::runtime_error(display.diagnostics);
+        toneMapping = display.package;
+        const std::array<float, 6> triangle{-1, -1, 3, -1, -1, 3};
+        fullscreen =
+            Upload(std::as_bytes(std::span{triangle}), "Display.Triangle", rhi::State::Vertex);
         sampler = runtime.CreateSampler();
-        UploadImage("white", {1, 1, {255, 255, 255, 255}});
+        UploadImage("white/Srgb", {1, 1, {255, 255, 255, 255}}, true);
+        UploadImage("white/Linear", {1, 1, {255, 255, 255, 255}}, false);
+        textures.emplace("normal/Linear",
+                         UploadFloat("Builtin.FlatNormal", {1, 1, {.5f, .5f, 1, 1}}));
+        brdfLut = UploadFloat("Environment.Brdf", IntegrateEnvironmentBrdf());
         EnsureModels();
     }
     std::shared_ptr<rhi::Buffer> Upload(std::span<const std::byte> bytes, const std::string& name,
@@ -94,7 +116,45 @@ struct SceneRenderer::Impl
         runtime.Wait(runtime.Submit(std::move(commands)));
         return destination;
     }
-    void UploadImage(const std::string& name, const assets::Image& image)
+    std::shared_ptr<rhi::TextureView> UploadFloat(const std::string& name,
+                                                  const EnvironmentImage& image)
+    {
+        const auto pitch = rhi::TextureRowPitch(image.width, rhi::Format::Rgba32Float);
+        auto staging = runtime.CreateBuffer(
+            {uint64_t(pitch) * image.height, rhi::Memory::Upload, name + ".Upload"});
+        const auto mapped = staging->Map();
+        std::memset(mapped.data(), 0, mapped.size());
+        for (uint32_t y = 0; y < image.height; ++y)
+            std::memcpy(mapped.data() + size_t(y) * pitch,
+                        image.pixels.data() + size_t(y) * image.width * 4,
+                        size_t(image.width) * 16);
+        auto texture = runtime.CreateTexture(
+            {image.width, image.height, rhi::Format::Rgba32Float, false, false, name});
+        auto commands = runtime.CreateCommands();
+        commands->Barrier(staging, rhi::State::HostWrite, rhi::State::CopySource);
+        commands->Barrier(texture, rhi::State::Undefined, rhi::State::CopyDest);
+        commands->CopyTexture(staging, texture, pitch, true);
+        commands->Barrier(texture, rhi::State::CopyDest, rhi::State::Sampled);
+        runtime.Wait(runtime.Submit(std::move(commands)));
+        return runtime.CreateView(texture);
+    }
+    void UpdateEnvironment()
+    {
+        const auto& ambient = snapshot.ambient;
+        const std::array<float, 3> color{ambient.x, ambient.y, ambient.z};
+        if (environmentAtlas && snapshot.environment == environmentKey &&
+            (!snapshot.environment.empty() || color == environmentAmbient))
+            return;
+        assets::Image source;
+        if (!snapshot.environment.empty())
+            source =
+                assets::DecodeImage(assets::detail::Read(database.Get(snapshot.environment).path));
+        environmentAtlas = UploadFloat(
+            "Environment.Atlas", PrefilterEnvironment(source.width ? &source : nullptr, ambient));
+        environmentKey = snapshot.environment;
+        environmentAmbient = color;
+    }
+    void UploadImage(const std::string& name, const assets::Image& image, bool srgb)
     {
         const auto pitch = rhi::TextureRowPitch(image.width);
         auto staging = runtime.CreateBuffer(
@@ -104,8 +164,9 @@ struct SceneRenderer::Impl
         for (uint32_t y = 0; y < image.height; ++y)
             std::memcpy(mapped.data() + size_t(y) * pitch,
                         image.rgba.data() + size_t(y) * image.width * 4, size_t(image.width) * 4);
-        auto texture = runtime.CreateTexture(
-            {image.width, image.height, rhi::Format::Rgba8Srgb, false, false, name});
+        auto texture = runtime.CreateTexture({image.width, image.height,
+                                              srgb ? rhi::Format::Rgba8Srgb : rhi::Format::Rgba8,
+                                              false, false, name});
         auto commands = runtime.CreateCommands();
         commands->Barrier(staging, rhi::State::HostWrite, rhi::State::CopySource);
         commands->Barrier(texture, rhi::State::Undefined, rhi::State::CopyDest);
@@ -128,9 +189,10 @@ struct SceneRenderer::Impl
                                                     Upload(std::as_bytes(std::span{mesh.indices}),
                                                            name + ".Indices", rhi::State::Index)});
                 }
-                for (size_t i = 0; i < model.images.size(); ++i)
-                    UploadImage(model.id + "/Image/" + std::to_string(i), model.images[i]);
-                models.emplace(model.id, std::move(model));
+                const auto id = model.id;
+                const auto& stored = models.emplace(id, std::move(model)).first->second;
+                for (size_t i = 0; i < stored.images.size(); ++i)
+                    modelImages.emplace(id + "/Image/" + std::to_string(i), &stored.images[i]);
             }
     }
     MaterialInput MaterialFor(const scene::Instance& instance, const assets::Surface& surface)
@@ -180,6 +242,27 @@ struct SceneRenderer::Impl
                 }
                 selected = packages.at(shaderId->second);
             }
+            else
+            {
+                const auto name =
+                    assets::detail::LoadJson(entry.path).at("shader").get<std::string>();
+                if (name != "RenderLab/Lit" && name != "RenderLab/Unlit" &&
+                    name != "RenderLab/BlinnPhong")
+                    throw std::invalid_argument(
+                        "Project shaders require a .meta shader dependency");
+                if (!packages.contains(name))
+                {
+                    shader::CompileOptions options;
+                    options.cacheDirectory = project.library / "Shaders";
+                    options.includeDirectories = {project.engine};
+                    const auto build =
+                        shader::CompileShader(project.ResolveEngine(name + ".shader"), options);
+                    if (!build)
+                        throw std::runtime_error(build.diagnostics);
+                    packages.emplace(name, build.package);
+                }
+                selected = packages.at(name);
+            }
             MaterialInput input{selected,
                                 material::Load(entry.path, shader::MaterialTemplate(selected))};
             materialAssets.insert_or_assign(instance.material, CachedMaterial{modified, input});
@@ -189,9 +272,28 @@ struct SceneRenderer::Impl
         material::Set(result, materialTemplate, "base_color",
                       std::array<double, 4>{surface.color[0], surface.color[1], surface.color[2],
                                             surface.color[3]});
+        material::Set(result, materialTemplate, "metallic",
+                      std::array<double, 1>{surface.metallic});
+        material::Set(result, materialTemplate, "roughness",
+                      std::array<double, 1>{surface.roughness});
+        material::Set(result, materialTemplate, "normal_scale",
+                      std::array<double, 1>{surface.normalScale});
+        material::Set(result, materialTemplate, "occlusion_strength",
+                      std::array<double, 1>{surface.occlusionStrength});
+        material::Set(
+            result, materialTemplate, "emission",
+            std::array<double, 3>{surface.emission[0], surface.emission[1], surface.emission[2]});
         if (surface.image >= 0)
             material::SetResource(result, materialTemplate, "base_map",
                                   instance.model + "/Image/" + std::to_string(surface.image));
+        for (const auto& [property, image] : std::array<std::pair<const char*, int>, 4>{
+                 {{"MetallicRoughnessMap", surface.metallicRoughnessImage},
+                  {"NormalMap", surface.normalImage},
+                  {"OcclusionMap", surface.occlusionImage},
+                  {"EmissionMap", surface.emissionImage}}})
+            if (image >= 0)
+                material::SetResource(result, materialTemplate, property,
+                                      instance.model + "/Image/" + std::to_string(image));
         return {package, std::move(result)};
     }
     std::shared_ptr<rhi::Buffer> FrameBuffer()
@@ -206,7 +308,12 @@ struct SceneRenderer::Impl
                     {"CameraPosition", Vector(snapshot.cameraPosition, 1)},
                     {"MainLightDirection", Vector(snapshot.light.direction)},
                     {"MainLightColor", Vector(snapshot.light.color, snapshot.light.intensity)},
-                    {"AmbientColor", Vector(snapshot.ambient)}});
+                    {"AmbientColor", Vector(snapshot.ambient)},
+                    {"EnvironmentParameters",
+                     {"float4",
+                      1,
+                      {snapshot.environmentIntensity,
+                       snapshot.environmentRotation * 3.141592653589793 / 180, 0, 0}}}});
         auto buffer = runtime.CreateBuffer({bytes.size(), rhi::Memory::Upload, "Frame.Constants"});
         std::memcpy(buffer->Map().data(), bytes.data(), bytes.size());
         return buffer;
@@ -239,12 +346,18 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
     self.EnsureModels();
     self.snapshot = self.extractor.Extract(
         self.document, float(target->desc.width) / float(target->desc.height), self.models);
+    self.UpdateEnvironment();
     rendergraph::Graph graph;
-    graph.ImportTexture("CameraColor", target, {initial, initial != rhi::State::Undefined});
+    if (target->desc.format != rhi::Format::Rgba8Srgb &&
+        target->desc.format != rhi::Format::Bgra8Srgb)
+        throw std::invalid_argument("Scene display target requires an sRGB format");
+    graph.ImportTexture("DisplayColor", target, {initial, initial != rhi::State::Undefined});
+    graph.CreateTexture("CameraColor", {target->desc.width, target->desc.height,
+                                        rhi::Format::Rgba32Float, false, true});
     graph.CreateTexture("CameraDepth",
                         {target->desc.width, target->desc.height, rhi::Format::D32, false, true});
     RenderFrame frame;
-    frame.clearColor = {.012f, .018f, .028f, 1};
+    frame.clearColor = {.02f, .02f, .02f, 1};
     const auto frameConstants = self.FrameBuffer();
     std::map<const rhi::Object*, std::string> imported;
     const auto importBuffer =
@@ -277,10 +390,19 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
         }
         else
         {
-            if (!self.textures.contains(reference))
-                self.UploadImage(reference, assets::DecodeImage(assets::detail::Read(
-                                                self.database.Get(reference).path)));
-            binding.view = self.textures.at(reference);
+            const auto key = reference + (property.srgb ? "/Srgb" : "/Linear");
+            if (!self.textures.contains(key))
+            {
+                if (const auto image = self.modelImages.find(reference);
+                    image != self.modelImages.end())
+                    self.UploadImage(key, *image->second, property.srgb);
+                else
+                    self.UploadImage(key,
+                                     assets::DecodeImage(
+                                         assets::detail::Read(self.database.Get(reference).path)),
+                                     property.srgb);
+            }
+            binding.view = self.textures.at(key);
         }
         return binding;
     };
@@ -293,7 +415,7 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
         const auto& surface = model.materials.at(mesh->material);
         material::Preparation prepare;
         prepare.pass = "Forward";
-        prepare.color = target->desc.format;
+        prepare.color = rhi::Format::Rgba32Float;
         prepare.cull = !surface.doubleSided;
         const auto& w = instance.world;
         const math::Vec3 x{w.At(0, 0), w.At(1, 0), w.At(2, 0)},
@@ -308,6 +430,11 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
                                      {"NormalToWorld", Matrix(instance.normal)},
                                      {"PreviousObjectToWorld", Matrix(instance.previousWorld)}};
         const auto material = self.MaterialFor(instance, surface);
+        for (const auto& resource : material.package->Layout("Forward").resources)
+            if (resource.property.symbol == "EnvironmentAtlas")
+                prepare.bindings["EnvironmentAtlas"] = {0, self.environmentAtlas};
+            else if (resource.property.symbol == "BrdfLut")
+                prepare.bindings["BrdfLut"] = {0, self.brdfLut};
         auto prepared = self.materials.Prepare(material.package, material.asset, prepare, resolve);
         self.generations[material.package.get()] = prepared.generation;
         DrawPacket draw;
@@ -351,6 +478,45 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
         frame.opaque.push_back(std::move(draw));
     }
     self.pipeline.Build(graph, frame);
+    material::Preparation displayPreparation;
+    displayPreparation.pass = "Display";
+    displayPreparation.color = target->desc.format;
+    displayPreparation.vertexStride = 8;
+    displayPreparation.attributes = {{"POSITION", 0, rhi::VertexFormat::Float2, 0}};
+    displayPreparation.constants["DisplayParameters"] = {
+        {"Exposure", {"float", 1, {self.snapshot.exposure}}}};
+    displayPreparation.deferredResources.insert("HdrColor");
+    const auto display = self.materials.Prepare(
+        self.toneMapping, material::Create(shader::MaterialTemplate(self.toneMapping)),
+        displayPreparation);
+    self.generations[self.toneMapping.get()] = display.generation;
+    const auto fullscreen = importBuffer(self.fullscreen, "Display.Triangle", rhi::State::Vertex);
+    std::vector<std::pair<rhi::Binding, std::string>> displayBuffers;
+    for (const auto& binding : display.resources)
+        if (binding.buffer)
+            displayBuffers.emplace_back(
+                binding, importBuffer(binding.buffer, "Display.Constants", rhi::State::HostWrite));
+    auto displayPass = graph.AddRasterPass("Display.ToneMapping");
+    displayPass.ColorTarget("DisplayColor", rhi::LoadOp::Clear, {.02f, .02f, .02f, 1});
+    const auto hdr = displayPass.ReadTexture("CameraColor");
+    const auto vertices = displayPass.ReadBuffer(fullscreen, rendergraph::Use::Vertex);
+    std::vector<std::pair<rhi::Binding, rendergraph::BufferHandle>> constants;
+    for (const auto& [binding, name] : displayBuffers)
+        constants.emplace_back(binding, displayPass.ReadBuffer(name, rendergraph::Use::Uniform));
+    const auto hdrBinding =
+        *std::ranges::find_if(display.pipeline->desc.layout->entries, [](const auto& entry)
+                              { return entry.kind == rhi::BindingKind::SampledTexture; });
+    displayPass.Execute(
+        [pipeline = display.pipeline, hdr, vertices, constants,
+         hdrBinding](rendergraph::RasterContext& context)
+        {
+            context.Bind(pipeline);
+            context.BindTexture(hdrBinding.slot, hdr, hdrBinding.space);
+            for (const auto& [binding, handle] : constants)
+                context.BindBuffer(binding.slot, handle, 0, binding.size, 0, binding.space);
+            context.Geometry(vertices);
+            context.Draw(3);
+        });
     SceneReadback result;
     if (readback)
     {
@@ -360,13 +526,13 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
         auto buffer =
             graph.ImportBuffer("Scene.Readback", result.pixels, {rhi::State::CopyDest, false});
         auto pass = graph.AddCopyPass("Scene.Readback");
-        const auto color = pass.ReadTexture("CameraColor");
+        const auto color = pass.ReadTexture("DisplayColor");
         buffer = pass.WriteBuffer(buffer);
         pass.Execute([buffer, color, pitch](rendergraph::CopyContext& context)
                      { context.CopyTexture(buffer, color, pitch, false); });
         graph.Export(buffer, rhi::State::HostRead);
     }
-    graph.Export("CameraColor", swapchain ? rhi::State::Present : rhi::State::CopySource);
+    graph.Export("DisplayColor", swapchain ? rhi::State::Present : rhi::State::CopySource);
     graph.Compile();
     result.completion = graph.Execute(self.pool, swapchain).completion;
     if (!dump.empty())

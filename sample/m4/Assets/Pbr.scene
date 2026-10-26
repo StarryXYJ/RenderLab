@@ -1,0 +1,340 @@
+{
+  "version": 1,
+  "activeCamera": "9d2dfc3b5d955b35a34a3165e89ca06d",
+  "ambient": [
+    0.06,
+    0.07,
+    0.09
+  ],
+  "objects": [
+    {
+      "id": "9d2dfc3b5d955b35a34a3165e89ca06d",
+      "name": "camera",
+      "parent": "",
+      "enabled": true,
+      "transform": {
+        "position": [
+          0,
+          1,
+          9
+        ],
+        "rotation": [
+          -0.035,
+          0,
+          0,
+          0.999387312
+        ],
+        "scale": [
+          1,
+          1,
+          1
+        ]
+      },
+      "camera": {
+        "fov": 55,
+        "near": 0.1,
+        "far": 100
+      }
+    },
+    {
+      "id": "10000000000040008000000000000001",
+      "name": "sun",
+      "parent": "",
+      "enabled": true,
+      "transform": {
+        "position": [
+          0,
+          0,
+          0
+        ],
+        "rotation": [
+          -0.29045949785607994,
+          -0.2468401104907439,
+          -0.07782838788448602,
+          0.9212198336973718
+        ],
+        "scale": [
+          1,
+          1,
+          1
+        ]
+      },
+      "directionalLight": {
+        "color": [
+          1,
+          0.95,
+          0.85
+        ],
+        "intensity": 3,
+        "enabled": true
+      }
+    },
+    {
+      "id": "819482c7b3305fcca9037089b11b5c5b",
+      "name": "metal-0",
+      "enabled": true,
+      "transform": {
+        "position": [
+          -2.7,
+          1.1,
+          -0.2
+        ],
+        "rotation": [
+          0,
+          0,
+          0,
+          1
+        ],
+        "scale": [
+          0.65,
+          0.65,
+          0.65
+        ]
+      },
+      "meshRenderer": {
+        "model": "8cb75671f1c7525abe1c98eeede99855",
+        "materials": {
+          "18609d7bc4b25b3094ca40a95c490f5a": "984be79c5226529a90078b6f1d97cdfe"
+        }
+      }
+    },
+    {
+      "id": "48e9abcfac0f51558e53594cda2df720",
+      "name": "metal-1",
+      "enabled": true,
+      "transform": {
+        "position": [
+          -0.9,
+          1.1,
+          -0.2
+        ],
+        "rotation": [
+          0,
+          0,
+          0,
+          1
+        ],
+        "scale": [
+          0.65,
+          0.65,
+          0.65
+        ]
+      },
+      "meshRenderer": {
+        "model": "8cb75671f1c7525abe1c98eeede99855",
+        "materials": {
+          "18609d7bc4b25b3094ca40a95c490f5a": "c518c5fb2a87520a9d9422913c79b314"
+        }
+      }
+    },
+    {
+      "id": "cdb02c9baa295655a1d038e7f8d4c5c9",
+      "name": "metal-2",
+      "enabled": true,
+      "transform": {
+        "position": [
+          0.9,
+          1.1,
+          -0.2
+        ],
+        "rotation": [
+          0,
+          0,
+          0,
+          1
+        ],
+        "scale": [
+          0.65,
+          0.65,
+          0.65
+        ]
+      },
+      "meshRenderer": {
+        "model": "8cb75671f1c7525abe1c98eeede99855",
+        "materials": {
+          "18609d7bc4b25b3094ca40a95c490f5a": "c59ed1d5b19f578fb91963961945de50"
+        }
+      }
+    },
+    {
+      "id": "c15dc94246e55f75a441f99315b33b1a",
+      "name": "metal-3",
+      "enabled": true,
+      "transform": {
+        "position": [
+          2.7,
+          1.1,
+          -0.2
+        ],
+        "rotation": [
+          0,
+          0,
+          0,
+          1
+        ],
+        "scale": [
+          0.65,
+          0.65,
+          0.65
+        ]
+      },
+      "meshRenderer": {
+        "model": "8cb75671f1c7525abe1c98eeede99855",
+        "materials": {
+          "18609d7bc4b25b3094ca40a95c490f5a": "b3e52f1d55ee5147b47d7c28d6cd8d42"
+        }
+      }
+    },
+    {
+      "id": "d87b7e7e20645782af3dba5419e3792f",
+      "name": "dielectric-0",
+      "enabled": true,
+      "transform": {
+        "position": [
+          -2.7,
+          -0.8999999999999999,
+          -0.2
+        ],
+        "rotation": [
+          0,
+          0,
+          0,
+          1
+        ],
+        "scale": [
+          0.65,
+          0.65,
+          0.65
+        ]
+      },
+      "meshRenderer": {
+        "model": "8cb75671f1c7525abe1c98eeede99855",
+        "materials": {
+          "18609d7bc4b25b3094ca40a95c490f5a": "03db855801a2540b99742bfa1f4f8362"
+        }
+      }
+    },
+    {
+      "id": "54899b92e2a65967bfad19644ea13b72",
+      "name": "dielectric-1",
+      "enabled": true,
+      "transform": {
+        "position": [
+          -0.9,
+          -0.8999999999999999,
+          -0.2
+        ],
+        "rotation": [
+          0,
+          0,
+          0,
+          1
+        ],
+        "scale": [
+          0.65,
+          0.65,
+          0.65
+        ]
+      },
+      "meshRenderer": {
+        "model": "8cb75671f1c7525abe1c98eeede99855",
+        "materials": {
+          "18609d7bc4b25b3094ca40a95c490f5a": "9d05a848c41e5b3d8f772e40dbf650db"
+        }
+      }
+    },
+    {
+      "id": "87d3575643c35c9b98a26afc357ec1fd",
+      "name": "dielectric-2",
+      "enabled": true,
+      "transform": {
+        "position": [
+          0.9,
+          -0.8999999999999999,
+          -0.2
+        ],
+        "rotation": [
+          0,
+          0,
+          0,
+          1
+        ],
+        "scale": [
+          0.65,
+          0.65,
+          0.65
+        ]
+      },
+      "meshRenderer": {
+        "model": "8cb75671f1c7525abe1c98eeede99855",
+        "materials": {
+          "18609d7bc4b25b3094ca40a95c490f5a": "95444e6e7f1e55b5b242fa3071b3493c"
+        }
+      }
+    },
+    {
+      "id": "e53099e2eaad5ff3b0216701ab13839c",
+      "name": "dielectric-3",
+      "enabled": true,
+      "transform": {
+        "position": [
+          2.7,
+          -0.8999999999999999,
+          -0.2
+        ],
+        "rotation": [
+          0,
+          0,
+          0,
+          1
+        ],
+        "scale": [
+          0.65,
+          0.65,
+          0.65
+        ]
+      },
+      "meshRenderer": {
+        "model": "8cb75671f1c7525abe1c98eeede99855",
+        "materials": {
+          "18609d7bc4b25b3094ca40a95c490f5a": "3cf6e20c1816590da28e009c9ca87084"
+        }
+      }
+    },
+    {
+      "id": "99595404ccea5a64b52ca7be70eb2a2f",
+      "name": "unlit-hdr",
+      "enabled": true,
+      "transform": {
+        "position": [
+          0,
+          -2.7,
+          0
+        ],
+        "rotation": [
+          0,
+          0,
+          0,
+          1
+        ],
+        "scale": [
+          0.4,
+          0.4,
+          0.4
+        ]
+      },
+      "meshRenderer": {
+        "model": "8cb75671f1c7525abe1c98eeede99855",
+        "materials": {
+          "18609d7bc4b25b3094ca40a95c490f5a": "4f33df33a6a054da9d6087a72cfc8622"
+        }
+      }
+    }
+  ],
+  "environment": {
+    "image": "a118d11d917852f38828d8428f3f6d28",
+    "intensity": 3,
+    "rotation": 0
+  },
+  "exposure": 0
+}

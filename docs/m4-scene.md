@@ -1,6 +1,6 @@
-# M4.1–M4.2：项目、场景与 Blinn–Phong
+# M4：项目与场景数据
 
-链路为 Project → AssetDatabase → glTF/材质 → Scene → Snapshot/CPU Culling → RenderFrame/DrawPacket → Forward → Graph → RHI。PBR/HDR/IBL、阴影、动画/蒙皮与编辑器仍在后续阶段。
+链路为 Project → AssetDatabase → glTF/材质 → Scene → Snapshot/CPU Culling → RenderFrame/DrawPacket → Forward → Graph → RHI。M4.3 已接入 [Forward PBR、HDR 与 IBL](m4-forward-pbr.md)；阴影、动画/蒙皮与编辑器仍在后续阶段。
 
 ## 模块与入口
 
@@ -31,11 +31,13 @@ UUID 使用 32 位小写十六进制；filename.meta 保存 id、dependencies、
 
 选定 glTF scene 的节点/primitive 实例保留组合变换；无 scene/nodes 的 mesh 资源可按单位变换使用，或通过 MeshRenderer.mesh 选择单个 primitive UUID。
 
-导入 baseColorFactor/baseColorTexture、Opaque 与 doubleSided。Metallic-Roughness 等不直接换算成 Blinn–Phong，外观以基本颜色和用户材质覆盖为准。采样固定为 RHI 的 point-clamp，显式其他采样方式报错。
+导入 baseColorFactor/baseColorTexture、Opaque 与 doubleSided。M4.3 默认使用 Lit，并导入 Metallic-Roughness、Normal、Occlusion 和 Emission 参数及纹理，缓存格式随之升级；具体参数范围见 [Forward PBR](m4-forward-pbr.md)。采样固定为 RHI 的 point-clamp，显式其他采样方式报错。
 
 动画、skin、morph、压缩/required 扩展、稀疏 accessor、非三角形、归一化整数属性和透明材质明确报错。外部 URI 限普通相对 UTF-8 路径；网络和 percent 编码 URI 不支持。源文件上限 128MiB，图像上限 8192×8192，无 mip/流送。
 
 Library/Models 的 CBOR 缓存键包含 Importer 版本、模型与实际依赖内容。变化重新导入，损坏缓存重建，缓存几何/材质/索引/图像/矩阵也做校验。导入不改写 .material，清 Library 不覆盖用户资产。
+
+WIC 解码复用调用线程已有的 COM apartment，不改变其初始化计数；仅在线程尚未初始化 COM 时创建临时 MTA，并在解码结束或异常退出时配对释放。Sandbox 窗口线程在创建窗口和设备前初始化 STA，保持到这些宿主对象销毁之后；headless 宿主持有 MTA。独立材质纹理可能在交换链建立后的首帧才解码，因此 COM 生命周期由宿主维护，不能随单张图像解码结束而卸载。
 
 ## 场景与变换
 
@@ -45,7 +47,7 @@ Library/Models 的 CBOR 缓存键包含 Importer 版本、模型与实际依赖�
 
 方向光是带旋转/颜色/强度的场景组件。可有多个；每帧按 UUID 字典序选择首个继承启用状态且 Light 启用的对象，不依赖容器顺序。强度为零仍是选中光；禁用/删除后再选下一盏。光线沿局部 -Z 发射，Shader direction 表示从表面指向光源，取相反方向；父级旋转生效，位置和缩放不影响方向。
 
-无主光时直射强度为零，环境光独立配置。颜色与光照使用线性数值，颜色纹理由 sRGB 解码，当前通过 sRGB LDR 附件显示，超出范围会截断，没有 HDR/Tone Mapping。
+无主光时直射强度为零，环境光独立配置。颜色与光照使用线性数值，颜色纹理由 sRGB 解码。M4.3 使用 RGBA32F HDR 中间附件，经曝光与 ACES fitted Tone Mapping 写入 sRGB 显示目标；Scene 同时保存环境图 UUID、强度、旋转与曝光。
 
 ## 快照与渲染
 
@@ -75,12 +77,12 @@ DirectionalLight light = GetMainLight();
 
 CompileOptions.includeDirectories 挂载引擎根，shaderc 对应重复 --include DIRECTORY。use 先查当前模块目录，再查这些根，依赖内容参与缓存。
 
-.material 保持 M2 的 Shader 定义名称和 Schema；.meta 的 dependencies.shader 指向项目 .shader UUID，省略时采用内置 BlinnPhong。项目 Shader 需提供 Forward 光栅 Pass、当前顶点语义和 Scene.params Frame 布局，Renderer 校验共享布局，不猜测另一套全局数据。
+.material 保持 M2 的 Shader 定义名称和 Schema；.meta 的 dependencies.shader 指向项目 .shader UUID；没有该依赖时根据文件 shader 名称选择内置 Lit、Unlit 或 BlinnPhong，无覆盖的导入材质默认 Lit。项目 Shader 需提供 Forward 光栅 Pass、当前顶点语义和 Scene.params Frame 布局，Renderer 校验共享布局，不猜测另一套全局数据。
 
 材质值文件按修改时间重新读取；模型与项目 Shader 在创建 SceneRenderer 时加载。当前没有文件监视、模型实时重导入、编辑器或完整自动热重载集成。
 
 ## 验证入口
 
-content.contracts 覆盖矩阵/法线/投影、UUID、缓存与依赖失效、移动/glTF/GLB、场景层级/序列化/选光/剔除、项目 Shader 使用引擎模块。
+content.contracts 覆盖矩阵/法线/投影、UUID、缓存与依赖失效、移动/glTF/GLB、场景层级/序列化/选光/剔除、项目 Shader 使用引擎模块，以及 WIC 临时 COM 清理和调用者 STA 保持。
 
 gpu.{dx12,vulkan}.scene 检查实际项目加载、纹理/高光读回，以及主光选择/强度/旋转、相机、对象启用/新增、材质替换、镜像变换和场景保存重开的行为。原验收保留，实际配置与结果见 [阶段计划](../design/phaseplan.md)。

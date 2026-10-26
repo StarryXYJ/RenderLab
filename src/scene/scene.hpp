@@ -60,6 +60,11 @@ struct Scene
 {
     std::string activeCamera;
     math::Vec3 ambient{.035f, .035f, .035f};
+    /// Lat-long sRGB image UUID; empty uses uniform linear ambient radiance.
+    std::string environment;
+    float environmentIntensity = 1, environmentRotation = 0;
+    /// Exposure in stops, applied to linear HDR before the ACES fitted display transform.
+    float exposure = 0;
     std::vector<Object> objects;
     Object& Get(const std::string& id);
     const Object& Get(const std::string& id) const;
@@ -91,6 +96,8 @@ struct Snapshot
 {
     math::Mat4 view, projection, viewProjection;
     math::Vec3 cameraPosition, ambient;
+    std::string environment;
+    float environmentIntensity = 1, environmentRotation = 0, exposure = 0;
     MainLight light;
     std::vector<Instance> instances;
     size_t totalInstances = 0, culledInstances = 0;

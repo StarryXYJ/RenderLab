@@ -1,0 +1,40 @@
+{
+  "version": 1,
+  "shader": "RenderLab/Lit",
+  "variant": "Default",
+  "values": {
+    "base_color": {
+      "type": "float4",
+      "count": 1,
+      "array": false,
+      "value": [
+        0.15,
+        0.4,
+        0.65,
+        1
+      ]
+    },
+    "metallic": {
+      "type": "float",
+      "count": 1,
+      "array": false,
+      "value": [
+        0
+      ]
+    },
+    "roughness": {
+      "type": "float",
+      "count": 1,
+      "array": false,
+      "value": [
+        1.0
+      ]
+    }
+  },
+  "resources": {
+    "MetallicRoughnessMap": {
+      "type": "Texture2D<float4>",
+      "reference": "d2fb95b282815c839e84bdcc45d5f14b"
+    }
+  }
+}

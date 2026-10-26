@@ -44,7 +44,7 @@ Buffer 的内存类别为 Device、Upload、Readback。仅后两类允许映射�
 
 `UploadArena` 是固定容量、显式对齐的线性上传分配器，超容量报错，不静默增长。`UploadRing` 轮换两个 Arena，BeginFrame 等待该段完成点后 Reset，EndFrame 使用实际消费该段的提交点封存。不要保留 Arena 引用并在封存后继续写入；需要多次提交消费同一段时，用最后一次提交点封存。
 
-纹理 Copy 的公共对齐约定为行间距 256 字节、Buffer offset 512 字节。`TextureRowPitch(width)` 提供共同布局；Vulkan 把字节 pitch 转成 texel row length。有效像素外的行 padding 未定义，测试只对有效像素比对。
+纹理 Copy 的公共对齐约定为行间距 256 字节、Buffer offset 512 字节。`TextureRowPitch(width, format)` 提供共同布局，format 默认 RGBA8；M4.3 增加 Rgba32Float（16 字节/texel），FormatBytes 为 texel 大小的唯一入口，Vulkan 按它将字节 pitch 转成 texel row length。有效像素外的行 padding 未定义，测试只对有效像素比对。浮点 HDR 与显示约定见 [M4.3](m4-forward-pbr.md)。
 
 `State` 是首版保守的用途、访问、阶段与布局预设，覆盖 Copy、Vertex、Index、Indirect、Compute Storage、Fragment/Compute Sampled、Color、Depth 和 Present。屏障由调用者明确录制，RHI 不推断前态、不替调用者自动切换。Storage→Storage 在 DX12 发出 UAV barrier，在 Vulkan 发出 Synchronization2 内存依赖，即使布局未变也不能省略。M2 已补充 UniformRead、ShaderRead 和 Storage Buffer；HostWrite→UniformRead/ShaderRead 显式描述上传缓冲供 Shader 读取的依赖。仍不实现子资源细分、多队列与 Ownership Transfer；后续图层应生成明确计划，而非依赖本层猜测。
 

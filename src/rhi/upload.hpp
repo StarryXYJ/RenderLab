@@ -59,5 +59,5 @@ private:
     bool active_ = false;
 };
 
-uint32_t TextureRowPitch(uint32_t width);
+uint32_t TextureRowPitch(uint32_t width, Format format = Format::Rgba8);
 } // namespace renderlab::rhi

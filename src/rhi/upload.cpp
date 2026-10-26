@@ -46,9 +46,9 @@ void UploadRing::EndFrame(uint64_t completion)
     active_ = false;
     index_ = (index_ + 1) % segments_.size();
 }
-uint32_t TextureRowPitch(uint32_t width)
+uint32_t TextureRowPitch(uint32_t width, Format format)
 {
     Require(width && width <= 16384, "Invalid texture row width");
-    return (width * 4 + 255) & ~255u;
+    return (width * FormatBytes(format) + 255) & ~255u;
 }
 } // namespace renderlab::rhi

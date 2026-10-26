@@ -11,6 +11,9 @@ struct GpuGeneration
     std::shared_ptr<const shader::Package> package;
     std::map<std::string, std::shared_ptr<rhi::BindingLayout>> layouts;
     std::map<const shader::Program*, std::shared_ptr<rhi::ShaderModule>> modules;
+    // RHI lookups are weak. Keep active state combinations resident even when all submitted
+    // frames have retired before the next Prepare; otherwise owner-thread driver work repeats.
+    std::vector<std::shared_ptr<rhi::Pipeline>> pipelines;
 };
 Runtime::Runtime(rhi::Runtime& runtime, shader::Target target) : runtime_(runtime), target_(target)
 {
@@ -24,6 +27,18 @@ Prepared Runtime::Prepare(std::shared_ptr<const shader::Package> package, const 
         throw std::invalid_argument("Material preparation needs a shader package");
     const auto validated = Migrate(asset, shader::MaterialTemplate(package));
     const auto& interface = package->Layout(preparation.pass);
+    for (const auto& name : preparation.deferredResources)
+    {
+        const auto found =
+            std::ranges::find_if(interface.resources,
+                                 [&](const auto& resource)
+                                 {
+                                     return resource.scope != shader::Scope::Material &&
+                                            resource.property.symbol == name;
+                                 });
+        if (found == interface.resources.end() || preparation.bindings.contains(name))
+            throw std::invalid_argument("Invalid or already bound deferred resource: " + name);
+    }
     std::erase_if(generations_, [](const auto& generation) { return generation.expired(); });
     std::shared_ptr<GpuGeneration> generation;
     for (const auto& weak : generations_)
@@ -72,6 +87,12 @@ Prepared Runtime::Prepare(std::shared_ptr<const shader::Package> package, const 
     Prepared result;
     result.generation = generation;
     result.pipeline = runtime_.CreatePipeline(std::move(desc));
+    if (std::ranges::find(generation->pipelines, result.pipeline) == generation->pipelines.end())
+    {
+        if (generation->pipelines.size() == 64)
+            generation->pipelines.erase(generation->pipelines.begin());
+        generation->pipelines.push_back(result.pipeline);
+    }
     std::vector<rhi::Binding> bindings;
     for (const auto& block : interface.blocks)
     {
@@ -109,6 +130,8 @@ Prepared Runtime::Prepare(std::shared_ptr<const shader::Package> package, const 
         }
         else
         {
+            if (preparation.deferredResources.contains(property.symbol))
+                continue;
             const auto found = preparation.bindings.find(property.symbol);
             if (found == preparation.bindings.end())
                 throw std::invalid_argument("Missing pass resource: " + property.symbol);

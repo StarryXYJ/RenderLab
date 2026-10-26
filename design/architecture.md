@@ -83,6 +83,8 @@ RHI 定义 GPU 对象与命令语义。Render Graph 编译一帧工作的资源�
 
 完整编辑器阶段再处理 Docking、DPI、输入焦点、鼠标捕获和原生视口托管。Windows 首选 NativeControlHost 托管子 HWND，C++ 使用该窗口创建 Surface；视口内 Gizmo 和调试覆盖由原生编辑器渲染层绘制。独立 Sandbox 使用自己的原生窗口。视口宿主明确窗口所有权和销毁协议，避免窗口销毁后仍提交渲染。
 
+Windows Sandbox 在窗口和设备创建前为窗口线程初始化 COM STA，持有至宿主对象销毁后；headless 使用 MTA。WIC 资源解码复用已有 apartment，仅无宿主初始化的导入线程临时持有 MTA，避免首帧纹理解码结束时卸载展示线程的 COM。具体契约见 [场景资源](../docs/m4-scene.md#静态-gltf-与缓存)。
+
 ## 渲染方式与能力模型
 
 ### 正交的配置维度
@@ -194,7 +196,7 @@ DX12 与 Vulkan 的 DrawID、InstanceID、firstInstance 和间接 Count 能力�
 
 Hi-Z 使用跨帧历史时，规定首帧、相机跳变和分辨率变化下的失效策略。GPU Scene 的更新、剔除结果和间接参数全部进入 Render Graph 访问声明。
 
-M4 的首个场景闭环见 [项目、场景与 Blinn–Phong](../docs/m4-scene.md)。Scene 使用值类型组件和层级 Transform，不引入 ECS 管理器。DirectionalLight 可有多个，按稳定 UUID 选择一个启用对象，其世界旋转、颜色和强度提取到共享 Frame 常量。HLSL Lighting 读取全局主光，点光源和面光源后置。
+M4 的首个场景闭环见 [项目、场景](../docs/m4-scene.md)，Forward PBR/HDR 见 [M4.3](../docs/m4-forward-pbr.md)。Scene 使用值类型组件和层级 Transform，不引入 ECS 管理器。DirectionalLight 可有多个，按稳定 UUID 选择一个启用对象，其世界旋转、颜色和强度提取到共享 Frame 常量。HLSL Lighting 读取全局主光，点光源和面光源后置。
 
 ## Shader 与材质
 
@@ -205,6 +207,8 @@ ShaderDefinition 是作者维护的 Shader 资产，包含 HLSL 来源、入口�
 普通 material 数值自动生成 Material 常量缓冲，显式 cbuffer 声明共享数据块及 frame/view/draw/pass 作用域。参数 Schema、绑定映射和 PackingPlan 从同一声明生成。Shader 编译层仅产生 CPU 程序/接口数据，不依赖 RHI Device；DXC 处理 HLSL 预处理、Include 和程序编译，反射验证保留字段与资源接口。生成头按编译任务隔离，缓存覆盖共享声明及传递 Include。后台编译成功后，由设备所有线程在准备阶段创建 GPU 对象并在帧边界整体切换，失败保留旧代。Material 返回不可变绑定值：直接 RHI 建立绑定组，Graph 适配先导入并声明资源，由 Graph 录制时组装绑定，避免重复准备。
 
 M2 的具体声明、布局和准备/发布接口见 [Shader 与材质](../docs/m2-shader-material.md)。RHI 的唯一 CreatePipeline 入口按不可变程序/布局身份、顶点布局、附件格式和完整状态查找有界弱引用缓存。数值/纹理修改创建不可变绑定快照，静态功能选择有限具名变体，新代编译包创建新的程序身份。热重载通过 LiveMaterial 成组 Stage，调用方在帧边界 Publish；依赖监视器只负责请求编译，不进入 RHI。
+
+材质 GPU generation 最多驻留 64 个 PSO，跨帧保活以避免提交退休后重复创建；PSO 查找仍统一走 RHI 弱缓存。驻留淘汰或 generation 释放不影响命令快照对在途对象的保活。
 
 元数据生成材质参数声明，再编译各后端和变体，Reflection 校验实际 GPU 布局。作者元数据负责默认值、显示语义、分组、范围、条件显示和资源用途，Reflection 负责实际绑定、布局和阶段接口。
 
@@ -353,7 +357,7 @@ Feature 使用 RenderFeature 基类，构造时声明稳定名称、Feature 依�
 
 Custom 与 Forward 仅是预先注入 Feature 的不同组合，共用 Create 和 Build。Forward 注入 Opaque、Transparent 与可选颜色快照；用户 Feature 可指定阶段。Feature 名称依赖解决构图先后，Graph 资源名称与读写声明解决本帧数据依赖，两者不混为一个全局资源表。执行回调仅保存本帧解析的 handle 与数据副本。
 
-CameraColor/CameraDepth 由宿主创建或导入，可选 OpaqueColor/AfterTransparentColor 使用真实复制。Demo 使用空 Custom 组合注册 Noise、Scene 和 Readback，不传递 Feature 返回 handle，也不使用 Forward 内置流程。具体接口见 [Feature 与管线组合](../docs/forward-pipeline.md)。完整场景、PBR 和高级组合按计划推进。
+CameraColor/CameraDepth 由宿主创建或导入，可选 OpaqueColor/AfterTransparentColor 使用真实复制。M4.3 场景宿主使用 RGBA32F CameraColor，Forward 结束后显式添加 Display.ToneMapping，写入导入的 sRGB DisplayColor；快照保留 HDR 值。Demo 使用空 Custom 组合注册 Noise、Scene 和 Readback，不传递 Feature 返回 handle，也不使用 Forward 内置流程。具体接口见 [Feature 与管线组合](../docs/forward-pipeline.md)。高级组合按计划推进。
 
 一个后期混合示例是：
 
@@ -405,7 +409,7 @@ Assets 和元数据、ProjectSettings、Source、项目文件纳入版本管理�
 
 投影、Viewport Y、屏幕 UV 和正面绕序统一在平台适配规则中处理，上层不分散添加 Vulkan 或 DX12 修正。纹理上传、渲染附件和屏幕采样的原点转换用测试图验证。深度重建、阴影和 Hi-Z 都遵守相同约定。
 
-光照在统一的线性工作空间计算，颜色纹理按声明进行 sRGB 解码，法线和普通数据纹理使用线性数据。M4.2 先用 Blinn–Phong/sRGB LDR 验证场景，Core/Lighting HLSL 库共用 .params Frame/Draw 声明，不重复手写 cbuffer。HDR 中间结果在输出阶段进行曝光、Tone Mapping 和显示编码。
+光照在统一的线性工作空间计算，颜色纹理按声明进行 sRGB 解码，法线和普通数据纹理使用线性数据。M4.2 先用 Blinn–Phong/sRGB LDR 验证场景，M4.3 改为 Shader/Material 驱动的 Lit/Unlit 与 RGBA32F HDR；Core/Lighting HLSL 库共用 .params Frame/Draw 声明，不重复手写 cbuffer。Surface/BRDF 与光栅采样上下文分开，环境采用 CPU 准备的低分辨率 2D 预滤波图集和 split-sum LUT。HDR 中间结果在输出阶段执行曝光、ACES fitted Tone Mapping，最后由 sRGB 附件编码。此阶段环境输入是 sRGB 图像加线性强度，原生 HDR 图像、cubemap/mip 和高级 IBL 后置。
 
 Object、View、Projection 的历史值、相机 jitter 和运动矢量采用明确语义。即使 TAA 后置，也避免在接口中混淆当前与历史变换。
 

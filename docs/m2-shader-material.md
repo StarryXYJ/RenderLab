@@ -137,6 +137,8 @@ auto snapshot = materials.Prepare(build.package, asset, prepare, resolveResource
 
 Prepare 必须在 Runtime 创建线程执行。它复用当前代的 ShaderModule/BindingLayout，通过 RHI 唯一 `CreatePipeline` 缓存入口准备 PSO，打包数值并返回不可变绑定数据。Prepared 持有代际、PSO、resources 绑定值和新常量缓冲；数值或纹理修改产生新快照，正在执行的快照不原地改写。
 
+材质 GPU generation 按完整状态组合最多持有 64 个 PSO，沿用 RHI 的唯一 CreatePipeline 弱缓存查找。活动 generation 跨帧存续时，即使上一帧提交已完全退休，下一次 Prepare 也复用相同 PSO；淘汰只释放驻留引用，命令快照继续保活 GPU 使用，generation 释放后不保留永久 PSO。
+
 普通参数改变只更新常量/绑定，静态功能通过 variant 选择程序，depth/blend/cull 等渲染状态来自 Pass 或 Preparation 显式覆盖。PSO key 包含不可变 Shader/布局身份、全部顶点属性/stride、颜色格式和全部当前渲染状态。新代创建新模块身份，不能命中旧代 PSO；数值变化不进入 key。缓存最多 256 个弱引用，GPU 代查找最多 64 个弱引用，淘汰查找项不影响仍被命令保活的对象。超限后再次请求可能重建，不保证永久命中。
 
 调用方显式录制 `snapshot.constants` 的 HostWrite → UniformRead 屏障，直接 RHI 路径使用 runtime.CreateGroup(snapshot.pipeline->desc.layout, snapshot.resources) 建立 BindingGroup，再绑定 Pipeline/BindingGroup。外部上传常量、只读缓冲、UAV 和纹理状态也由调用方负责；Prepare 不插入屏障，不维护第二套资源状态机。Execute 只使用准备好的对象录制命令。完整样例见 `src/samples/material_demo.cpp`。
@@ -170,3 +172,5 @@ M2 提供编译请求与帧边界接口，不附带操作系统文件监视器�
 验收样例输出 default/edited/reloaded BMP、sample.material、日志和临时重载副本。源码不被测试修改；双后端验证开启，Shutdown 后检查验证错误及显存占用。M1 的固定噪声和窗口测试继续独立运行，避免材质层掩盖底层回归。
 
 Graph 路径将 Prepared.resources 导入并声明用途，由 Graph 录制时建立绑定组，避免重复准备绑定；见 [M4 场景](m4-scene.md)。参数模块 use 先查询声明文件目录，再查询 CompileOptions.includeDirectories；shaderc 对应可重复的 --include DIRECTORY。
+
+M4.3 新增 Preparation.deferredResources：对尚未分配的 Graph 外部资源显式按 symbol 延后绑定，只允许已声明的非材质资源，禁止与 preparation.bindings 重复。Prepare 返回 PSO、常量和其余绑定，Graph 录制时补齐实际资源；补齐前不能直接 CreateGroup。具体显示 Pass 见 [Forward PBR](m4-forward-pbr.md)。

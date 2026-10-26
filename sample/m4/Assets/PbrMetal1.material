@@ -1,0 +1,35 @@
+{
+  "version": 1,
+  "shader": "RenderLab/Lit",
+  "variant": "Default",
+  "values": {
+    "base_color": {
+      "type": "float4",
+      "count": 1,
+      "array": false,
+      "value": [
+        0.7,
+        0.32,
+        0.12,
+        1
+      ]
+    },
+    "metallic": {
+      "type": "float",
+      "count": 1,
+      "array": false,
+      "value": [
+        1
+      ]
+    },
+    "roughness": {
+      "type": "float",
+      "count": 1,
+      "array": false,
+      "value": [
+        0.3
+      ]
+    }
+  },
+  "resources": {}
+}

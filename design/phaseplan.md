@@ -4,9 +4,9 @@
 
 ## 当前状态
 
-- 当前实施阶段：M0–M3 DONE；M4 IN_PROGRESS，M4.1–M4.2 DONE；本轮授权范围已完成。
-- 当前工作项：相机俯仰轴修正已完成；下一计划项为 M4.3，等待后续授权。
-- 本轮授权实施上限为 M4.2，包含最小 Blinn–Phong 着色接入；M4.3 PBR/HDR/IBL、阴影、编辑器与高级管线继续保留计划。
+- 当前实施阶段：M0–M3 DONE；M4 IN_PROGRESS，M4.1–M4.3 DONE。
+- 当前工作项：M4.3 交付及窗口交互修复 DONE；用户确认完整 PBR 场景恢复交互，Debug/Release 完整回归各 27/27。M4.4 本轮不启动。
+- 用户确认本轮先交付 M4.3 以检查基础着色；M4.4、M4.5 本轮未启动，不进入 M5 或编辑器。
 - Demo 的 Custom 示例作为回归入口保留；M4 场景示例使用 Forward 组合与现有 Shader/Material 链路。
 
 | 阶段 | 目标 | 前置依赖 | 状态 |
@@ -116,7 +116,7 @@
 
 状态：IN_PROGRESS。
 
-目标是形成可展示画面和可保存内容，完整工程 UI 仍后置。本轮完成范围为 M4.1–M4.2，先用 Blinn–Phong 打通资产 → 场景 → 材质 → Forward → 显示的闭环；不因此将 M4.3 或整个 M4 标记完成。
+目标是形成可展示画面和可保存内容，完整工程 UI 仍后置。M4.1–M4.2 打通资产 → 场景 → 材质 → Forward → 显示，M4.3 接入 PBR/HDR/IBL；阴影、透明和可重复演示工具继续保留后续计划。
 
 ### M4.1 最小项目与资源
 
@@ -144,11 +144,17 @@
 
 ### M4.3 Forward PBR
 
-- [ ] 内置 Lit/Unlit，基本纹理、Normal Map、Metallic-Roughness 与 IBL。
-- [ ] 线性 HDR、曝光、Tone Mapping 和显示编码。
-- [ ] MaterialSurface 与材质求值代码隔离照明，明确导数和纹理采样上下文。
+状态：DONE，日期：2026 年 10 月 26 日。
 
-用受控光源、材质球和测试纹理验证，建立后续光追共用的基础参数模型。
+结果：普通 Shader/Material 驱动的 Lit/Unlit、glTF MR/Normal/Occlusion/Emission 参数与图像、独立 MaterialSurface/光栅 SampleGrad/BRDF 库；确定性预滤波 2D IBL 图集与 split-sum LUT；RGBA32F HDR、曝光、ACES fitted Tone Mapping 与单次 sRGB 显示编码。新增固定材质球参考项目，保留项目 Copper Shader 与原 Custom/RHI 示例。
+
+验证：RTX 5060、MSVC 19.51.36257、DXC 1.9.0.5512，标准 windows-debug/windows-release 完整构建及最终 CTest 各 27/27 通过；DX12/Vulkan 严格 Validation 错误为 0。两配置各 16 张 PBR 参考 BMP 双后端逐字节一致；Unlit HDR/曝光/ACES/sRGB 数值参考误差不超过一个显示 code；RGBA32F 非整齐行间距上传读回逐位一致。完整 PBR 项目的双后端窗口回归纳入 CTest，覆盖 STA 保持、54 帧、10 次重建及 minimize/restore。原 content/scene/material/graph/RHI 回归均通过。
+
+交互修复（同日）：首帧独立纹理 WIC 解码不再临时创建并卸载窗口线程的最后一个 COM apartment；Sandbox 在窗口/设备创建前初始化 STA，持有至宿主对象销毁，解码复用调用线程 apartment。用户在 VS Code 终端重跑原始 Debug DX12 完整 PBR 命令，确认蓝圈与交互问题消失。另修复材质 generation 未驻留 PSO 导致退休帧后重复创建的问题，保留独立生命周期回归。content.contracts 覆盖独立导入的临时 COM 清理，以及成功/失败解码均保持调用者 STA。
+
+入口：[表面、IBL 与 HDR 契约](../docs/m4-forward-pbr.md)、[构建运行](../manual/build.md#m43-pbr-参考场景)；参考项目 sample/m4/Pbr.rlproject。构建树 pbr 下保留 BMP/Graph/日志/隔离资产，windows-debug/pbr/backend-comparison.json 保存后端比较；Testing/Temporary/LastTest.log 为完整测试结果。
+
+限制：环境源为 sRGB lat-long 图加线性强度，无 .hdr/.exr 导入；低分辨率 IBL 与 split-sum 近似、导数切线框架（非 authored TANGENT/MikkTSpace 保证）、point-clamp/单 mip/layer/静态 Opaque。Vulkan 保留 Unlit 未消费 NORMAL 的提示，无验证错误。未验收其他 GPU、Vulkan/Release 的手动键盘与拖动或本子阶段的性能基准；阴影、透明与演示工具未因此标记完成，M4 保持 IN_PROGRESS。
 
 ### M4.4 阴影与透明
 

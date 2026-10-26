@@ -8,6 +8,7 @@
 #include <map>
 #include <memory>
 #include <optional>
+#include <set>
 #include <string>
 #include <thread>
 #include <vector>
@@ -25,6 +26,9 @@ struct Preparation
     /// External resources or prepacked cbuffers, keyed by generated HLSL symbol.
     std::map<std::string, rhi::Binding> bindings;
     std::map<std::string, std::map<std::string, Value>> constants;
+    /// Graph-owned pass resources, resolved during recording rather than preparation.
+    /// Only external texture/buffer/sampler symbols are accepted; constants remain prepared.
+    std::set<std::string> deferredResources;
 };
 using ResourceResolver = std::function<rhi::Binding(const shader::Property&, const std::string&)>;
 struct GpuGeneration;

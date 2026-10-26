@@ -125,7 +125,7 @@ struct Accessor
 };
 Json Encode(const Model& model)
 {
-    Json j{{"version", 1},
+    Json j{{"version", 2},
            {"id", model.id},
            {"key", model.key},
            {"meshes", Json::array()},
@@ -149,7 +149,16 @@ Json Encode(const Model& model)
                                   {"name", m.name},
                                   {"color", m.color},
                                   {"image", m.image},
-                                  {"doubleSided", m.doubleSided}});
+                                  {"doubleSided", m.doubleSided},
+                                  {"metallic", m.metallic},
+                                  {"roughness", m.roughness},
+                                  {"normalScale", m.normalScale},
+                                  {"occlusionStrength", m.occlusionStrength},
+                                  {"emission", m.emission},
+                                  {"metallicRoughnessImage", m.metallicRoughnessImage},
+                                  {"normalImage", m.normalImage},
+                                  {"occlusionImage", m.occlusionImage},
+                                  {"emissionImage", m.emissionImage}});
     for (const auto& image : model.images)
         j["images"].push_back(
             {{"width", image.width}, {"height", image.height}, {"rgba", Json::binary(image.rgba)}});
@@ -175,7 +184,7 @@ void BoundsFor(Mesh& mesh)
 }
 Model Decode(const Json& j)
 {
-    Require(j.at("version") == 1, "Unsupported model cache");
+    Require(j.at("version") == 2, "Unsupported model cache");
     Model result;
     result.id = j.at("id");
     result.key = j.at("key");
@@ -197,9 +206,12 @@ Model Decode(const Json& j)
         result.meshes.push_back(std::move(mesh));
     }
     for (const auto& m : j.at("materials"))
-        result.materials.push_back({m.at("id"), m.at("name"),
-                                    m.at("color").get<std::array<float, 4>>(), m.at("image"),
-                                    m.at("doubleSided")});
+        result.materials.push_back(
+            {m.at("id"), m.at("name"), m.at("color").get<std::array<float, 4>>(), m.at("image"),
+             m.at("doubleSided"), m.at("metallic"), m.at("roughness"), m.at("normalScale"),
+             m.at("occlusionStrength"), m.at("emission").get<std::array<float, 3>>(),
+             m.at("metallicRoughnessImage"), m.at("normalImage"), m.at("occlusionImage"),
+             m.at("emissionImage")});
     for (const auto& image : j.at("images"))
     {
         Image value;
@@ -234,9 +246,20 @@ Model Decode(const Json& j)
     }
     for (const auto& material : result.materials)
     {
-        Require(project::ValidId(material.id) && material.image >= -1 &&
-                    (material.image < 0 || size_t(material.image) < result.images.size()),
-                "Invalid cached material");
+        Require(project::ValidId(material.id), "Invalid cached material");
+        for (const auto image :
+             {material.image, material.metallicRoughnessImage, material.normalImage,
+              material.occlusionImage, material.emissionImage})
+            Require(image >= -1 && (image < 0 || size_t(image) < result.images.size()),
+                    "Invalid cached material image");
+        const auto unit = [](float value)
+        { return std::isfinite(value) && value >= 0 && value <= 1; };
+        Require(unit(material.metallic) && unit(material.roughness) &&
+                    unit(material.occlusionStrength) && std::isfinite(material.normalScale) &&
+                    material.normalScale >= 0 && material.normalScale <= 2,
+                "Invalid cached PBR material");
+        for (float value : material.emission)
+            Require(unit(value), "Invalid cached material emission");
         for (float value : material.color)
             Require(std::isfinite(value) && value >= 0 && value <= 1,
                     "Invalid cached material color");
@@ -300,7 +323,7 @@ Model LoadModel(Database& database, const std::string& id)
     Require(d.json.value("animations", Json::array()).empty() &&
                 d.json.value("skins", Json::array()).empty(),
             "Animation/skinning is not supported");
-    std::string hashes = "renderlab-static-gltf-v1:" + Sha256(source);
+    std::string hashes = "renderlab-static-gltf-v2:" + Sha256(source);
     for (const auto& buffer : d.json.value("buffers", Json::array()))
     {
         auto bytes = buffer.contains("uri") ? d.Uri(buffer.at("uri")) : d.binary;
@@ -370,9 +393,8 @@ Model LoadModel(Database& database, const std::string& id)
         const auto pbr = material.value("pbrMetallicRoughness", Json::object());
         if (pbr.contains("baseColorFactor"))
             surface.color = pbr.at("baseColorFactor").get<std::array<float, 4>>();
-        if (pbr.contains("baseColorTexture"))
+        const auto imageFor = [&](const Json& map)
         {
-            const auto& map = pbr.at("baseColorTexture");
             Require(map.value("texCoord", 0) == 0, "Only TEXCOORD_0 is supported");
             Require(!map.contains("extensions"), "Texture transforms are unsupported");
             const auto& texture = d.json.at("textures").at(map.at("index").get<size_t>());
@@ -383,12 +405,39 @@ Model LoadModel(Database& database, const std::string& id)
                             sampler.value("minFilter", 9728) == 9728 &&
                             sampler.value("wrapS", 33071) == 33071 &&
                             sampler.value("wrapT", 33071) == 33071,
-                        "M4.2 supports point-clamp texture samplers only");
+                        "Imported textures support point-clamp samplers only");
             }
-            surface.image = texture.at("source");
-            Require(surface.image >= 0 && size_t(surface.image) < result.images.size(),
-                    "Invalid material image");
+            const auto image = texture.at("source").get<int>();
+            Require(image >= 0 && size_t(image) < result.images.size(), "Invalid material image");
+            return image;
+        };
+        if (pbr.contains("baseColorTexture"))
+            surface.image = imageFor(pbr.at("baseColorTexture"));
+        surface.metallic = pbr.value("metallicFactor", 1.f);
+        surface.roughness = pbr.value("roughnessFactor", 1.f);
+        if (pbr.contains("metallicRoughnessTexture"))
+            surface.metallicRoughnessImage = imageFor(pbr.at("metallicRoughnessTexture"));
+        if (material.contains("normalTexture"))
+        {
+            surface.normalImage = imageFor(material.at("normalTexture"));
+            surface.normalScale = material.at("normalTexture").value("scale", 1.f);
         }
+        if (material.contains("occlusionTexture"))
+        {
+            surface.occlusionImage = imageFor(material.at("occlusionTexture"));
+            surface.occlusionStrength = material.at("occlusionTexture").value("strength", 1.f);
+        }
+        if (material.contains("emissiveTexture"))
+            surface.emissionImage = imageFor(material.at("emissiveTexture"));
+        surface.emission = material.value("emissiveFactor", std::array<float, 3>{0, 0, 0});
+        const auto unit = [](float value)
+        { return std::isfinite(value) && value >= 0 && value <= 1; };
+        Require(unit(surface.metallic) && unit(surface.roughness) &&
+                    unit(surface.occlusionStrength) && std::isfinite(surface.normalScale) &&
+                    surface.normalScale >= 0 && surface.normalScale <= 2,
+                "Invalid glTF metallic/roughness/normal/occlusion factor");
+        for (const auto value : surface.emission)
+            Require(unit(value), "Invalid glTF emission factor");
         for (float value : surface.color)
             Require(std::isfinite(value) && value >= 0 && value <= 1,
                     "Invalid glTF base color factor");

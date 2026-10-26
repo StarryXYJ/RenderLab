@@ -7,6 +7,9 @@
 #include "rhi/device.hpp"
 #include "rhi/runtime.hpp"
 
+#include <Windows.h>
+#include <objbase.h>
+
 #include <filesystem>
 #include <format>
 #include <fstream>
@@ -22,6 +25,19 @@ using namespace renderlab;
 
 int Run(const sandbox::Options& options, const std::filesystem::path& shaderRoot, Logger& logger)
 {
+    // A window thread owns its STA for the full host lifetime. Lazy WIC texture decoding must
+    // not create and tear down the last COM apartment after the swapchain has been created.
+    const auto initialized =
+        CoInitializeEx(nullptr, options.headless ? COINIT_MULTITHREADED : COINIT_APARTMENTTHREADED);
+    if (FAILED(initialized))
+        throw std::runtime_error("Cannot initialize the Sandbox COM apartment");
+    struct ApartmentScope
+    {
+        ~ApartmentScope()
+        {
+            CoUninitialize();
+        }
+    } apartment;
     std::unique_ptr<platform::Window> window;
     if (!options.headless)
     {

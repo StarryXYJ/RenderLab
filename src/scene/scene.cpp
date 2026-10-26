@@ -54,6 +54,12 @@ std::map<std::string, WorldTransform> Scene::WorldTransforms() const
                c.y >= 0 && c.z >= 0;
     };
     Require(colorValid(ambient), "Invalid ambient color");
+    Require((environment.empty() || project::ValidId(environment)) &&
+                std::isfinite(environmentIntensity) && environmentIntensity >= 0 &&
+                environmentIntensity <= 10000 && std::isfinite(environmentRotation),
+            "Invalid environment settings");
+    Require(std::isfinite(exposure) && exposure >= -16 && exposure <= 16,
+            "Exposure must be in [-16,16] stops");
     std::map<std::string, const Object*> ids;
     for (const auto& object : objects)
     {
@@ -111,6 +117,11 @@ Scene Scene::Load(const std::filesystem::path& path)
     Scene scene;
     scene.activeCamera = j.at("activeCamera");
     scene.ambient = Vector(j.value("ambient", Json::array({.035, .035, .035})));
+    const auto environment = j.value("environment", Json::object());
+    scene.environment = environment.value("image", "");
+    scene.environmentIntensity = environment.value("intensity", 1.f);
+    scene.environmentRotation = environment.value("rotation", 0.f);
+    scene.exposure = j.value("exposure", 0.f);
     for (const auto& input : j.at("objects"))
     {
         Object o;
@@ -163,6 +174,11 @@ void Scene::Save(const std::filesystem::path& path) const
     Json j{{"version", 1},
            {"activeCamera", activeCamera},
            {"ambient", Array(ambient)},
+           {"environment",
+            {{"image", environment},
+             {"intensity", environmentIntensity},
+             {"rotation", environmentRotation}}},
+           {"exposure", exposure},
            {"objects", Json::array()}};
     for (const auto& o : objects)
     {
@@ -212,6 +228,10 @@ Snapshot Extractor::Extract(const Scene& scene, float aspect,
     Snapshot snapshot;
     snapshot.cameraPosition = math::Point(pose.matrix, {});
     snapshot.ambient = scene.ambient;
+    snapshot.environment = scene.environment;
+    snapshot.environmentIntensity = scene.environmentIntensity;
+    snapshot.environmentRotation = scene.environmentRotation;
+    snapshot.exposure = scene.exposure;
     snapshot.view = math::Inverse(math::Compose(snapshot.cameraPosition, pose.rotation, {1, 1, 1}));
     snapshot.projection = math::Perspective(camera.camera->fov, aspect, camera.camera->nearPlane,
                                             camera.camera->farPlane);

@@ -74,9 +74,11 @@ target_include_directories(renderlab_rendergraph PUBLIC src)
 target_link_libraries(renderlab_rendergraph PRIVATE renderlab_options renderlab_rhi
     nlohmann_json::nlohmann_json)
 
-add_library(renderlab_renderer STATIC src/renderer/forward.cpp src/renderer/pipeline.cpp src/renderer/scene_renderer.cpp)
+add_library(renderlab_renderer STATIC src/renderer/forward.cpp src/renderer/pipeline.cpp
+    src/renderer/scene_renderer.cpp src/renderer/environment.cpp)
 target_include_directories(renderlab_renderer PUBLIC src)
-target_link_libraries(renderlab_renderer PRIVATE renderlab_options renderlab_rendergraph renderlab_rhi renderlab_content renderlab_material)
+target_link_libraries(renderlab_renderer PRIVATE renderlab_options renderlab_rendergraph renderlab_rhi
+    renderlab_content renderlab_material nlohmann_json::nlohmann_json)
 
 add_library(renderlab_sandbox_options STATIC src/apps/sandbox/options.cpp)
 target_include_directories(renderlab_sandbox_options PUBLIC src)
@@ -148,9 +150,23 @@ add_custom_command(TARGET renderlab_sandbox POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_FILE:renderlab_pix>
         $<TARGET_FILE_DIR:renderlab_sandbox> VERBATIM)
 target_link_libraries(renderlab_sandbox PRIVATE renderlab_options renderlab_core
-    renderlab_platform renderlab_rhi renderlab_sandbox_options renderlab_samples)
+    renderlab_platform renderlab_rhi renderlab_sandbox_options renderlab_samples ole32)
 
 if(BUILD_TESTING)
+    add_executable(renderlab_pbr_tests tests/pbr_tests.cpp)
+    target_link_libraries(renderlab_pbr_tests PRIVATE renderlab_options renderlab_renderer
+        renderlab_material renderlab_rhi renderlab_content renderlab_core renderlab_platform
+        renderlab_samples nlohmann_json::nlohmann_json)
+    add_dependencies(renderlab_pbr_tests renderlab_scene_shaders)
+    add_custom_command(TARGET renderlab_pbr_tests POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_FILE:renderlab_dxc>
+            $<TARGET_FILE_DIR:renderlab_pbr_tests>
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_FILE:renderlab_pix>
+            $<TARGET_FILE_DIR:renderlab_pbr_tests> VERBATIM)
+    add_test(NAME pbr.contracts COMMAND renderlab_pbr_tests cpu
+        ${CMAKE_SOURCE_DIR}/sample/m4/Pbr.rlproject ${CMAKE_SOURCE_DIR}/shaders
+        ${CMAKE_BINARY_DIR}/pbr/cpu)
+    set_tests_properties(pbr.contracts PROPERTIES TIMEOUT 90)
     add_executable(renderlab_content_tests tests/content_tests.cpp)
     target_link_libraries(renderlab_content_tests PRIVATE renderlab_options renderlab_content
         renderlab_shader nlohmann_json::nlohmann_json)
@@ -188,6 +204,15 @@ if(BUILD_TESTING)
         PROPERTIES WILL_FAIL TRUE)
     if(RENDERLAB_GPU_TESTS)
         foreach(backend IN ITEMS dx12 vulkan)
+            add_test(NAME gpu.${backend}.pbr_window COMMAND renderlab_sandbox
+                --backend ${backend} --validation on --window-test
+                --project ${CMAKE_SOURCE_DIR}/sample/m4/Pbr.rlproject
+                --log ${CMAKE_BINARY_DIR}/logs/${backend}-pbr-window.log)
+            set_tests_properties(gpu.${backend}.pbr_window PROPERTIES LABELS gpu RUN_SERIAL TRUE TIMEOUT 60)
+            add_test(NAME gpu.${backend}.pbr COMMAND renderlab_pbr_tests ${backend}
+                ${CMAKE_SOURCE_DIR}/sample/m4/Pbr.rlproject ${CMAKE_SOURCE_DIR}/shaders
+                ${CMAKE_BINARY_DIR}/pbr/${backend})
+            set_tests_properties(gpu.${backend}.pbr PROPERTIES LABELS gpu RUN_SERIAL TRUE TIMEOUT 120)
             add_test(NAME gpu.${backend}.scene COMMAND renderlab_sandbox
                 --backend ${backend} --headless --validation on --scene-test
                 --project ${CMAKE_SOURCE_DIR}/sample/m4/RenderLab.rlproject

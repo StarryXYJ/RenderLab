@@ -79,8 +79,8 @@ void CommandList::CopyTexture(std::shared_ptr<Buffer> buffer, std::shared_ptr<Te
     Check(buffer);
     Check(texture);
     Require(!rendering_ && texture->desc.format != Format::D32, "Invalid texture copy");
-    Require(rowPitch >= uint64_t(texture->desc.width) * 4 && rowPitch % 256 == 0 &&
-                offset % 512 == 0,
+    Require(rowPitch >= uint64_t(texture->desc.width) * FormatBytes(texture->desc.format) &&
+                rowPitch % 256 == 0 && offset % 512 == 0,
             "Texture copy pitch/offset alignment invalid");
     Range(offset, uint64_t(rowPitch) * texture->desc.height, buffer->desc.size);
     commands_.emplace_back(

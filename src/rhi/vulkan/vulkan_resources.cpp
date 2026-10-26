@@ -52,7 +52,8 @@ std::shared_ptr<Texture> VulkanRuntime::CreateTexture(const TextureDesc& desc)
                                                  : VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
     VkFormatProperties props{};
     vkGetPhysicalDeviceFormatProperties(physical_, info.format, &props);
-    VkFormatFeatureFlags required = 0;
+    VkFormatFeatureFlags required =
+        desc.format == Format::D32 ? 0 : VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT;
     if (desc.storage)
         required |= VK_FORMAT_FEATURE_STORAGE_IMAGE_BIT;
     if (desc.attachment)

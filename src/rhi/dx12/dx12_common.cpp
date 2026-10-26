@@ -25,6 +25,8 @@ DXGI_FORMAT NativeFormat(Format format)
         return DXGI_FORMAT_B8G8R8A8_UNORM_SRGB;
     case Format::D32:
         return DXGI_FORMAT_D32_FLOAT;
+    case Format::Rgba32Float:
+        return DXGI_FORMAT_R32G32B32A32_FLOAT;
     }
     throw std::invalid_argument("Unknown format");
 }

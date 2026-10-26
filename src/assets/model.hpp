@@ -24,13 +24,16 @@ struct Image
     uint32_t width = 0, height = 0;
     std::vector<uint8_t> rgba;
 };
-/// @brief Imported Opaque base-color data; image indexes Model::images, or -1 means white.
+/// @brief Imported metallic-roughness surface; image indices address Model::images or use -1.
 struct Surface
 {
     std::string id, name;
     std::array<float, 4> color{1, 1, 1, 1};
     int image = -1;
     bool doubleSided = false;
+    float metallic = 1, roughness = 1, normalScale = 1, occlusionStrength = 1;
+    std::array<float, 3> emission{0, 0, 0};
+    int metallicRoughnessImage = -1, normalImage = -1, occlusionImage = -1, emissionImage = -1;
 };
 /// @brief One indexed triangle primitive; material indexes Model::materials.
 struct Mesh

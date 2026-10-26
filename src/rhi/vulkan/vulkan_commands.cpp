@@ -106,7 +106,7 @@ std::shared_ptr<Runtime::Submission> VulkanRuntime::Execute(const CommandList& c
                 {
                     VkBufferImageCopy copy{};
                     copy.bufferOffset = c.offset;
-                    copy.bufferRowLength = c.rowPitch / 4;
+                    copy.bufferRowLength = c.rowPitch / FormatBytes(c.texture->desc.format);
                     copy.imageSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
                     copy.imageExtent = {c.texture->desc.width, c.texture->desc.height, 1};
                     if (c.upload)

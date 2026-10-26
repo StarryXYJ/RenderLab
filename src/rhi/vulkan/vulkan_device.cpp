@@ -434,6 +434,7 @@ private:
                                      features12.bufferDeviceAddress ? "true" : "false");
         for (const auto& [name, format] : {std::pair{"RGBA8_UNORM", VK_FORMAT_R8G8B8A8_UNORM},
                                            std::pair{"RGBA16_FLOAT", VK_FORMAT_R16G16B16A16_SFLOAT},
+                                           std::pair{"RGBA32_FLOAT", VK_FORMAT_R32G32B32A32_SFLOAT},
                                            std::pair{"D32_FLOAT", VK_FORMAT_D32_SFLOAT}})
         {
             VkFormatProperties support{};

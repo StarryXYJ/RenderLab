@@ -13,6 +13,9 @@
 #include "samples/rhi_demo.hpp"
 #include "samples/scene_acceptance.hpp"
 
+#include <Windows.h>
+#include <objbase.h>
+
 #include <algorithm>
 #include <array>
 #include <chrono>
@@ -27,8 +30,17 @@ namespace renderlab::sandbox
 {
 namespace
 {
+void CheckWindowApartment()
+{
+    APTTYPE apartment;
+    APTTYPEQUALIFIER qualifier;
+    if (FAILED(CoGetApartmentType(&apartment, &qualifier)) ||
+        (apartment != APTTYPE_STA && apartment != APTTYPE_MAINSTA))
+        throw std::runtime_error("Window thread lost its host-owned COM STA");
+}
 void CheckWindow(platform::Window& window, Logger& logger)
 {
+    CheckWindowApartment();
     const auto previousResizeEvents = window.GetState().resizeEvents;
     window.Resize(640, 360);
     window.PumpEvents();
@@ -192,6 +204,8 @@ void RunRendering(platform::Window* window, rhi::Device& device, rhi::Runtime& r
                              {!options.graphNoUpdate, true, !options.graphNoCull}, dump)
                     .completion;
         imageInitialized[acquired.index] = true;
+        if (options.windowTest && scene && frameNumber == 0)
+            CheckWindowApartment();
         swapchain->Present();
         ++frameNumber;
     }
