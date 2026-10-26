@@ -110,4 +110,4 @@ GraphDemo 使用空 Custom 组合，注册 NoiseFeature、DemoSceneFeature、可
 
 内置与样例回调按值拥有本帧解析结果，Pipeline/Feature 可以在建图后释放。自定义 Feature 同样必须按值保存必要输入，不能让延迟回调依赖已释放的 this。Feature 本身可保存长期配置；并发复用须由调用方保证 Build 与其状态的线程安全，当前仍为单线程单队列。
 
-普通 Forward 接收准备好的绘制数据。场景、Material 适配和主方向光由 [M4 SceneRenderer](m4-scene.md) 提供；PBR/HDR 仍在后续阶段。DepthPrepass、Shadow、Sky、后处理将按需成为独立 Feature；高级管线、AS、TraceRays 与历史管理见 [阶段计划](../design/phaseplan.md)。
+普通 Forward 接收准备好的绘制数据。场景、Material 适配和主方向光由 [M4 SceneRenderer](m4-scene.md) 提供；[PBR/HDR](m4-forward-pbr.md) 与 [ShadowFeature、Masked/透明](m4-shadows-alpha.md) 沿用该组合。ShadowFeature 由场景宿主显式注册于 BeforeOpaque，接收 RenderFrame.shadowCasters 并生成 MainLightShadow；普通 Forward preset 不自动注入阴影。DepthPrepass、Sky 与更多后处理按需增加；高级管线、AS、TraceRays 与历史管理见 [阶段计划](../design/phaseplan.md)。

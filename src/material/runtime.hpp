@@ -22,7 +22,7 @@ struct Preparation
     rhi::Format color = rhi::Format::Rgba8Srgb;
     uint32_t vertexStride = 0;
     std::vector<rhi::VertexAttribute> attributes;
-    std::optional<bool> depth, blend, cull, frontCounterClockwise;
+    std::optional<bool> depth, depthWrite, blend, cull, frontCounterClockwise;
     /// External resources or prepacked cbuffers, keyed by generated HLSL symbol.
     std::map<std::string, rhi::Binding> bindings;
     std::map<std::string, std::map<std::string, Value>> constants;

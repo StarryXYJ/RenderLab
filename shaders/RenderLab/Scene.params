@@ -8,6 +8,8 @@
     float4 MainLightColor = (0, 0, 0, 0);
     float4 AmbientColor = (0.035, 0.035, 0.035, 0);
     float4 EnvironmentParameters = (1, 0, 0, 0);
+    float4x4 MainLightShadowMatrix = (1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1);
+    float4 MainLightShadowParameters = (1, 0.001, 0.01, 0);
 }
 [scope(draw)] cbuffer Draw
 {

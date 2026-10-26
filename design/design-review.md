@@ -100,3 +100,7 @@ GPU Driven 和路径队列都保持动态数量在 GPU 上消费。射线 Payloa
 ## M4.3 Shader 材质与 HDR/IBL
 
 Lit/Unlit 保持普通 Shader 资产，表面值、光栅 SampleGrad 上下文、BRDF 与照明分开。HDR 使用 RGBA32F 正确性基线，显示变换显式进入 Graph；外部图资源通过明确 deferredResources 延后绑定，不以占位纹理伪装实际依赖。IBL 先采用确定性 CPU 预滤波 2D 图集和 BRDF LUT，遵守当前单 mip/layer 的 RHI 边界；明确低分辨率、LDR 环境源、导数切线框架和 split-sum 近似的局限，避免同时扩张 cubemap/mip、流送和离线烘焙系统。数据与采样契约见 [M4.3](../docs/m4-forward-pbr.md)。
+
+## M4.4 单张阴影与 Alpha 角色
+
+先用颜色记录深度的单张正交阴影验证完整遮挡链路，D32 保持只用于附件，避免同时扩张深度采样与无颜色 PSO。RGBA32F 的存储代价显式记录；手动 3×3 PCF 采用接收平面深度修正。Caster 候选与相机可见集分开，防止离屏投影丢失。Masked/Transparent 作为 Lit/Unlit 普通 variant，沿用固定布局与 Forward 的 Opaque/Transparent 阶段；透明不投影且不解决相交排序。Sky、DepthPrepass、Bloom 和级联均等实际用例再增加。

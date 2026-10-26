@@ -4,9 +4,9 @@
 
 ## 当前状态
 
-- 当前实施阶段：M0–M3 DONE；M4 IN_PROGRESS，M4.1–M4.3 DONE。
-- 当前工作项：M4.3 交付及窗口交互修复 DONE；用户确认完整 PBR 场景恢复交互，Debug/Release 完整回归各 27/27。M4.4 本轮不启动。
-- 用户确认本轮先交付 M4.3 以检查基础着色；M4.4、M4.5 本轮未启动，不进入 M5 或编辑器。
+- 当前实施阶段：M0–M3 DONE；M4 IN_PROGRESS，M4.1–M4.4 DONE。
+- 当前工作项：M4.4 已验收；下一工作项为 M4.5 可重复演示。
+- 用户授权无阻塞时继续按计划推进，每个子阶段验收完成即提交 Git；M4.3 已提交 c50ee6a。
 - Demo 的 Custom 示例作为回归入口保留；M4 场景示例使用 Forward 组合与现有 Shader/Material 链路。
 
 | 阶段 | 目标 | 前置依赖 | 状态 |
@@ -158,9 +158,15 @@
 
 ### M4.4 阴影与透明
 
-- [ ] 先实现一种确定的方向光阴影；级联在需要时作为子任务增加。
-- [ ] 在 M4.2 场景接入基础上增加 Masked 与透明材质角色；按需加入独立 DepthPrepass/Sky Feature 和后处理阶段，定义快照位置。
-- [ ] 可选 Bloom 等基础后处理，按实际画面需求增加，不先堆齐所有效果。
+状态：DONE，日期：2026 年 10 月 26 日。
+
+结果：单张正交 Reversed-Z 方向光阴影，独立 ShadowFeature、RGBA32F 深度图与 D32 可见性附件、3×3 PCF 与接收平面深度修正；保留相机视野外投影实例。Lit/Unlit 的 Masked/Transparent 普通 variant、glTF alphaMode/alphaCutoff 与 v3 缓存、HDR straight alpha 混合/只读深度/从远到近排序。固定 Shadow.rlproject 覆盖实体、裁剪孔洞、透明薄片和接收地面；快照仍在 Tone Mapping 前。
+
+验证：RTX 5060、MSVC 19.51.36257、DXC 1.9.0.5512，标准 windows-debug/windows-release 构建及完整 CTest 各 32/32 通过，双后端 validation error 为 0。新增 CPU 投影/竖直光/退化包围盒、alpha 导入缓存与非法值、离屏 caster 保留；GPU 专项覆盖离屏投影、光旋转、128/512 分辨率、直接光与 IBL 隔离、Masked 裁剪/不投影、透明排序/零 alpha/深度遮挡，以及 CPU 线性混合显示参考（误差不超过一个 code）。两配置各 18 张专项参考图双后端最大差异 2 个 8-bit code，差异局限于少数通道；透明数值参考图逐字节一致。原 PBR 16 张参考图逐字节一致；Shadow 完整窗口回归双后端各 54 帧与 10 次重建通过。
+
+入口：[阴影与 Alpha 契约](../docs/m4-shadows-alpha.md)、[构建运行](../manual/build.md#m44-阴影与透明场景)。构建树 surface/{dx12,vulkan} 保存 BMP/Graph/日志/隔离资产，backend-comparison.json 保存比较，完整测试结果见 Testing/Temporary/LastTest.log。
+
+限制：单张场景拟合图，无级联或移动场景的完全稳定保证；RGBA32F+D32 的 512² 逻辑大小为 5 MiB。透明不投影，无相交透明/OIT/折射；项目 Shader 需显式提供 Shadow Pass 才投影。Vulkan 显式检查并启用 shaderDemoteToHelperInvocation；保留未消费顶点属性提示，DX12 保留优化 clear 值不匹配的性能提示，无验证错误。未手动验收本场景输入或其他 GPU；Sky、DepthPrepass、Bloom 按需增加，M4 仍待 M4.5 与基线验收。
 
 ### M4.5 可重复演示
 

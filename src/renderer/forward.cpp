@@ -84,6 +84,24 @@ void Record(RasterContext& context, const ResolvedDraw& resolved)
     }
 }
 } // namespace
+void ShadowFeature::Build(rendergraph::Graph& graph, const RenderFrame& frame)
+{
+    const auto size = frame.shadowResolution;
+    graph.CreateTexture("MainLightShadow", {size, size, rhi::Format::Rgba32Float, false, true});
+    graph.CreateTexture("MainLightShadowDepth", {size, size, rhi::Format::D32, false, true});
+    auto pass = graph.AddRasterPass("MainLight.Shadow");
+    pass.ColorTarget("MainLightShadow", rhi::LoadOp::Clear, {0, 0, 0, 0});
+    pass.DepthTarget("MainLightShadowDepth");
+    std::vector<ResolvedDraw> draws;
+    for (const auto& draw : frame.shadowCasters)
+        draws.push_back(Declare(pass, draw, false));
+    pass.Execute(
+        [draws = std::move(draws)](RasterContext& context)
+        {
+            for (const auto& draw : draws)
+                Record(context, draw);
+        });
+}
 void OpaqueFeature::Build(rendergraph::Graph& graph, const RenderFrame& frame)
 {
     const auto color = graph.GetTextureDesc(graph.GetTexture("CameraColor"));

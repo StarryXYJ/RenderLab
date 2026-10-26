@@ -69,6 +69,7 @@ Prepared Runtime::Prepare(std::shared_ptr<const shader::Package> package, const 
     desc.color = preparation.color;
     desc.depth = preparation.depth.value_or(pass.depth);
     desc.blend = preparation.blend.value_or(pass.blend);
+    desc.depthWrite = preparation.depthWrite.value_or(!desc.blend);
     desc.cull = preparation.cull.value_or(pass.cull);
     desc.frontCounterClockwise = preparation.frontCounterClockwise.value_or(true);
     desc.vertexStride = preparation.vertexStride;

@@ -125,7 +125,7 @@ struct Accessor
 };
 Json Encode(const Model& model)
 {
-    Json j{{"version", 2},
+    Json j{{"version", 3},
            {"id", model.id},
            {"key", model.key},
            {"meshes", Json::array()},
@@ -158,7 +158,9 @@ Json Encode(const Model& model)
                                   {"metallicRoughnessImage", m.metallicRoughnessImage},
                                   {"normalImage", m.normalImage},
                                   {"occlusionImage", m.occlusionImage},
-                                  {"emissionImage", m.emissionImage}});
+                                  {"emissionImage", m.emissionImage},
+                                  {"alphaMode", m.alphaMode},
+                                  {"alphaCutoff", m.alphaCutoff}});
     for (const auto& image : model.images)
         j["images"].push_back(
             {{"width", image.width}, {"height", image.height}, {"rgba", Json::binary(image.rgba)}});
@@ -184,7 +186,7 @@ void BoundsFor(Mesh& mesh)
 }
 Model Decode(const Json& j)
 {
-    Require(j.at("version") == 2, "Unsupported model cache");
+    Require(j.at("version") == 3, "Unsupported model cache");
     Model result;
     result.id = j.at("id");
     result.key = j.at("key");
@@ -211,7 +213,7 @@ Model Decode(const Json& j)
              m.at("doubleSided"), m.at("metallic"), m.at("roughness"), m.at("normalScale"),
              m.at("occlusionStrength"), m.at("emission").get<std::array<float, 3>>(),
              m.at("metallicRoughnessImage"), m.at("normalImage"), m.at("occlusionImage"),
-             m.at("emissionImage")});
+             m.at("emissionImage"), m.at("alphaMode"), m.at("alphaCutoff")});
     for (const auto& image : j.at("images"))
     {
         Image value;
@@ -247,6 +249,11 @@ Model Decode(const Json& j)
     for (const auto& material : result.materials)
     {
         Require(project::ValidId(material.id), "Invalid cached material");
+        Require((material.alphaMode == "OPAQUE" || material.alphaMode == "MASK" ||
+                 material.alphaMode == "BLEND") &&
+                    std::isfinite(material.alphaCutoff) && material.alphaCutoff >= 0 &&
+                    material.alphaCutoff <= 1,
+                "Invalid cached alpha mode/cutoff");
         for (const auto image :
              {material.image, material.metallicRoughnessImage, material.normalImage,
               material.occlusionImage, material.emissionImage})
@@ -323,7 +330,7 @@ Model LoadModel(Database& database, const std::string& id)
     Require(d.json.value("animations", Json::array()).empty() &&
                 d.json.value("skins", Json::array()).empty(),
             "Animation/skinning is not supported");
-    std::string hashes = "renderlab-static-gltf-v2:" + Sha256(source);
+    std::string hashes = "renderlab-static-gltf-v3:" + Sha256(source);
     for (const auto& buffer : d.json.value("buffers", Json::array()))
     {
         auto bytes = buffer.contains("uri") ? d.Uri(buffer.at("uri")) : d.binary;
@@ -382,11 +389,16 @@ Model LoadModel(Database& database, const std::string& id)
     for (size_t i = 0; i < materials.size(); ++i)
     {
         const auto& material = materials[i];
-        Require(material.value("alphaMode", "OPAQUE") == "OPAQUE",
-                "Only opaque glTF materials are supported in M4.2");
         Require(material.value("extensions", Json::object()).empty(),
                 "glTF material extensions are unsupported");
         Surface surface;
+        surface.alphaMode = material.value("alphaMode", "OPAQUE");
+        surface.alphaCutoff = material.value("alphaCutoff", .5f);
+        Require((surface.alphaMode == "OPAQUE" || surface.alphaMode == "MASK" ||
+                 surface.alphaMode == "BLEND") &&
+                    std::isfinite(surface.alphaCutoff) && surface.alphaCutoff >= 0 &&
+                    surface.alphaCutoff <= 1,
+                "Invalid glTF alpha mode/cutoff");
         surface.id = database.Subresource(id, StableKey(materials, i, "material:"));
         surface.name = material.value("name", "Material");
         surface.doubleSided = material.value("doubleSided", false);

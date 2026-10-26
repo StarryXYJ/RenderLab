@@ -66,9 +66,18 @@ std::map<std::string, WorldTransform> Scene::WorldTransforms() const
         Require(project::ValidId(object.id), "Invalid scene object UUID");
         Require(ids.emplace(object.id, &object).second, "Duplicate scene object UUID");
         if (object.light)
+        {
             Require(colorValid(object.light->color) && std::isfinite(object.light->intensity) &&
                         object.light->intensity >= 0,
                     "Invalid directional light");
+            const auto& light = *object.light;
+            Require(light.shadowResolution >= 128 && light.shadowResolution <= 2048 &&
+                        (light.shadowResolution & (light.shadowResolution - 1)) == 0 &&
+                        std::isfinite(light.shadowBias) && light.shadowBias >= 0 &&
+                        light.shadowBias <= .1f && std::isfinite(light.shadowNormalBias) &&
+                        light.shadowNormalBias >= 0 && light.shadowNormalBias <= 1,
+                    "Invalid directional shadow settings");
+        }
         if (object.camera)
             math::Perspective(object.camera->fov, 1, object.camera->nearPlane,
                               object.camera->farPlane);
@@ -158,6 +167,10 @@ Scene Scene::Load(const std::filesystem::path& path)
             const auto& light = input.at("directionalLight");
             o.light = DirectionalLight{Vector(light.value("color", Json::array({1, 1, 1}))),
                                        light.value("intensity", 1.f), light.value("enabled", true)};
+            o.light->shadows = light.value("shadows", false);
+            o.light->shadowResolution = light.value("shadowResolution", 512u);
+            o.light->shadowBias = light.value("shadowBias", .001f);
+            o.light->shadowNormalBias = light.value("shadowNormalBias", .01f);
             Require(std::isfinite(o.light->intensity) && o.light->intensity >= 0 &&
                         o.light->color.x >= 0 && o.light->color.y >= 0 && o.light->color.z >= 0,
                     "Invalid directional light");
@@ -200,7 +213,11 @@ void Scene::Save(const std::filesystem::path& path) const
         if (o.light)
             data["directionalLight"] = {{"color", Array(o.light->color)},
                                         {"intensity", o.light->intensity},
-                                        {"enabled", o.light->enabled}};
+                                        {"enabled", o.light->enabled},
+                                        {"shadows", o.light->shadows},
+                                        {"shadowResolution", o.light->shadowResolution},
+                                        {"shadowBias", o.light->shadowBias},
+                                        {"shadowNormalBias", o.light->shadowNormalBias}};
         j["objects"].push_back(std::move(data));
     }
     assets::detail::SaveJson(path, j);
@@ -245,7 +262,12 @@ Snapshot Extractor::Extract(const Scene& scene, float aspect,
             snapshot.light = {id,
                               math::Normalize(math::Direction(
                                   math::Compose({}, world.rotation, {1, 1, 1}), {0, 0, 1})),
-                              object.light->color, object.light->intensity};
+                              object.light->color,
+                              object.light->intensity,
+                              object.light->shadows,
+                              object.light->shadowResolution,
+                              object.light->shadowBias,
+                              object.light->shadowNormalBias};
             break;
         }
     }
@@ -282,6 +304,8 @@ Snapshot Extractor::Extract(const Scene& scene, float aspect,
             if (auto found = renderer.materials.find(surface.id); found != renderer.materials.end())
                 instance.material = found->second;
             ++snapshot.totalInstances;
+            if (snapshot.light.shadows && snapshot.light.intensity > 0)
+                snapshot.shadowCasters.push_back(instance);
             if (!math::Visible(snapshot.viewProjection, instance.bounds))
             {
                 ++snapshot.culledInstances;

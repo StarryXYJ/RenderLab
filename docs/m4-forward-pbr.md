@@ -57,4 +57,4 @@ RHI 新增 Rgba32Float，`FormatBytes` 与 `TextureRowPitch(width, format)` 统�
 - gpu.{dx12,vulkan}.pbr_window：完整 Pbr.rlproject 的窗口启动、首帧独立纹理解码前后保持宿主 STA、resize/minimize/restore 与退出；COM 所有权见 [场景资源契约](m4-scene.md#静态-gltf-与缓存)。自动窗口测试不代替手动键盘与标题栏拖动验收。
 - Unlit HDR 颜色经过曝光/ACES/sRGB 的 GPU 输出与独立 CPU 参考比较，误差最多一个 8-bit code；其余图像比较针对行为变化，不冒充离线 BRDF ground truth。
 
-Vulkan 当前可能提示 Unlit 顶点未消费 NORMAL 属性（公共静态网格布局仍提供它），不影响结果；验收禁止 validation error。阴影、Masked/透明、天空绘制、调试面板与 Player 属于后续子阶段。
+Vulkan 当前可能提示 Unlit 顶点未消费 NORMAL 属性（公共静态网格布局仍提供它），不影响结果；验收禁止 validation error。阴影与 Masked/透明接入见 [M4.4](m4-shadows-alpha.md)；天空绘制、调试面板与 Player 按后续需求推进。

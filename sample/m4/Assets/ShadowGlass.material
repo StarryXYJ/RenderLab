@@ -1,0 +1,27 @@
+{
+  "version": 1,
+  "shader": "RenderLab/Lit",
+  "variant": "Transparent",
+  "values": {
+    "base_color": {
+      "type": "float4",
+      "count": 1,
+      "array": false,
+      "value": [
+        0.1,
+        0.25,
+        0.9,
+        0.4
+      ]
+    },
+    "roughness": {
+      "type": "float",
+      "count": 1,
+      "array": false,
+      "value": [
+        0.25
+      ]
+    }
+  },
+  "resources": {}
+}

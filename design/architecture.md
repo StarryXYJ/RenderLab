@@ -105,6 +105,8 @@ Windows Sandbox 在窗口和设备创建前为窗口线程初始化 COM STA，�
 
 基础目标是 Windows x64、DX12 和 Vulkan 1.3。Vulkan 基础路径使用 Dynamic Rendering、Synchronization2 和 Timeline Semaphore，并检查具体特性、格式和限制。DX12 的 Shader Model 与可选功能按实际能力验证。
 
+Masked 材质的 HLSL clip 在 DXC SPIR-V 中使用 helper invocation demote；Vulkan 基础设备同时检查并启用 shaderDemoteToHelperInvocation，不只查询支持而遗漏启用。
+
 DeviceCapabilities 至少区分：
 
 - 基础图形与计算能力、格式和附件限制。
@@ -358,6 +360,8 @@ Feature 使用 RenderFeature 基类，构造时声明稳定名称、Feature 依�
 Custom 与 Forward 仅是预先注入 Feature 的不同组合，共用 Create 和 Build。Forward 注入 Opaque、Transparent 与可选颜色快照；用户 Feature 可指定阶段。Feature 名称依赖解决构图先后，Graph 资源名称与读写声明解决本帧数据依赖，两者不混为一个全局资源表。执行回调仅保存本帧解析的 handle 与数据副本。
 
 CameraColor/CameraDepth 由宿主创建或导入，可选 OpaqueColor/AfterTransparentColor 使用真实复制。M4.3 场景宿主使用 RGBA32F CameraColor，Forward 结束后显式添加 Display.ToneMapping，写入导入的 sRGB DisplayColor；快照保留 HDR 值。Demo 使用空 Custom 组合注册 Noise、Scene 和 Readback，不传递 Feature 返回 handle，也不使用 Forward 内置流程。具体接口见 [Feature 与管线组合](../docs/forward-pipeline.md)。高级组合按计划推进。
+
+M4.4 以 BeforeOpaque 的 ShadowFeature 生成单张方向光图，RGBA32F 记录 Reversed-Z 片元深度，D32 只用于光栅可见性；保持现有单颜色附件与不可采样深度边界。Extractor 保留相机视野外的启用实例，Renderer 按材质 Shadow 角色筛选投影。Masked 在主绘制/阴影中复用同一 alpha 裁剪，Transparent 不投影并按 view 深度排序、关闭深度写入；Lit 的 PCF 仅调制直接光。数据与限制见 [阴影与 Alpha](../docs/m4-shadows-alpha.md)。
 
 一个后期混合示例是：
 

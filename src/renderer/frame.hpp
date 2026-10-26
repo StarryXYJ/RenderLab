@@ -54,6 +54,8 @@ struct DrawPacket
 struct RenderFrame
 {
     std::vector<DrawPacket> opaque, transparent;
+    std::vector<DrawPacket> shadowCasters;
+    uint32_t shadowResolution = 1;
     std::array<float, 4> clearColor = {.02f, .02f, .02f, 1};
 };
 } // namespace renderlab::renderer

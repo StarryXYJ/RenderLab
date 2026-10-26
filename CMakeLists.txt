@@ -75,7 +75,7 @@ target_link_libraries(renderlab_rendergraph PRIVATE renderlab_options renderlab_
     nlohmann_json::nlohmann_json)
 
 add_library(renderlab_renderer STATIC src/renderer/forward.cpp src/renderer/pipeline.cpp
-    src/renderer/scene_renderer.cpp src/renderer/environment.cpp)
+    src/renderer/scene_renderer.cpp src/renderer/environment.cpp src/renderer/shadow.cpp)
 target_include_directories(renderlab_renderer PUBLIC src)
 target_link_libraries(renderlab_renderer PRIVATE renderlab_options renderlab_rendergraph renderlab_rhi
     renderlab_content renderlab_material nlohmann_json::nlohmann_json)
@@ -153,6 +153,14 @@ target_link_libraries(renderlab_sandbox PRIVATE renderlab_options renderlab_core
     renderlab_platform renderlab_rhi renderlab_sandbox_options renderlab_samples ole32)
 
 if(BUILD_TESTING)
+    add_executable(renderlab_surface_tests tests/surface_tests.cpp)
+    target_link_libraries(renderlab_surface_tests PRIVATE renderlab_options renderlab_renderer
+        renderlab_material renderlab_rhi renderlab_content renderlab_core renderlab_platform
+        renderlab_samples nlohmann_json::nlohmann_json)
+    add_dependencies(renderlab_surface_tests renderlab_scene_shaders)
+    add_test(NAME surface.contracts COMMAND renderlab_surface_tests cpu
+        ${CMAKE_SOURCE_DIR}/sample/m4/Shadow.rlproject ${CMAKE_SOURCE_DIR}/shaders
+        ${CMAKE_BINARY_DIR}/surface/cpu)
     add_executable(renderlab_pbr_tests tests/pbr_tests.cpp)
     target_link_libraries(renderlab_pbr_tests PRIVATE renderlab_options renderlab_renderer
         renderlab_material renderlab_rhi renderlab_content renderlab_core renderlab_platform
@@ -204,6 +212,15 @@ if(BUILD_TESTING)
         PROPERTIES WILL_FAIL TRUE)
     if(RENDERLAB_GPU_TESTS)
         foreach(backend IN ITEMS dx12 vulkan)
+            add_test(NAME gpu.${backend}.surface COMMAND renderlab_surface_tests ${backend}
+                ${CMAKE_SOURCE_DIR}/sample/m4/Shadow.rlproject ${CMAKE_SOURCE_DIR}/shaders
+                ${CMAKE_BINARY_DIR}/surface/${backend})
+            set_tests_properties(gpu.${backend}.surface PROPERTIES LABELS gpu RUN_SERIAL TRUE TIMEOUT 120)
+            add_test(NAME gpu.${backend}.surface_window COMMAND renderlab_sandbox
+                --backend ${backend} --validation on --window-test
+                --project ${CMAKE_SOURCE_DIR}/sample/m4/Shadow.rlproject
+                --log ${CMAKE_BINARY_DIR}/logs/${backend}-surface-window.log)
+            set_tests_properties(gpu.${backend}.surface_window PROPERTIES LABELS gpu RUN_SERIAL TRUE TIMEOUT 60)
             add_test(NAME gpu.${backend}.pbr_window COMMAND renderlab_sandbox
                 --backend ${backend} --validation on --window-test
                 --project ${CMAKE_SOURCE_DIR}/sample/m4/Pbr.rlproject

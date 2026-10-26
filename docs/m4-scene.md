@@ -33,7 +33,7 @@ UUID 使用 32 位小写十六进制；filename.meta 保存 id、dependencies、
 
 导入 baseColorFactor/baseColorTexture、Opaque 与 doubleSided。M4.3 默认使用 Lit，并导入 Metallic-Roughness、Normal、Occlusion 和 Emission 参数及纹理，缓存格式随之升级；具体参数范围见 [Forward PBR](m4-forward-pbr.md)。采样固定为 RHI 的 point-clamp，显式其他采样方式报错。
 
-动画、skin、morph、压缩/required 扩展、稀疏 accessor、非三角形、归一化整数属性和透明材质明确报错。外部 URI 限普通相对 UTF-8 路径；网络和 percent 编码 URI 不支持。源文件上限 128MiB，图像上限 8192×8192，无 mip/流送。
+glTF 的 OPAQUE、MASK、BLEND 与 alphaCutoff 映射到内置材质角色，缓存版本为 v3；覆盖材质以用户 .material 为准。角色、阴影及透明排序见 [M4.4](m4-shadows-alpha.md)。动画、skin、morph、压缩/required 扩展、稀疏 accessor、非三角形和归一化整数属性明确报错。外部 URI 限普通相对 UTF-8 路径；网络和 percent 编码 URI 不支持。源文件上限 128MiB，图像上限 8192×8192，无 mip/流送。
 
 Library/Models 的 CBOR 缓存键包含 Importer 版本、模型与实际依赖内容。变化重新导入，损坏缓存重建，缓存几何/材质/索引/图像/矩阵也做校验。导入不改写 .material，清 Library 不覆盖用户资产。
 

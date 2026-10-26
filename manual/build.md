@@ -68,7 +68,7 @@ ctest --preset windows-release
 
 输出分别在 `out/build/windows-debug` 和 `out/build/windows-release`。默认注册 9 项不需要创建设备的测试，包含实际 DXC 双目标编译的 `shader.contracts`。预设与依赖版本纳入 Git，本机设置使用被忽略的 `CMakeUserPresets.json`。
 
-完整验收启用 GPU 测试，当前共 27 项（9 项 CPU/CLI、18 项 GPU）。GPU 测试要求验证层和桌面会话，会短暂打开原生窗口：
+完整验收启用 GPU 测试，当前共 32 项（10 项 CPU/CLI、22 项 GPU）。GPU 测试要求验证层和桌面会话，会短暂打开原生窗口：
 
 ```powershell
 cmake --preset windows-debug -DRENDERLAB_GPU_TESTS=ON
@@ -198,6 +198,18 @@ ctest --preset windows-debug -R 'pbr|content.contracts|gpu.*.scene' --output-on-
 场景文件可保存 exposure（stops）及 environment 的 image UUID、intensity、rotation（度）。空环境图使用 ambient 均匀 radiance；环境源为 sRGB lat-long 图，尚无 .hdr/.exr 导入。材质使用普通 .material，可指定 RenderLab/Lit 或 RenderLab/Unlit；项目 Copper Shader 继续保留。运行中改材质值会按文件时间重新读取；场景文件修改后需重启项目。WASD/QE/方向键控制不变。
 
 新增 pbr.contracts、gpu.{dx12,vulkan}.pbr 与 gpu.{dx12,vulkan}.pbr_window；输出在各构建树 pbr/后端，包含材质球与单项参考 BMP、Graph JSON、日志和隔离测试资产。测试不会修改 sample。双后端图像对照需相同配置，物理模型与支持限制见 [Forward PBR 契约](../docs/m4-forward-pbr.md)。
+
+## M4.4 阴影与透明场景
+
+Shadow.rlproject 选择带实体、网格裁剪和透明薄片的固定场景，地面用于观察阴影。内置 Lit/Unlit 的 Default、Masked、Transparent variant 分别对应不透明、alpha 裁剪和 straight alpha 混合；Masked 的 alpha_cutoff 默认 0.5。方向光组件保存 shadows、shadowResolution、shadowBias、shadowNormalBias；旧场景默认关闭阴影。
+
+```powershell
+./out/build/windows-debug/renderlab_sandbox.exe --backend dx12 --validation on --project sample/m4/Shadow.rlproject
+./out/build/windows-debug/renderlab_sandbox.exe --backend vulkan --validation on --project sample/m4/Shadow.rlproject
+ctest --preset windows-debug -R 'surface|content.contracts' --output-on-failure
+```
+
+专项参考图与 Graph JSON 在构建树 surface/后端；原始场景不会被测试修改。透明在 HDR 空间混合后统一显示变换，按物体中心从远到近排序，不支持相交面的正确排序。单张阴影、alpha 导入和硬件要求见 [契约](../docs/m4-shadows-alpha.md)。
 
 ## 验证结果与边界
 

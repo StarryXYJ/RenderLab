@@ -135,6 +135,8 @@ void ContentContracts(const std::filesystem::path& manifest, const std::filesyst
     pbrMaterial["occlusionTexture"] = {{"index", 0}, {"strength", .8f}};
     pbrMaterial["emissiveTexture"] = {{"index", 0}};
     pbrMaterial["emissiveFactor"] = {.1f, .2f, .3f};
+    pbrMaterial["alphaMode"] = "MASK";
+    pbrMaterial["alphaCutoff"] = .35f;
     assets::detail::SaveJson(db.Get(modelId).path, pbrSource);
     auto importedPbr = assets::LoadModel(db, modelId);
     Require(!importedPbr.cacheHit && importedPbr.key != model.key, "PBR factors invalidate cache");
@@ -144,8 +146,21 @@ void ContentContracts(const std::filesystem::path& manifest, const std::filesyst
                 Near(surface.normalScale, .5f) && Near(surface.occlusionStrength, .8f) &&
                 Near(surface.emission[2], .3f) && surface.metallicRoughnessImage == 0 &&
                 surface.normalImage == 0 && surface.occlusionImage == 0 &&
-                surface.emissionImage == 0,
+                surface.emissionImage == 0 && surface.alphaMode == "MASK" &&
+                Near(surface.alphaCutoff, .35f),
             "PBR factors and image references survive cached import");
+    pbrMaterial["alphaMode"] = "BLEND";
+    assets::detail::SaveJson(db.Get(modelId).path, pbrSource);
+    Require(assets::LoadModel(db, modelId).materials.front().alphaMode == "BLEND",
+            "Blend alpha mode must invalidate cached import");
+    pbrMaterial["alphaMode"] = "INVALID";
+    assets::detail::SaveJson(db.Get(modelId).path, pbrSource);
+    Fails([&] { assets::LoadModel(db, modelId); }, "alpha");
+    pbrMaterial["alphaMode"] = "MASK";
+    pbrMaterial["alphaCutoff"] = -1;
+    assets::detail::SaveJson(db.Get(modelId).path, pbrSource);
+    Fails([&] { assets::LoadModel(db, modelId); }, "alpha");
+    pbrMaterial["alphaCutoff"] = .5;
     pbrMaterial["pbrMetallicRoughness"]["roughnessFactor"] = -1;
     assets::detail::SaveJson(db.Get(modelId).path, pbrSource);
     Fails([&] { assets::LoadModel(db, modelId); }, "factor");
@@ -227,6 +242,14 @@ void ContentContracts(const std::filesystem::path& manifest, const std::filesyst
     Require(!snapshot.instances.empty() && snapshot.culledInstances > 0,
             "Scene extraction and CPU culling");
     const auto selected = snapshot.light.object;
+    scene.Get(selected).light->shadows = true;
+    const auto shadows = extractor.Extract(scene, 16.f / 9, models);
+    Require(shadows.shadowCasters.size() == shadows.totalInstances &&
+                shadows.shadowCasters.size() > shadows.instances.size(),
+            "Camera-culled enabled instances must remain directional shadow candidates");
+    scene.Get(selected).light->shadowResolution = 129;
+    Fails([&] { scene.WorldTransforms(); }, "shadow");
+    scene.Get(selected).light->shadowResolution = 512;
     std::reverse(scene.objects.begin(), scene.objects.end());
     Require(extractor.Extract(scene, 16.f / 9, models).light.object == selected,
             "Light selection independent of storage order");

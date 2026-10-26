@@ -8,6 +8,13 @@
 
 namespace renderlab::renderer
 {
+/** @brief Single directional shadow map; RGBA32F depth values plus a D32 visibility attachment. */
+class ShadowFeature final : public RenderFeature
+{
+public:
+    ShadowFeature() : RenderFeature("MainLight.Shadow") {}
+    void Build(rendergraph::Graph&, const RenderFrame&) override;
+};
 class OpaqueFeature final : public RenderFeature
 {
 public:

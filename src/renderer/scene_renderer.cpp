@@ -4,7 +4,9 @@
 #include "assets/json_io.hpp"
 #include "material/runtime.hpp"
 #include "renderer/environment.hpp"
+#include "renderer/forward.hpp"
 #include "renderer/pipeline.hpp"
+#include "renderer/shadow.hpp"
 #include "rendergraph/graph.hpp"
 #include "rendergraph/pool.hpp"
 #include "rhi/commands.hpp"
@@ -68,7 +70,11 @@ struct SceneRenderer::Impl
     std::map<std::string, CachedMaterial> materialAssets;
     material::Runtime materials;
     rendergraph::Pool pool;
-    RenderPipeline pipeline = CreatePipeline(PipelineType::Forward).Create();
+    RenderPipeline pipeline =
+        CreatePipeline(PipelineType::Forward)
+            .AddFeature(std::make_shared<ShadowFeature>(), RenderStage::BeforeOpaque)
+            .Create();
+    math::Mat4 shadowMatrix = math::Mat4::Identity();
     scene::Extractor extractor;
     scene::Snapshot snapshot;
     Impl(rhi::Runtime& r, shader::Target target, const std::filesystem::path& manifest,
@@ -269,6 +275,12 @@ struct SceneRenderer::Impl
             return input;
         }
         auto result = material::Create(materialTemplate);
+        if (surface.alphaMode == "MASK")
+            material::SelectVariant(result, materialTemplate, "Masked");
+        else if (surface.alphaMode == "BLEND")
+            material::SelectVariant(result, materialTemplate, "Transparent");
+        material::Set(result, materialTemplate, "alpha_cutoff",
+                      std::array<double, 1>{surface.alphaCutoff});
         material::Set(result, materialTemplate, "base_color",
                       std::array<double, 4>{surface.color[0], surface.color[1], surface.color[2],
                                             surface.color[3]});
@@ -309,6 +321,16 @@ struct SceneRenderer::Impl
                     {"MainLightDirection", Vector(snapshot.light.direction)},
                     {"MainLightColor", Vector(snapshot.light.color, snapshot.light.intensity)},
                     {"AmbientColor", Vector(snapshot.ambient)},
+                    {"MainLightShadowMatrix", Matrix(shadowMatrix)},
+                    {"MainLightShadowParameters",
+                     {"float4",
+                      1,
+                      {1.0 / snapshot.light.shadowResolution, snapshot.light.shadowBias,
+                       snapshot.light.shadowNormalBias,
+                       snapshot.light.shadows && snapshot.light.intensity > 0 &&
+                               !snapshot.shadowCasters.empty()
+                           ? 1.0
+                           : 0.0}}},
                     {"EnvironmentParameters",
                      {"float4",
                       1,
@@ -347,6 +369,7 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
     self.snapshot = self.extractor.Extract(
         self.document, float(target->desc.width) / float(target->desc.height), self.models);
     self.UpdateEnvironment();
+    self.shadowMatrix = FitDirectionalShadow(self.snapshot);
     rendergraph::Graph graph;
     if (target->desc.format != rhi::Format::Rgba8Srgb &&
         target->desc.format != rhi::Format::Bgra8Srgb)
@@ -358,6 +381,8 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
                         {target->desc.width, target->desc.height, rhi::Format::D32, false, true});
     RenderFrame frame;
     frame.clearColor = {.02f, .02f, .02f, 1};
+    frame.shadowResolution =
+        self.snapshot.shadowCasters.empty() ? 1 : self.snapshot.light.shadowResolution;
     const auto frameConstants = self.FrameBuffer();
     std::map<const rhi::Object*, std::string> imported;
     const auto importBuffer =
@@ -406,16 +431,24 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
         }
         return binding;
     };
-    for (const auto& instance : self.snapshot.instances)
+    const auto prepareDraw = [&](const scene::Instance& instance, bool shadow)
     {
         const auto& model = self.models.at(instance.model);
         const auto mesh = std::ranges::find(model.meshes, instance.mesh, &assets::Mesh::id);
         if (mesh == model.meshes.end())
             throw std::logic_error("Snapshot references missing mesh");
         const auto& surface = model.materials.at(mesh->material);
+        const auto material = self.MaterialFor(instance, surface);
+        const auto transparent = material.asset.variant == "Transparent";
+        if (shadow && (transparent || !std::ranges::any_of(material.package->definition.passes,
+                                                           [](const auto& pass)
+                                                           { return pass.name == "Shadow"; })))
+            return;
         material::Preparation prepare;
-        prepare.pass = "Forward";
+        prepare.pass = shadow ? "Shadow" : "Forward";
         prepare.color = rhi::Format::Rgba32Float;
+        prepare.blend = !shadow && transparent;
+        prepare.depthWrite = shadow || !transparent;
         prepare.cull = !surface.doubleSided;
         const auto& w = instance.world;
         const math::Vec3 x{w.At(0, 0), w.At(1, 0), w.At(2, 0)},
@@ -429,18 +462,21 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
         prepare.constants["Draw"] = {{"ObjectToWorld", Matrix(instance.world)},
                                      {"NormalToWorld", Matrix(instance.normal)},
                                      {"PreviousObjectToWorld", Matrix(instance.previousWorld)}};
-        const auto material = self.MaterialFor(instance, surface);
-        for (const auto& resource : material.package->Layout("Forward").resources)
+        for (const auto& resource : material.package->Layout(prepare.pass).resources)
             if (resource.property.symbol == "EnvironmentAtlas")
                 prepare.bindings["EnvironmentAtlas"] = {0, self.environmentAtlas};
             else if (resource.property.symbol == "BrdfLut")
                 prepare.bindings["BrdfLut"] = {0, self.brdfLut};
+            else if (resource.property.symbol == "MainLightShadow")
+                prepare.deferredResources.insert("MainLightShadow");
         auto prepared = self.materials.Prepare(material.package, material.asset, prepare, resolve);
         self.generations[material.package.get()] = prepared.generation;
         DrawPacket draw;
         draw.pipeline = prepared.pipeline;
         draw.kind = DrawKind::Indexed;
         draw.count = static_cast<uint32_t>(mesh->indices.size());
+        const auto center = (instance.bounds.minimum + instance.bounds.maximum) * .5f;
+        draw.distance = std::max(0.f, -math::Point(self.snapshot.view, center).z);
         const auto& geometry = self.geometry.at(model.id + "/" + mesh->id);
         draw.vertices =
             importBuffer(geometry.vertices, geometry.vertices->desc.name, rhi::State::Vertex);
@@ -455,12 +491,12 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
                 throw std::logic_error("Material binding layout mismatch");
             if (binding.buffer)
             {
-                const auto name = importBuffer(binding.buffer,
-                                               instance.id + "/" + std::to_string(binding.space) +
-                                                   "/" + std::to_string(binding.slot),
-                                               binding.buffer->desc.memory == rhi::Memory::Upload
-                                                   ? rhi::State::HostWrite
-                                                   : rhi::State::ShaderRead);
+                const auto name = importBuffer(
+                    binding.buffer,
+                    instance.id + "/" + prepare.pass + "/" + std::to_string(binding.space) + "/" +
+                        std::to_string(binding.slot),
+                    binding.buffer->desc.memory == rhi::Memory::Upload ? rhi::State::HostWrite
+                                                                       : rhi::State::ShaderRead);
                 draw.buffers.push_back({binding.slot,
                                         name,
                                         entry->kind == rhi::BindingKind::ConstantBuffer
@@ -475,8 +511,25 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
             else if (binding.sampler)
                 draw.samplers.push_back({binding.slot, binding.sampler, binding.space});
         }
-        frame.opaque.push_back(std::move(draw));
-    }
+        if (prepare.deferredResources.contains("MainLightShadow"))
+        {
+            const auto& resources = material.package->Layout(prepare.pass).resources;
+            const auto& resource =
+                *std::ranges::find_if(resources, [](const auto& value)
+                                      { return value.property.symbol == "MainLightShadow"; });
+            draw.textures.push_back({resource.slot, "MainLightShadow", uint32_t(resource.scope)});
+        }
+        if (shadow)
+            frame.shadowCasters.push_back(std::move(draw));
+        else if (transparent)
+            frame.transparent.push_back(std::move(draw));
+        else
+            frame.opaque.push_back(std::move(draw));
+    };
+    for (const auto& instance : self.snapshot.shadowCasters)
+        prepareDraw(instance, true);
+    for (const auto& instance : self.snapshot.instances)
+        prepareDraw(instance, false);
     self.pipeline.Build(graph, frame);
     material::Preparation displayPreparation;
     displayPreparation.pass = "Display";

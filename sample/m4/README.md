@@ -11,3 +11,7 @@ Run from the repository root:
 ```
 
 Use `--backend vulkan` for the other backend. See [build instructions](../../manual/build.md#m43-pbr-参考场景) and [PBR contracts/limitations](../../docs/m4-forward-pbr.md).
+
+## 阴影与透明
+
+`Shadow.rlproject` 选择 `Shadow.scene`：实体球、带 AlphaGrid 测试纹理的 Masked 方块、透明薄片和接收地面。方向光启用单张 512² 阴影；WASD/QE/方向键与 Pbr 场景相同。运行与限制见 [构建手册](../../manual/build.md#m44-阴影与透明场景)。

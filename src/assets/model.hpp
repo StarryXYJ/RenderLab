@@ -34,6 +34,9 @@ struct Surface
     float metallic = 1, roughness = 1, normalScale = 1, occlusionStrength = 1;
     std::array<float, 3> emission{0, 0, 0};
     int metallicRoughnessImage = -1, normalImage = -1, occlusionImage = -1, emissionImage = -1;
+    /// OPAQUE, MASK or BLEND; cutoff applies only to MASK.
+    std::string alphaMode = "OPAQUE";
+    float alphaCutoff = .5f;
 };
 /// @brief One indexed triangle primitive; material indexes Model::materials.
 struct Mesh
