@@ -84,6 +84,11 @@ add_library(renderlab_sandbox_options STATIC src/apps/sandbox/options.cpp)
 target_include_directories(renderlab_sandbox_options PUBLIC src)
 target_link_libraries(renderlab_sandbox_options PRIVATE renderlab_options)
 
+add_library(renderlab_benchmark STATIC src/benchmark/recording.cpp)
+target_include_directories(renderlab_benchmark PUBLIC src)
+target_link_libraries(renderlab_benchmark PUBLIC nlohmann_json::nlohmann_json
+    PRIVATE renderlab_options renderlab_platform)
+
 add_library(renderlab_shader STATIC
     src/shader/lexer.cpp
     src/shader/types.cpp
@@ -183,7 +188,7 @@ target_link_libraries(renderlab_sandbox PRIVATE renderlab_options renderlab_core
 target_link_libraries(renderlab_player PRIVATE renderlab_options renderlab_core
     renderlab_platform renderlab_rhi renderlab_sandbox_options renderlab_app_host ole32)
 target_link_libraries(renderlab_app_host PRIVATE renderlab_options renderlab_core renderlab_platform
-    renderlab_rhi renderlab_renderer renderlab_sandbox_options renderlab_samples nlohmann_json::nlohmann_json ole32 gdi32 psapi)
+    renderlab_rhi renderlab_renderer renderlab_sandbox_options renderlab_samples renderlab_benchmark nlohmann_json::nlohmann_json ole32 gdi32 psapi)
 
 install(TARGETS renderlab_player RUNTIME DESTINATION .)
 install(FILES $<TARGET_FILE:renderlab_dxc> $<TARGET_FILE:renderlab_pix> DESTINATION .)
@@ -192,6 +197,9 @@ install(DIRECTORY sample/m4/Assets DESTINATION project)
 install(FILES sample/m4/RenderLab.rlproject sample/m4/Pbr.rlproject sample/m4/Shadow.rlproject DESTINATION project)
 
 if(BUILD_TESTING)
+    add_executable(renderlab_benchmark_tests tests/benchmark_tests.cpp)
+    target_link_libraries(renderlab_benchmark_tests PRIVATE renderlab_options renderlab_benchmark)
+    add_test(NAME benchmark.contracts COMMAND renderlab_benchmark_tests)
     set(parameter_fixture "${CMAKE_BINARY_DIR}/generated/parameter_fixture.hpp")
     add_custom_command(OUTPUT "${parameter_fixture}"
         COMMAND $<TARGET_FILE:renderlab_shaderc> "${CMAKE_SOURCE_DIR}/shaders/tests/parameters.shader"

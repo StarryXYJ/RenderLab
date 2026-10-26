@@ -21,6 +21,13 @@ struct Options
     std::string outputPath = "out/m1";
     std::string quality = "scene", view = "final", profilePath;
     uint32_t width = 1280, height = 720, benchmarkFrames = 0;
+    double benchmarkSeconds = 0, warmupSeconds = 0;
+    uint32_t warmupFrames = 5;
+    std::string samplesPath;
+    bool Benchmark() const
+    {
+        return benchmarkFrames > 0 || benchmarkSeconds > 0;
+    }
     bool debugPanel = false, fixedCamera = false;
     bool headless = false;
     bool windowTest = false;

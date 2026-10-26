@@ -1,6 +1,7 @@
 #include "apps/sandbox/options.hpp"
 
 #include <charconv>
+#include <cmath>
 #include <stdexcept>
 
 namespace renderlab::sandbox
@@ -29,6 +30,18 @@ Options ParseOptions(std::span<const std::string_view> arguments)
             {
                 throw std::invalid_argument("Expected unsigned integer for " + std::string(arg));
             }
+            return result;
+        };
+        const auto seconds = [&]()
+        {
+            const auto text = value();
+            double result = 0;
+            const auto [end, error] =
+                std::from_chars(text.data(), text.data() + text.size(), result);
+            if (error != std::errc{} || end != text.data() + text.size() ||
+                !std::isfinite(result) || result < 0 || result > 3600)
+                throw std::invalid_argument("Expected finite seconds in [0,3600] for " +
+                                            std::string(arg));
             return result;
         };
         if (arg == "--backend")
@@ -85,6 +98,26 @@ Options ParseOptions(std::span<const std::string_view> arguments)
         }
         else if (arg == "--quality")
             options.quality = value();
+        else if (arg == "--benchmark-seconds")
+        {
+            options.benchmarkSeconds = seconds();
+            if (options.benchmarkSeconds == 0)
+                throw std::invalid_argument("--benchmark-seconds must be positive");
+        }
+        else if (arg == "--warmup-seconds")
+            options.warmupSeconds = seconds();
+        else if (arg == "--warmup-frames")
+        {
+            options.warmupFrames = number();
+            if (options.warmupFrames > 10000)
+                throw std::invalid_argument("--warmup-frames requires 0..10000");
+        }
+        else if (arg == "--samples")
+        {
+            options.samplesPath = value();
+            if (options.samplesPath.empty())
+                throw std::invalid_argument("--samples cannot be empty");
+        }
         else if (arg == "--view")
             options.view = value();
         else if (arg == "--profile")
@@ -160,12 +193,18 @@ Options ParseOptions(std::span<const std::string_view> arguments)
         throw std::invalid_argument("--view must be final, hdr, shadow, environment or brdf");
     if (options.headless && options.debugPanel)
         throw std::invalid_argument("--debug-panel requires a window");
-    if ((options.debugPanel || options.fixedCamera || options.benchmarkFrames ||
+    if ((options.debugPanel || options.fixedCamera || options.Benchmark() ||
          !options.profilePath.empty() || options.view != "final" || options.quality != "scene") &&
         options.projectPath.empty())
         throw std::invalid_argument("Scene tools require --project");
-    if (options.benchmarkFrames && (!options.headless || options.sceneTest))
-        throw std::invalid_argument("--benchmark requires --headless and excludes --scene-test");
+    if (options.benchmarkFrames && options.benchmarkSeconds)
+        throw std::invalid_argument("Select either --benchmark or --benchmark-seconds");
+    if (options.Benchmark() &&
+        (!options.headless || options.sceneTest || options.rhiTest || options.graphTest))
+        throw std::invalid_argument("Benchmark requires --headless and excludes acceptance demos");
+    if (!options.Benchmark() &&
+        (!options.samplesPath.empty() || options.warmupSeconds || options.warmupFrames != 5))
+        throw std::invalid_argument("Samples and warmup options require a benchmark");
     return options;
 }
 
@@ -195,6 +234,11 @@ std::string_view Usage()
            "  --fixed-camera              Ignore camera movement keys\n"
            "  --profile PATH              Save CPU/GPU pass timing and memory JSON\n"
            "  --benchmark N               Headless: 5 warmup frames then N measured frames\n"
+           "  --benchmark-seconds S       Headless: measure for S seconds (excludes warmup)\n"
+           "  --warmup-frames N           Minimum warmup frames (default: 5)\n"
+           "  --warmup-seconds S          Minimum warmup seconds (default: 0)\n"
+           "  --samples PATH              Benchmark raw JSONL (default: "
+           "OUTPUT/BACKEND/frames.jsonl)\n"
            "  --report PATH               Write a JSON capability report\n"
            "  --log PATH                  UTF-8 log (default: logs/renderlab.log)\n"
            "  --help                      Show this help\n";

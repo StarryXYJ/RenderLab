@@ -77,6 +77,28 @@ int main()
         Require(tools.benchmarkFrames == 12 && tools.quality == "high" && tools.view == "shadow" &&
                     tools.width == 257,
                 "Scene capture options must remain explicit and reproducible");
+        const auto timed = ParseOptions(
+            std::array{"--project"sv, "sample.rlproject"sv, "--headless"sv, "--benchmark-seconds"sv,
+                       "0.25"sv, "--warmup-seconds"sv, "0.1"sv, "--warmup-frames"sv, "0"sv,
+                       "--samples"sv, "raw.jsonl"sv});
+        Require(timed.Benchmark() && timed.benchmarkSeconds == .25 && timed.warmupSeconds == .1 &&
+                    timed.warmupFrames == 0 && timed.samplesPath == "raw.jsonl",
+                "Timed benchmark CLI");
+        for (const auto value : {"0"sv, "nan"sv, "inf"sv, "-1"sv, "3601"sv, "1junk"sv})
+            RequireInvalid([&] { ParseOptions(std::array{"--benchmark-seconds"sv, value}); });
+        RequireInvalid(
+            []
+            {
+                ParseOptions(std::array{"--project"sv, "p"sv, "--headless"sv, "--benchmark"sv,
+                                        "1"sv, "--benchmark-seconds"sv, "1"sv});
+            });
+        RequireInvalid(
+            []
+            {
+                ParseOptions(std::array{"--project"sv, "p"sv, "--headless"sv,
+                                        "--benchmark-seconds"sv, "1"sv, "--graph-test"sv});
+            });
+        RequireInvalid([] { ParseOptions(std::array{"--samples"sv, "raw.jsonl"sv}); });
 
         using namespace renderlab::rhi;
         int owner = 0, otherOwner = 0;

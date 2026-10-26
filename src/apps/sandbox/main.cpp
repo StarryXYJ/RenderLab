@@ -34,6 +34,9 @@ std::string_view ApplicationUsage()
            "  --view final|hdr|shadow|environment|brdf  Texture preview\n"
            "  --fixed-camera --debug-panel  Camera and native controls\n"
            "  --headless --benchmark N    Capture or measure a fixed scene\n"
+           "  --benchmark-seconds S       Measure for a duration instead of a frame count\n"
+           "  --warmup-frames N --warmup-seconds S  Minimum warmup budgets\n"
+           "  --samples PATH              Per-frame JSONL (automatic for benchmarks)\n"
            "  --profile PATH --output DIR  Timing JSON and captured image\n"
            "  --frames N                  Close after N presented frames\n"
            "  --help                      Show help\n";

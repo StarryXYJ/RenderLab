@@ -120,8 +120,8 @@ GPU `gpu.{dx12,vulkan}.graph` 将六张图的输出与直接 RHI 基线及 CPU �
 | rendergraph/compiler、validation | 存活分析、依赖、排序、屏障与访问校验 |
 | rendergraph/context、executor | 准备、受限录制、提交和完成状态发布 |
 | rendergraph/pool、diagnostics | 资源复用与计划导出 |
-| samples/graph_features、graph_demo | Demo Feature 实例与 Custom 组合 |
-| samples/graph_acceptance、graph_buffer_checks、forward_acceptance | GPU 行为验收 |
+| samples/graph/graph_features、graph_demo | Demo Feature 实例与 Custom 组合 |
+| samples/graph/graph_acceptance、graph_buffer_checks、forward_acceptance | GPU 行为验收 |
 
 当前仍是单视图、单 Graphics Queue、单 mip/layer、保守整 Buffer 依赖、单颜色附件和固定 Store。名称表仅属于单张图，阶段枚举由 Renderer 提供。没有全局资源黑板、多队列、并行录制、Alias、执行计划缓存或跨设备同步。相关能力在真实阶段需求出现时扩展。
 

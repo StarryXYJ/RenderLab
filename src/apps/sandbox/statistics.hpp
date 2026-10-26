@@ -8,6 +8,11 @@
 #include <map>
 #include <string>
 
+namespace renderlab::benchmark
+{
+struct Sample;
+class Recording;
+} // namespace renderlab::benchmark
 namespace renderlab::sandbox
 {
 renderer::SceneRenderOptions RenderOptions(const Options& options);
@@ -16,10 +21,12 @@ renderer::SceneRenderOptions RenderOptions(const Options& options);
 class Statistics final
 {
 public:
-    void Add(const renderer::SceneReadback& frame, const rhi::Runtime& runtime, double cpuMs);
+    void Add(const renderer::SceneReadback& frame, const rhi::Runtime& runtime, double cpuMs,
+             benchmark::Sample* sample = nullptr);
     std::string Text(const scene::Snapshot& snapshot, rhi::MemoryStats memory) const;
     void Save(const std::filesystem::path& path, const Options& options,
-              const rhi::DeviceReport& device, rhi::MemoryStats memory) const;
+              const rhi::DeviceReport& device, rhi::MemoryStats memory,
+              const benchmark::Recording* recording = nullptr) const;
 
 private:
     struct Samples

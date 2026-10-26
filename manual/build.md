@@ -70,9 +70,9 @@ cmake --build --preset windows-release --parallel 4
 ctest --preset windows-release
 ```
 
-输出分别在 `out/build/windows-debug` 和 `out/build/windows-release`。默认注册 12 项不需要创建设备的测试，包含实际 DXC 双目标编译的 `shader.contracts` 和生成 C++ 契约的 `parameters.contracts`。预设与依赖版本纳入 Git，本机设置使用被忽略的 `CMakeUserPresets.json`。
+输出分别在 `out/build/windows-debug` 和 `out/build/windows-release`。默认注册 13 项不需要创建设备的测试，包含实际 DXC 双目标编译的 `shader.contracts`、生成 C++ 契约的 `parameters.contracts` 和流式计时数据的 `benchmark.contracts`。预设与依赖版本纳入 Git，本机设置使用被忽略的 `CMakeUserPresets.json`。
 
-完整验收启用 GPU 测试，当前共 40 项（12 项 CPU/CLI、28 项 GPU）。GPU 测试要求验证层和桌面会话，会短暂打开原生窗口：
+完整验收启用 GPU 测试，当前共 41 项（13 项 CPU/CLI、28 项 GPU）。GPU 测试要求验证层和桌面会话，会短暂打开原生窗口：
 
 ```powershell
 cmake --preset windows-debug -DRENDERLAB_GPU_TESTS=ON
@@ -240,6 +240,35 @@ cd out/player
 ```
 
 安装包含 Player、DXC/PIX DLL、shaders/RenderLab 和示例项目 Assets/.meta/清单；不复制 Library，首次启动会重建。基线与边界见 [性能记录](../docs/performance/m4-rtx5060.md)，接口与计时范围见 [工具契约](../docs/m4-tools.md)。
+
+## Benchmark 与双后端分析
+
+先构建 windows-release。单次按时长运行（预热至少 5 帧且至少 2 秒，再测至少 10 秒）：
+
+```powershell
+./out/build/windows-release/renderlab_player.exe --headless --backend dx12 --validation off --project sample/m4/Pbr.rlproject --width 1280 --height 720 --quality medium --benchmark-seconds 10 --warmup-seconds 2 --profile out/benchmarks/single/report.json --samples out/benchmarks/single/frames.jsonl --output out/benchmarks/single/capture
+```
+
+报告为 v2 JSON，逐帧原始数据为 JSONL；不指定 profile/samples 时自动放到 OUTPUT/BACKEND。旧 `--benchmark N` 继续支持并使用同一数据导出链路。计时与 FPS 含义见 [Benchmark 契约](../docs/benchmark.md)。
+
+批量样例按 DX12/Vulkan 交替顺序分别执行 PBR，默认各 3 次，每次预热 2 秒、测量 10 秒。工具默认自动创建 out/benchmarks/UTC时间戳；指定 `--output DIR` 时要求目录尚不存在。核心运行/分析只需 Python 3.10+，可选图表使用已验证的 Python 3.12 依赖环境：
+
+```powershell
+python -m venv out/benchmark-env
+./out/benchmark-env/Scripts/python.exe -m pip install -r tools/benchmark/requirements.txt
+./out/benchmark-env/Scripts/python.exe tools/benchmark/run.py sample/benchmark/pbr.json --plots
+```
+
+可用 `--seconds`、`--warmup-seconds`、`--repeats`、`--backends`、`--validation on|off` 或 `--exe PATH` 覆盖样例；新增场景在配置 cases 中登记，相对项目路径以配置文件目录为基准。完整参数可运行 `run.py --help`。
+
+每组输出 manifest.json，各运行目录含原始样本、report/device JSON、日志与测量外截图；analysis 目录含逐指标 CSV、分析 JSON、Markdown 报告及可选 PNG/SVG 图表。报告给出每次 P50/P95/P99、各后端重复均值与重复间标准差。示例独立分析已有数据（替换路径为实际组目录）：
+
+```powershell
+./out/benchmark-env/Scripts/python.exe tools/benchmark/analyze.py out/benchmarks/RUN/manifest.json --output out/benchmarks/RUN/reanalysis --plots
+python -m unittest discover -s tools/benchmark -p "test_*.py"
+```
+
+分析可接受多个完成 manifest 或单次 v2 report，支持独立重画图/新增统计。比较器拒绝截断、失败或配置/设备不匹配的结果；它不会把 Debug/Validation 测试标为正式性能基线。当前为逐帧 GPU 完成点等待的 headless 测量，不代表窗口 Present 的流水吞吐。样例源码按 src/samples/common、rhi、graph、material、scene 分类；一次性迁移脚本已清理，tools/benchmark 为正式维护工具。
 
 ## 验证结果与边界
 

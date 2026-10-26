@@ -40,7 +40,7 @@ Graph 为每个存活 Pass 写入起止各一个 timestamp，因此单次开启 
 
 ## 固定配置与测量
 
-命令行选择后端、项目、宽高、阴影质量和显示资源；Low/Medium/High 对应 128/512/1024，Scene 保留场景值。窗口可冻结相机；headless 始终使用固定场景相机。`--benchmark N` 先预热 5 帧，再测量 N 帧；资产导入、首次 Shader/PSO/纹理准备由预热吸收，最后单独读回参考图，不把截图拷贝加入测量。
+命令行选择后端、项目、宽高、阴影质量和显示资源；Low/Medium/High 对应 128/512/1024，Scene 保留场景值。窗口可冻结相机；headless 始终使用固定场景相机。`--benchmark N` 按帧、`--benchmark-seconds S` 按时长，默认先预热 5 帧，可另设最少预热帧数和时长；最后单独读回参考图，不把截图拷贝加入测量。逐帧 JSONL、v2 汇总、批量运行与分析见 [Benchmark 契约](benchmark.md)。
 
 JSON 记录真实设备/驱动/validation、启动配置、CPU render 和 Graph 各准备步骤、逐 Pass GPU 的 count/mean/min/max、RHI 原生分配的当前/高水位/预算，以及进程 working set/private commit（查询失败为 null）。CPU render 包含同步的场景提取、材质与 Graph 准备、录制/提交，计时不包含等待 GPU 退休。RHI 占用不等于进程或驱动总显存；进程内存也不是 GPU 分配的重复统计。窗口 JSON 标记 configurationMayChange，不将交互运行当成固定基准。
 

@@ -196,9 +196,7 @@ DONE（2026 年 10 月 26 日）：删除 out 顶层 18 个一次性生成/迁�
 
 ### B1.2 运行时测量与原始数据
 
-- [ ] 保留按帧模式，新增按秒测量、独立预热预算，固定相机与相同场景配置。
-- [ ] 明确 CPU render、GPU wait、离线帧时间和 GPU Pass 范围；流式 JSONL 原始样本与版本化 JSON 汇总、设备/构建/测量元数据。
-- [ ] CLI/测量边界及双后端 Debug/Release 验证。
+DONE（2026 年 10 月 26 日）：保留按帧模式，新增按秒/独立双预热预算；src/benchmark 流式 JSONL、在线均值/极值与 v2 完成报告，记录设备/构建/原始路径/真实预算。CPU render、GPU wait、串行帧延迟/墙钟吞吐、Graph 子区间与逐 GPU Pass 分开。接口：[Benchmark](../docs/benchmark.md)。RTX 5060 / MSVC 19.51 / DXC 1.9，标准 Debug/Release 构建与完整 CTest 各 41/41，双后端 validation error 为 0；追加 Debug/Validation、1280×720/Medium、PBR 按时长端到端两次通过，原始样本与汇总一致（out/benchmarks/b1-debug-smoke）。窗口仍使用原有统计，未新增逐帧等待；离线串行模式不作为窗口流水性能结论。
 
 ### B1.3 批量执行与分析
 

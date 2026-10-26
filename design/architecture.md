@@ -342,6 +342,8 @@ Execute 只读取声明的数据并录制命令，使用预先准备的 View、�
 
 Graph 的可选 profiling 在存活 Pass 两端录制 Timestamp，由提交结果持有读回和完成点，宿主在退休后读取；每命令列表 64 个 slot，单图最多 32 个已计时 Pass，默认关闭。Sandbox 与独立原生 Player 共用宿主循环；Win32 modeless 调试面板只在帧间修改 CPU 控制值，纹理查看仍通过 Graph 声明和普通显示 Shader。固定场景/质量/尺寸与预热测量导出 CPU/GPU/内存数据，交互统计和关闭验证层的性能基线分开。接口见 [M4 工具](../docs/m4-tools.md)。
 
+离线 Benchmark 复用同一场景 Capture 路径，支持帧数/时长及独立预热预算。src/benchmark 以动态指标映射流式记录完成帧，不依赖 Renderer 或 RHI；宿主负责定义计时边界与版本化报告。CPU render、GPU wait、串行帧延迟和 GPU Pass 范围分别保存，单帧 GPU 等待模式不冒充窗口流水吞吐。Python 工具按配置顺序运行和核对源内容，聚合/绘图独立消费 JSON/JSONL；扩展指标无需修改 Renderer 核心。接口见 [Benchmark](../docs/benchmark.md)。
+
 ## 光追路线
 
 BLAS 管理几何，TLAS 管理场景实例；通过统一的 InstanceID、MeshID、MaterialID 找到 GPU Scene 数据。BLAS 和 TLAS 在跨帧管理器中持有，构建与更新通过图声明，不能每帧无条件重建全部结构。
