@@ -261,6 +261,15 @@ python -m venv out/benchmark-env
 
 可用 `--seconds`、`--warmup-seconds`、`--repeats`、`--backends`、`--validation on|off` 或 `--exe PATH` 覆盖样例；新增场景在配置 cases 中登记，相对项目路径以配置文件目录为基准。完整参数可运行 `run.py --help`。
 
+扩大样本或定位 CPU/驱动差距：
+
+```powershell
+python tools/benchmark/run.py sample/benchmark/pbr.json --seconds 20 --warmup-seconds 5 --repeats 8
+python tools/benchmark/run.py sample/benchmark/pbr-diagnostics.json
+```
+
+诊断配置开启 `cpuProfiling`，也可用 CLI `--cpu-profile`/`--no-cpu-profile` 覆盖；直接 Player 对应 `--cpu-profile`。这组数据额外包含 RHI 创建、提交、Fence 与回收区间/调用计数，计时定义见 Benchmark 文档。
+
 每组输出 manifest.json，各运行目录含原始样本、report/device JSON、日志与测量外截图；analysis 目录含逐指标 CSV、分析 JSON、Markdown 报告及可选 PNG/SVG 图表。报告给出每次 P50/P95/P99、各后端重复均值与重复间标准差。示例独立分析已有数据（替换路径为实际组目录）：
 
 ```powershell

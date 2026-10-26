@@ -4,8 +4,8 @@
 
 ## 当前状态
 
-- 当前实施阶段：M0–M4、R1、B1 DONE。
-- 当前工作项：B1 DONE；样例分类、一次性脚本清理、场景 Benchmark 与分析工具均交付；M5 NOT_STARTED。
+- 当前实施阶段：M0–M4、R1、B1、B2 DONE。
+- 当前工作项：B2 DONE；扩大样本并定位 CPU 创建/描述符/回收开销，M5 NOT_STARTED。
 - 用户约定：每个子阶段验收完成即提交 Git，无阻塞时在当前授权范围内继续推进；M4.3 提交 c50ee6a、M4.4 提交 40d0c12、M4.5 提交 9a4b2e4。
 - Demo 的 Custom 示例作为回归入口保留；M4 场景示例使用 Forward 组合与现有 Shader/Material 链路。
 
@@ -18,6 +18,7 @@
 | M4 | 场景资源与基础 Renderer | M3 | DONE |
 | R1 | Shader/Material 契约修订 | M4 | DONE |
 | B1 | 样例整理与可扩展 Benchmark | M4、R1 | DONE |
+| B2 | 双后端性能差异调查 | B1 | DONE |
 | M5 | Deferred 与光追基础 | M4 | NOT_STARTED |
 | M6 | GPU Driven 与执行优化 | M4；光追调度测试另需 M5 | NOT_STARTED |
 | M7 | C# 编辑器与完整项目工作流 | M4；默认在 M5、M6 的核心目标后开展 | NOT_STARTED |
@@ -211,6 +212,20 @@ DONE：按秒/按帧与双预热预算、独立 src/benchmark 流式 JSONL/在�
 ### B1.3 批量执行与分析
 
 DONE：tools/benchmark 正式工具与 PBR 配置，顺序/交替后端及重复，完整进程清单/内容 hash 与失败保留；JSON/CSV/Markdown、逐次分位数与重复间差异、PNG/SVG 帧曲线/分布/Pass 图表。Python 12/12、实际六次 Release 运行、原始数据复核与图表检查通过。结果和限制见本阶段汇总。
+
+## B2 双后端性能差异调查
+
+状态：DONE，日期：2026 年 10 月 26 日。
+
+结果：在同一原 Release 二进制上扩大 PBR 基线至每后端 8 次、5 秒预热/20 秒测量，共 16 次、39,808 帧；差距在 8 组配对都复现。增加默认关闭的 RHI CPU scopes/调用计数、CPU 报告和图表；完整 PBR/低分辨率/BRDF 剔除/原始较小场景各两后端 3 次，共 24 次、20,816 帧。主要测量合计 40 次、60,624 帧，保留所有停顿样本。
+
+验证：RTX 5060 / MSVC 19.51 / DXC 1.9，标准 Debug/Release 完整构建和 CTest 各 41/41，双后端 Validation 错误为 0；Python 13/13，覆盖探针总时长与逐帧值一致性、开关配置不混用。另以 Debug/Validation、完整 720p PBR 在两后端开启探针，验证导出与调用计数；结果一致、错误为 0。探针关闭时不读取计时钟，不改变创建/执行/回收策略。
+
+发现：扩展基线帧均值 DX12 13.4026ms、Vulkan 5.6008ms；CPU render 9.1965/2.4398ms，GPU Pass 合计 0.0435/0.0392ms。完整 PBR 每帧 23 次 Buffer/10 次 BindingGroup 创建；DX12 使用独立 committed Buffer 和每组新建 shader-visible heap，回收也耗费 CPU。典型原生 Fence 等待约 0.2ms，原 gpuWaitMs 的几毫秒大多在 Collect 回收。降低分辨率不减少这些创建次数，剔除场景绘制的 BRDF 查看将绑定组降至 1 个，较少对象场景降低至 11 Buffer/4 组，支持定位到逐帧资源生命周期。
+
+限制与后续：短诊断出现过一次 Vulkan 严重回收停顿及其他波动，未删除运行；典型诊断图明确使用 3 次均值的中位数，性能比较仍以前述更长基线为主。探针为包含驱动/系统的墙钟区间，不能区分全部内核/调度原因，也不覆盖所有局部析构。CPU 策略优化（完成点保护的上传区、不可变材质数据复用、描述符空间/读回复用）需另行实现与在途/画面/性能验收；本轮没有将诊断代码冒充性能修复。
+
+入口：[数值、图与定位理由](../docs/performance/b2-pbr-rtx5060.md)、[探针接口](../docs/benchmark.md#可选-rhi-cpu-分解)、[对照配置](../sample/benchmark/pbr-diagnostics.json)。完整原始/诊断组分别在 out/benchmarks/b2-pbr-extended 与 out/benchmarks/b2-cpu-diagnostics；正确性专项在 out/benchmarks/b2-probe-validation，完整测试在各配置 Testing/Temporary/LastTest.log。
 
 ## M5 Deferred 与光追基础
 

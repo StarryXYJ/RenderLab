@@ -344,6 +344,8 @@ Graph 的可选 profiling 在存活 Pass 两端录制 Timestamp，由提交结�
 
 离线 Benchmark 复用同一场景 Capture 路径，支持帧数/时长及独立预热预算。src/benchmark 以动态指标映射流式记录完成帧，不依赖 Renderer 或 RHI；宿主负责定义计时边界与版本化报告。CPU render、GPU wait、串行帧延迟和 GPU Pass 范围分别保存，单帧 GPU 等待模式不冒充窗口流水吞吐。Python 工具按配置顺序运行和核对源内容，聚合/绘图独立消费 JSON/JSONL；扩展指标无需修改 Renderer 核心。接口见 [Benchmark](../docs/benchmark.md)。
 
+性能诊断可显式启用 RHI owner-thread CPU scopes，累计创建 Buffer/View/BindingGroup、原生 Execute/Signal、Collect 与 Fence 等待的调用次数和时间。默认关闭且不读计时钟，宿主按测量帧取增量并复用已有指标导出。该诊断不引入第二套执行路径，也不改变资源复用或队列策略；区间定义与基线分开。
+
 ## 光追路线
 
 BLAS 管理几何，TLAS 管理场景实例；通过统一的 InstanceID、MeshID、MaterialID 找到 GPU Scene 数据。BLAS 和 TLAS 在跨帧管理器中持有，构建与更新通过图声明，不能每帧无条件重建全部结构。

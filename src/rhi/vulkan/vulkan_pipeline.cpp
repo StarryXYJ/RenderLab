@@ -102,6 +102,7 @@ std::shared_ptr<BindingLayout> VulkanRuntime::CreateLayout(std::vector<BindingDe
 std::shared_ptr<BindingGroup> VulkanRuntime::CreateGroup(std::shared_ptr<BindingLayout> layout,
                                                          std::vector<Binding> bindings)
 {
+    auto cpuTimer = ProfileCpu(CpuOperation::GroupCreate);
     Validate(layout, bindings);
     auto group = std::make_shared<VkGroup>(layout, std::move(bindings));
     group->device = device_;

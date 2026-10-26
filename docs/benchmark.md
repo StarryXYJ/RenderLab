@@ -38,6 +38,16 @@ Sandbox/Player 共用 CaptureScene 的固定场景路径。`--benchmark N` 按�
 
 新增 CPU 阶段计时直接扩展 metricsMs；GPU Pass 名称自动随 Graph 进入 gpuPassesMs。分析器自动处理新指标；分析器将 GPU Pass 展平为 `gpu/名称`，该前缀保留。若改变单位、帧身份或字段含义，应升级相应 schema，不复用原字段承载不同语义。内存仍为报告时的 RHI/进程快照，不是逐帧 GPU 内存曲线。
 
+## 可选 RHI CPU 分解
+
+`--cpu-profile` 仅用于 benchmark，默认关闭。它在测量循环中启用 Runtime 的 owner-thread 累计计时，记录 Buffer 创建、BindingGroup 创建、TextureView 创建、原生录制/提交、Collect 回收和实际 Fence 等待。逐帧增量分别作为 rhiBufferCreateMs/rhiGroupCreateMs/rhiViewCreateMs/rhiNativeSubmitMs/rhiRetireMs/rhiFenceWaitMs 进入 metricsMs；报告 benchmark.cpuOperations 同时保存每项 calls/totalMs。预热、截图和测量结束后的清理不计入这些计数。
+
+这些是包含调用内部驱动/系统工作的 CPU 墙钟区间，有额外计时开销，适合定位而不替代关闭探针的基线。Buffer 创建不含调用方之后的 Map/拷贝；Retire 是 Collect 的调用时间和调用次数，包含已完成命令释放及资源析构，不是“释放资源数量”。原生 Submit 不含前后 Collect。gpuWaitMs 包含 Runtime.Wait 中的 Fence 等待及 Collect，因此不能直接视为 GPU 执行时间。CPU 开启/关闭状态参与分析器配置一致性检查。
+
+CPU 区间不覆盖所有对象析构，例如被 Graph 剔除的资源可能在 Render 返回前释放；它们不能作为完整线程 CPU profile。分析器核对各项 totalMs 与逐帧增量之和，并在报告/可选图表中展示操作时间和 calls/frame。扩展样本与实际定位见 [B2 记录](performance/b2-pbr-rtx5060.md)。
+
+`sample/benchmark/pbr-diagnostics.json` 提供完整 PBR 720p、低分辨率 257×193、BRDF 查看和较小的原始 RenderLab 场景。BRDF 查看仍经过场景参数/材质准备，但无消费者的场景绘制在 Graph 编译时剔除，可以用实际调用计数区分准备开销和 Draw/描述符开销。原始场景用于对照较少 Draw 的创建计数；CPU 探针不改变资源分配与帧提交策略。
+
 ## 批量执行与聚合
 
 正式工具位于 tools/benchmark，示例配置为 sample/benchmark/pbr.json。配置 schemaVersion=1，以 defaults 加 cases 的局部覆盖描述场景；executable/project 相对配置文件解析，CLI 覆盖路径相对当前目录解析。可增加场景、后端子集、重复次数、时长/预热、尺寸、质量、显示视图与显式 validation。

@@ -86,7 +86,8 @@ std::string Statistics::Text(const scene::Snapshot& snapshot, rhi::MemoryStats m
 }
 void Statistics::Save(const std::filesystem::path& path, const Options& options,
                       const rhi::DeviceReport& device, rhi::MemoryStats memory,
-                      const benchmark::Recording* recording) const
+                      const benchmark::Recording* recording,
+                      const rhi::CpuProfileSnapshot* cpuOperations) const
 {
     const auto summary = [](const Samples& samples)
     {
@@ -139,6 +140,12 @@ void Statistics::Save(const std::filesystem::path& path, const Options& options,
         result["benchmark"]["requestedSeconds"] = options.benchmarkSeconds;
         result["benchmark"]["requestedWarmupFrames"] = options.warmupFrames;
         result["benchmark"]["requestedWarmupSeconds"] = options.warmupSeconds;
+        result["benchmark"]["cpuProfiling"] = options.cpuProfile;
+        if (cpuOperations)
+            for (size_t i = 0; i < cpuOperations->size(); ++i)
+                result["benchmark"]["cpuOperations"][rhi::CpuOperationNames[i]] = {
+                    {"calls", (*cpuOperations)[i].calls},
+                    {"totalMs", double((*cpuOperations)[i].nanoseconds) / 1e6}};
     }
     for (const auto& [name, pass] : passes_)
         result["gpuPasses"][name] = summary(pass);

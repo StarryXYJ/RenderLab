@@ -62,10 +62,13 @@ void CaptureScene(rhi::Runtime& runtime, const rhi::DeviceReport& device, const 
             throw std::invalid_argument("Benchmark report and samples must use different files");
         recording = std::make_unique<benchmark::Recording>(samplesPath);
     }
+    runtime.SetCpuProfiling(options.cpuProfile);
+    const auto cpuMeasureStart = runtime.GetCpuProfile();
     const auto measureStart = Clock::now();
     uint64_t measured = 0;
     do
     {
+        const auto cpuBefore = runtime.GetCpuProfile();
         const auto start = Clock::now();
         const auto rendered = render();
         const auto submitted = Clock::now();
@@ -77,12 +80,21 @@ void CaptureScene(rhi::Runtime& runtime, const rhi::DeviceReport& device, const 
                             {"gpuWaitMs", milliseconds(completed - submitted)}};
         statistics.Add(rendered, runtime, milliseconds(submitted - start),
                        recording ? &sample : nullptr);
+        if (options.cpuProfile)
+        {
+            const auto delta = rhi::Difference(runtime.GetCpuProfile(), cpuBefore);
+            for (size_t i = 0; i < delta.size(); ++i)
+                sample.metricsMs.emplace(rhi::CpuOperationNames[i],
+                                         double(delta[i].nanoseconds) / 1e6);
+        }
         if (recording)
             recording->Add(sample);
         ++measured;
     } while (options.benchmarkSeconds > 0
                  ? milliseconds(Clock::now() - measureStart) < options.benchmarkSeconds * 1000
                  : measured < (options.benchmarkFrames ? options.benchmarkFrames : 1u));
+    const auto cpuOperations = rhi::Difference(runtime.GetCpuProfile(), cpuMeasureStart);
+    runtime.SetCpuProfiling(false);
     if (recording)
         recording->Close(milliseconds(Clock::now() - measureStart), warmupFrames, warmupMs);
     const auto memory = runtime.GetMemoryStats();
@@ -94,7 +106,8 @@ void CaptureScene(rhi::Runtime& runtime, const rhi::DeviceReport& device, const 
     samples::SaveImage(output / "scene.bmp", capture.pixels->Map(), options.width, options.height,
                        rhi::TextureRowPitch(options.width));
     if (recording || !options.profilePath.empty())
-        statistics.Save(reportPath, options, device, memory, recording.get());
+        statistics.Save(reportPath, options, device, memory, recording.get(),
+                        options.cpuProfile ? &cpuOperations : nullptr);
     if (recording)
     {
         const auto summary = recording->Summary(reportPath);

@@ -8,6 +8,7 @@ namespace renderlab::rhi::vulkan
 {
 std::shared_ptr<Buffer> VulkanRuntime::CreateBuffer(const BufferDesc& desc)
 {
+    auto cpuTimer = ProfileCpu(CpuOperation::BufferCreate);
     Validate(desc);
     auto buffer = std::make_shared<VkBufferObject>(this, desc);
     buffer->allocation.device = device_;
@@ -73,6 +74,7 @@ std::shared_ptr<Texture> VulkanRuntime::CreateTexture(const TextureDesc& desc)
 
 std::shared_ptr<TextureView> VulkanRuntime::CreateView(std::shared_ptr<Texture> texture)
 {
+    auto cpuTimer = ProfileCpu(CpuOperation::ViewCreate);
     CheckOwner(texture);
     auto view = std::make_shared<VkView>(texture);
     view->device = device_;

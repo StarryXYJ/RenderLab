@@ -130,6 +130,8 @@ Options ParseOptions(std::span<const std::string_view> arguments)
             options.debugPanel = true;
         else if (arg == "--fixed-camera")
             options.fixedCamera = true;
+        else if (arg == "--cpu-profile")
+            options.cpuProfile = true;
         else if (arg == "--window-test")
         {
             options.windowTest = true;
@@ -205,6 +207,8 @@ Options ParseOptions(std::span<const std::string_view> arguments)
     if (!options.Benchmark() &&
         (!options.samplesPath.empty() || options.warmupSeconds || options.warmupFrames != 5))
         throw std::invalid_argument("Samples and warmup options require a benchmark");
+    if (options.cpuProfile && !options.Benchmark())
+        throw std::invalid_argument("--cpu-profile requires a benchmark");
     return options;
 }
 
@@ -235,6 +239,7 @@ std::string_view Usage()
            "  --profile PATH              Save CPU/GPU pass timing and memory JSON\n"
            "  --benchmark N               Headless: 5 warmup frames then N measured frames\n"
            "  --benchmark-seconds S       Headless: measure for S seconds (excludes warmup)\n"
+           "  --cpu-profile               Benchmark: record RHI CPU operations and call counts\n"
            "  --warmup-frames N           Minimum warmup frames (default: 5)\n"
            "  --warmup-seconds S          Minimum warmup seconds (default: 0)\n"
            "  --samples PATH              Benchmark raw JSONL (default: "

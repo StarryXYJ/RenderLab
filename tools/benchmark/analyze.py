@@ -92,6 +92,9 @@ def load_recording(path):
             for key in ("meanMs", "minMs", "maxMs")
         ):
             raise ValueError(f"Raw samples disagree with summary {name}: {path}")
+    for name, operation in benchmark.get("cpuOperations", {}).items():
+        if name not in metrics or not math.isclose(math.fsum(metrics[name]), finite(operation["totalMs"]), rel_tol=1e-8, abs_tol=1e-6):
+            raise ValueError(f"CPU operation total disagrees with frames: {name}")
     return report, summaries, metrics, timestamps
 
 
@@ -122,7 +125,8 @@ def compatible_key(report):
             report["view"], report["validation"], report["buildConfiguration"], report["adapter"],
             identity["vendorId"], identity["deviceId"], identity["software"],
             benchmark["timingMode"], benchmark["requestedFrames"], benchmark["requestedSeconds"],
-            benchmark["requestedWarmupFrames"], benchmark["requestedWarmupSeconds"])
+            benchmark["requestedWarmupFrames"], benchmark["requestedWarmupSeconds"],
+            benchmark.get("cpuProfiling", False))
 
 
 def ensure_plotting():
@@ -133,6 +137,23 @@ def ensure_plotting():
     except ImportError as error:
         raise ValueError("Plots require: python -m pip install -r tools/benchmark/requirements.txt") from error
     return plt
+
+
+def plot_range_bars(output, filename, runs, names, labels, xlabel, title):
+    plt = ensure_plotting()
+    figure, axis = plt.subplots(figsize=(10, max(3, len(names) * .6)), layout="constrained")
+    backends = sorted({run["backend"] for run in runs})
+    for backend_index, backend in enumerate(backends):
+        values = [statistics.fmean([run["metrics"][name]["meanMs"] for run in runs if run["backend"] == backend and name in run["metrics"]])
+                  if any(run["backend"] == backend and name in run["metrics"] for run in runs) else math.nan for name in names]
+        height = .8 / len(backends)
+        axis.barh([i + (backend_index + .5) * height - .4 for i in range(len(names))], values, height=height, label=backend)
+    axis.set(yticks=range(len(names)), yticklabels=labels, xlabel=xlabel, title=title)
+    axis.legend()
+    axis.grid(axis="x", alpha=.25)
+    for extension in ("png", "svg"):
+        figure.savefig(output / f"{filename}.{extension}", dpi=150)
+    plt.close(figure)
 
 
 def plot_case(output, case_index, runs):
@@ -159,20 +180,16 @@ def plot_case(output, case_index, runs):
         figure.savefig(output / f"{prefix}-frames.{extension}", dpi=150)
     plt.close(figure)
     passes = sorted({name for run in runs for name in run["metrics"] if name.startswith("gpu/")})
-    figure, axis = plt.subplots(figsize=(10, max(3, len(passes) * .6)), layout="constrained")
-    backends = sorted({run["backend"] for run in runs})
-    for backend_index, backend in enumerate(backends):
-        values = [statistics.fmean([run["metrics"][name]["meanMs"] for run in runs if run["backend"] == backend and name in run["metrics"]])
-                  if any(run["backend"] == backend and name in run["metrics"] for run in runs) else math.nan for name in passes]
-        height = .8 / len(backends)
-        axis.barh([i + (backend_index + .5) * height - .4 for i in range(len(passes))], values, height=height, label=backend)
-    axis.set(yticks=range(len(passes)), yticklabels=[name[4:] for name in passes], xlabel="GPU pass mean (ms), mean of runs", title="GPU ranges (exclude barriers, wait and Present)")
-    axis.legend()
-    axis.grid(axis="x", alpha=.25)
-    for extension in ("png", "svg"):
-        figure.savefig(output / f"{prefix}-passes.{extension}", dpi=150)
-    plt.close(figure)
-    return [f"{prefix}-frames.png", f"{prefix}-passes.png"]
+    plot_range_bars(output, prefix + "-passes", runs, passes, [name[4:] for name in passes],
+                    "GPU pass mean (ms), mean of runs", "GPU ranges (exclude barriers, wait and Present)")
+    images = [f"{prefix}-frames.png", f"{prefix}-passes.png"]
+    operations = sorted({name for run in runs for name in run["metadata"]["benchmark"].get("cpuOperations", {})})
+    if operations:
+        plot_range_bars(output, prefix + "-cpu", runs, operations,
+                        [name.removeprefix("rhi").removesuffix("Ms") for name in operations],
+                        "CPU operation mean (ms per frame), mean of runs", "RHI CPU diagnostic scopes")
+        images.append(f"{prefix}-cpu.png")
+    return images
 
 
 def analyze(inputs, output, plots=False):
@@ -237,6 +254,17 @@ def analyze(inputs, output, plots=False):
         for run in selected:
             metric = run["metrics"]["frameTimeMs"]
             lines.append(f"| {run['backend']} / {run['repeat'] + 1} | {metric['samples']} | {metric['meanMs']:.4f} | {metric['p50Ms']:.4f} | {metric['p95Ms']:.4f} | {metric['p99Ms']:.4f} |")
+        operations = sorted({name for run in selected for name in run["metadata"]["benchmark"].get("cpuOperations", {})})
+        if operations:
+            lines.extend(["", "CPU diagnostic scopes include driver/OS CPU wall time; FenceWait excludes Collect retirement.",
+                          "", "| Operation | Backend | Mean ms/frame | Calls/frame |", "| --- | --- | ---: | ---: |"])
+            for name in operations:
+                for backend in sorted({run["backend"] for run in selected}):
+                    matching = [run for run in selected if run["backend"] == backend and name in run["metadata"]["benchmark"].get("cpuOperations", {})]
+                    if matching:
+                        mean_ms = statistics.fmean(run["metrics"][name]["meanMs"] for run in matching)
+                        calls = statistics.fmean(run["metadata"]["benchmark"]["cpuOperations"][name]["calls"] / run["metadata"]["benchmark"]["sampleCount"] for run in matching)
+                        lines.append(f"| {name} | {backend} | {mean_ms:.4f} | {calls:.2f} |")
         pair = {item["backend"]: item for item in aggregates if item["case"] == case}
         if "dx12" in pair and "vulkan" in pair:
             delta = (pair["vulkan"]["frameMeanMs"] / pair["dx12"]["frameMeanMs"] - 1) * 100

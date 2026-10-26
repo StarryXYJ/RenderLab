@@ -1,6 +1,7 @@
 #include "apps/sandbox/options.hpp"
 #include "core/log.hpp"
 #include "rhi/commands.hpp"
+#include "rhi/cpu_profile.hpp"
 #include "rhi/device.hpp"
 #include "rhi/upload.hpp"
 
@@ -99,6 +100,28 @@ int main()
                                         "--benchmark-seconds"sv, "1"sv, "--graph-test"sv});
             });
         RequireInvalid([] { ParseOptions(std::array{"--samples"sv, "raw.jsonl"sv}); });
+        RequireInvalid([] { ParseOptions(std::array{"--cpu-profile"sv}); });
+        const auto profiled =
+            ParseOptions(std::array{"--project"sv, "sample.rlproject"sv, "--headless"sv,
+                                    "--benchmark"sv, "1"sv, "--cpu-profile"sv});
+        Require(profiled.cpuProfile, "CPU profiling must be explicit and benchmark scoped");
+        {
+            renderlab::rhi::CpuProfileSnapshot before{}, after{};
+            {
+                renderlab::rhi::CpuTimer disabled(nullptr);
+            }
+            try
+            {
+                renderlab::rhi::CpuTimer timer(&after[0]);
+                throw std::runtime_error("profiled exception");
+            }
+            catch (const std::runtime_error&)
+            {
+            }
+            const auto delta = renderlab::rhi::Difference(after, before);
+            Require(delta[0].calls == 1 && delta[1].calls == 0,
+                    "CPU scopes count exception exits and isolate operations");
+        }
 
         using namespace renderlab::rhi;
         int owner = 0, otherOwner = 0;

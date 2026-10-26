@@ -57,7 +57,7 @@ def load_suite(config_path, args):
     if not backends or len(set(backends)) != len(backends) or set(backends) - {"dx12", "vulkan"}:
         raise ValueError("Backends must be distinct dx12/vulkan values")
     defaults = {"seconds": 10, "warmupSeconds": 2, "warmupFrames": 5, "width": 1280, "height": 720,
-                "quality": "medium", "view": "final", "validation": "off"}
+                "quality": "medium", "view": "final", "validation": "off", "cpuProfiling": False}
     if set(config.get("defaults", {})) - set(defaults):
         raise ValueError("Unknown benchmark defaults")
     defaults.update(config.get("defaults", {}))
@@ -76,6 +76,10 @@ def load_suite(config_path, args):
             case["warmupSeconds"] = args.warmup_seconds
         if args.validation is not None:
             case["validation"] = args.validation
+        if getattr(args, "cpu_profile", None) is not None:
+            case["cpuProfiling"] = args.cpu_profile
+        if not isinstance(case["cpuProfiling"], bool):
+            raise ValueError("cpuProfiling requires a boolean")
         bounded(case["seconds"], .001, 3600, "seconds")
         bounded(case["warmupSeconds"], 0, 3600, "warmupSeconds")
         bounded(case["warmupFrames"], 0, 10000, "warmupFrames", True)
@@ -122,6 +126,7 @@ def validate_case(report, case, backend):
                "requestedWarmupFrames": case["warmupFrames"], "requestedWarmupSeconds": case["warmupSeconds"]}
     if (any(report[key] != value for key, value in expected.items()) or
         any(report["benchmark"][key] != value for key, value in budgets.items()) or
+        report["benchmark"].get("cpuProfiling", False) != case.get("cpuProfiling", False) or
         Path(report["project"]).resolve() != Path(case["project"])):
         raise ValueError("Recorded settings disagree with the requested suite case")
 
@@ -155,6 +160,8 @@ def run_suite(config_path, output, args):
                            "--quality", case["quality"], "--view", case["view"],
                            "--profile", str(report), "--samples", str(directory / "frames.jsonl"),
                            "--output", str(directory / "capture"), "--report", str(capability), "--log", str(directory / "player.log")]
+                if case["cpuProfiling"]:
+                    command.append("--cpu-profile")
                 item = {"id": run_id, "case": case["name"], "repeat": repeat, "backend": backend,
                         "sequence": len(manifest["runs"]), "command": command, "cwd": str(executable.parent),
                         "report": report.relative_to(output).as_posix(), "status": "running"}
@@ -199,6 +206,7 @@ def main():
     parser.add_argument("--warmup-seconds", type=float)
     parser.add_argument("--repeats", type=int)
     parser.add_argument("--validation", choices=("on", "off"))
+    parser.add_argument("--cpu-profile", action=argparse.BooleanOptionalAction, default=None)
     parser.add_argument("--backends", nargs="+", choices=("dx12", "vulkan"))
     parser.add_argument("--plots", action="store_true")
     args = parser.parse_args()

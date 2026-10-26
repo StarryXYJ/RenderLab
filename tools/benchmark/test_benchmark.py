@@ -94,6 +94,23 @@ class BenchmarkTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "budget"):
             analyze.load_recording(path)
 
+    def test_cpu_diagnostic_totals_and_report(self):
+        path, report, raw, rows = self.recording()
+        for row in rows:
+            row["metricsMs"]["rhiBufferCreateMs"] = .25
+        raw.write_text("".join(json.dumps(row) + "\n" for row in rows), encoding="utf-8")
+        report["benchmark"]["cpuProfiling"] = True
+        report["benchmark"]["metricsMs"]["rhiBufferCreateMs"] = {
+            "samples": 4, "meanMs": .25, "minMs": .25, "maxMs": .25}
+        report["benchmark"]["cpuOperations"] = {"rhiBufferCreateMs": {"calls": 8, "totalMs": 1}}
+        analyze.write_json(path, report)
+        analyze.analyze([path], self.root / "analysis")
+        self.assertIn("rhiBufferCreateMs | dx12 | 0.2500 | 2.00", (self.root / "analysis/report.md").read_text())
+        report["benchmark"]["cpuOperations"]["rhiBufferCreateMs"]["totalMs"] = 2
+        analyze.write_json(path, report)
+        with self.assertRaisesRegex(ValueError, "CPU operation total"):
+            analyze.load_recording(path)
+
     def test_mismatched_configuration(self):
         a, _, _, _ = self.recording()
         b, report, _, _ = self.recording("second", "vulkan")
@@ -103,6 +120,11 @@ class BenchmarkTests(unittest.TestCase):
             analyze.write_json(b, changed)
             with self.subTest(key=key), self.assertRaisesRegex(ValueError, "Incomparable"):
                 analyze.analyze([a, b], self.root / "analysis")
+        changed = copy.deepcopy(report)
+        changed["benchmark"]["cpuProfiling"] = True
+        analyze.write_json(b, changed)
+        with self.assertRaisesRegex(ValueError, "Incomparable"):
+            analyze.analyze([a, b], self.root / "analysis")
 
     def test_failed_suite_and_duplicate_reports(self):
         path, _, _, _ = self.recording()

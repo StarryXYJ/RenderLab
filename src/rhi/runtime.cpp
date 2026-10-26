@@ -177,6 +177,7 @@ uint64_t Runtime::Submit(std::unique_ptr<CommandList> commands, Swapchain* prese
     auto& pending = pending_.back();
     try
     {
+        auto cpuTimer = ProfileCpu(CpuOperation::NativeSubmit);
         pending.native = Execute(*pending.commands, pending.point, presentation);
     }
     catch (...)
@@ -191,6 +192,7 @@ uint64_t Runtime::Submit(std::unique_ptr<CommandList> commands, Swapchain* prese
 }
 void Runtime::Collect()
 {
+    auto cpuTimer = ProfileCpu(CpuOperation::Retire);
     const auto completed = Completed();
     while (!pending_.empty() && pending_.front().point <= completed)
         pending_.pop_front();
@@ -199,7 +201,10 @@ void Runtime::Wait(uint64_t point)
 {
     Require(point <= lastSubmitted_, "Cannot wait for an unsubmitted completion point");
     if (point && Completed() < point)
+    {
+        auto cpuTimer = ProfileCpu(CpuOperation::FenceWait);
         WaitNative(point);
+    }
     Collect();
 }
 void Runtime::WaitIdle()

@@ -26,7 +26,8 @@ public:
     std::string Text(const scene::Snapshot& snapshot, rhi::MemoryStats memory) const;
     void Save(const std::filesystem::path& path, const Options& options,
               const rhi::DeviceReport& device, rhi::MemoryStats memory,
-              const benchmark::Recording* recording = nullptr) const;
+              const benchmark::Recording* recording = nullptr,
+              const rhi::CpuProfileSnapshot* cpuOperations = nullptr) const;
 
 private:
     struct Samples

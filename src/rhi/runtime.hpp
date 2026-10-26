@@ -1,6 +1,7 @@
 #pragma once
 
 #include "platform/window.hpp"
+#include "rhi/cpu_profile.hpp"
 #include "rhi/resources.hpp"
 #include "rhi/swapchain.hpp"
 
@@ -55,9 +56,22 @@ public:
     {
         return lastSubmitted_;
     }
+    /// Owner-thread diagnostic scopes; enable between calls. Cumulative counters never reset.
+    void SetCpuProfiling(bool enabled)
+    {
+        cpuProfiling_ = enabled;
+    }
+    CpuProfileSnapshot GetCpuProfile() const
+    {
+        return cpuProfile_;
+    }
 
 protected:
     Runtime();
+    CpuTimer ProfileCpu(CpuOperation operation)
+    {
+        return CpuTimer(cpuProfiling_ ? &cpuProfile_.at(size_t(operation)) : nullptr);
+    }
     virtual std::shared_ptr<Pipeline> CreatePipelineNative(PipelineDesc desc) = 0;
     struct Submission
     {
@@ -75,6 +89,8 @@ protected:
     std::shared_ptr<AllocationLedger> ledger_ = std::make_shared<AllocationLedger>();
 
 private:
+    bool cpuProfiling_ = false;
+    CpuProfileSnapshot cpuProfile_{};
     struct Pending
     {
         uint64_t point;

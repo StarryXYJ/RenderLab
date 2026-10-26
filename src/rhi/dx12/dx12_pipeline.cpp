@@ -91,6 +91,7 @@ std::shared_ptr<BindingLayout> DxRuntime::CreateLayout(std::vector<BindingDesc> 
 std::shared_ptr<BindingGroup> DxRuntime::CreateGroup(std::shared_ptr<BindingLayout> layout,
                                                      std::vector<Binding> bindings)
 {
+    auto cpuTimer = ProfileCpu(CpuOperation::GroupCreate);
     Validate(layout, bindings);
     auto group = std::make_shared<DxGroup>(layout, std::move(bindings));
     const auto samplerCount = static_cast<UINT>(std::ranges::count_if(

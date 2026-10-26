@@ -8,6 +8,7 @@ namespace renderlab::rhi::dx12
 {
 std::shared_ptr<Buffer> DxRuntime::CreateBuffer(const BufferDesc& desc)
 {
+    auto cpuTimer = ProfileCpu(CpuOperation::BufferCreate);
     Validate(desc);
     auto buffer = std::make_shared<DxBuffer>(this, desc);
     D3D12_HEAP_PROPERTIES heap{};
@@ -85,6 +86,7 @@ std::shared_ptr<Texture> DxRuntime::CreateTexture(const TextureDesc& desc)
 
 std::shared_ptr<TextureView> DxRuntime::CreateView(std::shared_ptr<Texture> texture)
 {
+    auto cpuTimer = ProfileCpu(CpuOperation::ViewCreate);
     CheckOwner(texture);
     auto view = std::make_shared<DxView>(texture);
     if (texture->desc.attachment)
