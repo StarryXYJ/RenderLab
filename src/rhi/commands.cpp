@@ -245,8 +245,15 @@ void CommandList::Trace(std::shared_ptr<ShaderTable> table, uint32_t width, uint
                         uint32_t depth)
 {
     Check(table);
-    Require(!rendering_ && pipeline_ && table->pipeline == pipeline_ && group_ && width && height &&
-                depth && uint64_t(width) * height * depth <= (1ull << 30),
+    Check(table->buffer);
+    Require(table->buffer->desc.shaderTable && table->stride > 0 &&
+                table->stride <= table->buffer->desc.size / 3 &&
+                table->offset <= table->buffer->desc.size - table->stride * 3,
+            "Invalid ShaderTable storage");
+    Require(!rendering_ && pipeline_ && pipeline_->desc.rayGeneration &&
+                table->pipeline == pipeline_ && group_ && width && height && depth &&
+                width <= 65535 && height <= 65535 && depth <= 65535 &&
+                uint64_t(width) * height * depth <= (1ull << 30),
             "Invalid TraceRays state or dimensions");
     commands_.emplace_back(TraceRays{std::move(table), width, height, depth});
 }

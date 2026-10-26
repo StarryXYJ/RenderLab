@@ -24,9 +24,9 @@ SamplerState RaySampler : register(s11);
 
 float4 SampleRayMap(uint tile, float2 uv)
 {
-    // 64x64 payload, one wrapped border texel, eight columns. One mip in the current RHI.
+    // 64x64 payload, one clamped border texel, eight columns. One mip in the current RHI.
     float2 origin = float2(tile % 8, tile / 8) * 66 + 1;
-    return RayAtlas.SampleLevel(RaySampler, (origin + frac(uv) * 64) / 528, 0);
+    return RayAtlas.SampleLevel(RaySampler, (origin + saturate(uv) * 64) / 528, 0);
 }
 MaterialSurface EvaluateRaySurface(uint instanceIndex, uint primitive, float2 barycentrics,
                                    out bool unlit)
@@ -59,7 +59,9 @@ MaterialSurface EvaluateRaySurface(uint instanceIndex, uint primitive, float2 ba
     {
         float3 tangent = SafeNormalize((p1 * d2.y - p2 * d1.y) / determinant);
         tangent = SafeNormalize(tangent - n * dot(n, tangent));
-        float3 bitangent = SafeNormalize(cross(n, tangent)) * (determinant < 0 ? -1 : 1);
+        float3 bitangentUV = (p2 * d1.x - p1 * d2.x) / determinant;
+        float handedness = dot(cross(n, tangent), bitangentUV) < 0 ? -1 : 1;
+        float3 bitangent = SafeNormalize(cross(n, tangent)) * handedness;
         float3 normalTS = SampleRayMap(material.normalFlags.x, uv).xyz * 2 - 1;
         normalTS.xy *= material.options.x;
         n = SafeNormalize(tangent * normalTS.x + bitangent * normalTS.y + n * normalTS.z);

@@ -187,6 +187,7 @@ void Gpu(rhi::Runtime& runtime, shader::Target target, const std::filesystem::pa
         object("glass").enabled = false;
         renderer::SceneRenderOptions raySettings;
         raySettings.pipeline = renderer::PipelineType::RayTracing;
+        raySettings.reflections = false;
         const auto rayShadow = render("ray-query-shadow", raySettings);
         object("sun").light->shadows = false;
         const auto rayUnshadowed = render("ray-query-unshadowed", raySettings);

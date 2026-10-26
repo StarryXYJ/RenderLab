@@ -61,11 +61,27 @@ struct DebugPanel::Impl
             {
                 const auto index = SendMessageW(self->pipeline, CB_GETCURSEL, 0, 0);
                 if (index >= 0 && size_t(index) < self->choices.size())
+                {
                     self->controls.render.pipeline = self->choices[size_t(index)].type;
+                    if (self->controls.render.pipeline != renderer::PipelineType::RayTracing &&
+                        self->controls.render.view >= renderer::SceneView::ReflectionRaw)
+                    {
+                        self->controls.render.view = renderer::SceneView::Final;
+                        SendMessageW(self->view, CB_SETCURSEL, 0, 0);
+                    }
+                }
             }
             else if (HIWORD(wParam) == CBN_SELCHANGE && id == View)
+            {
                 self->controls.render.view =
                     renderer::SceneView(SendMessageW(self->view, CB_GETCURSEL, 0, 0));
+                if (self->controls.render.view >= renderer::SceneView::ReflectionRaw &&
+                    self->controls.render.pipeline != renderer::PipelineType::RayTracing)
+                {
+                    self->controls.render.view = renderer::SceneView::Final;
+                    SendMessageW(self->view, CB_SETCURSEL, 0, 0);
+                }
+            }
             else if (HIWORD(wParam) == CBN_SELCHANGE && id == Quality)
             {
                 const auto index = SendMessageW(self->quality, CB_GETCURSEL, 0, 0);
@@ -144,8 +160,9 @@ DebugPanel::DebugPanel(platform::NativeSurface owner, DebugControls controls,
     self.Control(L"STATIC", L"Texture", 0, 0, 12, 46, 100, 20);
     self.view =
         self.Control(L"COMBOBOX", L"", CBS_DROPDOWNLIST | WS_TABSTOP, View, 112, 44, 280, 180);
-    for (const auto* name : {L"Final (ACES)", L"CameraColor (linear HDR)",
-                             L"MainLightShadow (depth)", L"Environment atlas", L"BRDF LUT"})
+    for (const auto* name :
+         {L"Final (ACES)", L"CameraColor (linear HDR)", L"MainLightShadow (depth)",
+          L"Environment atlas", L"BRDF LUT", L"Reflection (raw sample)", L"Reflection (history)"})
         SendMessageW(self.view, CB_ADDSTRING, 0, reinterpret_cast<LPARAM>(name));
     SendMessageW(self.view, CB_SETCURSEL, WPARAM(controls.render.view), 0);
     self.Control(L"STATIC", L"Shadow quality", 0, 0, 12, 80, 100, 20);
@@ -231,5 +248,18 @@ void DebugPanel::VerifyControls()
         if (Resolutions[i] == saved.render.shadowResolution)
             SendMessageW(self.quality, CB_SETCURSEL, i, 0);
     SendMessageW(self.freeze, BM_SETCHECK, saved.freezeCamera ? BST_CHECKED : BST_UNCHECKED, 0);
+}
+void DebugPanel::SelectPipeline(renderer::PipelineType pipeline)
+{
+    impl_->controls.render.pipeline = pipeline;
+    for (size_t i = 0; i < impl_->choices.size(); ++i)
+        if (impl_->choices[i].type == pipeline)
+            SendMessageW(impl_->pipeline, CB_SETCURSEL, i, 0);
+    if (pipeline != renderer::PipelineType::RayTracing &&
+        impl_->controls.render.view >= renderer::SceneView::ReflectionRaw)
+    {
+        impl_->controls.render.view = renderer::SceneView::Final;
+        SendMessageW(impl_->view, CB_SETCURSEL, 0, 0);
+    }
 }
 } // namespace renderlab::sandbox

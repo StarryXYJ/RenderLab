@@ -33,6 +33,10 @@ renderer::SceneRenderOptions RenderOptions(const Options& options)
         render.view = renderer::SceneView::Environment;
     else if (options.view == "brdf")
         render.view = renderer::SceneView::Brdf;
+    if (options.view == "reflection-raw")
+        render.view = renderer::SceneView::ReflectionRaw;
+    if (options.view == "reflection-history")
+        render.view = renderer::SceneView::ReflectionHistory;
     return render;
 }
 void Statistics::Samples::Add(double value)

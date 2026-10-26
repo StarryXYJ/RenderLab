@@ -4,8 +4,8 @@
 
 ## 当前状态
 
-- 当前实施阶段：M0–M4、R1、B1–B3 DONE；M5 IN_PROGRESS。
-- 当前工作项：M5.4 独立光追反射与样例集成。
+- 当前实施阶段：M0–M5、R1、B1–B3 DONE。
+- 当前工作项：本次授权的 M5 与样例管线切换已完成；M6/M8 未启动。
 - 用户约定：每个子阶段验收完成即提交 Git，无阻塞时在当前授权范围内继续推进。
 
 | 阶段 | 目标 | 前置依赖 | 状态 |
@@ -19,7 +19,7 @@
 | B1 | 样例整理与可扩展 Benchmark | M4、R1 | DONE |
 | B2 | 双后端性能差异调查 | B1 | DONE |
 | B3 | 逐帧资源复用优化 | B2 | DONE |
-| M5 | Deferred 与光追基础 | M4 | IN_PROGRESS |
+| M5 | Deferred 与光追基础 | M4 | DONE |
 | M6 | GPU Driven 与执行优化 | M4；光追调度测试另需 M5 | NOT_STARTED |
 | M7 | C# 编辑器与完整项目工作流 | M4；默认在 M5、M6 的核心目标后开展 | NOT_STARTED |
 | M8 | 一个深入的渲染专题与作品交付 | 所选专题依赖已满足 | NOT_STARTED |
@@ -157,50 +157,15 @@ R1 契约修订、B1 样例整理/Benchmark、B2 调查和 B3 资源复用已完
 
 ## M5 Deferred 与光追基础
 
-每个子阶段独立验收。先共享数据和有限材质，避免同时开发任意 Shader 命中调度与完整积分器。
-
-### M5.1 Deferred（可选组合）
-
 状态：DONE，日期：2026 年 10 月 26 日。
 
-结果：RHI/Graph 支持最多八个 MRT 与 D32/D32S8 采样视图；SceneRenderer 提供三张 RGBA32F GBuffer、逆 ViewProjection 深度重建、PBR Deferred Lighting，透明仍走 Forward。Lit/Unlit 增加 GBuffer 角色；样例调节面板与 CLI 可选 Forward/Deferred，菜单选项表可扩展。接口见 [Deferred Pipeline](../docs/deferred-pipeline.md)，架构限制见 [Feature 与管线组合](../docs/forward-pipeline.md)。
+结果：双后端 MRT/可采样深度、PBR GBuffer 与 Deferred Lighting；BLAS/TLAS build/update、Graph AS 用途与静态 BLAS/不可变 TLAS 版本；Ray Query 阴影、原生 RayGen/Miss/通用 Hit Group/不可变 ShaderTable/TraceRays。一次 GGX specular 反射通过索引 Mesh/Instance/Material 与有限纹理图集求值，追踪、ViewID 静止历史累积和 IBL specular 替换独立成 Pass。样例面板/CLI 可选 Forward、Deferred、Ray Tracing，并查看原始/累积反射；不兼容材质选择给出诊断并恢复原管线。
 
-验证：MSVC Debug/NMake 构建 `renderlab_sandbox` 成功。RTX 5060 上 CTest `gpu.{dx12,vulkan}.{deferred,tools_window}` 4/4；固定 PBR 640×360 下 Forward/Deferred 两后端均运行，validation errors=0。同后端 RGB 平均绝对差为 0.09/255，每帧有 742/230400 个像素不同。Shadow 场景 Deferred 窗口 DX12/Vulkan 各 54 帧、10 次重建，validation errors=0。DX12 清除值优化及 Vulkan 未消费顶点属性仍有非错误警告。
+验证：MSVC Debug/Release NMake 构建。RTX 5060 上 Debug 所选 16 项通过（Core/Graph；双后端 AS/TraceRays、Ray Query Scene、反射参考、surface、deferred、rhi、tools_window），追加 ShaderTable 范围/尺寸边界后 Graph 与双后端 AS/反射 5/5。Release 双后端 AS/TraceRays 与反射专项 4/4；上述 GPU 验收 validation errors=0。独立窗口各 54 帧、10 次重建、10 次挂起，实际渲染三种菜单选择。反射覆盖确定性 raw、静止累积、相机/场景/材质/尺寸/照明失效、ViewID 隔离、空场景与在途版本。Release/validation off 的 1280×720 短测各预热 64 帧、测量 240 帧，保留两后端三管线成本和参考图；不是长测或窗口 FPS 结论。
 
-边界：三张全分辨率 RGBA32F 目标带宽较高；自定义不透明 Shader 必须提供 GBuffer 角色。Path Tracing 与 Forward+ 尚未实现，菜单只显示已实现组合；其他 GPU 未验证。
+边界：静态不透明三角形；反射仅内置 Lit/Unlit，Masked 显式拒绝，透明走 Forward 且不进入 AS。三张 RGBA32F GBuffer 与浮点历史占用较高；有限图集为 64×64/显式 LOD 0，最多 62 个图像/色彩空间/文件版本；无动态几何/压缩、any-hit/callable、移动相机重投影、空间降噪或自动光追 Shader 文件监视。自定义 Copper 需保留 Forward，原始资源不做隐式 PBR 映射。其他 GPU 未验证，WARP 探测未完成。Path Tracing 按 M8、Forward+ 按 M6 保留，未提前实施。
 
-后续修复：M5.2 增加 Unlit GBuffer 标记，保持 Forward 输出并跳过 PBR 光照；补齐 MRT/采样视图修改后的 FakeRuntime 与共享 LitSurface 改名回归。双后端 surface 验证通过。
-
-### M5.2 加速结构与 Ray Query
-
-状态：DONE，日期：2026 年 10 月 26 日。
-
-结果：双后端 BLAS/TLAS 原生尺寸查询、build/update、设备地址、scratch 保活及 Graph BuildInput/BuildWrite/Read 声明；静态 Mesh 复用 BLAS，独立 allInstances 列表驱动不可变 TLAS 版本重建。RayTracing 组合以独立 Ray Query Pass 生成 ShadowVisibility，接入 Deferred 直接光；面板和 CLI 可选 Forward/Deferred/Ray Tracing。新增 [RayTracing 参考项目](../sample/m4/RayTracing.rlproject)。
-
-验证：MSVC Debug/NMake 构建 Sandbox、Surface、Graph、Core 目标。RTX 5060 上所选 CTest 14 项通过（core/graph；双后端 AS、Ray Query Scene、surface、deferred、rhi、tools_window），validation errors=0；覆盖原生 build/update、空 TLAS、提交后释放 scratch、对象增删/移动、相机复用、两帧在途版本、接收面阴影和 Unlit 对照。新增参考场景 DX12/Vulkan 窗口各 54 帧、10 次重建；640×360 离线输出均通过，validation errors=0。不支持能力诊断由 CPU 合约验证。
-
-边界：仅不透明三角形，Masked 显式拒绝，透明继续 Forward 且不进入 AS；场景 Transform 更新采用新 TLAS 重建，动态顶点/蒙皮、压缩未实现。DX12 清除值优化和 Vulkan 未消费顶点属性仍有非错误警告。其他 GPU 未验证；WARP 软件路径探测未完成，不计通过。TraceRays 与反射集成继续 M5.3/M5.4，Path Tracing 仍按 M8 计划保留。
-
-入口：[接口与生命周期](../docs/raytracing.md)、[运行与验收](../manual/build.md#ray-tracing-组合与-ray-query)。
-
-### M5.3 Ray Tracing Pipeline
-
-状态：DONE，日期：2026 年 10 月 26 日。
-
-结果：双后端 RayGen/Miss/通用三角形 Hit Group、不可变 ShaderTable 与 TraceRays；Graph 增加类型化 RayTracing Pass、显式 ShaderTableRead 与匹配检查。通过 Instance/Mesh/Material 索引访问共享 PBR，有限纹理图集显式 LOD 0；表对齐遵守原生限制，代际变化重建 PSO/表，录制保活旧版本。
-
-验证：MSVC Debug/NMake 构建 Sandbox 成功；RTX 5060 上 `gpu.{dx12,vulkan}.acceleration_structure` 2/2，实际执行 Ray Query 与 TraceRays；覆盖索引表面求值、纹理采样、hit/miss 和两代 PSO/ShaderTable 重建，validation errors=0。Vulkan 顶点用两个 float4 保持 32 字节 ABI，SBT 使用基础 KHR ray tracing 的 ShaderRead 访问，无额外布局/maintenance 扩展要求。
-
-边界：仅一个通用三角形 Hit Group；无 any-hit、callable、程序几何、局部参数或自动文件监视。场景反射集成继续 M5.4，其他 GPU 未验证。入口：[接口、数据 ABI 与表重建规则](../docs/raytracing.md)。
-
-### M5.4 混合效果
-
-- [ ] 选择独立光追反射或 GI Feature，声明 Depth/Normal/Material/AS 输入和 Radiance 输出；按算法由 Forward 表面预通道或 GBuffer 提供输入。
-- [ ] GI 的追踪、时域重投影、空间过滤和照明合成按依赖分 Pass，保留无降噪参考，不作为照明内部隐式副作用。
-- [ ] 按 ViewID 管理历史与版本，定义相机/场景/材质/尺寸变化的失效规则。
-- [ ] 记录支持材质范围与真实 GPU 成本，保留纯光栅对照。
-
-退出条件：Deferred、Ray Query 和 TraceRays 分别有验证入口；至少一个光追效果接入渲染流程。硬件未验证的后端明确记录阻塞，不能把主阶段直接标为全部通过。
+入口：[Deferred](../docs/deferred-pipeline.md)、[光追接口/生命周期/ShaderTable 重建](../docs/raytracing.md)、[样例与运行](../manual/build.md#ray-tracing-组合与-ray-query)、[GPU 成本/参考图](../docs/performance/m5-reflections.md)。独立验证入口分别为 `--pipeline deferred`、`--as-test`（Ray Query 与 TraceRays 分别记录）、`--scene-test --pipeline raytracing`；每个子阶段按验收提交，过程由 Git 历史追溯。
 
 ## M6 GPU Driven 与执行优化
 

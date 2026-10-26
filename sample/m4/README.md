@@ -17,3 +17,13 @@ Use `--backend vulkan` for the other backend. See [build instructions](../../man
 `Shadow.rlproject` 选择 `Shadow.scene`：实体球、带 AlphaGrid 测试纹理的 Masked 方块、透明薄片和接收地面。方向光启用单张 512² 阴影；WASD/QE/方向键与 Pbr 场景相同。运行与限制见 [构建手册](../../manual/build.md#m44-阴影与透明场景)。
 
 Add `--debug-panel` for native view/exposure/shadow controls, or press F1 in a scene window. `renderlab_player.exe --project ...` uses the same content. Fixed captures, quality presets, profiling and standalone installation are described in [M4.5](../../manual/build.md#m45-演示与-player).
+
+## Deferred 与 Ray Tracing
+
+`RayTracing.rlproject` 选择不透明地面、球和立方体参考场景，Pipeline 菜单可切换 Forward、Deferred、Ray Tracing。Ray Tracing 使用 Ray Query 阴影和一次 TraceRays 反射；静止相机逐步累积，运动或场景/材质变化会重置历史。Texture 菜单可查看原始单样本与累积反射。
+
+```powershell
+./out/build/windows-debug/renderlab_sandbox.exe --backend dx12 --validation on --project sample/m4/RayTracing.rlproject --pipeline raytracing --debug-panel
+```
+
+需要支持 AS、Ray Query 和 Ray Tracing Pipeline 的设备；Vulkan 使用同一入口。Pbr 项目也支持三种管线。原始 Copper 自定义 Shader 没有 GBuffer/命中表面实现，保持 Forward；Shadow 项目含 Masked 几何，目前不能进入光追模式。窗口切换不兼容管线时显示具体原因并恢复上一选择。Path Tracing 和 Forward+ 暂未实现，后续可扩展现有菜单。接口与限制见 [光追基础](../../docs/raytracing.md)。

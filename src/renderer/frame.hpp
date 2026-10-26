@@ -61,6 +61,13 @@ struct RenderFrame
         std::string storage;
         std::shared_ptr<rhi::Pipeline> shadowPipeline;
         BufferBinding parameters;
+        std::shared_ptr<rhi::ShaderTable> reflectionTable;
+        std::shared_ptr<rhi::Pipeline> historyPipeline, combinePipeline;
+        BufferBinding reflectionParameters;
+        std::vector<BufferBinding> surfaces;
+        std::vector<TextureBinding> reflectionTextures;
+        std::shared_ptr<rhi::Sampler> sampler;
+        std::string previousRadiance, historyRadiance;
     } rayTracing;
     std::vector<DrawPacket> opaque, transparent;
     std::vector<DrawPacket> gbuffer;

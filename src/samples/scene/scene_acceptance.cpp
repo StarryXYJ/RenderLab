@@ -10,6 +10,7 @@
 
 #include <algorithm>
 #include <cstring>
+#include <format>
 #include <set>
 
 namespace renderlab::samples
@@ -31,6 +32,7 @@ void VerifyScene(rhi::Runtime& runtime, shader::Target target, const std::filesy
     {
         ::renderlab::renderer::SceneRenderOptions options;
         options.pipeline = pipeline;
+        options.reflections = false;
         auto result =
             renderer.Render(color, initial, nullptr, true, output / (name + "-plan.json"), options);
         runtime.Wait(result.completion);
@@ -127,6 +129,7 @@ void VerifyScene(rhi::Runtime& runtime, shader::Target target, const std::filesy
                         "Scene TLAS cache did not follow instance and transform changes");
         renderer::SceneRenderOptions options;
         options.pipeline = pipeline;
+        options.reflections = false;
         auto first = renderer.Render(color, initial, nullptr, true, {}, options);
         auto changed = std::ranges::find_if(document.objects, [](const auto& value)
                                             { return value.mesh.has_value(); });
@@ -143,6 +146,129 @@ void VerifyScene(rhi::Runtime& runtime, shader::Target target, const std::filesy
             if (entity.mesh)
                 entity.enabled = false;
         detail::Require(render("empty-scene") != baseline, "Empty ray-traced scene did not render");
+        document = original;
+        renderer::SceneRenderOptions reflectionOptions;
+        reflectionOptions.pipeline = pipeline;
+        reflectionOptions.profile = true;
+        reflectionOptions.shadowResolution = 128;
+        const auto reflectionRender =
+            [&](const std::string& name, renderer::SceneRenderOptions options)
+        {
+            auto result = renderer.Render(color, initial, nullptr, true,
+                                          output / (name + "-plan.json"), options);
+            initial = rhi::State::CopySource;
+            return result;
+        };
+        auto firstReflection = reflectionRender("reflection-first", reflectionOptions);
+        auto accumulated = reflectionRender("reflection-accumulated", reflectionOptions);
+        runtime.Wait(accumulated.completion);
+        detail::Require(
+            firstReflection.reflectionSamples == 1 && firstReflection.reflectionHistoryReset &&
+                accumulated.reflectionSamples == 2 && !accumulated.reflectionHistoryReset,
+            "Stationary reflection history did not accumulate across in-flight frames");
+        SaveImage(output / "reflection-first.bmp", firstReflection.pixels->Map(), 640, 360,
+                  rhi::TextureRowPitch(640));
+        SaveImage(output / "reflection-accumulated.bmp", accumulated.pixels->Map(), 640, 360,
+                  rhi::TextureRowPitch(640));
+        std::string costs;
+        uint32_t reflectionPasses = 0;
+        for (const auto& timing : firstReflection.profile.Read(runtime))
+            if (timing.name.starts_with("RayTracing.Reflection."))
+            {
+                costs += std::format("{}: {:.6f} ms\n", timing.name, timing.nanoseconds / 1e6);
+                ++reflectionPasses;
+            }
+        detail::Require(reflectionPasses == 3,
+                        "Trace/accumulation/combine did not execute as independent GPU passes");
+        WriteFileAtomically(output / "reflection-gpu-cost.txt",
+                            std::as_bytes(std::span{costs.data(), costs.size()}));
+        auto rawOptions = reflectionOptions;
+        rawOptions.view = renderer::SceneView::ReflectionRaw;
+        auto rawFirst = reflectionRender("reflection-raw", rawOptions);
+        auto rawSecond = reflectionRender("reflection-raw-repeat", rawOptions);
+        runtime.Wait(rawSecond.completion);
+        const auto rawPixels = rawFirst.pixels->Map(), repeatedRawPixels = rawSecond.pixels->Map();
+        detail::Require(std::ranges::equal(rawPixels, repeatedRawPixels) &&
+                            rawSecond.reflectionHistoryReset,
+                        "Raw single-sample reflection reference was not deterministic");
+        SaveImage(output / "reflection-raw.bmp", rawPixels, 640, 360, rhi::TextureRowPitch(640));
+        auto rasterOptions = reflectionOptions;
+        rasterOptions.reflections = false;
+        auto raster = reflectionRender("reflection-disabled", rasterOptions);
+        auto enabled = reflectionRender("reflection-enabled", reflectionOptions);
+        runtime.Wait(enabled.completion);
+        detail::Require(!std::ranges::equal(raster.pixels->Map(), enabled.pixels->Map()),
+                        "Reflection composition did not change the raster/shadow reference");
+        SaveImage(output / "reflection-disabled.bmp", raster.pixels->Map(), 640, 360,
+                  rhi::TextureRowPitch(640));
+        document.MoveCamera({.2f, 0, 0}, {0, 2, 0});
+        auto cameraChanged = reflectionRender("reflection-camera-change", reflectionOptions);
+        detail::Require(cameraChanged.reflectionHistoryReset,
+                        "Camera motion did not invalidate reflection history");
+        document = original;
+        auto& changedObject = *std::ranges::find_if(document.objects, [](const auto& value)
+                                                    { return value.mesh.has_value(); });
+        changedObject.transform.position.x += .3f;
+        auto sceneChanged = reflectionRender("reflection-scene-change", reflectionOptions);
+        detail::Require(sceneChanged.reflectionHistoryReset,
+                        "Scene transform did not invalidate reflection history");
+        document = original;
+        auto beforeMaterial = reflectionRender("reflection-before-material", reflectionOptions);
+        const auto materialSource =
+            std::ranges::find_if(document.objects, [](const auto& value)
+                                 { return value.mesh && !value.mesh->materials.empty(); });
+        detail::Require(materialSource != document.objects.end(),
+                        "Reflection fixture needs a material override");
+        const auto replacement = materialSource->mesh->materials.begin()->second;
+        bool replaced = false;
+        for (auto& entity : document.objects)
+            if (entity.mesh && entity.id != materialSource->id)
+            {
+                for (const auto& surface : renderer.Models().at(entity.mesh->model).materials)
+                    entity.mesh->materials[surface.id] = replacement;
+                replaced = true;
+                break;
+            }
+        detail::Require(replaced, "Reflection fixture needs multiple mesh objects");
+        auto materialChanged = reflectionRender("reflection-material-change", reflectionOptions);
+        detail::Require(materialChanged.reflectionHistoryReset,
+                        "Material change did not invalidate reflection history");
+        document = original;
+        auto restored = reflectionRender("reflection-restored", reflectionOptions);
+        auto alternateCamera = document.Get(document.activeCamera);
+        alternateCamera.id = project::NewId();
+        document.objects.push_back(alternateCamera);
+        document.activeCamera = alternateCamera.id;
+        auto alternate = reflectionRender("reflection-other-view", reflectionOptions);
+        detail::Require(alternate.reflectionHistoryReset,
+                        "A new ViewID reused another view's history");
+        document.activeCamera = original.activeCamera;
+        auto returned = reflectionRender("reflection-return-view", reflectionOptions);
+        detail::Require(!returned.reflectionHistoryReset,
+                        "ViewID history was not retained independently");
+        auto small = runtime.CreateTexture(
+            {320, 180, rhi::Format::Rgba8Srgb, false, true, "Reflection.Resize"});
+        auto resized =
+            renderer.Render(small, rhi::State::Undefined, nullptr, true, {}, reflectionOptions);
+        detail::Require(resized.reflectionHistoryReset,
+                        "Resize did not invalidate reflection history");
+        document.environmentIntensity += .2f;
+        auto environmentChanged =
+            reflectionRender("reflection-environment-change", reflectionOptions);
+        detail::Require(environmentChanged.reflectionHistoryReset,
+                        "Lighting change did not invalidate reflection history");
+        for (auto& entity : document.objects)
+            if (entity.mesh)
+                entity.enabled = false;
+        auto emptyReflection = reflectionRender("reflection-empty", reflectionOptions);
+        runtime.Wait(emptyReflection.completion);
+        document = original;
+        logger.Write(LogLevel::Info,
+                     "M5.4 reflection acceptance passed: native TraceRays, raw reference, "
+                     "stationary accumulation, "
+                     "camera/scene/material/size/light invalidation, ViewID isolation, empty scene "
+                     "and in-flight history. GPU diagnostic costs:\n" +
+                         costs);
         logger.Write(LogLevel::Info,
                      "M5.2 scene acceptance passed: static BLAS reuse, TLAS membership/transform "
                      "updates, camera reuse, empty scene and two in-flight scene versions");

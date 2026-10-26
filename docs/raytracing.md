@@ -1,7 +1,7 @@
 # Ray tracing foundation
 
 The `RayTracing` scene composition uses the Deferred GBuffer and an independent Ray Query shadow
-feature. Select `--pipeline raytracing`, or **Ray Tracing** in the native debug panel on a supported
+feature, followed by independent TraceRays specular reflections. Select `--pipeline raytracing`, or **Ray Tracing** in the native debug panel on a supported
 device. Forward and Deferred remain available as raster references. Path tracing and Forward+ are
 separate planned compositions and are not exposed as placeholder menu entries.
 
@@ -105,7 +105,7 @@ Vulkan shader resource barriers cover ray stages as well as raster and Compute.
 vertices, uint32 indices, 16-byte mesh/instance records and 80-byte material records. TLAS InstanceID
 selects an instance, which selects mesh and material; PrimitiveIndex selects the triangle. One
 hit group interpolates normals/UVs and evaluates the shared metallic-roughness BRDF. A finite 8x8
-tile atlas holds 64x64 maps with wrapped one-texel borders. Color maps are linearized before packing;
+tile atlas holds 64x64 maps with clamped one-texel borders. Color maps are linearized before packing;
 base color, metallic/roughness, normal, occlusion and emission are sampled at explicit LOD 0.
 There are no raster derivatives or implicit mip selection. This deliberately bounded representation
 is independent of material asset count and does not require M6 descriptor arrays.
@@ -113,3 +113,73 @@ is independent of material asset count and does not require M6 descriptor arrays
 `--as-test` also executes real TraceRays hit/miss cases, indexed PBR evaluation, explicit texture
 sampling and two rebuilt PSO/table generations on each backend. Ray Query results do not stand in
 for these native pipeline checks.
+
+## Hybrid reflections
+
+Ray Tracing now requires all three enabled capabilities: AS, Ray Query and Ray Tracing Pipeline.
+The composition is GBuffer → Ray Query shadows → Deferred Lighting → reflection trace → stationary
+accumulation → reflection combine → Forward transparency → display. The Graph exposes separate
+`RayTracing.Reflection.Trace`, `.Accumulate` and `.Combine` timings and dependencies.
+
+Trace reads Depth, world Normal/Roughness, Albedo/Metallic, TLAS and indexed geometry/material
+buffers. One GGX importance-sampled specular ray produces RGBA32F `RayTracing.RawRadiance`.
+The 16-byte payload holds incoming radiance and hit state. ClosestHit evaluates shared PBR,
+emission, main directional lighting (with an inline shadow query) and the existing IBL; Miss
+samples the environment. Recursion depth is one: secondary surfaces do not launch another
+specular bounce. This is a hybrid reflection effect, not a path tracing integrator.
+
+Combine replaces the existing IBL specular contribution with accumulated traced specular light,
+weighted by `1 - roughness²` and primary occlusion. Rough surfaces increasingly retain the stable
+prefiltered IBL baseline. The diffuse IBL, emission and direct-light terms stay in Deferred Lighting.
+The reference is finite-sample GGX reflection; no firefly clamp or spatial denoiser is applied.
+Some noise remains during motion and after resets. Transparent surfaces keep their Forward
+lighting and do not participate in these reflection rays.
+
+### Histories and invalidation
+
+Histories are keyed by stable camera ID (ViewID), bounded to four views, with two completion-protected
+RGBA32F textures per view. Each submission reads the preceding version and writes the other texture
+on the same queue; it publishes the new index/signature only after successful submission. Resize
+replaces textures while command references retain old in-flight allocations. The running mean
+uses up to 64 samples, then a 1/64 update weight. There is no moving-camera reprojection in M5.
+
+The exact input signature includes current view/projection and camera position, target dimensions,
+enabled instance membership/world transforms, packed geometry/material generation, texture-atlas
+generation, environment identity/ambient/intensity/rotation, directional light values and the shadow
+setting. A mismatch sets history count and sample sequence to zero. Returning to an unchanged ViewID
+can resume its own history. Switching to raster or another diagnostic view clears retained histories.
+Exposure is a display transform and does not invalidate linear radiance.
+
+`SceneRenderOptions::reflections=false` retains the M5.2 shadow-only baseline;
+`reflectionHistory=false` forces deterministic sample zero. The panel/CLI expose **Reflection (raw
+sample)** / `--view reflection-raw` and **Reflection (history)** / `--view reflection-history`.
+Raw view always uses sample zero and skips prior history, providing an unfiltered reference.
+Forward and Deferred remain the pure raster references. Unsupported material selections are
+preflighted in the window host and restore the last working pipeline with a concrete diagnostic.
+
+### Material and sampling boundary
+
+Reflected surfaces support built-in Lit and Unlit opaque static meshes. Custom opaque shaders
+must provide an explicit compatible surface implementation before reflection support; having a
+GBuffer role alone does not define their hit shading. Masked geometry is rejected until any-hit
+alpha evaluation exists. Meshes remain indexed uint32 triangles with 32-byte vertices. ShaderTable
+size stays three records regardless of instance/material count.
+
+The atlas uses 64 tiles, including white and flat-normal defaults, and supports up to 62 distinct
+image/color-space/file-version combinations during a renderer session. A version change allocates
+a new tile; exceeding that bound produces a diagnostic (restart or reduce textures). Images are
+resampled to 64×64, color maps are decoded from sRGB, UVs and borders clamp to match the current
+point-clamp sampler, and rays sample explicit LOD 0. Normal frames derive from triangle edges and
+UVs, with inverse-transpose interpolated normals. No texture arrays, native mip chains, anisotropic
+footprints or bindless resource indexing are introduced.
+
+### Acceptance and costs
+
+`--scene-test --pipeline raytracing` retains the shadow-only checks and additionally exercises real
+reflection tracing, separate GPU pass timings, deterministic raw output, stationary accumulation,
+camera/scene/material/size/light invalidation, ViewID isolation, an empty scene and consecutive
+in-flight history versions. It writes reference BMPs, graph JSON and `reflection-gpu-cost.txt`.
+These per-pass Debug/validation timings are diagnostic GPU costs, not a Release performance claim.
+Use the benchmark runner with validation disabled and record the build configuration for a
+performance comparison; include Forward or Deferred and the same scene/resolution. The initial
+Release measurements and raster/reflection images are in [the M5 cost record](performance/m5-reflections.md).

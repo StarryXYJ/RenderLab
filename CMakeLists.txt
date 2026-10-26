@@ -333,6 +333,12 @@ if(BUILD_TESTING)
                 --output ${CMAKE_BINARY_DIR}/ray-query-scene
                 --log ${CMAKE_BINARY_DIR}/logs/${backend}-ray-query-scene.log)
             set_tests_properties(gpu.${backend}.ray_query_scene PROPERTIES LABELS gpu RUN_SERIAL TRUE TIMEOUT 120)
+            add_test(NAME gpu.${backend}.reflections COMMAND renderlab_sandbox
+                --backend ${backend} --headless --validation on --scene-test --pipeline raytracing
+                --project ${CMAKE_SOURCE_DIR}/sample/m4/RayTracing.rlproject
+                --output ${CMAKE_BINARY_DIR}/reflections
+                --log ${CMAKE_BINARY_DIR}/logs/${backend}-reflections.log)
+            set_tests_properties(gpu.${backend}.reflections PROPERTIES LABELS gpu RUN_SERIAL TRUE TIMEOUT 120)
             add_test(NAME gpu.${backend}.pbr COMMAND renderlab_pbr_tests ${backend}
                 ${CMAKE_SOURCE_DIR}/sample/m4/Pbr.rlproject ${CMAKE_SOURCE_DIR}/shaders
                 ${CMAKE_BINARY_DIR}/pbr/${backend})

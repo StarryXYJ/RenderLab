@@ -42,6 +42,7 @@ template <class T>
 concept Drawable = requires(T& c) { c.Draw(3); };
 static_assert(Dispatchable<ComputeContext> && !Dispatchable<RasterContext> &&
               !Dispatchable<CopyContext>);
+static_assert(!Drawable<RayTracingContext> && !Dispatchable<RayTracingContext>);
 static_assert(Drawable<RasterContext> && !Drawable<ComputeContext> && !Drawable<CopyContext>);
 TextureHandle Texture(Graph& graph, const std::string& name = "Test.Texture")
 {
@@ -800,6 +801,54 @@ void AccelerationStructureContracts()
               "AS storage cannot be used as an ordinary buffer");
     }
 }
+void ShaderTableContracts()
+{
+    FakeRuntime runtime;
+    Pool pool(runtime, 8, 1024 * 1024);
+    rhi::PipelineDesc desc;
+    desc.layout = runtime.CreateLayout({});
+    desc.rayGeneration = runtime.CreateShader(rhi::ShaderStage::RayGeneration,
+                                              std::vector<std::byte>(4), "RayGeneration");
+    auto pipeline = std::make_shared<rhi::Pipeline>(&runtime, desc);
+    auto buffer =
+        runtime.CreateBuffer({256, rhi::Memory::Upload, "Table", false, true, false, false, true});
+    auto table = std::make_shared<rhi::ShaderTable>(pipeline, buffer, 0, 64);
+    Fails([&] { runtime.CreateShaderTable(pipeline); }, "requires a ray tracing pipeline");
+    {
+        Graph graph;
+        auto records = graph.ImportBuffer("Table", buffer, {rhi::State::HostWrite, true});
+        auto pass = graph.AddRayTracingPass("PartialTable");
+        records = pass.ReadBuffer(records, Use::ShaderTableRead, {0, 64});
+        pass.SideEffect();
+        pass.Execute(
+            [=](RayTracingContext& context)
+            {
+                context.Bind(pipeline);
+                context.TraceRays(table, records, 1, 1);
+            });
+        graph.Compile();
+        Fails([&] { graph.Execute(pool); }, "exceeds declared buffer range");
+    }
+    {
+        Graph graph;
+        auto records = graph.ImportBuffer("Table", buffer, {rhi::State::HostWrite, true});
+        auto pass = graph.AddRayTracingPass("FullTable");
+        records = pass.ReadBuffer(records, Use::ShaderTableRead);
+        pass.SideEffect();
+        pass.Execute(
+            [=](RayTracingContext& context)
+            {
+                context.Bind(pipeline);
+                context.TraceRays(table, records, 1, 1);
+            });
+        graph.Compile();
+        runtime.Wait(graph.Execute(pool).completion);
+    }
+    auto commands = runtime.CreateCommands();
+    commands->Bind(pipeline);
+    commands->Bind(runtime.CreateGroup(desc.layout, {}));
+    Fails([&] { commands->Trace(table, UINT32_MAX, UINT32_MAX, UINT32_MAX); }, "Invalid TraceRays");
+}
 } // namespace
 int main()
 {
@@ -815,6 +864,7 @@ int main()
         StencilContracts();
         ProfilingContracts();
         AccelerationStructureContracts();
+        ShaderTableContracts();
         std::cout << "Graph contracts passed: names, typed passes, versions, culling, hazards, "
                      "bindings and lifetime\n";
         return 0;

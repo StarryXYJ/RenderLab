@@ -121,6 +121,8 @@ void RunRendering(platform::Window* window, rhi::Device& device, rhi::Runtime& r
     if (demo)
         demo->Prepare(swapchain->GetFormat());
     auto settings = RenderOptions(options);
+    if (scene)
+        scene->ValidatePipeline(settings.pipeline);
     Statistics statistics;
     std::unique_ptr<DebugPanel> panel;
     scene::Transform originalCamera;
@@ -146,7 +148,8 @@ void RunRendering(platform::Window* window, rhi::Device& device, rhi::Runtime& r
             DebugControls{settings, scene->Document().exposure,
                           !selectedLight.empty() &&
                               scene->Document().Get(selectedLight).light->shadows},
-            runtime.SupportsAccelerationStructures() && runtime.SupportsRayQuery());
+            runtime.SupportsAccelerationStructures() && runtime.SupportsRayQuery() &&
+                runtime.SupportsRayTracingPipeline());
         if (options.windowTest)
             panel->VerifyControls();
     };
@@ -166,12 +169,25 @@ void RunRendering(platform::Window* window, rhi::Device& device, rhi::Runtime& r
     auto previousTime = start;
     auto lastPanelUpdate = start;
     bool debugKeyDown = false;
+    uint32_t pipelineMask = 0;
     while (window->PumpEvents())
     {
         device.PollDiagnostics();
         ++tick;
         if (options.windowTest)
         {
+            if (scene && options.pipeline == "raytracing" &&
+                (tick == 7 || tick == 23 || tick == 47))
+            {
+                const auto selected = tick == 7    ? renderer::PipelineType::Forward
+                                      : tick == 23 ? renderer::PipelineType::Deferred
+                                                   : renderer::PipelineType::RayTracing;
+                scene->ValidatePipeline(selected);
+                if (panel)
+                    panel->SelectPipeline(selected);
+                else
+                    settings.pipeline = selected;
+            }
             if (tick == 5 || tick == 30 || tick == 50)
                 window->Resize(641, 359);
             if (tick == 10 || tick == 35 || tick == 55)
@@ -230,6 +246,21 @@ void RunRendering(platform::Window* window, rhi::Device& device, rhi::Runtime& r
             statistics.Add(frame.rendered, runtime, frame.cpuMs);
             frame.rendered = {};
         }
+        if (panel && panel->Controls().render.pipeline != settings.pipeline)
+        {
+            try
+            {
+                scene->ValidatePipeline(panel->Controls().render.pipeline);
+            }
+            catch (const std::exception& error)
+            {
+                panel->SelectPipeline(settings.pipeline);
+                logger.Write(LogLevel::Warning, error.what());
+                const auto message = platform::Utf8ToWide(error.what());
+                MessageBoxW(static_cast<HWND>(window->GetNativeSurface().window), message.c_str(),
+                            L"Pipeline unavailable for this scene", MB_OK | MB_ICONINFORMATION);
+            }
+        }
         auto acquired = swapchain->Acquire();
         if (!acquired.texture)
         {
@@ -284,6 +315,7 @@ void RunRendering(platform::Window* window, rhi::Device& device, rhi::Runtime& r
                               std::chrono::steady_clock::now() - renderStart)
                               .count();
             frame.completion = frame.rendered.completion;
+            pipelineMask |= 1u << static_cast<uint32_t>(settings.pipeline);
             if (panel && now - lastPanelUpdate > std::chrono::milliseconds(250))
             {
                 panel->Update(statistics.Text(scene->LastSnapshot(), runtime.GetMemoryStats()));
@@ -313,6 +345,10 @@ void RunRendering(platform::Window* window, rhi::Device& device, rhi::Runtime& r
                         device.GetReport(), runtime.GetMemoryStats());
     if (options.windowTest && (!frameNumber || resizeCount < 8 || suspendedTicks < 2))
         throw std::runtime_error("In-flight presentation resize/minimize coverage incomplete");
+    if (options.windowTest && scene && options.pipeline == "raytracing" &&
+        (pipelineMask & 14u) != 14u)
+        throw std::runtime_error(
+            "Window test did not render Forward, Deferred and Ray Tracing selections");
     logger.Write(LogLevel::Info,
                  std::format("Presentation completed: frames={}, rebuilds={}, suspendedTicks={}, "
                              "frameContexts=2 (independent of swapchain images)",

@@ -2,6 +2,7 @@
 #include "material/render_state.hpp"
 #include "renderer/acceleration_scene.hpp"
 #include "renderer/builtin_shaders.hpp"
+#include "renderer/ray_surface.hpp"
 #include "renderer/raytracing.hpp"
 
 #include "assets/io.hpp"
@@ -21,6 +22,7 @@
 
 #include <algorithm>
 #include <array>
+#include <cmath>
 #include <cstring>
 #include <map>
 #include <optional>
@@ -80,6 +82,25 @@ struct SceneRenderer::Impl
     rhi::UploadPool uploadPool;
     AccelerationScene accelerationScene;
     std::shared_ptr<rhi::Pipeline> rayQueryShadow;
+    std::shared_ptr<rhi::ShaderTable> reflectionTable;
+    std::shared_ptr<rhi::Pipeline> reflectionHistory, reflectionCombine;
+    std::array<std::shared_ptr<rhi::Buffer>, 5> raySurfaceBuffers;
+    std::array<std::vector<std::byte>, 5> raySurfaceBytes;
+    uint64_t raySurfaceVersion = 0, rayAtlasVersion = 0;
+    EnvironmentImage rayAtlas;
+    std::shared_ptr<rhi::TextureView> rayAtlasView;
+    std::map<std::string, uint32_t> rayTiles;
+    bool rayAtlasDirty = false;
+    struct ReflectionHistory
+    {
+        std::string signature;
+        std::array<std::shared_ptr<rhi::Texture>, 2> radiance;
+        std::array<bool, 2> initialized{};
+        uint32_t index = 0;
+        uint32_t samples = 0, sequence = 0;
+        uint64_t completion = 0;
+    };
+    std::map<std::string, ReflectionHistory> reflectionViews;
     RenderPipeline forwardPipeline =
         CreatePipeline(PipelineType::Forward)
             .AddFeature(std::make_shared<ShadowFeature>(), RenderStage::BeforeOpaque)
@@ -276,6 +297,197 @@ struct SceneRenderer::Impl
             runtime.CreateShader(rhi::ShaderStage::Compute, compiler.Compile(request), "CSMain");
         rayQueryShadow = runtime.CreatePipeline(std::move(description));
     }
+    void EnsureReflectionPrograms()
+    {
+        if (reflectionTable)
+            return;
+        if (!runtime.SupportsRayTracingPipeline())
+            throw std::invalid_argument("Reflections require rayTracingPipeline capability");
+        shader::DxcCompiler compiler;
+        const auto module = [&](const char* file, rhi::ShaderStage stage, const char* entry)
+        {
+            shader::ProgramRequest request;
+            request.entry = {stage, project.engine / "RenderLab" / file, entry};
+            request.target = shaderTarget;
+            if (shaderTarget == shader::Target::Spirv)
+                request.defines["SPIRV"] = "1";
+            return runtime.CreateShader(stage, compiler.Compile(request), entry);
+        };
+        rhi::PipelineDesc desc;
+        desc.layout = runtime.CreateLayout({{0, rhi::BindingKind::AccelerationStructure},
+                                            {1, rhi::BindingKind::StorageTexture},
+                                            {2, rhi::BindingKind::SampledTexture},
+                                            {3, rhi::BindingKind::SampledTexture},
+                                            {4, rhi::BindingKind::ConstantBuffer},
+                                            {5, rhi::BindingKind::ReadOnlyBuffer},
+                                            {6, rhi::BindingKind::ReadOnlyBuffer},
+                                            {7, rhi::BindingKind::ReadOnlyBuffer},
+                                            {8, rhi::BindingKind::ReadOnlyBuffer},
+                                            {9, rhi::BindingKind::ReadOnlyBuffer},
+                                            {10, rhi::BindingKind::SampledTexture},
+                                            {11, rhi::BindingKind::Sampler},
+                                            {12, rhi::BindingKind::SampledTexture},
+                                            {13, rhi::BindingKind::SampledTexture},
+                                            {15, rhi::BindingKind::SampledTexture}});
+        desc.rayGeneration =
+            module("RayReflection.hlsl", rhi::ShaderStage::RayGeneration, "RayGeneration");
+        desc.miss = module("RayReflection.hlsl", rhi::ShaderStage::Miss, "Miss");
+        desc.closestHit = module("RayReflection.hlsl", rhi::ShaderStage::ClosestHit, "ClosestHit");
+        reflectionTable = runtime.CreateShaderTable(runtime.CreatePipeline(desc));
+        desc = {};
+        desc.layout = runtime.CreateLayout({{0, rhi::BindingKind::SampledTexture},
+                                            {1, rhi::BindingKind::SampledTexture},
+                                            {2, rhi::BindingKind::StorageTexture},
+                                            {3, rhi::BindingKind::ConstantBuffer}});
+        desc.compute = module("ReflectionPost.hlsl", rhi::ShaderStage::Compute, "Accumulate");
+        reflectionHistory = runtime.CreatePipeline(desc);
+        desc = {};
+        desc.layout = runtime.CreateLayout({{0, rhi::BindingKind::SampledTexture},
+                                            {2, rhi::BindingKind::StorageTexture},
+                                            {3, rhi::BindingKind::ConstantBuffer},
+                                            {4, rhi::BindingKind::SampledTexture},
+                                            {5, rhi::BindingKind::SampledTexture},
+                                            {6, rhi::BindingKind::SampledTexture},
+                                            {7, rhi::BindingKind::SampledTexture},
+                                            {8, rhi::BindingKind::SampledTexture},
+                                            {9, rhi::BindingKind::SampledTexture},
+                                            {10, rhi::BindingKind::SampledTexture}});
+        desc.compute = module("ReflectionPost.hlsl", rhi::ShaderStage::Compute, "Combine");
+        reflectionCombine = runtime.CreatePipeline(desc);
+    }
+    uint32_t RayTile(const std::string& reference, bool srgb)
+    {
+        if (rayAtlas.pixels.empty())
+        {
+            rayAtlas = {RayAtlasSize, RayAtlasSize,
+                        std::vector<float>(size_t(RayAtlasSize) * RayAtlasSize * 4, 1)};
+            for (uint32_t y = 0; y < RayAtlasTilePitch; ++y)
+                for (uint32_t x = RayAtlasTilePitch; x < RayAtlasTilePitch * 2; ++x)
+                {
+                    const auto pixel = (size_t(y) * RayAtlasSize + x) * 4;
+                    rayAtlas.pixels[pixel] = rayAtlas.pixels[pixel + 1] = .5f;
+                }
+            rayAtlasDirty = true;
+        }
+        if (reference == "white")
+            return 0;
+        if (reference == "normal")
+            return 1;
+        const auto embedded = modelImages.find(reference);
+        std::string key = reference + (srgb ? "/Srgb" : "/Linear");
+        if (embedded == modelImages.end())
+            key +=
+                "/" + std::to_string(std::filesystem::last_write_time(database.Get(reference).path)
+                                         .time_since_epoch()
+                                         .count());
+        if (const auto found = rayTiles.find(key); found != rayTiles.end())
+            return found->second;
+        if (rayTiles.size() >= 62)
+            throw std::invalid_argument(
+                "Ray material atlas exceeds 62 image versions; restart or reduce texture count");
+        assets::Image decoded;
+        if (embedded == modelImages.end())
+            decoded = assets::DecodeImage(assets::detail::Read(database.Get(reference).path));
+        const auto& image = embedded != modelImages.end() ? *embedded->second : decoded;
+        const auto tile = static_cast<uint32_t>(rayTiles.size()) + 2;
+        rayTiles.emplace(key, tile);
+        const auto linear = [&](float value)
+        {
+            return srgb ? (value <= .04045f ? value / 12.92f
+                                            : std::pow((value + .055f) / 1.055f, 2.4f))
+                        : value;
+        };
+        for (uint32_t y = 0; y < RayAtlasTilePitch; ++y)
+            for (uint32_t x = 0; x < RayAtlasTilePitch; ++x)
+            {
+                const auto sx = std::min(image.width - 1, uint32_t(std::clamp(int(x) - 1, 0, 63)) *
+                                                              image.width / 64);
+                const auto sy = std::min(image.height - 1, uint32_t(std::clamp(int(y) - 1, 0, 63)) *
+                                                               image.height / 64);
+                const auto source = (size_t(sy) * image.width + sx) * 4;
+                const auto destination =
+                    (size_t(tile / 8 * 66 + y) * RayAtlasSize + tile % 8 * 66 + x) * 4;
+                for (uint32_t c = 0; c < 4; ++c)
+                    rayAtlas.pixels[destination + c] = c < 3
+                                                           ? linear(image.rgba[source + c] / 255.f)
+                                                           : image.rgba[source + c] / 255.f;
+            }
+        rayAtlasDirty = true;
+        return tile;
+    }
+    RayMaterialData RayMaterial(const MaterialInput& material)
+    {
+        if (material.package->definition.assetId != builtin::Lit &&
+            material.package->definition.assetId != "9120dfaac72c5c1c88f3a41e3ac22447")
+            throw std::invalid_argument(
+                "Ray reflections support built-in Lit/Unlit materials only");
+        RayMaterialData output;
+        output.normalFlags[1] = material.package->definition.assetId == builtin::Lit ? 0 : 1;
+        RayTile("white", false);
+        const shader::MaterialTemplate definition(material.package);
+        for (const auto& property : definition.Properties())
+        {
+            using S = shader::MaterialSemantic;
+            if (property.type.resource)
+            {
+                const auto found = material.asset.resources.find(property.id);
+                const auto& reference = found == material.asset.resources.end()
+                                            ? property.resourceDefault
+                                            : found->second.reference;
+                switch (property.semantic)
+                {
+                case S::BaseMap:
+                    output.maps[0] = RayTile(reference, true);
+                    break;
+                case S::MetallicRoughnessMap:
+                    output.maps[1] = RayTile(reference, false);
+                    break;
+                case S::OcclusionMap:
+                    output.maps[2] = RayTile(reference, false);
+                    break;
+                case S::EmissionMap:
+                    output.maps[3] = RayTile(reference, true);
+                    break;
+                case S::NormalMap:
+                    output.normalFlags[0] = RayTile(reference, false);
+                    break;
+                default:
+                    break;
+                }
+                continue;
+            }
+            const auto found = material.asset.values.find(property.id);
+            const auto& values =
+                found == material.asset.values.end() ? property.defaults : found->second.numbers;
+            const auto value = [&](size_t i) { return static_cast<float>(values.at(i)); };
+            switch (property.semantic)
+            {
+            case S::BaseColor:
+                for (uint32_t i = 0; i < 3; ++i)
+                    output.baseMetallic[i] = value(i);
+                break;
+            case S::Metallic:
+                output.baseMetallic[3] = value(0);
+                break;
+            case S::Roughness:
+                output.emissionRoughness[3] = value(0);
+                break;
+            case S::Emission:
+                for (uint32_t i = 0; i < 3; ++i)
+                    output.emissionRoughness[i] = value(i);
+                break;
+            case S::NormalScale:
+                output.options[0] = value(0);
+                break;
+            case S::OcclusionStrength:
+                output.options[1] = value(0);
+                break;
+            default:
+                break;
+            }
+        }
+        return output;
+    }
     MaterialInput MaterialFor(const scene::Instance& instance, const assets::Surface& surface)
     {
         const shader::MaterialTemplate materialTemplate(package);
@@ -448,6 +660,44 @@ scene::Scene& SceneRenderer::Document()
 {
     return impl_->document;
 }
+void SceneRenderer::ValidatePipeline(PipelineType pipeline)
+{
+    auto& self = *impl_;
+    if (pipeline == PipelineType::Forward)
+        return;
+    if (pipeline != PipelineType::Deferred && pipeline != PipelineType::RayTracing)
+        throw std::invalid_argument("Unknown rendering pipeline");
+    if (pipeline == PipelineType::RayTracing &&
+        (!self.runtime.SupportsAccelerationStructures() || !self.runtime.SupportsRayQuery() ||
+         !self.runtime.SupportsRayTracingPipeline()))
+        throw std::invalid_argument(
+            "Ray Tracing requires acceleration structures, Ray Query and TraceRays");
+    self.EnsureModels();
+    scene::Extractor extractor;
+    const auto snapshot = extractor.Extract(self.document, 1, self.models);
+    for (const auto& instance : snapshot.allInstances)
+    {
+        const auto& model = self.models.at(instance.model);
+        const auto mesh = std::ranges::find(model.meshes, instance.mesh, &assets::Mesh::id);
+        const auto material = self.MaterialFor(instance, model.materials.at(mesh->material));
+        const auto policy = material::ResolvePolicy(material.package->definition, material.asset);
+        if (policy.surface == shader::SurfaceType::Transparent)
+            continue;
+        if (!material.package->HasRole(shader::PassRole::GBuffer))
+            throw std::invalid_argument("Deferred rendering requires a GBuffer role in " +
+                                        material.package->definition.name);
+        if (pipeline == PipelineType::RayTracing)
+        {
+            if (policy.alphaClip)
+                throw std::invalid_argument("Ray Tracing currently supports opaque geometry; "
+                                            "masked materials need any-hit support");
+            if (material.package->definition.assetId != builtin::Lit &&
+                material.package->definition.assetId != "9120dfaac72c5c1c88f3a41e3ac22447")
+                throw std::invalid_argument(
+                    "Ray reflections currently support built-in Lit/Unlit materials");
+        }
+    }
+}
 const scene::Snapshot& SceneRenderer::LastSnapshot() const
 {
     return impl_->snapshot;
@@ -483,6 +733,23 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
     }
     self.UpdateEnvironment();
     self.shadowMatrix = FitDirectionalShadow(self.snapshot);
+    const bool reflections =
+        rayTracing && options.reflections &&
+        (options.view == SceneView::Final || options.view == SceneView::Hdr ||
+         options.view == SceneView::ReflectionRaw || options.view == SceneView::ReflectionHistory);
+    if (!reflections)
+        self.reflectionViews.clear();
+    if ((options.view == SceneView::ReflectionRaw ||
+         options.view == SceneView::ReflectionHistory) &&
+        !reflections)
+        throw std::invalid_argument(
+            "Reflection texture views require the Ray Tracing pipeline and reflections enabled");
+    std::vector<assets::Vertex> rayVertices;
+    std::vector<uint32_t> rayIndices;
+    std::vector<RayMeshData> rayMeshesData;
+    std::vector<RayInstanceData> rayInstanceData;
+    std::vector<RayMaterialData> rayMaterials;
+    std::map<std::string, uint32_t> rayMeshIndices;
     std::vector<AccelerationScene::Instance> rayInstances;
     if (rayTracing)
     {
@@ -519,8 +786,52 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
                     rayInstance.mask |= 1;
             }
             rayInstances.push_back(std::move(rayInstance));
+            if (reflections)
+            {
+                if (!rayMeshIndices.contains(key))
+                {
+                    rayMeshIndices.emplace(key, static_cast<uint32_t>(rayMeshesData.size()));
+                    rayMeshesData.push_back({static_cast<uint32_t>(rayVertices.size()),
+                                             static_cast<uint32_t>(rayIndices.size())});
+                    rayVertices.insert(rayVertices.end(), mesh->vertices.begin(),
+                                       mesh->vertices.end());
+                    rayIndices.insert(rayIndices.end(), mesh->indices.begin(), mesh->indices.end());
+                }
+                rayInstanceData.push_back(
+                    {rayMeshIndices.at(key), static_cast<uint32_t>(rayMaterials.size())});
+                rayMaterials.push_back(self.RayMaterial(material));
+            }
         }
         self.accelerationScene.EnsureMeshes(rayMeshes);
+        if (reflections)
+        {
+            self.EnsureReflectionPrograms();
+            const auto cache = [&](auto& data, size_t index)
+            {
+                if (data.empty())
+                    data.resize(1);
+                const auto bytes = std::as_bytes(std::span{data});
+                if (self.raySurfaceBuffers[index] &&
+                    std::ranges::equal(bytes, self.raySurfaceBytes[index]))
+                    return;
+                self.raySurfaceBytes[index].assign(bytes.begin(), bytes.end());
+                self.raySurfaceBuffers[index] = self.Upload(
+                    bytes, "RayTracing.Surface" + std::to_string(index), rhi::State::ShaderRead);
+                ++self.raySurfaceVersion;
+            };
+            cache(rayVertices, 0);
+            cache(rayIndices, 1);
+            cache(rayMeshesData, 2);
+            cache(rayInstanceData, 3);
+            cache(rayMaterials, 4);
+            self.RayTile("white", false);
+            if (self.rayAtlasDirty)
+            {
+                self.rayAtlasView = self.UploadFloat("RayTracing.MaterialAtlas", self.rayAtlas);
+                self.rayAtlasDirty = false;
+                ++self.rayAtlasVersion;
+            }
+        }
     }
     rendergraph::Graph graph;
     if (target->desc.format != rhi::Format::Rgba8Srgb &&
@@ -596,6 +907,9 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
         return name;
     };
     std::optional<AccelerationScene::Prepared> preparedAcceleration;
+    std::string reflectionSignature;
+    Impl::ReflectionHistory* reflectionHistory = nullptr;
+    uint32_t reflectionOutput = 0, reflectionSamples = 0, reflectionSequence = 0;
     if (rayTracing)
     {
         preparedAcceleration = self.accelerationScene.Build(graph, std::move(rayInstances));
@@ -614,6 +928,92 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
             importBuffer(slice.buffer, "RayTracing.Parameters", rhi::State::HostWrite);
         frame.rayTracing.parameters = {
             3, name, rendergraph::Use::Uniform, {slice.offset, slice.size}};
+    }
+    if (reflections)
+    {
+        ReflectionParameters parameters;
+        parameters.inverseViewProjection = math::Inverse(self.snapshot.viewProjection).values;
+        parameters.cameraPosition = Vector(self.snapshot.cameraPosition);
+        parameters.directionToLight = Vector(self.snapshot.light.direction);
+        parameters.lightColor = Vector(self.snapshot.light.color, self.snapshot.light.intensity);
+        parameters.environment = {
+            self.snapshot.environmentIntensity,
+            self.snapshot.environmentRotation * float(3.141592653589793 / 180), 0, 0};
+        parameters.options[2] = self.snapshot.light.shadows ? 1.f : 0.f;
+        const auto append = [&](const auto& value)
+        {
+            const auto bytes = std::as_bytes(std::span{&value, size_t{1}});
+            reflectionSignature.append(reinterpret_cast<const char*>(bytes.data()), bytes.size());
+        };
+        append(parameters);
+        append(target->desc.width);
+        append(target->desc.height);
+        append(self.raySurfaceVersion);
+        append(self.rayAtlasVersion);
+        append(self.environmentAmbient);
+        reflectionSignature += self.environmentKey;
+        for (const auto& instance : self.snapshot.allInstances)
+        {
+            reflectionSignature += instance.id;
+            append(instance.world.values);
+        }
+        const auto& viewId = self.document.activeCamera;
+        if (!self.reflectionViews.contains(viewId) && self.reflectionViews.size() >= 4)
+            self.reflectionViews.erase(self.reflectionViews.begin());
+        auto& history = self.reflectionViews[viewId];
+        reflectionHistory = &history;
+        const bool accumulate =
+            options.reflectionHistory && options.view != SceneView::ReflectionRaw;
+        const bool valid =
+            accumulate && history.signature == reflectionSignature && history.samples > 0;
+        reflectionSamples = valid ? history.samples : 0;
+        reflectionSequence = valid ? history.sequence : 0;
+        parameters.options[0] = static_cast<float>(reflectionSequence);
+        parameters.options[1] = static_cast<float>(reflectionSamples);
+        reflectionOutput = 1 - history.index;
+        auto& output = history.radiance[reflectionOutput];
+        if (!output || output->desc.width != target->desc.width ||
+            output->desc.height != target->desc.height)
+        {
+            output = self.runtime.CreateTexture({target->desc.width, target->desc.height,
+                                                 rhi::Format::Rgba32Float, true, false,
+                                                 "RayTracing.History." + viewId});
+            history.initialized[reflectionOutput] = false;
+        }
+        const auto name = "RayTracing.History." + viewId;
+        graph.ImportTexture(
+            name, output,
+            {history.initialized[reflectionOutput] ? rhi::State::Sampled : rhi::State::Undefined,
+             history.initialized[reflectionOutput], history.completion});
+        frame.rayTracing.historyRadiance = name;
+        if (valid)
+        {
+            graph.ImportTexture("RayTracing.Previous." + viewId, history.radiance[history.index],
+                                {rhi::State::Sampled, true, history.completion});
+            frame.rayTracing.previousRadiance = "RayTracing.Previous." + viewId;
+        }
+        const auto slice = uploads.Write(std::as_bytes(std::span{&parameters, size_t{1}}));
+        frame.rayTracing.reflectionParameters = {
+            4,
+            importBuffer(slice.buffer, "RayTracing.ReflectionParameters", rhi::State::HostWrite),
+            rendergraph::Use::Uniform,
+            {slice.offset, slice.size}};
+        frame.rayTracing.reflectionTable = self.reflectionTable;
+        frame.rayTracing.historyPipeline = self.reflectionHistory;
+        frame.rayTracing.combinePipeline = self.reflectionCombine;
+        frame.rayTracing.sampler = self.sampler;
+        constexpr std::array<uint32_t, 5> strides{32, 4, 16, 16, 80};
+        for (uint32_t i = 0; i < 5; ++i)
+            frame.rayTracing.surfaces.push_back(
+                {i + 5,
+                 importBuffer(self.raySurfaceBuffers[i], "RayTracing.Surface" + std::to_string(i),
+                              rhi::State::ShaderRead),
+                 rendergraph::Use::ShaderRead,
+                 {},
+                 strides[i]});
+        frame.rayTracing.reflectionTextures = {{10, importTexture(self.rayAtlasView)},
+                                               {13, importTexture(self.environmentAtlas)},
+                                               {15, importTexture(self.brdfLut)}};
     }
     const material::ResourceResolver resolve =
         [&](const shader::Property& property, const std::string& reference)
@@ -859,7 +1259,13 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
         self.deferredPipeline.Build(graph, frame);
     else
         self.forwardPipeline.Build(graph, frame);
+    if (reflections)
+        graph.Export(graph.GetTexture(frame.rayTracing.historyRadiance), rhi::State::Sampled);
     std::string displaySource = "CameraColor";
+    if (options.view == SceneView::ReflectionRaw)
+        displaySource = "RayTracing.RawRadiance";
+    else if (options.view == SceneView::ReflectionHistory)
+        displaySource = frame.rayTracing.historyRadiance;
     if (options.view == SceneView::Shadow)
         displaySource = rayTracing ? "RayTracing.ShadowVisibility" : "MainLightShadow";
     else if (options.view == SceneView::Environment)
@@ -942,9 +1348,20 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
     graph.Export("DisplayColor", swapchain ? rhi::State::Present : rhi::State::CopySource);
     graph.Compile({.profile = options.profile});
     auto submitted = graph.Execute(self.pool, swapchain);
+    if (reflectionHistory)
+    {
+        reflectionHistory->signature = std::move(reflectionSignature);
+        reflectionHistory->index = reflectionOutput;
+        reflectionHistory->initialized[reflectionOutput] = true;
+        reflectionHistory->samples = std::min(reflectionSamples + 1, 63u);
+        reflectionHistory->sequence = (reflectionSequence + 1) % 1048576;
+        reflectionHistory->completion = submitted.completion;
+    }
     if (preparedAcceleration)
         self.accelerationScene.Commit(std::move(*preparedAcceleration), submitted.completion);
     uploads.Seal(submitted.completion);
+    result.reflectionSamples = reflectionHistory ? reflectionHistory->samples : 0;
+    result.reflectionHistoryReset = reflectionHistory && reflectionSamples == 0;
     result.completion = submitted.completion;
     result.profile = std::move(submitted.profile);
     result.compileNs = graph.GetPlan().compileNs;

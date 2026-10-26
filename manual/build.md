@@ -204,7 +204,7 @@ Assets 与 .meta 纳入版本管理，Library 可以清除重建。不要原地�
 
 ### Ray Tracing 组合与 Ray Query
 
-支持 AS/Ray Query 的设备可在 Pipeline 菜单选择 **Ray Tracing**，CLI 使用 `--pipeline raytracing`。当前组合以 Deferred 为主体，通过独立 Ray Query Pass 生成方向光阴影可见性；Shadow 纹理查看项显示此可见性图。方向光的 Shadows 开关控制该效果。当前仅支持不透明静态几何，Masked 材质会给出诊断，透明材质仍走 Forward。
+支持 AS/Ray Query/TraceRays 的设备可在 Pipeline 菜单选择 **Ray Tracing**，CLI 使用 `--pipeline raytracing`。当前组合以 Deferred 为主体，通过独立 Ray Query Pass 生成方向光阴影可见性，并用 TraceRays 生成一次反射、静止历史累积与独立合成；Shadow 纹理查看项显示此可见性图。方向光的 Shadows 开关控制阴影效果。反射仅支持内置 Lit/Unlit 不透明材质。当前仅支持不透明静态几何，Masked 材质会给出诊断，透明材质仍走 Forward。
 
 ```powershell
 out/build/windows-debug/renderlab_sandbox.exe --backend dx12 --validation on `
@@ -214,6 +214,8 @@ ctest --test-dir out/build/windows-debug -R "acceleration_structure|ray_query_sc
 ```
 
 `--as-test` 还运行原生 TraceRays 的三角形命中/未命中、索引 PBR 和 PSO/ShaderTable 代际重建检查；成功日志分别列出 Ray Query 与 TraceRays。
+
+Texture 菜单可查看 Reflection (raw sample) 与 Reflection (history)。CLI 对应 `--pipeline raytracing --view reflection-raw` / `reflection-history`；raw 固定单样本且不读旧历史，相机运动会重置累积。纯光栅对照用 `--pipeline forward` 或 `deferred`。自定义 Shader 缺少 GBuffer 或光追表面实现时，窗口菜单恢复原选项并显示原因；如原始 Copper 场景可继续用 Forward，三种模式对照请用下列 RayTracing 项目。
 
 RayTracing.rlproject 与 M4 项目共用 Assets，只保留不透明地面、球和立方体，适合在三种组合间对照。AS 接口、资源声明、scratch 与在途 TLAS 生命周期见 [光追基础](../docs/raytracing.md)。Path Tracing 按 M8 计划保留，Forward+ 按 M6 计划保留；实现后可加入现有类型化菜单选项表。
 

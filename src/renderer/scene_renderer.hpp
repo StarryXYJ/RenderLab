@@ -1,7 +1,7 @@
 #pragma once
 
-#include "rendergraph/types.hpp"
 #include "renderer/pipeline.hpp"
+#include "rendergraph/types.hpp"
 #include "rhi/resources.hpp"
 #include "rhi/upload.hpp"
 #include "scene/scene.hpp"
@@ -25,7 +25,9 @@ enum class SceneView
     Hdr,
     Shadow,
     Environment,
-    Brdf
+    Brdf,
+    ReflectionRaw,
+    ReflectionHistory
 };
 struct SceneRenderOptions
 {
@@ -34,6 +36,9 @@ struct SceneRenderOptions
     bool profile = false;
     /// Zero preserves the scene setting; otherwise a power of two in [128,2048].
     uint32_t shadowResolution = 0;
+    bool reflections = true;
+    /// Bounded stationary accumulation. Disable for deterministic single-sample comparisons.
+    bool reflectionHistory = true;
 };
 /// @brief Submission completion point and optional pixels; wait before mapping the readback buffer.
 struct SceneReadback
@@ -41,6 +46,8 @@ struct SceneReadback
     uint64_t completion = 0;
     std::shared_ptr<rhi::Buffer> pixels;
     rendergraph::Submission::GpuProfile profile;
+    uint32_t reflectionSamples = 0;
+    bool reflectionHistoryReset = false;
     uint64_t compileNs = 0, prepareNs = 0, recordNs = 0;
 };
 /** @brief Project/scene to the existing Forward composition. Runtime outlives the renderer. */
@@ -55,6 +62,8 @@ public:
     SceneRenderer& operator=(const SceneRenderer&) = delete;
     /// @brief Owner-thread editable scene; apply changes between Render calls.
     scene::Scene& Document();
+    /// Validate composition/material compatibility before changing an interactive selection.
+    void ValidatePipeline(PipelineType pipeline);
     const scene::Snapshot& LastSnapshot() const;
     const std::map<std::string, assets::Model>& Models() const;
     rhi::UploadPool::Statistics UploadStatistics() const;

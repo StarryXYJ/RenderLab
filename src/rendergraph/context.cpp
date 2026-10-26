@@ -268,6 +268,9 @@ void RayTracingContext::TraceRays(std::shared_ptr<rhi::ShaderTable> table, Buffe
                                Use::ShaderTableRead);
     Require(table && table->buffer == resource.buffer,
             "ShaderTable records do not match declaration");
+    Require(table->stride > 0 && table->stride <= table->buffer->desc.size / 3,
+            "Invalid ShaderTable stride");
+    g.CheckBufferRange(pass_, records, table->offset, table->stride * 3);
     FlushBindings();
     commands_.Trace(std::move(table), width, height, depth);
 }

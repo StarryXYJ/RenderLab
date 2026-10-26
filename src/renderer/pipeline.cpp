@@ -155,7 +155,12 @@ RenderPipelineBuilder CreatePipeline(PipelineType type, PipelineOptions options)
         if (type == PipelineType::RayTracing)
             pipeline.Append(std::make_shared<RayQueryShadowFeature>(), 2);
         pipeline.Append(std::make_shared<DeferredLightingFeature>(), 3);
-        pipeline.Append(std::make_shared<TransparentFeature>("Deferred.Lighting"), 5);
+        if (type == PipelineType::RayTracing)
+            pipeline.Append(std::make_shared<RayReflectionFeature>(), 4);
+        pipeline.Append(std::make_shared<TransparentFeature>(type == PipelineType::RayTracing
+                                                                 ? "RayTracing.Reflections"
+                                                                 : "Deferred.Lighting"),
+                        5);
     }
     return pipeline;
 }
