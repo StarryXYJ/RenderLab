@@ -42,7 +42,7 @@ public:
     std::shared_ptr<BindingGroup> CreateGroup(std::shared_ptr<BindingLayout> layout,
                                               std::vector<Binding> bindings) override;
     std::unique_ptr<Swapchain> CreateSwapchain(platform::NativeSurface surface, uint32_t width,
-                                               uint32_t height) override;
+                                               uint32_t height, bool vsync = true) override;
 
 protected:
     std::shared_ptr<ShaderTable> CreateShaderTableNative(std::shared_ptr<Pipeline>) override;

@@ -22,7 +22,7 @@ public partial class MainWindow : Window
     internal Button ResetButton => ResetAction;
     internal Button RecreateButton => RecreateAction;
     internal IReadOnlyList<CloseReport> CloseReports => viewportService!.CloseReports;
-    internal event Action<ViewportStats>? FrameCompleted;
+    internal event Action<ViewportStats>? StatsUpdated;
 
     // The previewer loads XAML without creating native rendering resources.
     public MainWindow() => InitializeComponent();
@@ -33,13 +33,13 @@ public partial class MainWindow : Window
         DataContext = viewModel;
         this.viewportService = viewportService;
         viewportService.RecreateRequested += RecreateViewport;
-        viewportService.FrameCompleted += ForwardFrame;
+        viewportService.StatsUpdated += ForwardStats;
         viewportService.Failed += OnViewportFailure;
         Closing += (_, _) => Viewport.CloseViewport();
         Closed += (_, _) =>
         {
             viewportService.RecreateRequested -= RecreateViewport;
-            viewportService.FrameCompleted -= ForwardFrame;
+            viewportService.StatsUpdated -= ForwardStats;
             viewportService.Failed -= OnViewportFailure;
         };
         RecreateViewport();
@@ -55,7 +55,7 @@ public partial class MainWindow : Window
 
     private void OnViewportFailure(Exception error) => smoke?.Fail(error);
 
-    private void ForwardFrame(ViewportStats stats) => FrameCompleted?.Invoke(stats);
+    private void ForwardStats(ViewportStats stats) => StatsUpdated?.Invoke(stats);
 
     internal void RecreateViewport()
     {

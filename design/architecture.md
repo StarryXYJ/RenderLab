@@ -81,7 +81,7 @@ RHI 定义 GPU 对象与命令语义。Render Graph 编译一帧工作的资源�
 
 编辑器阶段先使用进程内原生库与 P/Invoke，桥接接口采用不透明 Handle、固定宽度字段、UTF-8 和明确的缓冲区所有权。STL 容器、C++ 异常和内部对象指针不跨边界。按编辑操作批量交互，不把 RHI 逐个包装成 C# 对象。桥接双方随同一版本发布，不建设跨版本插件 ABI。
 
-Windows 编辑器使用 Avalonia 管理整个窗口和普通面板，NativeControlHost 托管由 C++ 创建的渲染子 HWND；C++ 使用该窗口创建 Surface，复用 SceneRenderer 与双后端 Swapchain。[提前集成原型](../docs/editor-host.md) 已验证 UI STA 线程上的最小生命周期和双后端 Present，采用代际 Handle、UTF-8 和显式关闭协议，先释放 GPU/展示再销毁子窗口。原型的渲染/编译/GPU 等待会阻塞 UI，后续按实际需要引入独立渲染 owner thread。跨屏 DPI、Docking、浮动窗口重挂接和真实交互仍需完整编辑器阶段验证。
+Windows 编辑器使用 Avalonia 管理整个窗口和普通面板，NativeControlHost 托管由 C++ 创建的渲染子 HWND；C++ 使用该窗口创建 Surface，复用 SceneRenderer 与双后端 Swapchain。[提前集成原型](../docs/editor-host.md) 已验证双后端 Present，采用代际 Handle、UTF-8 和显式关闭协议。UI STA 拥有 HWND/输入，专用 MTA 渲染线程创建、使用并销毁 Device/Runtime/SceneRenderer/Swapchain；最新值邮箱传递配置与输入，完成帧快照用有界队列发布，RHI 线程所有权检查保留。关闭先停止线程、释放 GPU/展示，再在 UI 销毁 HWND；等待期间处理 Win32 同步消息以防 DXGI 死锁。目标帧率调度支持 0 表示无 CPU 限速且关闭强制 VSync；RHI Swapchain 创建参数显式选择展示同步，默认保持 VSync。Resize 合并与静态按需重绘的契约和实际验收见宿主说明及阶段计划。跨屏 DPI、Docking、浮动窗口重挂接和真实交互仍需完整编辑器阶段验证。
 
 托管宿主按官方 Avalonia MVVM 模板组织 App、Views 与 ViewModels；XAML 使用编译绑定，CommunityToolkit.Mvvm 生成属性通知和命令，App 通过 Microsoft.Extensions.DependencyInjection 装配具体依赖。ViewModel 保存 UI 状态和服务投影，不调用 P/Invoke 或持有 HWND；NativeViewportService 管理原生 Session、已接受的视口配置与错误，NativeControlHost 适配窗口生命周期和 Timer。当前服务与视口一一对应，不建设通用模块框架；后续编辑面板沿同一结构增量加入，场景、材质和资源的权威状态继续归 C++ 服务。
 

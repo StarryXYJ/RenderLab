@@ -18,7 +18,8 @@ internal sealed class SmokeTest
     private readonly List<string> checks = [];
     private readonly Stopwatch elapsed = Stopwatch.StartNew();
     private readonly DispatcherTimer watchdog = new() { Interval = TimeSpan.FromSeconds(120) };
-    private int stage, ticks;
+    private int stage, ticks, resizeBurstTicks;
+    private int acknowledgedPauseStage = -1;
     private ulong oldHandle, savedFrames, savedResizes, savedPaused, savedInput;
     private bool completed;
     private RenderViewportHost? detachedHost;
@@ -27,7 +28,7 @@ internal sealed class SmokeTest
     {
         this.window = window;
         this.options = options;
-        window.FrameCompleted += Update;
+        window.StatsUpdated += Update;
         watchdog.Tick += (_, _) => Fail(new TimeoutException("Viewport smoke stopped making progress."));
         watchdog.Start();
     }
@@ -40,12 +41,12 @@ internal sealed class SmokeTest
         }
     }
 
-    private void CheckPixels(ViewportStats stats)
-    {
-        Require(Math.Abs(stats.Width - window.Viewport.Bounds.Width * window.RenderScaling) <= 2 &&
-            Math.Abs(stats.Height - window.Viewport.Bounds.Height * window.RenderScaling) <= 2,
-            "Native client size does not match Avalonia DIP-to-pixel layout.");
-    }
+    private bool PixelsMatch(ViewportStats stats) =>
+        Math.Abs(stats.Width - window.Viewport.Bounds.Width * window.RenderScaling) <= 2 &&
+        Math.Abs(stats.Height - window.Viewport.Bounds.Height * window.RenderScaling) <= 2;
+
+    private void CheckPixels(ViewportStats stats) => Require(PixelsMatch(stats),
+        "Native client size does not match Avalonia DIP-to-pixel layout.");
 
     private void Update(ViewportStats stats)
     {
@@ -56,8 +57,41 @@ internal sealed class SmokeTest
         try
         {
             Require(elapsed.Elapsed < TimeSpan.FromSeconds(120), "Viewport smoke timed out.");
-            if (++ticks < 8 || stats.Frames < 8)
+            if (stage == 17 && resizeBurstTicks < 6)
             {
+                ++resizeBurstTicks;
+                window.Width += 10;
+                return;
+            }
+            if (++ticks < 8 || stats.Frames < 1 || stats.Ready == 0)
+            {
+                return;
+            }
+            // Configuration now crosses a mailbox. First-use shader/PSO work may take
+            // longer than eight UI heartbeats; wait for the published render result.
+            if ((stage == 9 && stats.Pipeline != 1) ||
+                (stage == 10 && (stats.Pipeline != 3 || stats.ReflectionSamples == 0)) ||
+                (stage == 12 && (stats.Pipeline != 3 || stats.ReflectionSamples == 0 ||
+                    (stats.ProfilingEnabled != 0 && stats.GpuFrame == 0))) ||
+                (stage == 13 && (stats.Pipeline != 1 || stats.Activity != 2)))
+            {
+                return;
+            }
+            if ((stage is 1 or 17) && !PixelsMatch(stats))
+            {
+                return;
+            }
+            if (stage is 5 or 7 or 11 && acknowledgedPauseStage != stage)
+            {
+                if (stats.Activity != 3)
+                {
+                    return;
+                }
+                // Freeze the reference after the render owner acknowledges suspension.
+                // A UI snapshot sampled before the command may already lag an in-flight frame.
+                acknowledgedPauseStage = stage;
+                savedFrames = stats.Frames;
+                ticks = 0;
                 return;
             }
             ticks = 0;
@@ -66,6 +100,9 @@ internal sealed class SmokeTest
             switch (stage++)
             {
                 case 0:
+                    Require(stats.UiThreadId != 0 && stats.RenderThreadId != 0 &&
+                        stats.UiThreadId != stats.RenderThreadId, "Runtime did not move to a dedicated render owner.");
+                    Require(stats.DroppedSamples == 0, "Completed frame samples were dropped.");
                     Require(stats.ValidationEnabled == (options.Validation ? 1u : 0u) &&
                         stats.ProfilingEnabled == (options.Profiling ? 1u : 0u), "Creation settings were not applied.");
                     Require(NativeMethods.IsChild(root, host.Child), "Viewport is not embedded in the Avalonia window.");
@@ -113,24 +150,24 @@ internal sealed class SmokeTest
                     window.WindowState = WindowState.Minimized;
                     break;
                 case 5:
-                    Require(stats.PausedTicks > savedPaused && stats.Frames <= savedFrames + 1,
+                    Require(stats.PausedTicks > savedPaused && stats.Frames == savedFrames,
                         "Minimized window continued rendering.");
                     window.WindowState = WindowState.Normal;
                     break;
                 case 6:
-                    Require(stats.Frames > savedFrames + 1, "Restored window did not resume rendering.");
+                    Require(stats.Frames > savedFrames, "Restored window did not resume rendering.");
                     checks.Add("minimize pauses rendering and restore resumes");
                     savedFrames = stats.Frames;
                     savedPaused = stats.PausedTicks;
                     host.IsVisible = false;
                     break;
                 case 7:
-                    Require(stats.PausedTicks > savedPaused && stats.Frames <= savedFrames + 1,
+                    Require(stats.PausedTicks > savedPaused && stats.Frames == savedFrames,
                         "Hidden viewport continued rendering.");
                     host.IsVisible = true;
                     break;
                 case 8:
-                    Require(stats.Frames > savedFrames + 1, "Shown viewport did not resume.");
+                    Require(stats.Frames > savedFrames, "Shown viewport did not resume.");
                     checks.Add("hide/show viewport");
                     window.PipelinePicker.SelectedIndex = 0;
                     window.ExposureSlider.Value = .5;
@@ -152,7 +189,7 @@ internal sealed class SmokeTest
                     window.PauseButton.Command!.Execute(null);
                     break;
                 case 11:
-                    Require(stats.PausedTicks > savedPaused && stats.Frames <= savedFrames + 1 &&
+                    Require(stats.PausedTicks > savedPaused && stats.Frames == savedFrames &&
                         window.ViewModel.IsPaused && window.PauseButton.Content?.ToString() == "Resume viewport",
                         "Pause command or generated property notification did not update rendering and UI.");
                     window.PauseButton.Command!.Execute(null);
@@ -176,6 +213,35 @@ internal sealed class SmokeTest
                     Require(NativeMethods.GetStats(host.Session, out _) == 0,
                         "A repeated detached-host close destroyed the replacement session.");
                     checks.Add("detach/recreate, stale generation rejection, GPU-before-HWND shutdown");
+                    window.PipelinePicker.SelectedIndex = 0;
+                    break;
+                case 13:
+                    savedFrames = stats.Frames;
+                    break;
+                case 14:
+                    Require(stats.Frames == savedFrames && stats.Activity == 2,
+                        "Static raster viewport kept rendering.");
+                    checks.Add("static raster viewport idles without additional presents");
+                    window.ExposureSlider.Value = .75;
+                    break;
+                case 15:
+                    Require(stats.Frames > savedFrames, "Exposure edit did not invalidate the static viewport.");
+                    window.PipelinePicker.SelectedIndex = 2;
+                    break;
+                case 16:
+                    if (stats.Pipeline != 3 || stats.ReflectionSamples < 2)
+                    {
+                        --stage;
+                        break;
+                    }
+                    checks.Add("raster edits redraw and ray tracing continues progressive accumulation");
+                    savedResizes = stats.Resizes;
+                    break;
+                case 17:
+                    CheckPixels(stats);
+                    Require(stats.Resizes > savedResizes && stats.Resizes <= savedResizes + 2,
+                        "Consecutive resize updates were not coalesced.");
+                    checks.Add("six consecutive UI resize updates coalesced into at most two swapchain rebuilds");
                     Finish(stats);
                     break;
             }
@@ -189,8 +255,17 @@ internal sealed class SmokeTest
     private void Finish(ViewportStats stats)
     {
         window.Viewport.CloseViewport();
-        Require(window.CloseReports.Count == 2 && window.CloseReports.All(r => r.RemainingBytes == 0 && r.ValidationErrors == 0),
+        Require(window.CloseReports.Count == 2 && window.CloseReports.All(r => r.RemainingBytes == 0 && r.ValidationErrors == 0 && r.WorkerFailed == 0),
             "Final native shutdown did not release all resources cleanly.");
+        NativeMethods.Check(NativeMethods.Create(window.TryGetPlatformHandle()!.Handle,
+            options.Backend == "dx12" ? 0u : 1u, options.Validation ? 1u : 0u,
+            options.Profiling ? 1u : 0u, options.TargetFps, 0,
+            options.Project, options.Shaders, Path.Combine(options.Output, "startup-close.log"),
+            out var startupSession, out _));
+        NativeMethods.Check(NativeMethods.Destroy(startupSession, out var startupClose));
+        Require(startupClose.RemainingBytes == 0 && startupClose.ValidationErrors == 0 && startupClose.WorkerFailed == 0,
+            "Closing during render startup leaked or failed validation.");
+        checks.Add("immediate close during asynchronous render startup");
         completed = true;
         watchdog.Stop();
         File.WriteAllText(Path.Combine(options.Output, "smoke.json"), JsonSerializer.Serialize(new
@@ -201,6 +276,7 @@ internal sealed class SmokeTest
             checks,
             stats,
             closeReports = window.CloseReports,
+            startupClose,
             dpiBoundary = "Current monitor scale verified; cross-monitor DPI transition not tested."
         }, EditorDiagnostics.JsonOptions));
         ((IClassicDesktopStyleApplicationLifetime)Application.Current!.ApplicationLifetime!).Shutdown(0);

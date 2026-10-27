@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using System.Text.Json;
 using Avalonia;
 using Avalonia.Controls.ApplicationLifetimes;
@@ -16,18 +15,18 @@ internal sealed class ViewportBenchmark
     private readonly EditorOptions options;
     private readonly NativeViewportService viewport;
     private readonly MainWindow window;
-    private readonly Stopwatch elapsed = new();
     private readonly List<FrameSample> samples = [];
     private readonly DispatcherTimer watchdog;
-    private bool measuring, finished;
+    private bool finished;
     private ulong previousFrame;
+    private ulong? firstFrameTime;
 
     internal ViewportBenchmark(MainWindow window, NativeViewportService viewport, EditorOptions options)
     {
         this.window = window;
         this.viewport = viewport;
         this.options = options;
-        viewport.FrameCompleted += Update;
+        viewport.FrameMeasured += Update;
         viewport.Failed += Fail;
         watchdog = new DispatcherTimer { Interval = TimeSpan.FromSeconds(options.WarmupSeconds + options.BenchmarkSeconds + 30) };
         watchdog.Tick += (_, _) => Fail(new TimeoutException("Viewport benchmark timed out."));
@@ -41,30 +40,27 @@ internal sealed class ViewportBenchmark
             return;
         }
         previousFrame = stats.Frames;
-        if (!elapsed.IsRunning)
+        firstFrameTime ??= stats.FrameTimeNs;
+        var seconds = (stats.FrameTimeNs - firstFrameTime.Value) / 1e9;
+        if (seconds < options.WarmupSeconds)
         {
-            elapsed.Start();
-        }
-        if (elapsed.Elapsed.TotalSeconds < options.WarmupSeconds)
-        {
-            return;
-        }
-        if (!measuring)
-        {
-            viewport.Timings.Reset();
-            measuring = true;
             return;
         }
         if (viewport.Timings.Latest is { } sample)
         {
             samples.Add(sample);
         }
-        if (elapsed.Elapsed.TotalSeconds < options.WarmupSeconds + options.BenchmarkSeconds)
+        if (seconds < options.WarmupSeconds + options.BenchmarkSeconds)
         {
             return;
         }
         finished = true;
         watchdog.Stop();
+        Dispatcher.UIThread.Post(() => Finish(stats));
+    }
+
+    private void Finish(ViewportStats stats)
+    {
         window.Viewport.CloseViewport();
         File.WriteAllText(Path.Combine(options.Output, "frames.json"), JsonSerializer.Serialize(samples, EditorDiagnostics.JsonOptions));
         File.WriteAllText(Path.Combine(options.Output, "performance.json"), JsonSerializer.Serialize(new
@@ -73,7 +69,7 @@ internal sealed class ViewportBenchmark
             stats,
             summary = FrameTimingWindow.Summarize(samples),
             viewport.CloseReports,
-            scope = "Window render-callback intervals; GPU is the sum of completed Graph pass timings, not scanout latency."
+            scope = "Native Present-return intervals from a bounded frame queue; GPU is the sum of completed Graph pass timings, not scanout latency."
         }, EditorDiagnostics.JsonOptions));
         ((IClassicDesktopStyleApplicationLifetime)Application.Current!.ApplicationLifetime!).Shutdown(0);
     }

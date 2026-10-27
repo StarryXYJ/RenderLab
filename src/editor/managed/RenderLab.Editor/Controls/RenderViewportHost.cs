@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using Avalonia.Controls;
 using Avalonia.Platform;
 using Avalonia.Threading;
@@ -11,8 +10,6 @@ internal sealed class RenderViewportHost : NativeControlHost
 {
     private readonly NativeViewportService viewport;
     private readonly DispatcherTimer timer = new() { Interval = TimeSpan.FromMilliseconds(16) };
-    private readonly Stopwatch clock = Stopwatch.StartNew();
-    private double previous;
     internal ulong Session { get; private set; }
     internal nint Child { get; private set; }
 
@@ -31,7 +28,6 @@ internal sealed class RenderViewportHost : NativeControlHost
         var child = viewport.Create(parent.Handle);
         Session = viewport.Session;
         Child = child;
-        previous = clock.Elapsed.TotalSeconds;
         timer.Start();
         return new PlatformHandle(child, "HWND");
     }
@@ -46,10 +42,7 @@ internal sealed class RenderViewportHost : NativeControlHost
         }
         try
         {
-            var now = clock.Elapsed.TotalSeconds;
-            var delta = (float)Math.Clamp(now - previous, 0, .1);
-            previous = now;
-            viewport.Tick(delta, !IsVisible);
+            viewport.Poll(!IsVisible);
         }
         catch (Exception error)
         {

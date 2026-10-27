@@ -22,6 +22,7 @@
 
 #include <algorithm>
 #include <array>
+#include <chrono>
 #include <cmath>
 #include <cstring>
 #include <map>
@@ -886,6 +887,7 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
                                     rhi::Swapchain* swapchain, bool readback,
                                     const std::filesystem::path& dump, SceneRenderOptions options)
 {
+    const auto preparationStart = std::chrono::steady_clock::now();
     auto& self = *impl_;
     const bool rayTracing = options.pipeline == PipelineType::RayTracing;
     if (options.pipeline != PipelineType::Forward && options.pipeline != PipelineType::Deferred &&
@@ -1694,6 +1696,10 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
         graph.Export(buffer, rhi::State::HostRead);
     }
     graph.Export("DisplayColor", swapchain ? rhi::State::Present : rhi::State::CopySource);
+    result.scenePrepareNs =
+        static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(
+                                  std::chrono::steady_clock::now() - preparationStart)
+                                  .count());
     graph.Compile({.profile = options.profile});
     auto submitted = graph.Execute(self.pool, swapchain);
     if (reflectionHistory)

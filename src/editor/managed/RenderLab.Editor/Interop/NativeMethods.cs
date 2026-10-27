@@ -11,13 +11,16 @@ internal struct ViewportStats
     public ulong TickNs, FenceWaitNs, AcquireNs, RenderNs, PresentNs, ResizeNs;
     public ulong DiagnosticsNs, GraphCompileNs, GraphPrepareNs, GraphRecordNs, GpuNs, GpuFrame;
     public uint ValidationEnabled, ProfilingEnabled;
+    public ulong ScenePrepareNs;
+    public ulong FrameIntervalNs, FrameTimeNs, DroppedSamples;
+    public uint Activity, Ready, UiThreadId, RenderThreadId;
 }
 
 [StructLayout(LayoutKind.Sequential)]
 internal struct CloseReport
 {
     public ulong RemainingBytes, PeakBytes;
-    public uint ValidationErrors, Reserved;
+    public uint ValidationErrors, WorkerFailed;
 }
 
 internal static class NativeMethods
@@ -29,19 +32,23 @@ internal static class NativeMethods
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "rl_viewport_create")]
     internal static extern int Create(nint parent, uint backend, uint validation, uint profiling,
+        uint targetFps, uint continuous,
         [MarshalAs(UnmanagedType.LPUTF8Str)] string project,
         [MarshalAs(UnmanagedType.LPUTF8Str)] string shaders,
         [MarshalAs(UnmanagedType.LPUTF8Str)] string log,
         out ulong session, out nint child);
 
-    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "rl_viewport_tick")]
-    internal static extern int Tick(ulong session, float deltaSeconds, uint paused);
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "rl_viewport_update")]
+    internal static extern int Update(ulong session, uint paused);
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "rl_viewport_configure")]
     internal static extern int Configure(ulong session, uint pipeline, float exposure, uint reset);
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "rl_viewport_get_stats")]
     internal static extern int GetStats(ulong session, out ViewportStats stats);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "rl_viewport_read_frames")]
+    internal static extern int ReadFrames(ulong session, [Out] ViewportStats[] frames, uint capacity, out uint count);
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "rl_viewport_destroy")]
     internal static extern int Destroy(ulong session, out CloseReport report);

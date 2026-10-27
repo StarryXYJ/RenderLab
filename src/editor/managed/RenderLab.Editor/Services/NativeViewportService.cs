@@ -1,6 +1,5 @@
 using System.Runtime.InteropServices;
 using System.Text.Json;
-using System.Diagnostics;
 using Avalonia.Threading;
 using RenderLab.Editor.Configuration;
 using RenderLab.Editor.Diagnostics;
@@ -8,11 +7,12 @@ using RenderLab.Editor.Interop;
 
 namespace RenderLab.Editor.Services;
 
-/// <summary>Owns one viewport session on the UI STA; contains no Avalonia controls.</summary>
+/// <summary>Owns the UI side of one session; rendering and GPU waits belong to its native worker.</summary>
 public sealed class NativeViewportService : IDisposable
 {
     private readonly EditorOptions options;
     private int logSequence;
+    private readonly ViewportStats[] completedFrames = new ViewportStats[512];
     internal FrameTimingWindow Timings { get; } = new();
     internal uint AbiVersion { get; private set; }
     internal ulong Session { get; private set; }
@@ -22,7 +22,8 @@ public sealed class NativeViewportService : IDisposable
     internal float Exposure { get; private set; }
     internal bool IsPaused { get; set; }
     internal List<CloseReport> CloseReports { get; } = [];
-    internal event Action<ViewportStats>? FrameCompleted;
+    internal event Action<ViewportStats>? StatsUpdated;
+    internal event Action<ViewportStats>? FrameMeasured;
     internal event Action<Exception>? Failed;
     internal event Action? RecreateRequested;
 
@@ -40,12 +41,13 @@ public sealed class NativeViewportService : IDisposable
             throw new InvalidOperationException("The viewport service is already attached to a host.");
         }
         AbiVersion = NativeMethods.AbiVersion();
-        if (AbiVersion != 2 || Marshal.SizeOf<ViewportStats>() != 184 || Marshal.SizeOf<CloseReport>() != 24)
+        if (AbiVersion != 4 || Marshal.SizeOf<ViewportStats>() != 232 || Marshal.SizeOf<CloseReport>() != 24)
         {
             throw new InvalidOperationException("Managed/native bridge ABI mismatch.");
         }
         NativeMethods.Check(NativeMethods.Create(parent, options.Backend == "dx12" ? 0u : 1u,
             options.Validation ? 1u : 0u, options.Profiling ? 1u : 0u,
+            options.TargetFps, options.BenchmarkSeconds > 0 ? 1u : 0u,
             options.Project, options.Shaders, Path.Combine(options.Output, $"native-{++logSequence}.log"),
             out var session, out var child));
         Session = session;
@@ -74,14 +76,20 @@ public sealed class NativeViewportService : IDisposable
         Exposure = exposure;
     }
 
-    internal void Tick(float deltaSeconds, bool hidden)
+    internal void Poll(bool hidden)
     {
         Dispatcher.UIThread.VerifyAccess();
-        NativeMethods.Check(NativeMethods.Tick(Session, deltaSeconds, IsPaused || hidden ? 1u : 0u));
+        NativeMethods.Check(NativeMethods.Update(Session, IsPaused || hidden ? 1u : 0u));
+        NativeMethods.Check(NativeMethods.ReadFrames(Session, completedFrames, (uint)completedFrames.Length, out var count));
+        for (var i = 0; i < count; ++i)
+        {
+            var frame = completedFrames[i];
+            Timings.Observe(frame, frame.FrameTimeNs / 1e9);
+            FrameMeasured?.Invoke(frame);
+        }
         NativeMethods.Check(NativeMethods.GetStats(Session, out var stats));
         Stats = stats;
-        Timings.Observe(stats, Stopwatch.GetTimestamp() / (double)Stopwatch.Frequency);
-        FrameCompleted?.Invoke(stats);
+        StatsUpdated?.Invoke(stats);
     }
 
     internal void RequestRecreate() => RecreateRequested?.Invoke();

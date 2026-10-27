@@ -47,8 +47,10 @@ public:
     std::shared_ptr<Pipeline> CreatePipeline(PipelineDesc desc);
     /// Rebuild for every pipeline generation; records contain no material-specific local data.
     std::shared_ptr<ShaderTable> CreateShaderTable(std::shared_ptr<Pipeline> pipeline);
+    /// vsync=false requests unsynchronized presentation; unsupported modes fail explicitly.
     virtual std::unique_ptr<Swapchain> CreateSwapchain(platform::NativeSurface surface,
-                                                       uint32_t width, uint32_t height) = 0;
+                                                       uint32_t width, uint32_t height,
+                                                       bool vsync = true) = 0;
     std::shared_ptr<ShaderModule> CreateShader(ShaderStage stage, std::vector<std::byte> code,
                                                std::string entry);
     std::unique_ptr<CommandList> CreateCommands();

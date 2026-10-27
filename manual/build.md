@@ -345,6 +345,19 @@ cmake --preset windows-release
 ./out/dotnet/RenderLab.Editor/bin/Release/net10.0/RenderLab.Editor.exe --backend vulkan
 ```
 
+默认目标帧率为 60，`--target-fps 1..240` 设置上限并保留 VSync；`--target-fps 0` 取消限速与强制 VSync。驱动/合成器和实际 CPU/GPU 吞吐仍可能限制帧率，静态光栅仍按需重绘。光栅视口静止后显示 Idle，输入、曝光、管线或尺寸变化后重绘；光追在达到 Renderer 的样本计数上限前继续刷新。`--validation on|off` 和 `--profile on|off` 控制设备验证与 GPU Pass 查询，Release 默认关闭验证，Debug/默认 smoke 开启验证。
+
+固定相机窗口基准显式使用连续刷新；先预热，再采集原生渲染线程的逐帧完成间隔，输出 `performance.json` 和 `frames.json`，不在每帧写文件：
+
+```powershell
+./out/dotnet/RenderLab.Editor/bin/Release/net10.0/RenderLab.Editor.exe `
+    --backend dx12 --pipeline deferred --validation off --profile on `
+    --target-fps 60 --warmup-seconds 2 --benchmark-seconds 5 `
+    --output out/m7/benchmark-dx12
+```
+
+比较后端/验证模式时保持项目、管线、像素尺寸、缩放、目标帧率与预热一致。检查报告的 `DroppedSamples` 和关闭报告；有丢样的结果不能作为完整分布，GPU Pass 时间也不代表扫描输出延迟。[调度测量](../docs/performance/editor-scheduling.md) 保留本轮基线和解释边界。
+
 有完整 NuGet 缓存的离线机器可以增加 `-OfflinePackageCache C:/你的目录/.nuget/packages`；恢复仍使用 locked mode。直接运行 dotnet 时在仓库根目录使用 `RenderLab.slnx` 作为构建入口；需要自定义原生路径时使用 `-p:NativeBuildDir=绝对路径`。构建脚本跳过本原型没有使用的 Avalonia 商业产品构建遥测，不修改用户全局设置。
 
 默认加载源码仓库的 `sample/m4/RayTracing.rlproject`，初始为 Deferred。`--project` 可以指定其他项目，`--shaders` 可指定引擎 Shader 根目录；默认使用 exe 同目录的 shaders。周边控件提供管线、曝光、暂停、重置相机和重建视口；点击原生视口后使用 WASD/QE、方向键或右键拖动。此原型未打包示例项目，移出仓库运行时必须显式提供项目路径。

@@ -81,3 +81,7 @@ PSO 在样例准备阶段创建，录制只绑定。Direct Draw、Indexed Draw�
 ## M3 接入补充
 
 默认 Sandbox 窗口已迁入 [Render Graph](m3-rendergraph.md)，`--rhi-test` 继续使用直接 RHI 路径作为独立基线。RHI BeginRendering 支持 Color/Depth 各自的 Clear、Load、Discard，Store 固定为 Store；M1 调用保持默认 Clear。上传缓冲支持 GPU 只读用途间转换，读回缓冲支持 CopyDest/HostRead 交接及重复复制，仍需调用方满足完成要求。图内屏障完全由 Graph 生成；直接 RHI 验收继续手工声明。
+
+### 展示同步配置
+
+Runtime::CreateSwapchain 的 vsync 参数默认 true。false 请求非同步展示：DX12 使用 Present(0)，能力允许时创建及重建都保留 ALLOW_TEARING；Vulkan 优先选择 Immediate，其次 Mailbox，不支持则显式失败。选择在创建时固定，Resize 沿用，不在逐帧修改展示策略。驱动和窗口合成器仍可能施加限制，非同步提交不等于扫描输出帧率。

@@ -64,6 +64,8 @@ struct SceneReadback
     /// The moment covers the same raw samples as progressive history; wait for completion.
     std::shared_ptr<rhi::Buffer> reflectionStatistics;
     uint64_t compileNs = 0, prepareNs = 0, recordNs = 0;
+    /// CPU scene/material preparation and graph construction, before graph compilation.
+    uint64_t scenePrepareNs = 0;
 };
 /// Cumulative ray-surface preparation work; no timing overhead.
 struct RaySceneStatistics

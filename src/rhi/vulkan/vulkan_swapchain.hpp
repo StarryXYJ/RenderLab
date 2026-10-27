@@ -13,7 +13,7 @@ class VulkanSwapchain final : public Swapchain
 {
 public:
     VulkanSwapchain(VulkanRuntime& runtime, VkInstance instance, VkPhysicalDevice physical,
-                    VkDevice device, VkQueue queue);
+                    VkDevice device, VkQueue queue, bool vsync);
     void Initialize(uint32_t family, platform::NativeSurface surface);
     ~VulkanSwapchain() override;
     AcquiredImage Acquire() override;
@@ -32,6 +32,7 @@ private:
     VkPhysicalDevice physical_;
     VkDevice device_;
     VkQueue queue_;
+    bool vsync_;
     VkSurfaceKHR surface_ = VK_NULL_HANDLE;
     VkSwapchainKHR native_ = VK_NULL_HANDLE;
     Format format_ = Format::Rgba8;

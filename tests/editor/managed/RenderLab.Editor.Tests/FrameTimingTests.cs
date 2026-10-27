@@ -90,4 +90,27 @@ public sealed class FrameTimingTests
         }
         Assert.That(count, Is.EqualTo(4));
     }
+
+    [Test]
+    public void NativeIntervalsSurviveBatchedUiDeliveryAndExcludeIdleGaps()
+    {
+        var window = new FrameTimingWindow();
+        var stats = Frame(1);
+        stats.FrameTimeNs = 1_000_000_000;
+        window.Observe(stats, 100);
+        stats.Frames = 2;
+        stats.FrameTimeNs += 16_000_000;
+        stats.FrameIntervalNs = 16_000_000;
+        window.Observe(stats, 100);
+        stats.Frames = 3;
+        stats.FrameTimeNs += 10_000_000_000;
+        stats.FrameIntervalNs = 0;
+        window.Observe(stats, 110);
+        Assert.Multiple(() =>
+        {
+            Assert.That(window.Summarize().Fps, Is.EqualTo(62.5).Within(.001));
+            Assert.That(window.Summarize().FrameP95Ms, Is.EqualTo(16));
+            Assert.That(window.Latest!.IntervalMs, Is.Null);
+        });
+    }
 }

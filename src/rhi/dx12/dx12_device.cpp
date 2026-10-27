@@ -11,6 +11,7 @@
 #include <cstddef>
 #include <format>
 #include <stdexcept>
+#include <unordered_map>
 
 namespace renderlab::rhi
 {
@@ -35,6 +36,14 @@ public:
         try
         {
             PollDiagnostics();
+            if (repeatedWarnings_)
+            {
+                logger_.Write(LogLevel::Warning,
+                              std::format("DX12: {} repeated validation warnings omitted; first "
+                                          "occurrence of each message ID was logged",
+                                          repeatedWarnings_));
+                repeatedWarnings_ = 0;
+            }
         }
         catch (...)
         {
@@ -276,7 +285,20 @@ public:
             }
             else if (message->Severity == D3D12_MESSAGE_SEVERITY_WARNING)
             {
-                logger_.Write(LogLevel::Warning, message->pDescription);
+                // Bound bookkeeping and retain every error. Repeated warnings must not flush
+                // the log on every frame; the shutdown summary preserves their total count.
+                const auto id = static_cast<int>(message->ID);
+                if (warningCounts_.contains(id))
+                {
+                    ++warningCounts_[id];
+                    ++repeatedWarnings_;
+                }
+                else
+                {
+                    if (warningCounts_.size() < 128)
+                        warningCounts_.emplace(id, 1);
+                    logger_.Write(LogLevel::Warning, message->pDescription);
+                }
             }
         }
         infoQueue_->ClearStoredMessages();
@@ -292,6 +314,8 @@ private:
     Logger& logger_;
     DeviceReport report_;
     uint32_t validationErrors_ = 0;
+    std::unordered_map<int, uint64_t> warningCounts_;
+    uint64_t repeatedWarnings_ = 0;
     ComPtr<IDXGIFactory6> factory_;
     ComPtr<IDXGIAdapter1> adapter_;
     ComPtr<ID3D12Device> device_;

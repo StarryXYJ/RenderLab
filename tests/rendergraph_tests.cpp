@@ -114,8 +114,8 @@ struct FakeRuntime : rhi::Runtime
     {
         return std::make_shared<rhi::Pipeline>(this, std::move(d));
     }
-    std::unique_ptr<rhi::Swapchain> CreateSwapchain(platform::NativeSurface, uint32_t,
-                                                    uint32_t) override
+    std::unique_ptr<rhi::Swapchain> CreateSwapchain(platform::NativeSurface, uint32_t, uint32_t,
+                                                    bool) override
     {
         return {};
     }
