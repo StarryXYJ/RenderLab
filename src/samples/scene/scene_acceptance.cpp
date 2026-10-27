@@ -1,15 +1,19 @@
 #include "samples/scene/scene_acceptance.hpp"
 #include "samples/scene/reflection_temporal_motion.hpp"
 
+#include "assets/database.hpp"
 #include "assets/io.hpp"
 #include "core/log.hpp"
+#include "material/asset.hpp"
 #include "renderer/scene_renderer.hpp"
 #include "rhi/runtime.hpp"
 #include "rhi/upload.hpp"
 #include "samples/common/check.hpp"
 #include "samples/common/image_io.hpp"
+#include "shader/compiler.hpp"
 
 #include <algorithm>
+#include <chrono>
 #include <cstring>
 #include <format>
 #include <set>
@@ -21,7 +25,17 @@ void VerifyScene(rhi::Runtime& runtime, shader::Target target, const std::filesy
                  Logger& logger, renderer::PipelineType pipeline, bool validate)
 {
     std::filesystem::create_directories(output);
-    renderer::SceneRenderer renderer(runtime, target, project, engine);
+    auto fixture = project;
+    if (validate && pipeline == renderer::PipelineType::RayTracing)
+    {
+        const auto root = output / project::NewId();
+        std::filesystem::create_directories(root);
+        std::filesystem::copy(project.parent_path() / "Assets", root / "Assets",
+                              std::filesystem::copy_options::recursive);
+        fixture = root / project.filename();
+        std::filesystem::copy_file(project, fixture);
+    }
+    renderer::SceneRenderer renderer(runtime, target, fixture, engine);
     if (pipeline == renderer::PipelineType::RayTracing)
         for (auto& object : renderer.Document().objects)
             if (object.light)
@@ -296,6 +310,42 @@ void VerifyScene(rhi::Runtime& runtime, shader::Target target, const std::filesy
         detail::Require(materialChanged.reflectionTemporalFrames == 1,
                         "Material change did not reset temporal history");
         document = original;
+        const auto fixtureProject = project::Project::Open(fixture, engine);
+        assets::Database fixtureAssets(fixtureProject);
+        const auto materialPath = fixtureAssets.Get(replacement).path;
+        shader::CompileOptions shaderOptions;
+        shaderOptions.includeDirectories = {engine};
+        shaderOptions.cacheDirectory = fixtureProject.library / "CasterTest";
+        const auto lit = shader::CompileShader(engine / "RenderLab/Lit.shader", shaderOptions);
+        detail::Require(bool(lit), lit.diagnostics);
+        const shader::MaterialTemplate litTemplate(lit.package);
+        const auto originalMaterial = material::Load(materialPath, litTemplate);
+        auto shadowMaterial = originalMaterial;
+        material::Set(shadowMaterial, litTemplate, "cast_shadows", std::array<double, 1>{0});
+        auto beforeShadowPolicy = reflectionRender("reflection-before-caster", reflectionOptions);
+        runtime.Wait(beforeShadowPolicy.completion);
+        material::Save(shadowMaterial, materialPath);
+        std::filesystem::last_write_time(
+            materialPath, std::filesystem::file_time_type::clock::now() + std::chrono::seconds(1));
+        auto shadowPolicy = reflectionRender("reflection-caster-disabled", reflectionOptions);
+        runtime.Wait(shadowPolicy.completion);
+        detail::Require(shadowPolicy.reflectionHistoryReset &&
+                            shadowPolicy.reflectionSamples == 1 &&
+                            shadowPolicy.reflectionTemporalFrames == 1,
+                        "ShadowCaster-only edit did not reset both reflection histories");
+        renderer::SceneRenderer fresh(runtime, target, fixture, engine);
+        fresh.Document() = document;
+        auto reference = fresh.Render(color, initial, nullptr, true, {}, reflectionOptions);
+        runtime.Wait(reference.completion);
+        detail::Require(std::ranges::equal(shadowPolicy.pixels->Map(), reference.pixels->Map()),
+                        "ShadowCaster-only edit differs from a cold renderer reference");
+        material::Save(originalMaterial, materialPath);
+        std::filesystem::last_write_time(
+            materialPath, std::filesystem::file_time_type::clock::now() + std::chrono::seconds(2));
+        auto shadowRestored = reflectionRender("reflection-caster-restored", reflectionOptions);
+        detail::Require(shadowRestored.reflectionHistoryReset &&
+                            shadowRestored.reflectionTemporalFrames == 1,
+                        "Restoring ShadowCaster policy did not reset reflection histories");
         auto restored = reflectionRender("reflection-restored", reflectionOptions);
         auto alternateCamera = document.Get(document.activeCamera);
         alternateCamera.id = project::NewId();

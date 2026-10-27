@@ -5,7 +5,7 @@
 ## 当前状态
 
 - 当前实施阶段：M0–M5、R1、B1–B3 DONE。
-- 当前工作项：M5 运动反射稳定性修复已完成并验证，保留高光偏差/细节模糊边界；M6/M8 未启动。
+- 当前工作项：M5 光追管线优化 IN_PROGRESS：先修正 CastShadows 历史失效，再优化静态场景打包/上传与历史内存；保持参考采样和双后端验证。M6/M8 未启动。
 - 用户约定：每个子阶段验收完成即提交 Git，无阻塞时在当前授权范围内继续推进。
 
 | 阶段 | 目标 | 前置依赖 | 状态 |
@@ -236,6 +236,15 @@ R1 契约修订、B1 样例整理/Benchmark、B2 调查和 B3 资源复用已完
 验证：MSVC Debug/Release Sandbox/Player 构建；RTX 5060 / NVIDIA 591.74 上 Release 双后端反射完整序列/AS/持续窗口 6/6，Debug AS/Shader 合约 2/2。三场景 × 两版本 × 两后端静止及长停止/再移动共 16 次采集，保存前 128 帧和高 spp 检查点；强光 8..128 spp 正亮度误差 >4 的平均面积约降 82%，最大连通区域均值约降 17%；128/256 spp MSE 约降 35%/31%。全部 2048/8192 spp 版本间图像逐字节相同。两后端另完成 512 样本矩数值/控制速率探针、等像素数尺寸切换。窗口请求尺寸受桌面限制，已改为核对实际资源规模；补测真实 2560×1440 离屏目标、双在途帧各 32 帧，native 高水位约 1818.69/1817.75 MiB，保持原 2048 MiB 预算。上述 validation errors=0，退出 ledger=0。
 
 边界：显示重建仍有负偏差、细节模糊和单帧尖峰；PBR 64/128 spp MSE 约回退 16%/10%，gentle/fast 残差差分约增 2%/3%，未把面积下降当成全面无损改善。Sobol 下的误差是控制指标，不是校准置信区间；无完整 NRD/SVGF、额外射线或输入截断。真实 1440p 窗口展示、其他 GPU/4K 未验证。入口：[契约](../docs/temporal-reflections.md)、[动画/逐帧面积/峰值/误差/成本/复现](../docs/performance/m5-adaptive-reflections.md)。
+
+### M5 优化：光追场景与历史资源
+
+状态：IN_PROGRESS，日期：2026 年 10 月 27 日。
+
+- CastShadows 修复 DONE：有效实例 mask 进入两套历史签名；隔离材质开关/恢复均重置，首帧与新 Renderer 逐字节一致。MSVC Debug Sandbox、Release Sandbox/Player/Graph 构建；RTX 5060 上 Release Graph 与双后端反射 3/3，validation errors=0。契约见 [光追历史](../docs/raytracing.md#histories-and-invalidation)。
+- [ ] 静态几何按输入身份缓存打包，变更上传合批；验证静止/相机运动不重复打包，材质/成员变化及在途版本正确。
+- [ ] 按实测优化引导格式、历史缓存和高 spp 旁路，保持未滤波 FP32 参考；分别记录成本、画面与限制。
+- [ ] 评估几何法线偏移与纹理 footprint 的数据契约，能可靠验证的改动分步实施，其余明确保留。
 
 ## M6 GPU Driven 与执行优化
 

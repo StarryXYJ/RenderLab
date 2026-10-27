@@ -157,6 +157,11 @@ setting. A mismatch sets history count and sample sequence to zero. Returning to
 can resume its own history. Switching to raster or another diagnostic view clears retained histories.
 Exposure is a display transform and does not invalidate linear radiance.
 
+The effective instance masks are also part of both progressive and temporal scene signatures.
+Changing only a material's `CastShadows` policy rebuilds the TLAS and resets both histories, even
+when its packed surface values are identical. Scene acceptance edits an isolated material copy and
+compares the reset frame with a freshly created renderer; it never edits the source sample assets.
+
 `SceneRenderOptions::reflections=false` retains the M5.2 shadow-only baseline;
 `reflectionHistory=false` forces deterministic sample zero. The panel/CLI expose **Reflection (raw
 sample)** / `--view reflection-raw` and **Reflection (history)** / `--view reflection-history`.

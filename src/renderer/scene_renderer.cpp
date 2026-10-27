@@ -1045,6 +1045,12 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
             temporalSignature += instance.id;
             appendTemporal(instance.world.values);
         }
+        // ShadowCaster policy changes traversal without changing the packed surface material.
+        for (const auto& instance : preparedAcceleration->instances)
+        {
+            append(instance.mask);
+            appendTemporal(instance.mask);
+        }
         const auto& viewId = self.document.activeCamera;
         if (!self.reflectionViews.contains(viewId) && self.reflectionViews.size() >= 4)
             self.reflectionViews.erase(self.reflectionViews.begin());
