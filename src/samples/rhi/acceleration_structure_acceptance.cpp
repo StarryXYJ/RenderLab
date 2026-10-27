@@ -1,4 +1,5 @@
 #include "samples/rhi/acceleration_structure_acceptance.hpp"
+#include "samples/rhi/reflection_temporal_acceptance.hpp"
 
 #include "assets/model.hpp"
 #include "core/log.hpp"
@@ -553,6 +554,9 @@ void VerifyRaySampling(Runtime& runtime, shader::Target target, const std::files
     VerifyReflectionDenoise(
         runtime, target,
         source.parent_path().parent_path() / "RenderLab" / "ReflectionDenoise.hlsl", logger);
+    VerifyReflectionTemporal(
+        runtime, target,
+        source.parent_path().parent_path() / "RenderLab" / "ReflectionTemporal.hlsl", logger);
 }
 
 std::array<float, 12> Translation(float x)

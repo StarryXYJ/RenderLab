@@ -1,6 +1,6 @@
 # M5：反射空间降噪
 
-日期：2026-10-27。对静止 1/N 累积增加可选空间滤波，改善低 spp 下的反射噪声。
+日期：2026-10-27。对静止 1/N 累积增加可选空间滤波，改善低 spp 下的反射噪声。此处记录单独空间滤波基线；后续默认叠加的 [时间重投影](m5-temporal.md) 可用 `--temporal-denoise off` 关闭。
 
 ## 实现与范围
 
@@ -100,7 +100,7 @@ Sandbox/Player 场景启动时显式配置 2048 MiB tracked allocation 上限，
 ## 复现
 
 ```powershell
-out/build/m5-release/renderlab_sandbox.exe --backend dx12 --headless --validation off --project sample/m4/RayTracing.rlproject --pipeline raytracing --denoise on --width 640 --height 360 --quality low --warmup-frames 0 --benchmark 15 --output out/m5-denoise/repro
+out/build/m5-release/renderlab_sandbox.exe --backend dx12 --headless --validation off --project sample/m4/RayTracing.rlproject --pipeline raytracing --denoise on --temporal-denoise off --width 640 --height 360 --quality low --warmup-frames 0 --benchmark 15 --output out/m5-denoise/repro
 ```
 
 最后另行捕获的一帧为第 16 spp。用 `--denoise off` 比较同一未滤波前缀，`--backend vulkan` 复测另一后端。8192 spp 基准按 [收敛记录](m5-convergence.md) 用 `--denoise off` 生成。强光副本保留资产 ID/引用、只修改方向光强度，源场景不变。全部指标见 [summary.json](m5-denoise/summary.json)，原始 BMP/日志/报告保存在忽略目录 `out/m5-denoise`。接口和参数公式见 [光追文档](../raytracing.md)。

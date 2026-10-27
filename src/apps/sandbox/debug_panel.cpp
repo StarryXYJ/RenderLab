@@ -23,7 +23,8 @@ enum : int
     Reset,
     Darker,
     Brighter,
-    Denoise
+    Denoise,
+    Temporal
 };
 constexpr std::array<uint32_t, 4> Resolutions{0, 128, 512, 1024};
 struct PipelineChoice
@@ -39,7 +40,8 @@ constexpr std::array PipelineChoices{
 struct DebugPanel::Impl
 {
     HWND window = nullptr, pipeline = nullptr, view = nullptr, quality = nullptr, shadows = nullptr,
-         freeze = nullptr, denoise = nullptr, exposure = nullptr, statistics = nullptr;
+         freeze = nullptr, denoise = nullptr, temporal = nullptr, exposure = nullptr,
+         statistics = nullptr;
     DebugControls controls;
     std::vector<PipelineChoice> choices;
     static LRESULT CALLBACK Procedure(HWND window, UINT message, WPARAM wParam, LPARAM lParam)
@@ -92,6 +94,9 @@ struct DebugPanel::Impl
             else if (id == Shadows)
                 self->controls.shadows =
                     SendMessageW(self->shadows, BM_GETCHECK, 0, 0) == BST_CHECKED;
+            else if (id == Temporal)
+                self->controls.render.reflectionTemporal =
+                    SendMessageW(self->temporal, BM_GETCHECK, 0, 0) == BST_CHECKED;
             else if (id == Denoise)
                 self->controls.render.reflectionDenoise =
                     SendMessageW(self->denoise, BM_GETCHECK, 0, 0) == BST_CHECKED;
@@ -188,13 +193,17 @@ DebugPanel::DebugPanel(platform::NativeSurface owner, DebugControls controls,
     self.Control(L"BUTTON", L"Reset camera", BS_PUSHBUTTON | WS_TABSTOP, Reset, 12, 152, 110, 26);
     self.Control(L"BUTTON", L"Exposure -", BS_PUSHBUTTON | WS_TABSTOP, Darker, 132, 152, 125, 26);
     self.Control(L"BUTTON", L"Exposure +", BS_PUSHBUTTON | WS_TABSTOP, Brighter, 267, 152, 125, 26);
-    self.denoise = self.Control(L"BUTTON", L"RT spatial denoise (Final / HDR)",
+    self.denoise = self.Control(L"BUTTON", L"RT denoise (Final / HDR)",
                                 BS_AUTOCHECKBOX | WS_TABSTOP, Denoise, 12, 218, 380, 24);
     SendMessageW(self.denoise, BM_SETCHECK,
                  controls.render.reflectionDenoise ? BST_CHECKED : BST_UNCHECKED, 0);
+    self.temporal = self.Control(L"BUTTON", L"Temporal reprojection (requires denoise)",
+                                 BS_AUTOCHECKBOX | WS_TABSTOP, Temporal, 12, 246, 380, 24);
+    SendMessageW(self.temporal, BM_SETCHECK,
+                 controls.render.reflectionTemporal ? BST_CHECKED : BST_UNCHECKED, 0);
     self.exposure = self.Control(L"STATIC", L"", 0, 0, 12, 190, 380, 22);
     self.statistics =
-        self.Control(L"STATIC", L"Waiting for a retired frame...", 0, 0, 12, 250, 380, 260);
+        self.Control(L"STATIC", L"Waiting for a retired frame...", 0, 0, 12, 278, 380, 232);
     self.Control(L"STATIC",
                  L"F1: show/hide panel\nWASD/QE: move  |  Arrow keys: look\nInput goes to the "
                  L"focused window.",
@@ -241,6 +250,9 @@ void DebugPanel::VerifyControls()
     SendMessageW(self.denoise, BM_SETCHECK,
                  saved.render.reflectionDenoise ? BST_UNCHECKED : BST_CHECKED, 0);
     SendMessageW(self.window, WM_COMMAND, Denoise, 0);
+    SendMessageW(self.temporal, BM_SETCHECK,
+                 saved.render.reflectionTemporal ? BST_UNCHECKED : BST_CHECKED, 0);
+    SendMessageW(self.window, WM_COMMAND, Temporal, 0);
     RECT client{}, control{};
     GetClientRect(self.window, &client);
     GetWindowRect(self.statistics, &control);
@@ -250,9 +262,12 @@ void DebugPanel::VerifyControls()
         self.controls.exposure != std::clamp(saved.exposure + .5f, -16.f, 16.f) ||
         self.controls.render.shadowResolution != 1024 || !self.controls.freezeCamera ||
         self.controls.render.reflectionDenoise == saved.render.reflectionDenoise ||
+        self.controls.render.reflectionTemporal == saved.render.reflectionTemporal ||
         control.right > client.right || control.bottom > client.bottom)
         throw std::runtime_error("Native debug controls failed");
     self.controls = saved;
+    SendMessageW(self.temporal, BM_SETCHECK,
+                 saved.render.reflectionTemporal ? BST_CHECKED : BST_UNCHECKED, 0);
     SendMessageW(self.denoise, BM_SETCHECK,
                  saved.render.reflectionDenoise ? BST_CHECKED : BST_UNCHECKED, 0);
     for (size_t i = 0; i < self.choices.size(); ++i)

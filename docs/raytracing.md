@@ -118,8 +118,8 @@ for these native pipeline checks.
 
 Ray Tracing now requires all three enabled capabilities: AS, Ray Query and Ray Tracing Pipeline.
 The composition is GBuffer → Ray Query shadows → Deferred Lighting → reflection trace → stationary
-accumulation → optional spatial denoise → reflection combine → Forward transparency → display. The Graph exposes separate
-`RayTracing.Reflection.Trace`, `.Accumulate`, optional `.Denoise` and `.Combine` timings and dependencies.
+accumulation → optional spatial denoise → optional camera temporal denoise → reflection combine → Forward transparency → display. The Graph exposes separate
+`RayTracing.Reflection.Trace`, `.Accumulate`, optional `.Denoise` / `.Temporal` and `.Combine` timings and dependencies.
 
 Trace reads Depth, world Normal/Roughness, Albedo/Metallic, TLAS and indexed geometry/material
 buffers. One visible-normal GGX (VNDF) importance-sampled specular ray produces RGBA32F `RayTracing.RawRadiance`.
@@ -148,7 +148,7 @@ replaces textures while command references retain old in-flight allocations. The
 uses weight `1 / (N + 1)` for every new sample, including beyond 64 frames. The count/sequence do not
 wrap early. At 2^24 samples (the exact integer limit of the float parameter ABI), accumulation holds
 the completed mean instead of changing to a fixed-weight EMA. There is no moving-camera reprojection
-in M5.
+in the unfiltered estimator; optional filtered camera reprojection is described below.
 
 The exact input signature includes current view/projection and camera position, target dimensions,
 enabled instance membership/world transforms, packed geometry/material generation, texture-atlas
@@ -167,7 +167,7 @@ preflighted in the window host and restore the last working pipeline with a conc
 ### Spatial denoising
 
 `SceneRenderOptions::reflectionDenoise` defaults to true for Final/HDR. The native panel checkbox
-**RT spatial denoise (Final / HDR)** and CLI `--denoise on|off` select the composite input without
+**RT denoise (Final / HDR)** and CLI `--denoise on|off` select the composite input without
 resetting the sample count. **Reflection (denoised)** / `--view reflection-denoised` always requests
 the filtered diagnostic, independently of the Final checkbox. Raw and History always stay unfiltered.
 
@@ -187,7 +187,8 @@ buffer. Rough reflections may still blur small reflected details; hit-distance w
 heuristic and low-spp filtering introduces spatial bias. Primary depth/normal boundaries do not
 fully identify reflected material or lighting boundaries. The 2-pixel radius cannot remove all
 low-spp noise. No motion vectors, temporal reprojection, variance estimation or temporal denoiser
-are implemented; camera movement still starts accumulation over. Only stochastic reflection is
+are part of the spatial pass; optional camera temporal reuse is described below. Camera movement
+still starts the unfiltered accumulation over. Only stochastic reflection is
 filtered, not the Deferred direct-light term or the hard Ray Query shadow mask.
 
 The current format baseline adds two full-resolution RGBA32F transients (guide and filtered output):
@@ -203,6 +204,25 @@ host-visible buffers; the error reports requested/used/limit. Large scenes or re
 still exhaust the configured cap or physical memory. The original 256 MiB host policy failed a
 1920x1080 RT window after denoising; the repair preserves the existing allocation lifetime checks.
 See [measurements and limits](performance/m5-denoise.md) for hardware evidence.
+
+### Camera temporal denoising
+
+The optional independent `RayTracing.Reflection.Temporal` pass reprojects static primary geometry
+with current depth and previous view-projection, rejects individual bilinear taps using stored world
+position/normal/roughness, and clips HDR history to a geometry-checked current neighborhood. It caps
+per-pixel history length at 16 and attenuates view-dependent reflections; stationary 2048 spp and sharp
+mirrors bypass it. Scene/material/light/projection/size changes and large camera cuts reset the source.
+There are no animated-geometry velocities or reflected virtual-surface motion vectors.
+
+`reflectionTemporal` / `--temporal-denoise on|off` (default on) adds temporal reuse to the spatial
+filter. The panel **Temporal reprojection (requires denoise)** checkbox allows the spatial-only
+reference. Raw and History stay unfiltered; `reflectionHistory=false` disables temporal reuse. The
+report's temporal source frame count is CPU compatibility, not accepted pixels or reflection spp.
+Only the active ViewID retains temporal guides (three RGBA32F textures in each of two sets), in
+addition to the existing unfiltered up-to-four-view histories. Switching ViewID makes temporal reuse
+cold. The Sobol sequence now continues across camera movement for the same scene, while the exact
+unfiltered mean still resets; Raw/reference mode remains sample zero. See [the temporal contract](temporal-reflections.md)
+for guide layout, clipping, cut thresholds, memory, limitations and [motion evidence](performance/m5-temporal.md).
 
 ### Material and sampling boundary
 

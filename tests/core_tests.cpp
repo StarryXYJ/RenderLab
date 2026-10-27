@@ -70,6 +70,9 @@ int main()
         RequireInvalid([] { ParseOptions(std::array{"--quality"sv, "ultra"sv}); });
         RequireInvalid([] { ParseOptions(std::array{"--view"sv, "missing"sv}); });
         RequireInvalid([] { ParseOptions(std::array{"--denoise"sv, "maybe"sv}); });
+        RequireInvalid([] { ParseOptions(std::array{"--temporal-denoise"sv, "maybe"sv}); });
+        Require(!ParseOptions(std::array{"--temporal-denoise"sv, "off"sv}).reflectionTemporal,
+                "Temporal denoise switch was not parsed");
         RequireInvalid([] { ParseOptions(std::array{"--gpu-budget-mib"sv, "0"sv}); });
         RequireInvalid([] { ParseOptions(std::array{"--gpu-budget-mib"sv, "16385"sv}); });
         Require(ParseOptions(std::array{"--gpu-budget-mib"sv, "1024"sv}).gpuBudgetMiB == 1024,

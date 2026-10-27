@@ -29,6 +29,16 @@ struct ReflectionParameters
 };
 static_assert(sizeof(ReflectionParameters) == 256 &&
               offsetof(ReflectionParameters, options) == 128);
+struct ReflectionTemporalParameters
+{
+    std::array<float, 16> inverseViewProjection{}, previousViewProjection{};
+    std::array<float, 4> cameraPosition{}, previousCameraPosition{};
+    // Previous source valid, stationary spp, reserved, maximum per-pixel history length.
+    std::array<float, 4> options{};
+    std::array<float, 20> reserved{};
+};
+static_assert(sizeof(ReflectionTemporalParameters) == 256 &&
+              offsetof(ReflectionTemporalParameters, options) == 160);
 /** @brief Opaque scene visibility toward the main directional light, separate from lighting. */
 class RayQueryShadowFeature final : public RenderFeature
 {

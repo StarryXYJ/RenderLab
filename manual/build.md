@@ -217,7 +217,9 @@ ctest --test-dir out/build/windows-debug -R "acceleration_structure|ray_query_sc
 
 `--as-test` 还运行原生 TraceRays 的三角形命中/未命中、索引 PBR 和 PSO/ShaderTable 代际重建检查；成功日志分别列出 Ray Query 与 TraceRays。
 
-Texture 菜单可查看 Reflection (raw sample)、Reflection (history) 与 Reflection (denoised)。Final/HDR 默认开启空间降噪，面板 **RT spatial denoise (Final / HDR)** 可随时切换；CLI 用 `--denoise on|off`，不重置累积。降噪查看用 `--view reflection-denoised`，始终显示滤波结果；Raw/History 始终未滤波。粗糙度 ≤0.05 的镜面旁路，2048 spp 后旁路，滤波不回写历史。
+Texture 菜单可查看 Reflection (raw sample)、Reflection (history) 与 Reflection (denoised)。Final/HDR 默认开启空间降噪，面板 **RT denoise (Final / HDR)** 可随时切换；CLI 用 `--denoise on|off`，不重置累积。降噪查看用 `--view reflection-denoised`，始终显示滤波结果；Raw/History 始终未滤波。粗糙度 ≤0.05 的镜面旁路，2048 spp 后旁路，滤波不回写历史。
+
+空间降噪后默认启用时间重投影，面板 **Temporal reprojection (requires denoise)** / CLI `--temporal-denoise on|off` 单独控制；关掉此项可回到空间滤波基线，`--denoise off` 关闭两者。首版支持静态场景中的相机运动，以位置/法线/粗糙度拒绝遮挡变化、邻域裁剪限制高光拖尾；场景/材质/光照变化、投影/尺寸变化或相机大幅跳转重置时间历史。没有对象运动矢量或反射虚拟位置重投影，仍可能有高光偏差/拖影。面板 Temporal source 是 CPU 判定可供重投影的连续帧数，不是 GPU 接受像素数或 spp；未滤波 RT history 在移动时仍重置。[接口与限制](../docs/temporal-reflections.md)、[移动画面对照](../docs/performance/m5-temporal.md)。
 
 CLI 对应 `--pipeline raytracing --view reflection-raw` / `reflection-history`；raw 固定单样本且不读旧历史，相机运动会重置累积。Final/history 静止时持续按 1/N 累积；面板的 RT history 显示实际 spp 与已观察到的重置次数，超过 64 后应继续增长。纯光栅对照用 `--pipeline forward` 或 `deferred`。自定义 Shader 缺少 GBuffer 或光追表面实现时，窗口菜单恢复原选项并显示原因；如原始 Copper 场景可继续用 Forward，三种模式对照请用下列 RayTracing 项目。
 

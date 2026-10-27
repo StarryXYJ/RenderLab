@@ -83,7 +83,8 @@ struct SceneRenderer::Impl
     AccelerationScene accelerationScene;
     std::shared_ptr<rhi::Pipeline> rayQueryShadow;
     std::shared_ptr<rhi::ShaderTable> reflectionTable;
-    std::shared_ptr<rhi::Pipeline> reflectionHistory, reflectionCombine, reflectionDenoise;
+    std::shared_ptr<rhi::Pipeline> reflectionHistory, reflectionCombine, reflectionDenoise,
+        reflectionTemporal;
     std::array<std::shared_ptr<rhi::Buffer>, 5> raySurfaceBuffers;
     std::array<std::vector<std::byte>, 5> raySurfaceBytes;
     uint64_t raySurfaceVersion = 0, rayAtlasVersion = 0;
@@ -93,7 +94,7 @@ struct SceneRenderer::Impl
     bool rayAtlasDirty = false;
     struct ReflectionHistory
     {
-        std::string signature;
+        std::string signature, sequenceSignature;
         std::array<std::shared_ptr<rhi::Texture>, 2> radiance;
         std::array<bool, 2> initialized{};
         uint32_t index = 0;
@@ -101,6 +102,17 @@ struct SceneRenderer::Impl
         uint64_t completion = 0;
     };
     std::map<std::string, ReflectionHistory> reflectionViews;
+    struct TemporalHistory
+    {
+        std::string signature, viewId;
+        std::array<std::array<std::shared_ptr<rhi::Texture>, 3>, 2> textures;
+        std::array<bool, 2> initialized{};
+        math::Mat4 viewProjection{}, view{};
+        math::Vec3 cameraPosition{};
+        uint32_t index = 0, frames = 0;
+        uint64_t completion = 0;
+        bool active = false;
+    } temporalHistory;
     RenderPipeline forwardPipeline =
         CreatePipeline(PipelineType::Forward)
             .AddFeature(std::make_shared<ShadowFeature>(), RenderStage::BeforeOpaque)
@@ -365,6 +377,16 @@ struct SceneRenderer::Impl
                                             {7, rhi::BindingKind::SampledTexture}});
         desc.compute = module("ReflectionDenoise.hlsl", rhi::ShaderStage::Compute, "Denoise");
         reflectionDenoise = runtime.CreatePipeline(desc);
+        desc = {};
+        std::vector<rhi::BindingDesc> temporalLayout;
+        for (uint32_t slot = 0; slot <= 10; ++slot)
+            temporalLayout.push_back({slot, slot == 3 ? rhi::BindingKind::ConstantBuffer
+                                            : slot == 2 || slot == 9 || slot == 10
+                                                ? rhi::BindingKind::StorageTexture
+                                                : rhi::BindingKind::SampledTexture});
+        desc.layout = runtime.CreateLayout(std::move(temporalLayout));
+        desc.compute = module("ReflectionTemporal.hlsl", rhi::ShaderStage::Compute, "Temporal");
+        reflectionTemporal = runtime.CreatePipeline(desc);
     }
     uint32_t RayTile(const std::string& reference, bool srgb)
     {
@@ -922,6 +944,8 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
     std::string reflectionSignature;
     Impl::ReflectionHistory* reflectionHistory = nullptr;
     uint32_t reflectionOutput = 0, reflectionSamples = 0, reflectionSequence = 0;
+    std::string temporalSignature;
+    uint32_t temporalOutput = 0, temporalFrames = 0;
     if (rayTracing)
     {
         preparedAcceleration = self.accelerationScene.Build(graph, std::move(rayInstances));
@@ -959,16 +983,31 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
             reflectionSignature.append(reinterpret_cast<const char*>(bytes.data()), bytes.size());
         };
         append(parameters);
+        // This signature omits camera pose only. Scene/material/light changes reject all reuse.
+        const auto appendTemporal = [&](const auto& value)
+        {
+            const auto bytes = std::as_bytes(std::span{&value, size_t{1}});
+            temporalSignature.append(reinterpret_cast<const char*>(bytes.data()), bytes.size());
+        };
+        appendTemporal(parameters.directionToLight);
+        appendTemporal(parameters.lightColor);
+        appendTemporal(parameters.environment);
+        appendTemporal(parameters.options);
+        appendTemporal(self.snapshot.projection.values);
         append(target->desc.width);
         append(target->desc.height);
         append(self.raySurfaceVersion);
         append(self.rayAtlasVersion);
         append(self.environmentAmbient);
+        temporalSignature += reflectionSignature.substr(sizeof(parameters));
         reflectionSignature += self.environmentKey;
+        temporalSignature += self.environmentKey;
         for (const auto& instance : self.snapshot.allInstances)
         {
             reflectionSignature += instance.id;
             append(instance.world.values);
+            temporalSignature += instance.id;
+            appendTemporal(instance.world.values);
         }
         const auto& viewId = self.document.activeCamera;
         if (!self.reflectionViews.contains(viewId) && self.reflectionViews.size() >= 4)
@@ -980,7 +1019,9 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
         const bool valid =
             accumulate && history.signature == reflectionSignature && history.samples > 0;
         reflectionSamples = valid ? history.samples : 0;
-        reflectionSequence = valid ? history.sequence : 0;
+        // Continue independent samples during camera motion; Raw still fixes sample zero.
+        reflectionSequence =
+            accumulate && history.sequenceSignature == temporalSignature ? history.sequence : 0;
         parameters.options[0] = static_cast<float>(reflectionSequence);
         parameters.options[1] = static_cast<float>(reflectionSamples);
         reflectionOutput = 1 - history.index;
@@ -1018,6 +1059,66 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
              (options.view == SceneView::Final || options.view == SceneView::Hdr)) ||
             options.view == SceneView::ReflectionDenoised)
             frame.rayTracing.denoisePipeline = self.reflectionDenoise;
+        if (frame.rayTracing.denoisePipeline && options.reflectionTemporal && accumulate)
+        {
+            auto& temporal = self.temporalHistory;
+            const auto direction = [](const math::Mat4& view)
+            { return math::Vec3{view.At(2, 0), view.At(2, 1), view.At(2, 2)}; };
+            const bool validTemporal =
+                temporal.active && temporal.signature == temporalSignature &&
+                temporal.viewId == viewId &&
+                math::Length(temporal.cameraPosition - self.snapshot.cameraPosition) <= 1.f &&
+                math::Dot(direction(temporal.view), direction(self.snapshot.view)) >= .8660254f;
+            temporalFrames = validTemporal ? temporal.frames : 0;
+            temporalOutput = 1 - temporal.index;
+            // Release old-size CPU ownership before allocating replacements; commands keep uses.
+            auto& outputs = temporal.textures[temporalOutput];
+            if (outputs[0] && (outputs[0]->desc.width != target->desc.width ||
+                               outputs[0]->desc.height != target->desc.height))
+            {
+                outputs = {};
+                temporal.initialized[temporalOutput] = false;
+            }
+            constexpr std::array<const char*, 3> kinds{"Radiance", "World", "Normal"};
+            for (size_t i = 0; i < outputs.size(); ++i)
+            {
+                const auto outputName = std::string("RayTracing.Temporal.") + kinds[i];
+                if (!outputs[i])
+                    outputs[i] = self.runtime.CreateTexture(
+                        {target->desc.width, target->desc.height, rhi::Format::Rgba32Float, true,
+                         false, outputName});
+                graph.ImportTexture(outputName, outputs[i],
+                                    {temporal.initialized[temporalOutput] ? rhi::State::Sampled
+                                                                          : rhi::State::Undefined,
+                                     temporal.initialized[temporalOutput], temporal.completion});
+                frame.rayTracing.temporalOutputs[i] = outputName;
+                if (validTemporal)
+                {
+                    const auto previousName =
+                        std::string("RayTracing.TemporalPrevious.") + kinds[i];
+                    graph.ImportTexture(previousName, temporal.textures[temporal.index][i],
+                                        {rhi::State::Sampled, true, temporal.completion});
+                    frame.rayTracing.previousTemporal[i] = previousName;
+                }
+            }
+            ReflectionTemporalParameters temporalParameters;
+            temporalParameters.inverseViewProjection = parameters.inverseViewProjection;
+            temporalParameters.previousViewProjection = temporal.viewProjection.values;
+            temporalParameters.cameraPosition = parameters.cameraPosition;
+            temporalParameters.previousCameraPosition = Vector(temporal.cameraPosition);
+            temporalParameters.options = {
+                validTemporal ? 1.f : 0.f,
+                static_cast<float>(std::min(reflectionSamples + 1, MaxReflectionSamples)), 0, 16};
+            const auto temporalSlice =
+                uploads.Write(std::as_bytes(std::span{&temporalParameters, size_t{1}}));
+            frame.rayTracing.temporalParameters = {3,
+                                                   importBuffer(temporalSlice.buffer,
+                                                                "RayTracing.TemporalParameters",
+                                                                rhi::State::HostWrite),
+                                                   rendergraph::Use::Uniform,
+                                                   {temporalSlice.offset, temporalSlice.size}};
+            frame.rayTracing.temporalPipeline = self.reflectionTemporal;
+        }
         frame.rayTracing.sampler = self.sampler;
         constexpr std::array<uint32_t, 5> strides{32, 4, 16, 16, 80};
         for (uint32_t i = 0; i < 5; ++i)
@@ -1278,13 +1379,17 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
         self.forwardPipeline.Build(graph, frame);
     if (reflections)
         graph.Export(graph.GetTexture(frame.rayTracing.historyRadiance), rhi::State::Sampled);
+    if (frame.rayTracing.temporalPipeline)
+        for (const auto& name : frame.rayTracing.temporalOutputs)
+            graph.Export(graph.GetTexture(name), rhi::State::Sampled);
     std::string displaySource = "CameraColor";
     if (options.view == SceneView::ReflectionRaw)
         displaySource = "RayTracing.RawRadiance";
     else if (options.view == SceneView::ReflectionHistory)
         displaySource = frame.rayTracing.historyRadiance;
     else if (options.view == SceneView::ReflectionDenoised)
-        displaySource = "RayTracing.DenoisedRadiance";
+        displaySource = frame.rayTracing.temporalPipeline ? "RayTracing.Temporal.Radiance"
+                                                          : "RayTracing.DenoisedRadiance";
     if (options.view == SceneView::Shadow)
         displaySource = rayTracing ? "RayTracing.ShadowVisibility" : "MainLightShadow";
     else if (options.view == SceneView::Environment)
@@ -1370,12 +1475,28 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
     if (reflectionHistory)
     {
         reflectionHistory->signature = std::move(reflectionSignature);
+        reflectionHistory->sequenceSignature = temporalSignature;
         reflectionHistory->index = reflectionOutput;
         reflectionHistory->initialized[reflectionOutput] = true;
         reflectionHistory->samples = std::min(reflectionSamples + 1, MaxReflectionSamples);
-        reflectionHistory->sequence = std::min(reflectionSequence + 1, MaxReflectionSamples);
+        reflectionHistory->sequence = (reflectionSequence + 1) % MaxReflectionSamples;
         reflectionHistory->completion = submitted.completion;
     }
+    auto& temporal = self.temporalHistory;
+    temporal.active = bool(frame.rayTracing.temporalPipeline);
+    if (temporal.active)
+    {
+        temporal.signature = std::move(temporalSignature);
+        temporal.viewId = self.document.activeCamera;
+        temporal.index = temporalOutput;
+        temporal.initialized[temporalOutput] = true;
+        temporal.viewProjection = self.snapshot.viewProjection;
+        temporal.view = self.snapshot.view;
+        temporal.cameraPosition = self.snapshot.cameraPosition;
+        temporal.frames = std::min(temporalFrames + 1, MaxReflectionSamples);
+        temporal.completion = submitted.completion;
+    }
+    result.reflectionTemporalFrames = temporal.active ? temporal.frames : 0;
     if (preparedAcceleration)
         self.accelerationScene.Commit(std::move(*preparedAcceleration), submitted.completion);
     uploads.Seal(submitted.completion);

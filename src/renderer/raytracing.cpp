@@ -132,6 +132,42 @@ void RayReflectionFeature::Build(rendergraph::Graph& graph, const RenderFrame& f
                 context.Dispatch((camera.width + 7) / 8, (camera.height + 7) / 8);
             });
     }
+    if (input.temporalPipeline)
+    {
+        auto temporal = graph.AddComputePass("RayTracing.Reflection.Temporal");
+        const auto source = temporal.ReadTexture(filtered);
+        const auto normals = temporal.ReadTexture("GBuffer.NormalRoughness");
+        const auto depths = temporal.ReadTexture("CameraDepth");
+        const auto hit = temporal.ReadTexture(guide);
+        std::array<TextureHandle, 3> previousTemporal{source, hit, normals};
+        for (size_t i = 0; i < previousTemporal.size(); ++i)
+            if (!input.previousTemporal[i].empty())
+                previousTemporal[i] = temporal.ReadTexture(input.previousTemporal[i]);
+        const auto& uniform = input.temporalParameters;
+        const auto temporalConstants =
+            temporal.ReadBuffer(uniform.buffer, Use::Uniform, uniform.range);
+        std::array<TextureHandle, 3> outputs;
+        for (size_t i = 0; i < outputs.size(); ++i)
+            outputs[i] = temporal.WriteTexture(input.temporalOutputs[i]);
+        temporal.Execute(
+            [=](ComputeContext& context)
+            {
+                context.Bind(input.temporalPipeline);
+                context.BindTexture(0, source);
+                context.BindTexture(1, previousTemporal[0]);
+                context.BindTexture(2, outputs[0]);
+                context.BindBuffer(3, temporalConstants, uniform.range.offset, uniform.range.size);
+                context.BindTexture(4, previousTemporal[1]);
+                context.BindTexture(5, previousTemporal[2]);
+                context.BindTexture(6, hit);
+                context.BindTexture(7, depths);
+                context.BindTexture(8, normals);
+                context.BindTexture(9, outputs[1]);
+                context.BindTexture(10, outputs[2]);
+                context.Dispatch((camera.width + 7) / 8, (camera.height + 7) / 8);
+            });
+        filtered = outputs[0];
+    }
     graph.CreateTexture("RayTracing.Composite",
                         {camera.width, camera.height, rhi::Format::Rgba32Float, true, true});
     auto combine = graph.AddComputePass("RayTracing.Reflection.Combine");

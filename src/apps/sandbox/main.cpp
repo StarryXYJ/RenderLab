@@ -32,6 +32,7 @@ std::string_view ApplicationUsage()
            "  --width N --height N        Output size (default: 1280x720)\n"
            "  --gpu-budget-mib N          Tracked allocation limit (default: 2048 MiB)\n"
            "  --quality scene|low|medium|high  Shadow quality override\n"
+           "  --temporal-denoise on|off        Camera reprojection denoising (default on)\n"
            "  --denoise on|off                 Spatial reflection denoising (default on)\n"
            "  --view "
            "final|hdr|shadow|environment|brdf|reflection-raw|reflection-history|reflection-"

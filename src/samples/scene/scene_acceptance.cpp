@@ -1,4 +1,5 @@
 #include "samples/scene/scene_acceptance.hpp"
+#include "samples/scene/reflection_temporal_motion.hpp"
 
 #include "assets/io.hpp"
 #include "core/log.hpp"
@@ -166,6 +167,9 @@ void VerifyScene(rhi::Runtime& runtime, shader::Target target, const std::filesy
             firstReflection.reflectionSamples == 1 && firstReflection.reflectionHistoryReset &&
                 accumulated.reflectionSamples == 2 && !accumulated.reflectionHistoryReset,
             "Stationary reflection history did not accumulate across in-flight frames");
+        detail::Require(firstReflection.reflectionTemporalFrames == 1 &&
+                            accumulated.reflectionTemporalFrames == 2,
+                        "Independent temporal history was not published after submission");
         SaveImage(output / "reflection-first.bmp", firstReflection.pixels->Map(), 640, 360,
                   rhi::TextureRowPitch(640));
         SaveImage(output / "reflection-accumulated.bmp", accumulated.pixels->Map(), 640, 360,
@@ -191,8 +195,9 @@ void VerifyScene(rhi::Runtime& runtime, shader::Target target, const std::filesy
                 costs += std::format("{}: {:.6f} ms\n", timing.name, timing.nanoseconds / 1e6);
                 ++reflectionPasses;
             }
-        detail::Require(reflectionPasses == 4,
-                        "Trace/accumulation/denoise/combine did not execute independently");
+        detail::Require(
+            reflectionPasses == 5,
+            "Trace/accumulation/spatial/temporal/combine did not execute independently");
         WriteFileAtomically(output / "reflection-gpu-cost.txt",
                             std::as_bytes(std::span{costs.data(), costs.size()}));
         auto rawOptions = reflectionOptions;
@@ -244,11 +249,19 @@ void VerifyScene(rhi::Runtime& runtime, shader::Target target, const std::filesy
         auto cameraChanged = reflectionRender("reflection-camera-change", reflectionOptions);
         detail::Require(cameraChanged.reflectionHistoryReset,
                         "Camera motion did not invalidate reflection history");
+        detail::Require(cameraChanged.reflectionTemporalFrames == 2,
+                        "Small camera motion did not preserve a compatible reprojection source");
         document.MoveCamera({}, {});
         auto stoppedCamera = reflectionRender("reflection-camera-stopped", reflectionOptions);
         detail::Require(!stoppedCamera.reflectionHistoryReset &&
                             stoppedCamera.reflectionSamples == 2,
                         "Zero camera input after motion invalidated static reflection history");
+        detail::Require(stoppedCamera.reflectionTemporalFrames == 3,
+                        "Stopped camera did not preserve temporal source history");
+        document.MoveCamera({2, 0, 0}, {});
+        auto cut = reflectionRender("reflection-camera-cut", reflectionOptions);
+        detail::Require(cut.reflectionTemporalFrames == 1,
+                        "Camera cut did not reset the temporal source");
         document = original;
         auto& changedObject = *std::ranges::find_if(document.objects, [](const auto& value)
                                                     { return value.mesh.has_value(); });
@@ -256,6 +269,8 @@ void VerifyScene(rhi::Runtime& runtime, shader::Target target, const std::filesy
         auto sceneChanged = reflectionRender("reflection-scene-change", reflectionOptions);
         detail::Require(sceneChanged.reflectionHistoryReset,
                         "Scene transform did not invalidate reflection history");
+        detail::Require(sceneChanged.reflectionTemporalFrames == 1,
+                        "Scene transform did not reset temporal history");
         document = original;
         auto beforeMaterial = reflectionRender("reflection-before-material", reflectionOptions);
         const auto materialSource =
@@ -277,6 +292,8 @@ void VerifyScene(rhi::Runtime& runtime, shader::Target target, const std::filesy
         auto materialChanged = reflectionRender("reflection-material-change", reflectionOptions);
         detail::Require(materialChanged.reflectionHistoryReset,
                         "Material change did not invalidate reflection history");
+        detail::Require(materialChanged.reflectionTemporalFrames == 1,
+                        "Material change did not reset temporal history");
         document = original;
         auto restored = reflectionRender("reflection-restored", reflectionOptions);
         auto alternateCamera = document.Get(document.activeCamera);
@@ -286,6 +303,8 @@ void VerifyScene(rhi::Runtime& runtime, shader::Target target, const std::filesy
         auto alternate = reflectionRender("reflection-other-view", reflectionOptions);
         detail::Require(alternate.reflectionHistoryReset,
                         "A new ViewID reused another view's history");
+        detail::Require(alternate.reflectionTemporalFrames == 1,
+                        "A new ViewID reused another view's temporal history");
         document.activeCamera = original.activeCamera;
         auto returned = reflectionRender("reflection-return-view", reflectionOptions);
         detail::Require(!returned.reflectionHistoryReset,
@@ -296,17 +315,22 @@ void VerifyScene(rhi::Runtime& runtime, shader::Target target, const std::filesy
             renderer.Render(small, rhi::State::Undefined, nullptr, true, {}, reflectionOptions);
         detail::Require(resized.reflectionHistoryReset,
                         "Resize did not invalidate reflection history");
+        detail::Require(resized.reflectionTemporalFrames == 1,
+                        "Resize did not reset temporal history");
         document.environmentIntensity += .2f;
         auto environmentChanged =
             reflectionRender("reflection-environment-change", reflectionOptions);
         detail::Require(environmentChanged.reflectionHistoryReset,
                         "Lighting change did not invalidate reflection history");
+        detail::Require(environmentChanged.reflectionTemporalFrames == 1,
+                        "Lighting change did not reset temporal history");
         for (auto& entity : document.objects)
             if (entity.mesh)
                 entity.enabled = false;
         auto emptyReflection = reflectionRender("reflection-empty", reflectionOptions);
         runtime.Wait(emptyReflection.completion);
         document = original;
+        VerifyReflectionTemporalMotion(runtime, renderer, color, initial, output, logger);
         logger.Write(LogLevel::Info,
                      "M5.4 reflection acceptance passed: native TraceRays, raw reference, "
                      "stationary accumulation, "

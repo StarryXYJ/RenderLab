@@ -21,6 +21,7 @@ renderer::SceneRenderOptions RenderOptions(const Options& options)
                       : options.pipeline == "raytracing" ? renderer::PipelineType::RayTracing
                                                          : renderer::PipelineType::Forward;
     render.reflectionDenoise = options.reflectionDenoise;
+    render.reflectionTemporal = options.reflectionTemporal;
     render.profile = options.debugPanel || !options.profilePath.empty() || options.Benchmark();
     if (options.quality != "scene")
         render.shadowResolution = options.quality == "low"      ? 128u
@@ -59,6 +60,7 @@ void Statistics::Add(const renderer::SceneReadback& frame, const rhi::Runtime& r
                      double cpuMs, benchmark::Sample* sample)
 {
     reflectionSamples_ = frame.reflectionSamples;
+    reflectionTemporalFrames_ = frame.reflectionTemporalFrames;
     reflectionResets_ += frame.reflectionHistoryReset ? 1 : 0;
     const auto timings = frame.profile.Read(runtime);
     cpu_.Add(cpuMs);
@@ -95,6 +97,9 @@ std::string Statistics::Text(const scene::Snapshot& snapshot, rhi::MemoryStats m
     if (reflectionSamples_)
         text += std::format("RT history: {} spp | observed resets: {}\n", reflectionSamples_,
                             reflectionResets_);
+    if (reflectionTemporalFrames_)
+        text += std::format("Temporal source: {} frames (pixel rejection on GPU)\n",
+                            reflectionTemporalFrames_);
     text += "\nGPU pass means (ms):\n";
     for (const auto& [name, pass] : passes_)
         text += std::format("{}: {:.3f}\n", name, pass.Mean());
@@ -127,6 +132,7 @@ void Statistics::Save(const std::filesystem::path& path, const Options& options,
                           {"quality", options.quality},
                           {"view", options.view},
                           {"reflectionDenoise", options.reflectionDenoise},
+                          {"reflectionTemporal", options.reflectionTemporal},
                           {"pipeline", options.pipeline},
                           {"warmupFrames", options.Benchmark() ? options.warmupFrames : 0},
                           {"cpuRender", summary(cpu_)},
@@ -139,7 +145,8 @@ void Statistics::Save(const std::filesystem::path& path, const Options& options,
                             {"budgetBytes", memory.budget}}},
                           {"gpuPasses", nlohmann::json::object()}};
     result["reflectionHistory"] = {{"samples", reflectionSamples_},
-                                   {"observedResets", reflectionResets_}};
+                                   {"observedResets", reflectionResets_},
+                                   {"temporalSourceFrames", reflectionTemporalFrames_}};
     result["recordedAtUtc"] = std::format(
         "{:%FT%TZ}", std::chrono::floor<std::chrono::seconds>(std::chrono::system_clock::now()));
 #ifdef NDEBUG

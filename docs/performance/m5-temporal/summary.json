@@ -1,0 +1,510 @@
+{
+  "date": "2026-10-27",
+  "adapter": "NVIDIA GeForce RTX 5060",
+  "driver": "591.74",
+  "scope": "Static opaque scene camera reprojection, independent display history, no animated geometry velocity or reflected virtual-surface reprojection",
+  "motionConfiguration": "640x360, shadow128, validation on, light intensity x4, 8 stationary warmup frames +16 camera steps; current moving frame is1 spp, sequence continues; same-pose unfiltered2048 spp reference",
+  "trajectories": {
+    "gentle": {
+      "localTranslationPerFrame": [
+        0.02,
+        0,
+        0
+      ],
+      "yawDegreesPerFrame": 0.15
+    },
+    "fast": {
+      "localTranslationPerFrame": [
+        0.08,
+        0,
+        0
+      ],
+      "yawDegreesPerFrame": 0.8
+    }
+  },
+  "motion": [
+    {
+      "configuration": "Debug",
+      "scene": "RayTracing",
+      "backend": "dx12",
+      "trajectory": "gentle",
+      "unfilteredRgbMse": 19.32359375,
+      "spatialRgbMse": 9.66650174,
+      "temporalRgbMse": 7.58411603,
+      "temporalGpuMeanMs": 0.065754
+    },
+    {
+      "configuration": "Debug",
+      "scene": "RayTracing",
+      "backend": "dx12",
+      "trajectory": "fast",
+      "unfilteredRgbMse": 18.08912616,
+      "spatialRgbMse": 9.12951678,
+      "temporalRgbMse": 6.66441696,
+      "temporalGpuMeanMs": 0.066376
+    },
+    {
+      "configuration": "Debug",
+      "scene": "RayTracing",
+      "backend": "vulkan",
+      "trajectory": "gentle",
+      "unfilteredRgbMse": 19.31615596,
+      "spatialRgbMse": 9.66377894,
+      "temporalRgbMse": 7.58150318,
+      "temporalGpuMeanMs": 0.138196
+    },
+    {
+      "configuration": "Debug",
+      "scene": "RayTracing",
+      "backend": "vulkan",
+      "trajectory": "fast",
+      "unfilteredRgbMse": 18.08322049,
+      "spatialRgbMse": 9.12894821,
+      "temporalRgbMse": 6.66419271,
+      "temporalGpuMeanMs": 0.167676
+    },
+    {
+      "configuration": "Debug",
+      "scene": "Pbr",
+      "backend": "dx12",
+      "trajectory": "gentle",
+      "unfilteredRgbMse": 12.84484954,
+      "spatialRgbMse": 5.10448495,
+      "temporalRgbMse": 2.73234375,
+      "temporalGpuMeanMs": 0.04807
+    },
+    {
+      "configuration": "Debug",
+      "scene": "Pbr",
+      "backend": "dx12",
+      "trajectory": "fast",
+      "unfilteredRgbMse": 12.55666522,
+      "spatialRgbMse": 5.22956019,
+      "temporalRgbMse": 3.11421875,
+      "temporalGpuMeanMs": 0.715426
+    },
+    {
+      "configuration": "Debug",
+      "scene": "Pbr",
+      "backend": "vulkan",
+      "trajectory": "gentle",
+      "unfilteredRgbMse": 12.84501447,
+      "spatialRgbMse": 5.10422454,
+      "temporalRgbMse": 2.73240741,
+      "temporalGpuMeanMs": 0.025792
+    },
+    {
+      "configuration": "Debug",
+      "scene": "Pbr",
+      "backend": "vulkan",
+      "trajectory": "fast",
+      "unfilteredRgbMse": 12.55589265,
+      "spatialRgbMse": 5.22885272,
+      "temporalRgbMse": 3.11351128,
+      "temporalGpuMeanMs": 0.019008
+    },
+    {
+      "configuration": "Release",
+      "scene": "RayTracing",
+      "backend": "dx12",
+      "trajectory": "gentle",
+      "unfilteredRgbMse": 19.32359375,
+      "spatialRgbMse": 9.66650174,
+      "temporalRgbMse": 7.58411603,
+      "temporalGpuMeanMs": 0.043132
+    },
+    {
+      "configuration": "Release",
+      "scene": "RayTracing",
+      "backend": "dx12",
+      "trajectory": "fast",
+      "unfilteredRgbMse": 18.08912616,
+      "spatialRgbMse": 9.12951678,
+      "temporalRgbMse": 6.66441696,
+      "temporalGpuMeanMs": 0.069068
+    },
+    {
+      "configuration": "Release",
+      "scene": "RayTracing",
+      "backend": "vulkan",
+      "trajectory": "gentle",
+      "unfilteredRgbMse": 19.31615596,
+      "spatialRgbMse": 9.66377894,
+      "temporalRgbMse": 7.58150318,
+      "temporalGpuMeanMs": 0.040364
+    },
+    {
+      "configuration": "Release",
+      "scene": "RayTracing",
+      "backend": "vulkan",
+      "trajectory": "fast",
+      "unfilteredRgbMse": 18.08322049,
+      "spatialRgbMse": 9.12894821,
+      "temporalRgbMse": 6.66419271,
+      "temporalGpuMeanMs": 0.040364
+    }
+  ],
+  "costConfiguration": "Release, validation off, 1280x720, shadow128, warmup32 +128 measured serial stationary frames, spp33..160; single short run per mode; not window FPS",
+  "cost": [
+    {
+      "backend": "dx12",
+      "temporal": "off",
+      "serialFrameMeanMs": 2.050054687500001,
+      "gpuPasses": {
+        "Deferred.GBuffer": {
+          "maxMs": 0.052064,
+          "meanMs": 0.04677374999999999,
+          "minMs": 0.044544,
+          "samples": 128
+        },
+        "Deferred.Lighting": {
+          "maxMs": 0.045312,
+          "meanMs": 0.03384474999999999,
+          "minMs": 0.032512,
+          "samples": 128
+        },
+        "Display.ToneMapping": {
+          "maxMs": 0.022048,
+          "meanMs": 0.01839800000000001,
+          "minMs": 0.017216,
+          "samples": 128
+        },
+        "MainLight.Shadow": {
+          "maxMs": 0.010912,
+          "meanMs": 0.009251749999999998,
+          "minMs": 0.008544,
+          "samples": 128
+        },
+        "RayTracing.Reflection.Accumulate": {
+          "maxMs": 0.123552,
+          "meanMs": 0.09636675,
+          "minMs": 0.093888,
+          "samples": 128
+        },
+        "RayTracing.Reflection.Combine": {
+          "maxMs": 0.256352,
+          "meanMs": 0.05976025000000002,
+          "minMs": 0.046464,
+          "samples": 128
+        },
+        "RayTracing.Reflection.Denoise": {
+          "maxMs": 0.457856,
+          "meanMs": 0.25203774999999995,
+          "minMs": 0.23632,
+          "samples": 128
+        },
+        "RayTracing.Reflection.Trace": {
+          "maxMs": 0.139936,
+          "meanMs": 0.11423275000000004,
+          "minMs": 0.109984,
+          "samples": 128
+        },
+        "RayTracing.Shadows": {
+          "maxMs": 0.202144,
+          "meanMs": 0.040903000000000016,
+          "minMs": 0.037888,
+          "samples": 128
+        }
+      },
+      "memory": {
+        "budgetBytes": 2147483648,
+        "highWaterBytes": 176291840,
+        "processPrivateBytes": 433098752,
+        "processWorkingSetBytes": 269455360,
+        "usedBytes": 176226304
+      }
+    },
+    {
+      "backend": "dx12",
+      "temporal": "on",
+      "serialFrameMeanMs": 2.29239453125,
+      "gpuPasses": {
+        "Deferred.GBuffer": {
+          "maxMs": 0.191744,
+          "meanMs": 0.04800975,
+          "minMs": 0.045152,
+          "samples": 128
+        },
+        "Deferred.Lighting": {
+          "maxMs": 0.043424,
+          "meanMs": 0.03421625,
+          "minMs": 0.032992,
+          "samples": 128
+        },
+        "Display.ToneMapping": {
+          "maxMs": 0.023648,
+          "meanMs": 0.018091249999999996,
+          "minMs": 0.016704,
+          "samples": 128
+        },
+        "MainLight.Shadow": {
+          "maxMs": 0.012768,
+          "meanMs": 0.009253999999999997,
+          "minMs": 0.008512,
+          "samples": 128
+        },
+        "RayTracing.Reflection.Accumulate": {
+          "maxMs": 0.12976,
+          "meanMs": 0.09568300000000005,
+          "minMs": 0.075648,
+          "samples": 128
+        },
+        "RayTracing.Reflection.Combine": {
+          "maxMs": 0.265184,
+          "meanMs": 0.067385,
+          "minMs": 0.05824,
+          "samples": 128
+        },
+        "RayTracing.Reflection.Denoise": {
+          "maxMs": 0.449984,
+          "meanMs": 0.25056150000000005,
+          "minMs": 0.233728,
+          "samples": 128
+        },
+        "RayTracing.Reflection.Temporal": {
+          "maxMs": 0.421696,
+          "meanMs": 0.21902999999999997,
+          "minMs": 0.204544,
+          "samples": 128
+        },
+        "RayTracing.Reflection.Trace": {
+          "maxMs": 0.139456,
+          "meanMs": 0.11384999999999998,
+          "minMs": 0.109248,
+          "samples": 128
+        },
+        "RayTracing.Shadows": {
+          "maxMs": 0.156672,
+          "meanMs": 0.03959049999999999,
+          "minMs": 0.037952,
+          "samples": 128
+        }
+      },
+      "memory": {
+        "budgetBytes": 2147483648,
+        "highWaterBytes": 270663680,
+        "processPrivateBytes": 528990208,
+        "processWorkingSetBytes": 268341248,
+        "usedBytes": 270598144
+      }
+    },
+    {
+      "backend": "vulkan",
+      "temporal": "off",
+      "serialFrameMeanMs": 1.7449742187500006,
+      "gpuPasses": {
+        "Deferred.GBuffer": {
+          "maxMs": 0.059776,
+          "meanMs": 0.05634174999999997,
+          "minMs": 0.055008,
+          "samples": 128
+        },
+        "Deferred.Lighting": {
+          "maxMs": 0.217152,
+          "meanMs": 0.033483500000000006,
+          "minMs": 0.031296,
+          "samples": 128
+        },
+        "Display.ToneMapping": {
+          "maxMs": 0.033344,
+          "meanMs": 0.016119999999999992,
+          "minMs": 0.015296,
+          "samples": 128
+        },
+        "MainLight.Shadow": {
+          "maxMs": 0.010016,
+          "meanMs": 0.009105999999999996,
+          "minMs": 0.008672,
+          "samples": 128
+        },
+        "RayTracing.Reflection.Accumulate": {
+          "maxMs": 0.159104,
+          "meanMs": 0.03125900000000005,
+          "minMs": 0.028288,
+          "samples": 128
+        },
+        "RayTracing.Reflection.Combine": {
+          "maxMs": 0.06544,
+          "meanMs": 0.05511899999999995,
+          "minMs": 0.044576,
+          "samples": 128
+        },
+        "RayTracing.Reflection.Denoise": {
+          "maxMs": 0.422528,
+          "meanMs": 0.22388625000000012,
+          "minMs": 0.220384,
+          "samples": 128
+        },
+        "RayTracing.Reflection.Trace": {
+          "maxMs": 0.096736,
+          "meanMs": 0.08926099999999997,
+          "minMs": 0.088128,
+          "samples": 128
+        },
+        "RayTracing.Shadows": {
+          "maxMs": 0.258624,
+          "meanMs": 0.04412425000000001,
+          "minMs": 0.039296,
+          "samples": 128
+        }
+      },
+      "memory": {
+        "budgetBytes": 2147483648,
+        "highWaterBytes": 175504576,
+        "processPrivateBytes": 549494784,
+        "processWorkingSetBytes": 338890752,
+        "usedBytes": 175504320
+      }
+    },
+    {
+      "backend": "vulkan",
+      "temporal": "on",
+      "serialFrameMeanMs": 2.0161617187499994,
+      "gpuPasses": {
+        "Deferred.GBuffer": {
+          "maxMs": 0.060128,
+          "meanMs": 0.056621499999999984,
+          "minMs": 0.054528,
+          "samples": 128
+        },
+        "Deferred.Lighting": {
+          "maxMs": 0.036416,
+          "meanMs": 0.031946499999999996,
+          "minMs": 0.03104,
+          "samples": 128
+        },
+        "Display.ToneMapping": {
+          "maxMs": 0.020096,
+          "meanMs": 0.015231750000000006,
+          "minMs": 0.01472,
+          "samples": 128
+        },
+        "MainLight.Shadow": {
+          "maxMs": 0.010848,
+          "meanMs": 0.009291499999999996,
+          "minMs": 0.008576,
+          "samples": 128
+        },
+        "RayTracing.Reflection.Accumulate": {
+          "maxMs": 0.160896,
+          "meanMs": 0.03135025000000006,
+          "minMs": 0.02832,
+          "samples": 128
+        },
+        "RayTracing.Reflection.Combine": {
+          "maxMs": 0.27952,
+          "meanMs": 0.06803450000000004,
+          "minMs": 0.062944,
+          "samples": 128
+        },
+        "RayTracing.Reflection.Denoise": {
+          "maxMs": 0.456416,
+          "meanMs": 0.2241455000000001,
+          "minMs": 0.220672,
+          "samples": 128
+        },
+        "RayTracing.Reflection.Temporal": {
+          "maxMs": 0.345984,
+          "meanMs": 0.1330505,
+          "minMs": 0.122272,
+          "samples": 128
+        },
+        "RayTracing.Reflection.Trace": {
+          "maxMs": 0.304384,
+          "meanMs": 0.09159849999999999,
+          "minMs": 0.087008,
+          "samples": 128
+        },
+        "RayTracing.Shadows": {
+          "maxMs": 0.043936,
+          "meanMs": 0.040575500000000014,
+          "minMs": 0.039104,
+          "samples": 128
+        }
+      },
+      "memory": {
+        "budgetBytes": 2147483648,
+        "highWaterBytes": 269876416,
+        "processPrivateBytes": 648982528,
+        "processWorkingSetBytes": 340844544,
+        "usedBytes": 269876160
+      }
+    }
+  ],
+  "additionalWindows": [
+    {
+      "backend": "dx12",
+      "name": "player-1440",
+      "reportRequestedSize": [
+        2560,
+        1440
+      ],
+      "memory": {
+        "budgetBytes": 2147483648,
+        "highWaterBytes": 1197211648,
+        "processPrivateBytes": 1461776384,
+        "processWorkingSetBytes": 296632320,
+        "usedBytes": 1197080576
+      }
+    },
+    {
+      "backend": "dx12",
+      "name": "resize",
+      "reportRequestedSize": [
+        1920,
+        1080
+      ],
+      "memory": {
+        "budgetBytes": 2147483648,
+        "highWaterBytes": 241958912,
+        "processPrivateBytes": 547835904,
+        "processWorkingSetBytes": 302182400,
+        "usedBytes": 237961216
+      }
+    },
+    {
+      "backend": "vulkan",
+      "name": "player-1440",
+      "reportRequestedSize": [
+        2560,
+        1440
+      ],
+      "memory": {
+        "budgetBytes": 2147483648,
+        "highWaterBytes": 1196294080,
+        "processPrivateBytes": 1692049408,
+        "processWorkingSetBytes": 424710144,
+        "usedBytes": 1196293568
+      }
+    },
+    {
+      "backend": "vulkan",
+      "name": "resize",
+      "reportRequestedSize": [
+        1920,
+        1080
+      ],
+      "memory": {
+        "budgetBytes": 2147483648,
+        "highWaterBytes": 190586304,
+        "processPrivateBytes": 744755200,
+        "processWorkingSetBytes": 442486784,
+        "usedBytes": 186629568
+      }
+    }
+  ],
+  "validation": {
+    "debugSelected": "18/18 (17 together +DX12 reflections separately)",
+    "releaseRt": "6/6",
+    "gpuValidationErrors": 0,
+    "shutdownTrackedUsage": "zero"
+  },
+  "limits": [
+    "8-bit sRGB MSE, not HDR variance or independent ground truth; endpoint sample index is included in the reference",
+    "Endpoint image error does not measure temporal flicker or bound all ghosting",
+    "Stochastic secondary hit guide and primary reprojection only; glossy reflections can trail, RGB clipping can bias/desaturate",
+    "Other GPU hardware and4K unverified"
+  ],
+  "highSppBypass": "Both backends,2048 spp RGB temporal on/off identical; master denoise on so spatial also bypasses",
+  "additionalWindowsNote": "1440p Player32 frames; window-test54 frames/10 rebuilds/10 suspended ticks and three pipeline selections. Window smoke first resizes to640/641x360 before rendering; sustained1080p is covered by reflection_window16 frames. Odd257x193 Player forced Denoised view also passed."
+}

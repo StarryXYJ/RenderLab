@@ -126,6 +126,13 @@ Options ParseOptions(std::span<const std::string_view> arguments)
         }
         else if (arg == "--view")
             options.view = value();
+        else if (arg == "--temporal-denoise")
+        {
+            const auto mode = value();
+            if (mode != "on" && mode != "off")
+                throw std::invalid_argument("--temporal-denoise must be on or off");
+            options.reflectionTemporal = mode == "on";
+        }
         else if (arg == "--denoise")
         {
             const auto mode = value();
@@ -259,6 +266,7 @@ std::string_view Usage()
            "  --width N --height N        Scene output size (default: 1280x720)\n"
            "  --gpu-budget-mib N          Tracked allocation limit (scene default: 2048 MiB)\n"
            "  --quality scene|low|medium|high  Scene shadows, or 128/512/1024 resolution\n"
+           "  --temporal-denoise on|off        Camera reprojection denoising (default on)\n"
            "  --denoise on|off                 Spatial reflection denoising (default on)\n"
            "  --view "
            "final|hdr|shadow|environment|brdf|reflection-raw|reflection-history|reflection-"

@@ -42,6 +42,8 @@ struct SceneRenderOptions
     bool reflectionHistory = true;
     /// Spatial display filter; never feeds back into progressive history.
     bool reflectionDenoise = true;
+    /// Camera reprojection for static geometry; independent from the unfiltered running mean.
+    bool reflectionTemporal = true;
 };
 /// @brief Submission completion point and optional pixels; wait before mapping the readback buffer.
 struct SceneReadback
@@ -51,6 +53,8 @@ struct SceneReadback
     rendergraph::Submission::GpuProfile profile;
     uint32_t reflectionSamples = 0;
     bool reflectionHistoryReset = false;
+    /// Consecutive compatible source frames, not a count of accepted pixels or reflection spp.
+    uint32_t reflectionTemporalFrames = 0;
     uint64_t compileNs = 0, prepareNs = 0, recordNs = 0;
 };
 /** @brief Project/scene to the existing Forward composition. Runtime outlives the renderer. */

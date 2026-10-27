@@ -41,7 +41,7 @@ private:
         double Mean() const;
     } cpu_, compile_, prepare_, record_;
     std::map<std::string, Samples> passes_;
-    uint32_t reflectionSamples_ = 0;
+    uint32_t reflectionSamples_ = 0, reflectionTemporalFrames_ = 0;
     uint64_t reflectionResets_ = 0;
 };
 } // namespace renderlab::sandbox
