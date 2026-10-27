@@ -185,6 +185,16 @@ R1 契约修订、B1 样例整理/Benchmark、B2 调查和 B3 资源复用已完
 
 边界：有限空间邻域有低 spp 偏差与细节模糊，随机命中引导不能完整识别反射边界；无运动矢量、重投影、时间降噪或方差估计，其他 GPU 未验证。额外两张 RGBA32F 瞬态目标，关闭时仍写命中引导；未提前推进 M6/M8 其他能力。入口：[接口](../docs/raytracing.md#spatial-denoising)、[操作](../manual/build.md#ray-tracing-组合与-ray-query)、[图像、数值、成本与复现](../docs/performance/m5-denoise.md)。
 
+### M5 修复：高分辨率 RT 分配预算
+
+状态：DONE，日期：2026 年 10 月 27 日。
+
+原因与结果：用户报告后在 Vulkan 1920×1080 RT 窗口复现原 256 MiB ledger 上限失败；先前 640×360 窗口验收未覆盖高分辨率。场景宿主改为显式 2048 MiB tracked native 上限，CLI 可配置 64..16384 MiB；独立 RHI Demo 仍默认 256 MiB。SceneRenderer 缓存上限为预算的 3/4，为图外资源留余量；预算错误包含 requested/used/limit，拒绝零值、低于当前占用或非 owner-thread 修改。没有压缩图像或改变降噪 Shader。
+
+验证：MSVC Debug/Release Sandbox/Player 构建；Debug 所选 18/18、Release 光追/1080p 窗口 6/6，通过新增持续 1080p 16 帧回归和 CPU 预算合约。双后端另外在 1080p/1440p 各连续 32 帧（native 高水位约 365–872 MiB），1080p 启动后 resize/minimize/三管线各 54 帧/10 次重建，Release Player 1080p 各 16 帧，validation errors=0，关闭后 ledger 归零。
+
+边界：限额不是显存预留或驱动实时预算；更大分辨率/场景仍可能达到显式上限或硬件容量，其他 GPU/4K 未验证。入口：[接口](../docs/m1-rhi.md)、[操作](../manual/build.md#ray-tracing-组合与-ray-query)、[复现/内存数据](../docs/performance/m5-denoise.md#高分辨率窗口预算修复)。
+
 ## M6 GPU Driven 与执行优化
 
 按 CPU 基线、GPU 提交、并行录制、多队列、Alias 的顺序分别评估。M6.1 与 M6.2 完成可构成最小 GPU Driven 成果，后续优化不要求一定提升所有场景。

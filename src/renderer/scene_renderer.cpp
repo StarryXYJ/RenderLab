@@ -121,8 +121,8 @@ struct SceneRenderer::Impl
         : runtime(r), shaderTarget(target), project(project::Project::Open(manifest, engine)),
           database(project), document(scene::Scene::Load(database.Get(project.startScene).path)),
           materials(r, target),
-          // Two 2048 shadow color/depth pairs plus 720p HDR/depth fit below the RHI budget.
-          pool(r, 64, 224ull * 1024 * 1024), uploadPool(r), accelerationScene(r, pool)
+          // The host owns the native limit. Leave room for assets, AS, histories and uploads.
+          pool(r, 64, r.GetMemoryStats().budget * 3 / 4), uploadPool(r), accelerationScene(r, pool)
     {
         for (const auto& file : std::filesystem::recursive_directory_iterator(project.engine))
         {

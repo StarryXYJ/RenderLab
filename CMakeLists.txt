@@ -339,6 +339,13 @@ if(BUILD_TESTING)
                 --output ${CMAKE_BINARY_DIR}/reflections
                 --log ${CMAKE_BINARY_DIR}/logs/${backend}-reflections.log)
             set_tests_properties(gpu.${backend}.reflections PROPERTIES LABELS gpu RUN_SERIAL TRUE TIMEOUT 120)
+            add_test(NAME gpu.${backend}.reflection_window COMMAND renderlab_sandbox
+                --backend ${backend} --validation on --frames 16 --debug-panel --fixed-camera
+                --pipeline raytracing --project ${CMAKE_SOURCE_DIR}/sample/m4/RayTracing.rlproject
+                --width 1920 --height 1080
+                --profile ${CMAKE_BINARY_DIR}/tools/${backend}-reflection-window.json
+                --log ${CMAKE_BINARY_DIR}/logs/${backend}-reflection-window.log)
+            set_tests_properties(gpu.${backend}.reflection_window PROPERTIES LABELS gpu RUN_SERIAL TRUE TIMEOUT 90)
             add_test(NAME gpu.${backend}.pbr COMMAND renderlab_pbr_tests ${backend}
                 ${CMAKE_SOURCE_DIR}/sample/m4/Pbr.rlproject ${CMAKE_SOURCE_DIR}/shaders
                 ${CMAKE_BINARY_DIR}/pbr/${backend})

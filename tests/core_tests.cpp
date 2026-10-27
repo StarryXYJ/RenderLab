@@ -70,6 +70,10 @@ int main()
         RequireInvalid([] { ParseOptions(std::array{"--quality"sv, "ultra"sv}); });
         RequireInvalid([] { ParseOptions(std::array{"--view"sv, "missing"sv}); });
         RequireInvalid([] { ParseOptions(std::array{"--denoise"sv, "maybe"sv}); });
+        RequireInvalid([] { ParseOptions(std::array{"--gpu-budget-mib"sv, "0"sv}); });
+        RequireInvalid([] { ParseOptions(std::array{"--gpu-budget-mib"sv, "16385"sv}); });
+        Require(ParseOptions(std::array{"--gpu-budget-mib"sv, "1024"sv}).gpuBudgetMiB == 1024,
+                "Explicit allocation budget was not parsed");
         const auto denoise =
             ParseOptions(std::array{"--project"sv, "p"sv, "--pipeline"sv, "raytracing"sv,
                                     "--view"sv, "reflection-denoised"sv, "--denoise"sv, "off"sv});

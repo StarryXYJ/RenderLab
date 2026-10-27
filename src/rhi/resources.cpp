@@ -1,6 +1,7 @@
 #include "rhi/resources.hpp"
 
 #include <algorithm>
+#include <format>
 #include <stdexcept>
 
 namespace renderlab::rhi
@@ -25,7 +26,9 @@ uint32_t FormatBytes(Format format)
 void AllocationLedger::Add(uint64_t bytes)
 {
     if (bytes > stats.budget - stats.used)
-        throw std::runtime_error("RHI allocation budget exceeded");
+        throw std::runtime_error(std::format(
+            "RHI allocation budget exceeded: requested={} bytes, used={} bytes, limit={} bytes",
+            bytes, stats.used, stats.budget));
     stats.used += bytes;
     stats.highWater = std::max(stats.highWater, stats.used);
 }

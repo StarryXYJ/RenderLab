@@ -76,6 +76,27 @@ GPU 合约入口 `gpu.{dx12,vulkan}.acceleration_structure`：真实 Denoise Sha
 
 RGBA32F 命中引导和滤波输出共增加 32 字节/像素的瞬态资源，640×360 约 7.03 MiB、1280×720 约 28.13 MiB（不含对齐）。关闭滤波仍写入命中引导，高 spp 旁路仍执行复制 Pass；后续压缩或变体优化需单独评估。
 
+## 高分辨率窗口预算修复
+
+原空间降噪提交后的 640×360 窗口验证未覆盖高分辨率启动。收到用户报告后，在 Vulkan 的 1920×1080 RT 原生窗口复现 `RHI allocation budget exceeded`；M1 沿用的 256 MiB native ledger 上限无法覆盖当前 GBuffer/HDR、反射历史与降噪和在途帧。此前 720p 串行测量不会证明高分辨率窗口成立。
+
+上文图像与成本数据在预算修复前采集（当时限额 256 MiB）；本修复不改变 Shader。
+
+Sandbox/Player 场景启动时显式配置 2048 MiB tracked allocation 上限，独立 RHI Demo 保留 256 MiB；`--gpu-budget-mib N`（64..16384）允许设置其他有界上限。SceneRenderer Graph 缓存取该值的 3/4，为图外资源留余量。零值或低于当前 native 占用的 Runtime 设置被拒绝，预算耗尽诊断列出 requested/used/limit。此设置不预留显存，也不代替设备实时内存预算查询。没有压缩现有图像或改变滤波结果。
+
+修复后 Debug / validation on / 固定相机，每个后端每个尺寸连续 32 帧，场景阴影使用 512²：
+
+| 后端 | 分辨率 | native ledger 高水位 MiB |
+| --- | --- | ---: |
+| dx12 | 1920×1080 | 658.00 |
+| dx12 | 2560×1440 | 871.75 |
+| vulkan | 1920×1080 | 365.25 |
+| vulkan | 2560×1440 | 870.87 |
+
+修复后 Debug 所选 18/18、Release 光追/1080p 窗口专项 6/6 通过，Release Player 两后端另各完成 1080p 16 帧，validation errors=0；关闭后 ledger 归零。
+
+两后端另以 1920×1080 启动既有 resize/minimize 与三管线菜单测试，各 54 帧/10 次重建/10 次挂起通过，validation errors=0。新增长期回归 `gpu.{dx12,vulkan}.reflection_window` 在 1920×1080 固定窗口持续渲染 16 帧，不在早期缩小窗口；显式预算/耗尽账本不变/非法缩小/owner-thread 由 CPU 合约验证。以上不是泄漏长测或其他 GPU/4K 支持保证。历史帧、缓存、GPU 完成时机和原生对齐会影响高水位，不能按分辨率简单线性外推。
+
 ## 复现
 
 ```powershell

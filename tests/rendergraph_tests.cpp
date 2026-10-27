@@ -705,6 +705,34 @@ void StencilContracts()
 void ProfilingContracts()
 {
     FakeRuntime runtime;
+    {
+        struct BudgetRuntime : FakeRuntime
+        {
+            void Charge(uint64_t bytes)
+            {
+                ledger_->Add(bytes);
+            }
+            void Release(uint64_t bytes)
+            {
+                ledger_->Remove(bytes);
+            }
+        } budget;
+        Fails([&] { budget.SetAllocationBudget(0); }, "nonzero");
+        budget.SetAllocationBudget(1024);
+        budget.Charge(512);
+        Fails([&] { budget.SetAllocationBudget(511); }, "current native usage");
+        Fails([&] { budget.Charge(513); }, "requested=513 bytes, used=512 bytes, limit=1024 bytes");
+        Require(budget.GetMemoryStats().used == 512 && budget.GetMemoryStats().highWater == 512,
+                "Rejected allocation must not change ledger accounting");
+        budget.SetAllocationBudget(2048);
+        budget.Charge(1024);
+        Require(budget.GetMemoryStats().used == 1536 && budget.GetMemoryStats().budget == 2048,
+                "Configured budget must cover tracked allocations");
+        std::thread worker([&]
+                           { Fails([&] { budget.SetAllocationBudget(4096); }, "owner thread"); });
+        worker.join();
+        budget.Release(1536);
+    }
     Pool pool(runtime);
     {
         Pool views(runtime, 1, 1024);

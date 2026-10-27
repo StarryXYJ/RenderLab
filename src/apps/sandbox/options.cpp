@@ -56,6 +56,12 @@ Options ParseOptions(std::span<const std::string_view> arguments)
         {
             options.adapter = number();
         }
+        else if (arg == "--gpu-budget-mib")
+        {
+            options.gpuBudgetMiB = number();
+            if (options.gpuBudgetMiB < 64 || options.gpuBudgetMiB > 16384)
+                throw std::invalid_argument("--gpu-budget-mib requires 64..16384");
+        }
         else if (arg == "--exit-after-ms")
         {
             options.exitAfterMs = number();
@@ -251,6 +257,7 @@ std::string_view Usage()
            "  --scene-test               Check the M4 reference scene (--project required)\n"
            "  --project FILE             Load a project scene using Forward PBR/HDR\n"
            "  --width N --height N        Scene output size (default: 1280x720)\n"
+           "  --gpu-budget-mib N          Tracked allocation limit (scene default: 2048 MiB)\n"
            "  --quality scene|low|medium|high  Scene shadows, or 128/512/1024 resolution\n"
            "  --denoise on|off                 Spatial reflection denoising (default on)\n"
            "  --view "

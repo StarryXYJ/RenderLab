@@ -194,6 +194,14 @@ The current format baseline adds two full-resolution RGBA32F transients (guide a
 32 bytes/pixel, about 7.03 MiB at 640x360 or 28.13 MiB at 1280x720, excluding allocator alignment.
 With the filter off only the guide remains; Trace writes it along with raw radiance. High-spp
 filter bypass still dispatches a copy pass. Compression and guide-free trace variants are deferred.
+Scene hosts configure a bounded 2048 MiB tracked-native allocation limit before renderer creation;
+standalone RHI demos keep 256 MiB. Override with `--gpu-budget-mib N` (64..16384). The SceneRenderer
+pool caps estimated cache bytes at 3/4 of that configured limit, leaving headroom for graph-external
+assets, acceleration structures, persistent histories and uploads. The limit is not a VRAM
+reservation or a driver memory-budget query. It counts native Buffer/Texture allocations, including
+host-visible buffers; the error reports requested/used/limit. Large scenes or resolutions may
+still exhaust the configured cap or physical memory. The original 256 MiB host policy failed a
+1920x1080 RT window after denoising; the repair preserves the existing allocation lifetime checks.
 See [measurements and limits](performance/m5-denoise.md) for hardware evidence.
 
 ### Material and sampling boundary

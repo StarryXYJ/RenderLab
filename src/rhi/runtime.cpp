@@ -5,6 +5,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <stdexcept>
 #include <utility>
 
 namespace renderlab::rhi
@@ -13,6 +14,15 @@ using detail::Require;
 
 Runtime::Runtime() = default;
 Runtime::~Runtime() = default;
+
+void Runtime::SetAllocationBudget(uint64_t bytes)
+{
+    if (std::this_thread::get_id() != ownerThread_)
+        throw std::logic_error("Allocation budget requires runtime owner thread");
+    Require(bytes > 0 && bytes >= ledger_->stats.used,
+            "Allocation budget must be nonzero and cover current native usage");
+    ledger_->stats.budget = bytes;
+}
 
 void Runtime::CheckOwner(const std::shared_ptr<Object>& object) const
 {

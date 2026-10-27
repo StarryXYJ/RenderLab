@@ -204,6 +204,8 @@ Assets 与 .meta 纳入版本管理，Library 可以清除重建。不要原地�
 
 ### Ray Tracing 组合与 Ray Query
 
+场景宿主（Sandbox/Player）默认 tracked allocation 上限为 2048 MiB，Graph 资源缓存以其中 3/4 为上限，给资产、AS、历史和上传留出余量；需要时可用 `--gpu-budget-mib 4096` 显式调整。它统计 Buffer/Texture 的 native 分配，包括 Host 可见上传/读回，不是显卡实时可用显存，也不一次性预留这些内存。独立 RHI Demo 默认仍为 256 MiB。窗口分辨率、在途帧和保留的历史视图都会影响峰值；预算不足时日志给出 requested/used/limit。
+
 支持 AS/Ray Query/TraceRays 的设备可在 Pipeline 菜单选择 **Ray Tracing**，CLI 使用 `--pipeline raytracing`。当前组合以 Deferred 为主体，通过独立 Ray Query Pass 生成方向光阴影可见性，并用 TraceRays 生成一次反射、静止历史累积与独立合成；Shadow 纹理查看项显示此可见性图。方向光的 Shadows 开关控制阴影效果。反射仅支持内置 Lit/Unlit 不透明材质。当前仅支持不透明静态几何，Masked 材质会给出诊断，透明材质仍走 Forward。
 
 ```powershell

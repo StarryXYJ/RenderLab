@@ -30,6 +30,7 @@ std::string_view ApplicationUsage()
            "  --backend dx12|vulkan       Backend (default: dx12)\n"
            "  --validation auto|on|off    Device validation\n"
            "  --width N --height N        Output size (default: 1280x720)\n"
+           "  --gpu-budget-mib N          Tracked allocation limit (default: 2048 MiB)\n"
            "  --quality scene|low|medium|high  Shadow quality override\n"
            "  --denoise on|off                 Spatial reflection denoising (default on)\n"
            "  --view "
@@ -105,6 +106,12 @@ int Run(const sandbox::Options& options, const std::filesystem::path& shaderRoot
         !options.projectPath.empty())
     {
         auto runtime = device->CreateRuntime();
+        const auto budgetMiB = options.gpuBudgetMiB          ? options.gpuBudgetMiB
+                               : options.projectPath.empty() ? 256u
+                                                             : 2048u;
+        runtime->SetAllocationBudget(uint64_t(budgetMiB) * 1024 * 1024);
+        logger.Write(LogLevel::Info,
+                     std::format("Tracked RHI allocation limit: {} MiB", budgetMiB));
         sandbox::RunRendering(window.get(), *device, *runtime, options, shaderRoot, logger);
         runtime->WaitIdle();
         if (runtime->GetMemoryStats().used != 0)

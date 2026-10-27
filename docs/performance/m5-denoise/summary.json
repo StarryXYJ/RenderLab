@@ -603,5 +603,77 @@
     "player": "DX12/Vulkan 257x193, reflection-denoised with denoise off",
     "validationErrors": 0,
     "warnings": "existing clear-value / unconsumed vertex input performance warnings remain"
+  },
+  "allocationBudgetRepair": {
+    "cause": "Legacy256 MiB ledger limit; Vulkan1920x1080 RT window reproduced allocation failure",
+    "policy": "Scene host2048 MiB default, --gpu-budget-mib override64..16384; standalone RHI256 MiB; graph pool3/4 native limit",
+    "constantWindowRuns": [
+      {
+        "run": "dx12-1080p-budget",
+        "memory": {
+          "budgetBytes": 2147483648,
+          "highWaterBytes": 689963008,
+          "processPrivateBytes": 951324672,
+          "processWorkingSetBytes": 292921344,
+          "usedBytes": 689831936
+        },
+        "backend": "dx12",
+        "width": 1920,
+        "height": 1080,
+        "configuration": "Debug"
+      },
+      {
+        "run": "dx12-1440p-budget",
+        "memory": {
+          "budgetBytes": 2147483648,
+          "highWaterBytes": 914096128,
+          "processPrivateBytes": 1178607616,
+          "processWorkingSetBytes": 294879232,
+          "usedBytes": 913965056
+        },
+        "backend": "dx12",
+        "width": 2560,
+        "height": 1440,
+        "configuration": "Debug"
+      },
+      {
+        "run": "vulkan-1080p-budget",
+        "memory": {
+          "budgetBytes": 2147483648,
+          "highWaterBytes": 382993984,
+          "processPrivateBytes": 873684992,
+          "processWorkingSetBytes": 419749888,
+          "usedBytes": 382991808
+        },
+        "backend": "vulkan",
+        "width": 1920,
+        "height": 1080,
+        "configuration": "Debug"
+      },
+      {
+        "run": "vulkan-1440p-budget",
+        "memory": {
+          "budgetBytes": 2147483648,
+          "highWaterBytes": 913178560,
+          "processPrivateBytes": 1402068992,
+          "processWorkingSetBytes": 420069376,
+          "usedBytes": 913178048
+        },
+        "backend": "vulkan",
+        "width": 2560,
+        "height": 1440,
+        "configuration": "Debug"
+      }
+    ],
+    "resize": "DX12/Vulkan1920x1080 start,54 presented frames,10 rebuilds and10 suspended ticks,Forward/Deferred/RT selections",
+    "limits": "Not a live GPU memory budget; does not reserve VRAM; other GPU/4K unverified",
+    "validation": {
+      "debugSelected": "18/18",
+      "releaseRayTracingAnd1080pWindow": "6/6",
+      "releasePlayer": "DX12/Vulkan1920x1080 each16 frames",
+      "validationErrors": 0,
+      "shutdownLedger": "zero",
+      "cpuContracts": "explicit budget, exhausted allocation accounting unchanged, shrinking below usage rejected, owner thread enforced"
+    }
   }
 }
