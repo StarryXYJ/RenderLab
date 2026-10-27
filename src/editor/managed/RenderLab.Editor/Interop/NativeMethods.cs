@@ -1,7 +1,7 @@
 using System.Runtime.InteropServices;
 using System.Text;
 
-namespace RenderLab.Editor.Host;
+namespace RenderLab.Editor.Interop;
 
 [StructLayout(LayoutKind.Sequential)]
 internal struct ViewportStats

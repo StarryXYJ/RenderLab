@@ -5,7 +5,7 @@
 ## 当前状态
 
 - 当前实施阶段：M0–M5、R1、B1–B3 DONE。
-- 当前工作项：M7.1b 输入方向修复与 Editor 宿主复用骨架 DONE；官方模板、CommunityToolkit.Mvvm、DI 和双后端自动回归已验证。跨屏 DPI/Docking 与完整编辑器工作流保留后续授权，M6/M8 未启动。
+- 当前工作项：M7.1c 解决方案与 Editor 目录整理 DONE，继续 M7.1d 帧诊断、刷新节流与验证模式优化 IN_PROGRESS。跨屏 DPI/Docking 与完整编辑器工作流不展开，M6/M8 未启动。
 - 用户约定：每个子阶段验收完成即提交 Git，无阻塞时在当前授权范围内继续推进。
 
 | 阶段 | 目标 | 前置依赖 | 状态 |
@@ -322,6 +322,10 @@ R1 契约修订、B1 样例整理/Benchmark、B2 调查和 B3 资源复用已完
 限制：原生运行仍在 UI STA，GPU/编译等待可能阻塞界面；只有单窗口/单视口。原生 Debug 运行、人工可视检查、跨屏 DPI、Docking 和完整编辑器功能未验证，不将 M7.1 或 M7 整体标记完成。
 
 #### M7.1 后续集成验证
+
+M7.1c DONE（2026 年 10 月 27 日）：根 `RenderLab.slnx` 提供托管 IDE 入口，根 SDK/Directory.Build.props 统一规则和项目隔离输出；应用整理为 `src/editor/managed/RenderLab.Editor`，原生桥接为 `src/editor/native`，输入回归为 `tests/editor/native`。Configuration、Diagnostics、Interop 与既有 MVVM/服务目录使用对应命名空间，构建入口为 `tools/build-editor.ps1`。解决方案 list/locked restore/Release build、原生 Release 构建和 `editor.input` 通过，DX12/Vulkan 自动自检通过，证据 `out/m7/layout/{dx12,vulkan}`；长期目录和运行路径见架构及手册。没有将生成的 CMake vcxproj 纳入解决方案。
+
+M7.1d IN_PROGRESS：补帧性能诊断、修状态刷新、配置验证开关，并根据实测处理调度瓶颈。完成后记录实际数据和保留限制。
 
 - [x] 最小 C ABI、Handle 代际、字符串/缓冲区所有权和错误返回。
 - [x] Avalonia 原生视口托管，双后端 Present、当前 DPI 像素尺寸、resize、最小化和关闭的自动验证。

@@ -1,9 +1,12 @@
 using Avalonia.Controls;
-using RenderLab.Editor.Host.Controls;
-using RenderLab.Editor.Host.Services;
-using RenderLab.Editor.Host.ViewModels;
+using RenderLab.Editor.Controls;
+using RenderLab.Editor.Services;
+using RenderLab.Editor.ViewModels;
+using RenderLab.Editor.Configuration;
+using RenderLab.Editor.Diagnostics;
+using RenderLab.Editor.Interop;
 
-namespace RenderLab.Editor.Host.Views;
+namespace RenderLab.Editor.Views;
 
 public partial class MainWindow : Window
 {
@@ -23,7 +26,7 @@ public partial class MainWindow : Window
     // The previewer loads XAML without creating native rendering resources.
     public MainWindow() => InitializeComponent();
 
-    public MainWindow(MainWindowViewModel viewModel, NativeViewportService viewportService, HostOptions options)
+    public MainWindow(MainWindowViewModel viewModel, NativeViewportService viewportService, EditorOptions options)
         : this()
     {
         DataContext = viewModel;

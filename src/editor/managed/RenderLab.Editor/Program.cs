@@ -1,18 +1,20 @@
 using Avalonia;
 using Avalonia.Controls.ApplicationLifetimes;
+using RenderLab.Editor.Configuration;
+using RenderLab.Editor.Diagnostics;
 
-namespace RenderLab.Editor.Host;
+namespace RenderLab.Editor;
 
 internal static class Program
 {
-    internal static HostOptions Options { get; private set; } = null!;
+    internal static EditorOptions Options { get; private set; } = null!;
 
     [STAThread]
     internal static int Main(string[] args)
     {
         try
         {
-            Options = HostOptions.Parse(args);
+            Options = EditorOptions.Parse(args);
             Directory.CreateDirectory(Options.Output);
             return BuildAvaloniaApp().StartWithClassicDesktopLifetime(args);
         }
@@ -20,7 +22,7 @@ internal static class Program
         {
             if (Options != null)
             {
-                HostDiagnostics.WriteError(Options, error);
+                EditorDiagnostics.WriteError(Options, error);
             }
             Console.Error.WriteLine(error);
             return 1;

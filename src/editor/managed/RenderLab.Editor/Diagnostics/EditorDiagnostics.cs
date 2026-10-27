@@ -1,8 +1,9 @@
 using System.Text.Json;
+using RenderLab.Editor.Configuration;
 
-namespace RenderLab.Editor.Host;
+namespace RenderLab.Editor.Diagnostics;
 
-internal static class HostDiagnostics
+internal static class EditorDiagnostics
 {
     internal static JsonSerializerOptions JsonOptions { get; } = new()
     {
@@ -10,6 +11,6 @@ internal static class HostDiagnostics
         WriteIndented = true
     };
 
-    internal static void WriteError(HostOptions options, Exception error) =>
+    internal static void WriteError(EditorOptions options, Exception error) =>
         File.WriteAllText(Path.Combine(options.Output, "managed-error.txt"), error.ToString());
 }

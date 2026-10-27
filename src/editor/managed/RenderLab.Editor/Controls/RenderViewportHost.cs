@@ -2,9 +2,9 @@ using System.Diagnostics;
 using Avalonia.Controls;
 using Avalonia.Platform;
 using Avalonia.Threading;
-using RenderLab.Editor.Host.Services;
+using RenderLab.Editor.Services;
 
-namespace RenderLab.Editor.Host.Controls;
+namespace RenderLab.Editor.Controls;
 
 /// <summary>Adapts Avalonia's HWND attachment and timer to the viewport service.</summary>
 internal sealed class RenderViewportHost : NativeControlHost

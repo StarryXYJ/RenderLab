@@ -1,13 +1,16 @@
 using System.Runtime.InteropServices;
 using System.Text.Json;
 using Avalonia.Threading;
+using RenderLab.Editor.Configuration;
+using RenderLab.Editor.Diagnostics;
+using RenderLab.Editor.Interop;
 
-namespace RenderLab.Editor.Host.Services;
+namespace RenderLab.Editor.Services;
 
 /// <summary>Owns one viewport session on the UI STA; contains no Avalonia controls.</summary>
 public sealed class NativeViewportService : IDisposable
 {
-    private readonly HostOptions options;
+    private readonly EditorOptions options;
     private int logSequence;
     internal uint AbiVersion { get; private set; }
     internal ulong Session { get; private set; }
@@ -21,7 +24,7 @@ public sealed class NativeViewportService : IDisposable
     internal event Action<Exception>? Failed;
     internal event Action? RecreateRequested;
 
-    public NativeViewportService(HostOptions options) => this.options = options;
+    public NativeViewportService(EditorOptions options) => this.options = options;
 
     internal nint Create(nint parent)
     {
@@ -76,7 +79,7 @@ public sealed class NativeViewportService : IDisposable
 
     internal void ReportFailure(Exception error)
     {
-        HostDiagnostics.WriteError(options, error);
+        EditorDiagnostics.WriteError(options, error);
         Failed?.Invoke(error);
     }
 
@@ -92,7 +95,7 @@ public sealed class NativeViewportService : IDisposable
         Child = 0;
         CloseReports.Add(report);
         File.WriteAllText(Path.Combine(options.Output, "close-reports.json"),
-            JsonSerializer.Serialize(CloseReports, HostDiagnostics.JsonOptions));
+            JsonSerializer.Serialize(CloseReports, EditorDiagnostics.JsonOptions));
     }
 
     public void Dispose() => Close(Session);

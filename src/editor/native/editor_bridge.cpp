@@ -1,6 +1,6 @@
-#include "editor/editor_bridge.h"
+#include "editor/native/editor_bridge.h"
 
-#include "editor/camera_input.hpp"
+#include "editor/native/camera_input.hpp"
 
 #include "core/log.hpp"
 #include "platform/text.hpp"

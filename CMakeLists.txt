@@ -181,7 +181,7 @@ add_custom_target(renderlab_scene_shaders
         "$<TARGET_FILE_DIR:renderlab_sandbox>/shaders/RenderLab" VERBATIM)
 add_dependencies(renderlab_sandbox renderlab_scene_shaders)
 add_dependencies(renderlab_player renderlab_scene_shaders)
-add_library(renderlab_editor_bridge SHARED src/editor/editor_bridge.cpp)
+add_library(renderlab_editor_bridge SHARED src/editor/native/editor_bridge.cpp)
 target_compile_definitions(renderlab_editor_bridge PRIVATE RENDERLAB_EDITOR_BRIDGE_EXPORTS)
 target_include_directories(renderlab_editor_bridge PUBLIC src)
 target_link_libraries(renderlab_editor_bridge PRIVATE renderlab_options renderlab_renderer
@@ -217,7 +217,7 @@ install(DIRECTORY sample/m4/Assets DESTINATION project)
 install(FILES sample/m4/RenderLab.rlproject sample/m4/Pbr.rlproject sample/m4/Shadow.rlproject DESTINATION project)
 
 if(BUILD_TESTING)
-    add_executable(renderlab_editor_input_tests tests/editor_input_tests.cpp)
+    add_executable(renderlab_editor_input_tests tests/editor/native/camera_input_tests.cpp)
     target_link_libraries(renderlab_editor_input_tests PRIVATE renderlab_options renderlab_content)
     add_test(NAME editor.input COMMAND renderlab_editor_input_tests)
     add_executable(renderlab_benchmark_tests tests/benchmark_tests.cpp)

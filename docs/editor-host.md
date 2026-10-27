@@ -10,16 +10,18 @@
 
 | 位置 | 职责 |
 | --- | --- |
-| `Program.cs` / `HostOptions.cs` | 模板式 `BuildAvaloniaApp` 入口、命令行参数和启动错误处理 |
+| `Program.cs` / `Configuration/EditorOptions.cs` | 模板式 `BuildAvaloniaApp` 入口、命令行参数和启动错误处理 |
 | `App.axaml` / `App.axaml.cs` | 主题、DI composition root 与应用退出释放；容器仅在这里解析服务 |
 | `Views/MainWindow.axaml` | 布局与带 `x:DataType` 的编译绑定，避免业务控件的状态/命令散落在事件中 |
 | `Views/MainWindow.axaml.cs` | DataContext、NativeControlHost 挂载/移除、窗口关闭等视图生命周期 |
 | `ViewModels/MainWindowViewModel.cs` | CommunityToolkit.Mvvm 生成的可观察属性、RelayCommand、状态展示与配置失败回滚；不调用 P/Invoke，不保存 HWND |
 | `Services/NativeViewportService.cs` | 原生 Session 所有权、已接受的视口配置、帧统计/错误和关闭报告；不持有 Avalonia 控件 |
 | `Controls/RenderViewportHost.cs` | Avalonia 父 HWND 的创建/销毁回调、控件可见性与帧 Timer 适配 |
-| `NativeMethods.cs` | 固定 C ABI 的 P/Invoke 和数据布局 |
+| `Interop/NativeMethods.cs` | 固定 C ABI 的 P/Invoke 和数据布局 |
 
-`App` 通过 `Microsoft.Extensions.DependencyInjection` 10.0.0 注册 HostOptions、视口服务、ViewModel 和窗口；构造器接收依赖，不在 ViewModel/控件中访问全局 ServiceProvider。CommunityToolkit.Mvvm 固定 8.4.1，包图继续进入锁文件。当前单窗口、单视口采用应用级单例，退出时在 UI 线程 Dispose；多视口阶段应为每个视口建立独立的服务实例或作用域，不能让两个 Host 共用同一个活动 Session。
+`App` 通过 `Microsoft.Extensions.DependencyInjection` 10.0.0 注册 EditorOptions、视口服务、ViewModel 和窗口；构造器接收依赖，不在 ViewModel/控件中访问全局 ServiceProvider。CommunityToolkit.Mvvm 固定 8.4.1，包图继续进入锁文件。当前单窗口、单视口采用应用级单例，退出时在 UI 线程 Dispose；多视口阶段应为每个视口建立独立的服务实例或作用域，不能让两个 Host 共用同一个活动 Session。
+
+根目录 `RenderLab.slnx` 组织托管项目与构建入口文件，实际应用为 `src/editor/managed/RenderLab.Editor/RenderLab.Editor.csproj`。原生桥接单独位于 `src/editor/native`，原生输入回归位于 `tests/editor/native`。公共 SDK 与 C# 输出约定位于根目录，应用产物写入 `out/dotnet/RenderLab.Editor`，不在源码树生成 bin/obj。NativeMethods 位于 Interop，启动选项位于 Configuration，日志与自检位于 Diagnostics；这些文件夹使用对应命名空间，应用命名为 `RenderLab.Editor`。
 
 未来的 Inspector、Hierarchy、Assets 面板各自增加 View/ViewModel 和所需服务，并由此 composition root 注册。UI 的选择与展示状态放在 ViewModel；场景、材质、资产与 Undo 事务仍由相应原生编辑服务维护。当前不增加通用模块加载器、消息总线、空面板或编辑器插件协议。
 
@@ -58,7 +60,7 @@ UI 线程方案让最小原型容易验证所有权，但首帧 Shader 编译、
 
 ## C ABI v1
 
-公共 C 头文件为 `src/editor/editor_bridge.h`，托管声明为 `src/editor/managed/NativeMethods.cs`。DLL 与托管程序随同一版本构建，不提供跨版本插件兼容性。
+公共 C 头文件为 `src/editor/native/editor_bridge.h`，托管声明为 `src/editor/managed/RenderLab.Editor/Interop/NativeMethods.cs`。DLL 与托管程序随同一版本构建，不提供跨版本插件兼容性。
 
 | 契约 | 约定 |
 | --- | --- |
@@ -74,7 +76,7 @@ UI 线程方案让最小原型容易验证所有权，但首帧 Shader 编译、
 
 创建失败不发布 Handle 或子 HWND；已销毁的 Handle 即使槽位被复用也返回 `RL_INVALID_HANDLE`。Configure 的 pipeline 为 1 Forward、2 Deferred、3 RayTracing，先验证能力再更换选择。窗口点击获得原生焦点，WASD/QE 移动、方向键或右键拖动旋转；失焦清除按键并释放鼠标捕获，捕获被夺走时清除拖动状态。
 
-视线输入采用屏幕坐标：右/下为正，统一在 `editor/camera_input.hpp` 转换为朝 −Z 相机的旋转，因此右键向右拖向右看、向下拖向下看，方向键与拖动一致。相机数学仍保持右手系、正 yaw 向左、正 pitch 向上的约定。`editor.input` CPU 回归检查初始/已旋转姿态下的四向视线与前进方向，防止只检查有按键消息而漏掉方向反转。
+视线输入采用屏幕坐标：右/下为正，统一在 `editor/native/camera_input.hpp` 转换为朝 −Z 相机的旋转，因此右键向右拖向右看、向下拖向下看，方向键与拖动一致。相机数学仍保持右手系、正 yaw 向左、正 pitch 向上的约定。`editor.input` CPU 回归检查初始/已旋转姿态下的四向视线与前进方向，防止只检查有按键消息而漏掉方向反转。
 
 ## 自检与限制
 

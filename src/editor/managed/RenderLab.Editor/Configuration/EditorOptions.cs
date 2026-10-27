@@ -1,8 +1,8 @@
-namespace RenderLab.Editor.Host;
+namespace RenderLab.Editor.Configuration;
 
-public sealed record HostOptions(string Backend, string Project, string Shaders, string Output, bool Smoke)
+public sealed record EditorOptions(string Backend, string Project, string Shaders, string Output, bool Smoke)
 {
-    internal static HostOptions Parse(string[] args)
+    internal static EditorOptions Parse(string[] args)
     {
         var root = new DirectoryInfo(AppContext.BaseDirectory);
         while (root != null && !File.Exists(Path.Combine(root.FullName, "sample/m4/RayTracing.rlproject")))
@@ -40,6 +40,6 @@ public sealed record HostOptions(string Backend, string Project, string Shaders,
             throw new ArgumentException("Select dx12/vulkan and existing project/shader paths.");
         }
         output ??= Path.Combine(root?.FullName ?? Environment.CurrentDirectory, "out/m7", backend);
-        return new HostOptions(backend, Path.GetFullPath(project), Path.GetFullPath(shaders), Path.GetFullPath(output), smoke);
+        return new EditorOptions(backend, Path.GetFullPath(project), Path.GetFullPath(shaders), Path.GetFullPath(output), smoke);
     }
 }

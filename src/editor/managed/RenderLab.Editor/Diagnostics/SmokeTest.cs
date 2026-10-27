@@ -4,15 +4,17 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Threading;
-using RenderLab.Editor.Host.Controls;
-using RenderLab.Editor.Host.Views;
+using RenderLab.Editor.Controls;
+using RenderLab.Editor.Views;
+using RenderLab.Editor.Configuration;
+using RenderLab.Editor.Interop;
 
-namespace RenderLab.Editor.Host;
+namespace RenderLab.Editor.Diagnostics;
 
 internal sealed class SmokeTest
 {
     private readonly MainWindow window;
-    private readonly HostOptions options;
+    private readonly EditorOptions options;
     private readonly List<string> checks = [];
     private readonly Stopwatch elapsed = Stopwatch.StartNew();
     private readonly DispatcherTimer watchdog = new() { Interval = TimeSpan.FromSeconds(120) };
@@ -21,7 +23,7 @@ internal sealed class SmokeTest
     private bool completed;
     private RenderViewportHost? detachedHost;
 
-    internal SmokeTest(MainWindow window, HostOptions options)
+    internal SmokeTest(MainWindow window, EditorOptions options)
     {
         this.window = window;
         this.options = options;
@@ -195,7 +197,7 @@ internal sealed class SmokeTest
             stats,
             closeReports = window.CloseReports,
             dpiBoundary = "Current monitor scale verified; cross-monitor DPI transition not tested."
-        }, HostDiagnostics.JsonOptions));
+        }, EditorDiagnostics.JsonOptions));
         ((IClassicDesktopStyleApplicationLifetime)Application.Current!.ApplicationLifetime!).Shutdown(0);
     }
 

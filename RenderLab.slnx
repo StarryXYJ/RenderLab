@@ -1,0 +1,12 @@
+<Solution>
+  <Folder Name="/Editor/">
+    <Project Path="src/editor/managed/RenderLab.Editor/RenderLab.Editor.csproj" />
+  </Folder>
+  <Folder Name="/Build/">
+    <File Path="CMakeLists.txt" />
+    <File Path="CMakePresets.json" />
+    <File Path="Directory.Build.props" />
+    <File Path="global.json" />
+    <File Path="tools/build-editor.ps1" />
+  </Folder>
+</Solution>

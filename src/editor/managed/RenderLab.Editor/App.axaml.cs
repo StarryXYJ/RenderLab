@@ -3,11 +3,13 @@ using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
 using Avalonia.Threading;
 using Microsoft.Extensions.DependencyInjection;
-using RenderLab.Editor.Host.Services;
-using RenderLab.Editor.Host.ViewModels;
-using RenderLab.Editor.Host.Views;
+using RenderLab.Editor.Services;
+using RenderLab.Editor.ViewModels;
+using RenderLab.Editor.Views;
+using RenderLab.Editor.Configuration;
+using RenderLab.Editor.Diagnostics;
 
-namespace RenderLab.Editor.Host;
+namespace RenderLab.Editor;
 
 public partial class App : Application
 {
@@ -31,7 +33,7 @@ public partial class App : Application
                 });
             Dispatcher.UIThread.UnhandledException += (_, args) =>
             {
-                HostDiagnostics.WriteError(Program.Options, args.Exception);
+                EditorDiagnostics.WriteError(Program.Options, args.Exception);
                 args.Handled = true;
                 desktop.Shutdown(1);
             };

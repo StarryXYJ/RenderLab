@@ -324,7 +324,9 @@ python -m unittest discover -s tools/benchmark -p "test_*.py"
 
 ## Avalonia 嵌入原型
 
-额外需要 .NET SDK 10.0.401（managed/global.json 允许同 feature band 的更新补丁）和 PowerShell 7。Avalonia/Fonts.Inter 固定 12.0.5，CommunityToolkit.Mvvm 8.4.1、Microsoft.Extensions.DependencyInjection 10.0.0；Debug 开发工具使用模板的 AvaloniaUI.DiagnosticsSupport 2.2.3。包图由 `src/editor/managed/packages.lock.json` 锁定。宿主作为后续 Editor 的 MVVM/DI 骨架复用，目前只支持 Windows x64，属于 M7.1 的提前集成试验；模块职责、生命周期和未验证边界见 [宿主契约](../docs/editor-host.md)。
+IDE 打开根目录 `RenderLab.slnx`，应用项目位于 `src/editor/managed/RenderLab.Editor`；它负责托管项目导航和构建，C++ 依赖仍由 CMake 构建。根目录 `global.json` 锁定 SDK，`Directory.Build.props` 统一规则并将各项目产物分别放到 `out/dotnet/<项目名>/{bin,obj}`。首次运行先用下面的构建脚本准备原生 DLL/Shader，再由 IDE 启动 Editor；IDE 构建不会隐式配置或编译 CMake。自定义本机构建树时给 MSBuild 传 `-p:NativeBuildDir=绝对路径`，或将同名环境变量设为该绝对路径。
+
+额外需要 .NET SDK 10.0.401（根目录 global.json 允许同 feature band 的更新补丁）和 PowerShell 7。Avalonia/Fonts.Inter 固定 12.0.5，CommunityToolkit.Mvvm 8.4.1、Microsoft.Extensions.DependencyInjection 10.0.0；Debug 开发工具使用模板的 AvaloniaUI.DiagnosticsSupport 2.2.3。包图由 `src/editor/managed/RenderLab.Editor/packages.lock.json` 锁定。宿主作为后续 Editor 的 MVVM/DI 骨架复用，目前只支持 Windows x64，属于 M7.1 的提前集成试验；模块职责、生命周期和未验证边界见 [宿主契约](../docs/editor-host.md)。
 
 当前工程已从官方 12.0.5 MVVM 模板的 CommunityToolkit 分支整理，不需要重新生成。要在独立目录重现参考模板，可执行以下命令；不要向现有宿主目录使用 `--force` 覆盖 Bridge、manifest 或生命周期实现。
 
@@ -338,12 +340,12 @@ dotnet new avalonia.mvvm -n EditorReference -o out/editor-reference -f net10.0 `
 
 ```powershell
 cmake --preset windows-release
-./tools/build-editor-host.ps1
-./out/editor-host/bin/Release/net10.0/RenderLab.Editor.Host.exe --backend dx12
-./out/editor-host/bin/Release/net10.0/RenderLab.Editor.Host.exe --backend vulkan
+./tools/build-editor.ps1
+./out/dotnet/RenderLab.Editor/bin/Release/net10.0/RenderLab.Editor.exe --backend dx12
+./out/dotnet/RenderLab.Editor/bin/Release/net10.0/RenderLab.Editor.exe --backend vulkan
 ```
 
-有完整 NuGet 缓存的离线机器可以增加 `-OfflinePackageCache C:/你的目录/.nuget/packages`；恢复仍使用 locked mode。直接运行 dotnet 时进入 `src/editor/managed` 以采用 SDK 锁定；需要自定义原生路径时使用 `-p:NativeBuildDir=绝对路径`。构建脚本跳过本原型没有使用的 Avalonia 商业产品构建遥测，不修改用户全局设置。
+有完整 NuGet 缓存的离线机器可以增加 `-OfflinePackageCache C:/你的目录/.nuget/packages`；恢复仍使用 locked mode。直接运行 dotnet 时在仓库根目录使用 `RenderLab.slnx` 作为构建入口；需要自定义原生路径时使用 `-p:NativeBuildDir=绝对路径`。构建脚本跳过本原型没有使用的 Avalonia 商业产品构建遥测，不修改用户全局设置。
 
 默认加载源码仓库的 `sample/m4/RayTracing.rlproject`，初始为 Deferred。`--project` 可以指定其他项目，`--shaders` 可指定引擎 Shader 根目录；默认使用 exe 同目录的 shaders。周边控件提供管线、曝光、暂停、重置相机和重建视口；点击原生视口后使用 WASD/QE、方向键或右键拖动。此原型未打包示例项目，移出仓库运行时必须显式提供项目路径。
 
@@ -352,7 +354,7 @@ cmake --preset windows-release
 ```powershell
 foreach ($backend in @('dx12', 'vulkan'))
 {
-    $hostTest = Start-Process ./out/editor-host/bin/Release/net10.0/RenderLab.Editor.Host.exe `
+    $hostTest = Start-Process ./out/dotnet/RenderLab.Editor/bin/Release/net10.0/RenderLab.Editor.exe `
         -ArgumentList "--backend $backend --smoke --output out/m7/smoke/$backend" `
         -WindowStyle Hidden -Wait -PassThru
     if ($hostTest.ExitCode -ne 0) { throw "Editor host smoke failed: $backend" }

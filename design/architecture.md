@@ -479,12 +479,13 @@ RenderLab/
     renderer/
     assets/
     project/
-    editor_services/
-    editor_bridge/
     tools/
     apps/sandbox/
     apps/player/
-    editor/                后期 C# 与 Avalonia
+    editor/
+      native/              C ABI 桥接与视口输入适配
+      managed/
+        RenderLab.Editor/  Avalonia、MVVM 与原生视口宿主
   shaders/                 引擎内置 Shader
   sample/                  演示项目
   tests/
@@ -493,6 +494,8 @@ RenderLab/
 ```
 
 构建采用 CMake Presets、C++20 和固定依赖版本。第三方优先使用 DXC、volk、VMA、D3D12 Memory Allocator、Dear ImGui 和一个 glTF 导入库。窗口层先满足 Windows 原生宿主，后续根据需要引入 SDL3。C# 编辑器单独构建，通过统一脚本编排。
+
+根目录 `RenderLab.slnx` 是托管 IDE 入口；`global.json` 锁定 SDK，`Directory.Build.props` 统一 C# 构建规则，并按项目隔离 `out/dotnet/<项目名>/bin` 与 `obj`。原生目标和依赖图仍以 CMake 为准，不将生成的 vcxproj 加入解决方案。编辑器的 Configuration、Diagnostics、Interop、Controls、Services、Views、ViewModels 分别组织参数、诊断、P/Invoke、窗口适配、服务、界面与状态；在出现实际共享需求前保留一个托管应用项目。
 
 Concepts 用于有价值的泛型约束，std::span 用于非拥有视图，std::jthread 等用于明确生命周期的后台任务。动态后端边界可以使用虚接口或函数表，帧内高频数据路径尽量采用紧凑数据结构。C++ Modules、协程和通用 Job System 根据真实需求引入。
 

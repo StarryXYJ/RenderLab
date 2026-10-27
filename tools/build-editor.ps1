@@ -9,7 +9,7 @@ param(
 $ErrorActionPreference = "Stop"
 $repoRoot = Split-Path $PSScriptRoot -Parent
 $nativeDir = [IO.Path]::GetFullPath($NativeBuildDir, $repoRoot)
-$managedDir = Join-Path $repoRoot "src/editor/managed"
+$solutionPath = Join-Path $repoRoot "RenderLab.slnx"
 
 if (!(Test-Path (Join-Path $nativeDir "CMakeCache.txt")))
 {
@@ -19,10 +19,10 @@ if (!(Test-Path (Join-Path $nativeDir "CMakeCache.txt")))
 & cmake --build $nativeDir --config $Configuration --target renderlab_editor_bridge
 if ($LASTEXITCODE -ne 0) { throw "Native bridge build failed ($LASTEXITCODE)." }
 
-Push-Location $managedDir
+Push-Location $repoRoot
 try
 {
-    $restoreArgs = @("restore", "--locked-mode")
+    $restoreArgs = @("restore", $solutionPath, "--locked-mode")
     if ($OfflinePackageCache)
     {
         $packageCache = [IO.Path]::GetFullPath($OfflinePackageCache, $repoRoot)
@@ -39,7 +39,7 @@ try
     & dotnet @restoreArgs
     if ($LASTEXITCODE -ne 0) { throw "Managed dependency restore failed ($LASTEXITCODE)." }
     # This prototype uses no licensed Avalonia products; skip build-service telemetry.
-    & dotnet build --no-restore -c $Configuration "-p:NativeBuildDir=$nativeDir" "-p:UsedAvaloniaProducts="
+    & dotnet build $solutionPath --no-restore -c $Configuration "-p:NativeBuildDir=$nativeDir" "-p:UsedAvaloniaProducts="
     if ($LASTEXITCODE -ne 0) { throw "Managed host build failed ($LASTEXITCODE)." }
 }
 finally

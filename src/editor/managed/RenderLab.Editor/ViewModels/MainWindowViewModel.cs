@@ -1,8 +1,10 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
-using RenderLab.Editor.Host.Services;
+using RenderLab.Editor.Services;
+using RenderLab.Editor.Configuration;
+using RenderLab.Editor.Interop;
 
-namespace RenderLab.Editor.Host.ViewModels;
+namespace RenderLab.Editor.ViewModels;
 
 public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
 {
@@ -32,7 +34,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     [ObservableProperty]
     private string errorText = "";
 
-    public MainWindowViewModel(NativeViewportService viewport, HostOptions options)
+    public MainWindowViewModel(NativeViewportService viewport, EditorOptions options)
     {
         this.viewport = viewport;
         Title = $"RenderLab · Avalonia Host · {options.Backend.ToUpperInvariant()}";
