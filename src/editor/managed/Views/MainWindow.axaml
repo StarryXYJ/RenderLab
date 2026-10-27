@@ -1,0 +1,79 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:RenderLab.Editor.Host.ViewModels"
+        x:Class="RenderLab.Editor.Host.Views.MainWindow"
+        x:DataType="vm:MainWindowViewModel"
+        Title="{Binding Title}"
+        Width="1200" Height="780" MinWidth="880" MinHeight="540"
+        Background="#11151D">
+    <Window.Styles>
+        <Style Selector="TextBlock.section">
+            <Setter Property="FontSize" Value="13" />
+            <Setter Property="Foreground" Value="#8B9BB4" />
+        </Style>
+        <Style Selector="TextBlock.hint">
+            <Setter Property="TextWrapping" Value="Wrap" />
+            <Setter Property="Foreground" Value="#8797AF" />
+        </Style>
+        <Style Selector="Button.control">
+            <Setter Property="HorizontalAlignment" Value="Stretch" />
+        </Style>
+    </Window.Styles>
+    <Grid RowDefinitions="Auto,*,Auto">
+        <Border Padding="20,16">
+            <StackPanel Orientation="Horizontal" Spacing="20">
+                <TextBlock Text="RenderLab" FontSize="25" Foreground="#F1F5FC" />
+                <TextBlock Text="AVALONIA / NATIVE EDITOR HOST"
+                           VerticalAlignment="Center" Foreground="#7FADE6" />
+            </StackPanel>
+        </Border>
+        <Grid Grid.Row="1" ColumnDefinitions="220,6,*,6,250">
+            <Border Padding="18" Background="#171E29">
+                <StackPanel Spacing="16">
+                    <TextBlock Text="RENDER CONTROLS" Classes="section" />
+                    <TextBlock Text="{Binding BackendName}" FontSize="23" Foreground="#F1F5FC" />
+                    <TextBlock Text="Pipeline" Classes="section" />
+                    <ComboBox x:Name="PipelineSelector" ItemsSource="{Binding Pipelines}"
+                              SelectedIndex="{Binding SelectedPipelineIndex, Mode=TwoWay}"
+                              HorizontalAlignment="Stretch" />
+                    <TextBlock Text="Exposure · −4 to +4 stops" Classes="section" />
+                    <Slider x:Name="ExposureControl" Minimum="-4" Maximum="4"
+                            Value="{Binding Exposure, Mode=TwoWay}" />
+                    <Button x:Name="ResetAction" Classes="control" Content="Reset camera"
+                            Command="{Binding ResetCameraCommand}" />
+                    <Button x:Name="PauseAction" Classes="control" Content="{Binding PauseLabel}"
+                            Command="{Binding TogglePauseCommand}" />
+                    <Button x:Name="RecreateAction" Classes="control" Content="Recreate viewport"
+                            Command="{Binding RecreateViewportCommand}" />
+                    <TextBlock Classes="hint"
+                               Text="The native viewport is embedded in this window. All surrounding controls are Avalonia." />
+                </StackPanel>
+            </Border>
+            <GridSplitter Grid.Column="1" ResizeDirection="Columns"
+                          HorizontalAlignment="Stretch" Background="#283449" />
+            <Grid Grid.Column="2" RowDefinitions="Auto,*">
+                <Border Padding="16,12" Background="#1A2230">
+                    <TextBlock Text="SCENE VIEW  /  native child HWND"
+                               FontSize="13" Foreground="#B8C6DB" />
+                </Border>
+                <ContentControl x:Name="ViewportContainer" Grid.Row="1" />
+            </Grid>
+            <GridSplitter Grid.Column="3" ResizeDirection="Columns"
+                          HorizontalAlignment="Stretch" Background="#283449" />
+            <Border Grid.Column="4" Padding="18" Background="#171E29">
+                <StackPanel Spacing="16">
+                    <TextBlock Text="HOST CONTRACT" Classes="section" />
+                    <TextBlock Text="{Binding DetailsText}" TextWrapping="Wrap" />
+                    <TextBlock Text="Managed input" Classes="section" />
+                    <TextBox x:Name="ManagedInput" PlaceholderText="Click here to test keyboard focus"
+                             AcceptsReturn="True" MinHeight="100" />
+                    <TextBlock Classes="hint" Text="Click the scene for camera input.&#10;WASD / Q E to move.&#10;Arrows or right drag to look.&#10;&#10;Viewport overlays belong in the native renderer." />
+                    <TextBlock Text="{Binding ErrorText}" TextWrapping="Wrap" Foreground="OrangeRed" />
+                </StackPanel>
+            </Border>
+        </Grid>
+        <Border Grid.Row="2" Padding="18,10">
+            <TextBlock Text="{Binding StatusText}" />
+        </Border>
+    </Grid>
+</Window>

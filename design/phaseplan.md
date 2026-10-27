@@ -5,7 +5,7 @@
 ## 当前状态
 
 - 当前实施阶段：M0–M5、R1、B1–B3 DONE。
-- 当前工作项：M7.1a 输入方向修复与宿主复用骨架 IN_PROGRESS；采用 Avalonia 模板结构、CommunityToolkit.Mvvm 与 DI，保留跨屏 DPI/Docking 等后续验证，不展开完整编辑器。M6/M8 未启动。
+- 当前工作项：M7.1b 输入方向修复与 Editor 宿主复用骨架 DONE；官方模板、CommunityToolkit.Mvvm、DI 和双后端自动回归已验证。跨屏 DPI/Docking 与完整编辑器工作流保留后续授权，M6/M8 未启动。
 - 用户约定：每个子阶段验收完成即提交 Git，无阻塞时在当前授权范围内继续推进。
 
 | 阶段 | 目标 | 前置依赖 | 状态 |
@@ -21,7 +21,7 @@
 | B3 | 逐帧资源复用优化 | B2 | DONE |
 | M5 | Deferred 与光追基础 | M4 | DONE |
 | M6 | GPU Driven 与执行优化 | M4；光追调度测试另需 M5 | NOT_STARTED |
-| M7 | C# 编辑器与完整项目工作流 | M4；默认在 M5、M6 的核心目标后开展 | IN_PROGRESS（仅提前试验 M7.1a） |
+| M7 | C# 编辑器与完整项目工作流 | M4；默认在 M5、M6 的核心目标后开展 | IN_PROGRESS（提前试验 M7.1a/b 已完成） |
 | M8 | 一个深入的渲染专题与作品交付 | 所选专题依赖已满足 | NOT_STARTED |
 
 默认顺序为 M0 到 M8。M5 和 M6 在 M4 后可以独立推进；单阶段内按下列子阶段顺序执行，不同时建设多个高级系统。完整编辑器后置，M4 只实现运行内容所需的最小项目与资源能力。
@@ -311,9 +311,17 @@ R1 契约修订、B1 样例整理/Benchmark、B2 调查和 B3 资源复用已完
 
 限制：用户按 Esc 停止界面自动化，未完成人工可视检查，不以自动 Present 通过推断画面质量。仅当前 100% 显示缩放经过验证；跨屏/非 100% DPI、Docking、浮动窗口、多视口、覆盖层、长时间运行和 Debug 配置均未验证。重建不代表同一活跃视口跨父窗口重挂接通过；UI 线程阻塞限制见宿主契约。
 
-#### M7.1 后续集成验证
+#### M7.1b 输入修复与 Editor 宿主骨架
 
-宿主复用修订 IN_PROGRESS：输入方向修复子项 DONE，方向键/右键拖动统一把屏幕右/下正方向转换为 −Z 相机的旋转；`ctest -R '^editor.input$'` 在初始和已旋转朝向下验证四向视线与前进方向，Release 通过。官方模板的 App/Views/ViewModels XAML 结构、CommunityToolkit.Mvvm 与 DI 已编译，双后端嵌入初次回归通过；继续完善错误回滚与生命周期验证后记录最终结果。
+状态：DONE，日期：2026 年 10 月 27 日。用户要求此宿主后续直接复用为 Editor，并采用官方模板、DI 和 CommunityToolkit.Mvvm。
+
+结果：修复方向键和右键拖动的 pitch/yaw 符号，屏幕右/下正方向统一转换为 −Z 相机的旋转。以官方 Avalonia.Templates 12.0.5 `avalonia.mvvm` / CommunityToolkit 生成结果为基线整理 XAML、Views/ViewModels 和编译绑定；Toolkit 8.4.1 负责属性通知/命令，Microsoft DI 10.0.0 在 App 装配窗口、ViewModel 和视口服务。ViewModel 不持有 HWND、不调用 P/Invoke；控件适配挂载/Timer，服务拥有原生 Session 和关闭报告。重建保留配置，旧 Host 重复关闭不能销毁新 Session。长期职责和扩展边界见 [宿主契约](../docs/editor-host.md)。
+
+验证：`ctest -R '^editor.input$'` 在初始和已旋转朝向下检查四向视线与前进方向，原生 Release 通过。托管 Debug/Release 零编译警告，锁定离线恢复通过；DX12/Vulkan 均通过实际 XAML 控件双向绑定、Toolkit 重置/暂停/重建命令、配置失败回滚、暂停文字通知、重建后 RayTracing 保留及旧 Host 重复关闭回归，原有缩放/焦点/捕获/最小化等自动检查继续通过。每后端两次关闭均账本剩余 0、验证错误 0，最终报告为 `out/m7/mvvm-final/{dx12,vulkan}`。C# whitespace 与 UTF-8/LF 检查通过。
+
+限制：原生运行仍在 UI STA，GPU/编译等待可能阻塞界面；只有单窗口/单视口。原生 Debug 运行、人工可视检查、跨屏 DPI、Docking 和完整编辑器功能未验证，不将 M7.1 或 M7 整体标记完成。
+
+#### M7.1 后续集成验证
 
 - [x] 最小 C ABI、Handle 代际、字符串/缓冲区所有权和错误返回。
 - [x] Avalonia 原生视口托管，双后端 Present、当前 DPI 像素尺寸、resize、最小化和关闭的自动验证。

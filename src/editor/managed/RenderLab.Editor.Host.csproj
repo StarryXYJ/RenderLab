@@ -7,12 +7,21 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
     <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
     <NativeBuildDir Condition="'$(NativeBuildDir)' == ''">$(MSBuildProjectDirectory)/../../../out/build/windows-release</NativeBuildDir>
   </PropertyGroup>
   <ItemGroup>
+    <PackageReference Include="Avalonia" Version="12.0.5" />
     <PackageReference Include="Avalonia.Desktop" Version="12.0.5" />
     <PackageReference Include="Avalonia.Themes.Fluent" Version="12.0.5" />
+    <PackageReference Include="Avalonia.Fonts.Inter" Version="12.0.5" />
+    <PackageReference Include="AvaloniaUI.DiagnosticsSupport" Version="2.2.3">
+      <IncludeAssets Condition="'$(Configuration)' != 'Debug'">None</IncludeAssets>
+      <PrivateAssets Condition="'$(Configuration)' != 'Debug'">All</PrivateAssets>
+    </PackageReference>
+    <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.1" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.0" />
   </ItemGroup>
   <ItemGroup>
     <None Include="$(NativeBuildDir)/renderlab_editor_bridge.dll;$(NativeBuildDir)/dxcompiler.dll;$(NativeBuildDir)/WinPixEventRuntime.dll" Link="%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />

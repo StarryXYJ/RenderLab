@@ -324,7 +324,15 @@ python -m unittest discover -s tools/benchmark -p "test_*.py"
 
 ## Avalonia 嵌入原型
 
-额外需要 .NET SDK 10.0.401（managed/global.json 允许同 feature band 的更新补丁）和 PowerShell 7。Avalonia Desktop/Fluent 固定 12.0.5，包图由 `src/editor/managed/packages.lock.json` 锁定。原型只支持 Windows x64，属于 M7.1 的提前集成试验；设计、生命周期和未验证边界见 [宿主契约](../docs/editor-host.md)。
+额外需要 .NET SDK 10.0.401（managed/global.json 允许同 feature band 的更新补丁）和 PowerShell 7。Avalonia/Fonts.Inter 固定 12.0.5，CommunityToolkit.Mvvm 8.4.1、Microsoft.Extensions.DependencyInjection 10.0.0；Debug 开发工具使用模板的 AvaloniaUI.DiagnosticsSupport 2.2.3。包图由 `src/editor/managed/packages.lock.json` 锁定。宿主作为后续 Editor 的 MVVM/DI 骨架复用，目前只支持 Windows x64，属于 M7.1 的提前集成试验；模块职责、生命周期和未验证边界见 [宿主契约](../docs/editor-host.md)。
+
+当前工程已从官方 12.0.5 MVVM 模板的 CommunityToolkit 分支整理，不需要重新生成。要在独立目录重现参考模板，可执行以下命令；不要向现有宿主目录使用 `--force` 覆盖 Bridge、manifest 或生命周期实现。
+
+```powershell
+dotnet new install Avalonia.Templates::12.0.5
+dotnet new avalonia.mvvm -n EditorReference -o out/editor-reference -f net10.0 `
+    -m CommunityToolkit -av 12.0.5 --remove-view-locator --no-restore
+```
 
 在 x64 Developer PowerShell 中配置原生 Release 构建，然后运行脚本。脚本构建 Bridge、按锁文件恢复托管依赖，并将 DLL、运行依赖和 Shader 复制到托管输出目录。使用已有 Ninja/NMake 构建树时通过 `-NativeBuildDir` 指定目录，Configuration 应与原生构建树匹配。
 
@@ -352,6 +360,13 @@ foreach ($backend in @('dx12', 'vulkan'))
 ```
 
 成功输出 `smoke.json` 和 `close-reports.json`，失败输出 `smoke-failure.txt` 或 `managed-error.txt`。日志/测试报告默认写入仓库的 `out/m7/<backend>`；可用 `--output` 设置独立目录，避免旧报告混淆。本次实测使用 `out/build/m5-release` 原生构建树，原始报告在 `out/m7/嵌入验证/dx12-manifest` 与 `out/m7/嵌入验证/vulkan`。
+
+MVVM/DI 修订后的双后端回归还验证实际编译绑定、按钮命令、错误回滚和重建后的配置保留，最终报告使用 `out/m7/mvvm-final/<backend>`。相机方向有独立 CPU 回归：
+
+```powershell
+cmake --build --preset windows-release --target renderlab_editor_input_tests
+ctest --preset windows-release -R '^editor.input$' --output-on-failure
+```
 
 ## 验证结果与边界
 
