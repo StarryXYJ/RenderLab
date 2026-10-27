@@ -5,7 +5,7 @@
 ## 当前状态
 
 - 当前实施阶段：M0–M5、R1、B1–B3 DONE。
-- 当前工作项：M7.1a Avalonia 嵌入原型已完成自动验证；真实交互、跨屏 DPI 和 Docking 保留在 M7.1 后续，不展开完整编辑器。M6/M8 未启动。
+- 当前工作项：M7.1a 输入方向修复与宿主复用骨架 IN_PROGRESS；采用 Avalonia 模板结构、CommunityToolkit.Mvvm 与 DI，保留跨屏 DPI/Docking 等后续验证，不展开完整编辑器。M6/M8 未启动。
 - 用户约定：每个子阶段验收完成即提交 Git，无阻塞时在当前授权范围内继续推进。
 
 | 阶段 | 目标 | 前置依赖 | 状态 |
@@ -312,6 +312,8 @@ R1 契约修订、B1 样例整理/Benchmark、B2 调查和 B3 资源复用已完
 限制：用户按 Esc 停止界面自动化，未完成人工可视检查，不以自动 Present 通过推断画面质量。仅当前 100% 显示缩放经过验证；跨屏/非 100% DPI、Docking、浮动窗口、多视口、覆盖层、长时间运行和 Debug 配置均未验证。重建不代表同一活跃视口跨父窗口重挂接通过；UI 线程阻塞限制见宿主契约。
 
 #### M7.1 后续集成验证
+
+宿主复用修订 IN_PROGRESS：输入方向修复子项 DONE，方向键/右键拖动统一把屏幕右/下正方向转换为 −Z 相机的旋转；`ctest -R '^editor.input$'` 在初始和已旋转朝向下验证四向视线与前进方向，Release 通过。官方模板的 App/Views/ViewModels XAML 结构、CommunityToolkit.Mvvm 与 DI 已编译，双后端嵌入初次回归通过；继续完善错误回滚与生命周期验证后记录最终结果。
 
 - [x] 最小 C ABI、Handle 代际、字符串/缓冲区所有权和错误返回。
 - [x] Avalonia 原生视口托管，双后端 Present、当前 DPI 像素尺寸、resize、最小化和关闭的自动验证。

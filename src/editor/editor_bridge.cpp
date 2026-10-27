@@ -1,5 +1,7 @@
 #include "editor/editor_bridge.h"
 
+#include "editor/camera_input.hpp"
+
 #include "core/log.hpp"
 #include "platform/text.hpp"
 #include "platform/window.hpp"
@@ -249,8 +251,8 @@ struct Session
             { return float(keys[positive]) - float(keys[negative]); };
             const math::Vec3 motion{3 * dt * axis('D', 'A'), 3 * dt * axis('E', 'Q'),
                                     3 * dt * axis('S', 'W')};
-            const math::Vec3 rotation{60 * dt * axis(VK_DOWN, VK_UP) + pitch,
-                                      60 * dt * axis(VK_RIGHT, VK_LEFT) + yaw, 0};
+            const auto rotation = editor::CameraLookDelta(60 * dt * axis(VK_RIGHT, VK_LEFT) + yaw,
+                                                          60 * dt * axis(VK_DOWN, VK_UP) + pitch);
             if (stats.pressed_keys || yaw != 0 || pitch != 0)
                 ++stats.input_frames;
             scene->Document().MoveCamera(motion, rotation);
