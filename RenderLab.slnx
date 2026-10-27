@@ -9,4 +9,7 @@
     <File Path="global.json" />
     <File Path="tools/build-editor.ps1" />
   </Folder>
+  <Folder Name="/Tests/">
+    <Project Path="tests/editor/managed/RenderLab.Editor.Tests/RenderLab.Editor.Tests.csproj" />
+  </Folder>
 </Solution>

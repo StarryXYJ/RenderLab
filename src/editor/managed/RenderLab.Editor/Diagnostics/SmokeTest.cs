@@ -66,6 +66,8 @@ internal sealed class SmokeTest
             switch (stage++)
             {
                 case 0:
+                    Require(stats.ValidationEnabled == (options.Validation ? 1u : 0u) &&
+                        stats.ProfilingEnabled == (options.Profiling ? 1u : 0u), "Creation settings were not applied.");
                     Require(NativeMethods.IsChild(root, host.Child), "Viewport is not embedded in the Avalonia window.");
                     CheckPixels(stats);
                     Require(NativeMethods.GetStats(ulong.MaxValue, out _) == 2, "Invalid handle accepted.");
@@ -161,6 +163,9 @@ internal sealed class SmokeTest
                     window.RecreateButton.Command!.Execute(null);
                     break;
                 case 12:
+                    Require(stats.TickNs > 0 && stats.RenderNs > 0 &&
+                        (stats.ProfilingEnabled == 0 || (stats.GpuFrame > 0 && stats.GpuNs > 0)),
+                        "CPU/GPU frame timings were not collected.");
                     Require(host.Session != oldHandle && NativeMethods.GetStats(oldHandle, out _) == 2,
                         "Destroyed session generation was reused.");
                     Require(window.CloseReports.Count == 1 && window.CloseReports[0].RemainingBytes == 0 &&

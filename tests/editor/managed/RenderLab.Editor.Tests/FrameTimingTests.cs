@@ -1,0 +1,93 @@
+using NUnit.Framework;
+using RenderLab.Editor.Diagnostics;
+using RenderLab.Editor.Interop;
+
+namespace RenderLab.Editor.Tests;
+
+[TestFixture]
+public sealed class FrameTimingTests
+{
+    private static ViewportStats Frame(ulong frame, ulong cpu = 1_000_000) => new()
+    {
+        Frames = frame,
+        TickNs = cpu,
+        RenderNs = cpu
+    };
+
+    [Test]
+    public void IntervalsAndNearestRankP95UseActualFrameTimes()
+    {
+        var window = new FrameTimingWindow();
+        window.Observe(Frame(1), 0);
+        window.Observe(Frame(2, 2_000_000), .01);
+        window.Observe(Frame(3, 3_000_000), .03);
+        var result = window.Summarize();
+        Assert.Multiple(() =>
+        {
+            Assert.That(result.Fps, Is.EqualTo(1000 / 15.0).Within(.001));
+            Assert.That(result.FrameP95Ms, Is.EqualTo(20).Within(.001));
+            Assert.That(result.NativeP95Ms, Is.EqualTo(3));
+            Assert.That(result.GpuP95Ms, Is.Null);
+        });
+    }
+
+    [Test]
+    public void PausesDoNotBecomeLongFramesOrAdditionalSamples()
+    {
+        var window = new FrameTimingWindow();
+        window.Observe(Frame(1), 0);
+        window.Observe(Frame(2), .01);
+        window.Observe(Frame(2), 10);
+        window.Observe(Frame(3), 20);
+        Assert.Multiple(() =>
+        {
+            Assert.That(window.Summarize().Samples, Is.EqualTo(3));
+            Assert.That(window.Summarize().Fps, Is.EqualTo(100).Within(.001));
+            Assert.That(window.Latest!.IntervalMs, Is.Null);
+        });
+    }
+
+    [Test]
+    public void NewSessionClearsOldTimings()
+    {
+        var window = new FrameTimingWindow();
+        window.Observe(Frame(30, 90_000_000), 100);
+        window.Observe(Frame(1), 101);
+        Assert.That(window.Summarize().Samples, Is.EqualTo(1));
+        Assert.That(window.Summarize().NativeP95Ms, Is.EqualTo(1));
+    }
+
+    [Test]
+    public void RollingWindowEvictsOldSpikesAndPreservesGpuSourceFrame()
+    {
+        var window = new FrameTimingWindow(2);
+        window.Observe(Frame(1, 100_000_000), 0);
+        window.Observe(Frame(2), .01);
+        var stats = Frame(3);
+        stats.GpuFrame = 1;
+        stats.GpuNs = 2_000_000;
+        window.Observe(stats, .02);
+        Assert.Multiple(() =>
+        {
+            Assert.That(window.Summarize().Samples, Is.EqualTo(2));
+            Assert.That(window.Summarize().NativeP95Ms, Is.EqualTo(1));
+            Assert.That(window.Latest!.GpuFrame, Is.EqualTo(1));
+            Assert.That(window.Summarize().GpuP95Ms, Is.EqualTo(2));
+        });
+    }
+
+    [Test]
+    public void UiRefreshRemainsTimeLimitedAcrossPauseAndResume()
+    {
+        var refresh = new RefreshGate();
+        var count = 0;
+        for (var tick = 0; tick < 100; ++tick)
+        {
+            if (refresh.TryPublish(tick * .01))
+            {
+                ++count;
+            }
+        }
+        Assert.That(count, Is.EqualTo(4));
+    }
+}

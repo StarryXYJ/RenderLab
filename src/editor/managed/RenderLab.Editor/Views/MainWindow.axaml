@@ -61,15 +61,18 @@
             <GridSplitter Grid.Column="3" ResizeDirection="Columns"
                           HorizontalAlignment="Stretch" Background="#283449" />
             <Border Grid.Column="4" Padding="18" Background="#171E29">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
                 <StackPanel Spacing="16">
                     <TextBlock Text="HOST CONTRACT" Classes="section" />
                     <TextBlock Text="{Binding DetailsText}" TextWrapping="Wrap" />
+                    <TextBlock Text="{Binding PerformanceText}" TextWrapping="Wrap" />
                     <TextBlock Text="Managed input" Classes="section" />
                     <TextBox x:Name="ManagedInput" PlaceholderText="Click here to test keyboard focus"
                              AcceptsReturn="True" MinHeight="100" />
                     <TextBlock Classes="hint" Text="Click the scene for camera input.&#10;WASD / Q E to move.&#10;Arrows or right drag to look.&#10;&#10;Viewport overlays belong in the native renderer." />
                     <TextBlock Text="{Binding ErrorText}" TextWrapping="Wrap" Foreground="OrangeRed" />
                 </StackPanel>
+                </ScrollViewer>
             </Border>
         </Grid>
         <Border Grid.Row="2" Padding="18,10">

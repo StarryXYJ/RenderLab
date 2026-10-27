@@ -15,6 +15,7 @@
 
 #include <algorithm>
 #include <array>
+#include <chrono>
 #include <cmath>
 #include <cstring>
 #include <filesystem>
@@ -26,11 +27,17 @@
 #include <utility>
 #include <vector>
 
-static_assert(sizeof(rl_viewport_stats) == 80 && sizeof(rl_viewport_close_report) == 24);
+static_assert(sizeof(rl_viewport_stats) == 184 && sizeof(rl_viewport_close_report) == 24);
 namespace
 {
 using namespace renderlab;
 thread_local std::string lastError;
+using Clock = std::chrono::steady_clock;
+uint64_t ElapsedNs(Clock::time_point start)
+{
+    return static_cast<uint64_t>(
+        std::chrono::duration_cast<std::chrono::nanoseconds>(Clock::now() - start).count());
+}
 struct Failure : std::runtime_error
 {
     Failure(rl_status status, const char* message) : std::runtime_error(message), status(status) {}
@@ -81,6 +88,8 @@ struct Session
     renderer::SceneRenderOptions options;
     scene::Transform initialCamera;
     std::array<uint64_t, 2> completions{};
+    std::array<rendergraph::Submission::GpuProfile, 2> profiles;
+    std::array<uint64_t, 2> profileFrames{};
     std::vector<bool> initialized;
     std::array<bool, 256> keys{};
     rl_viewport_stats stats{};
@@ -157,8 +166,9 @@ struct Session
         }
         return DefWindowProcW(window, message, w, l);
     }
-    Session(HWND parent, uint32_t backend, const std::filesystem::path& project,
-            const std::filesystem::path& shaders, const std::filesystem::path& log)
+    Session(HWND parent, uint32_t backend, bool validation, bool profiling,
+            const std::filesystem::path& project, const std::filesystem::path& shaders,
+            const std::filesystem::path& log)
         : logger(log)
     {
         static const auto registered = []
@@ -178,9 +188,10 @@ struct Session
                                       0, 1, 1, parent, nullptr, GetModuleHandleW(nullptr), this);
         if (!child.value)
             throw std::runtime_error("Embedded viewport child creation failed");
-        device = rhi::CreateDevice(
-            {backend == 0 ? rhi::Backend::Dx12 : rhi::Backend::Vulkan, rhi::ValidationMode::On},
-            logger);
+        device =
+            rhi::CreateDevice({backend == 0 ? rhi::Backend::Dx12 : rhi::Backend::Vulkan,
+                               validation ? rhi::ValidationMode::On : rhi::ValidationMode::Off},
+                              logger);
         runtime = device->CreateRuntime();
         runtime->SetAllocationBudget(2048ull * 1024 * 1024);
         scene = std::make_unique<renderer::SceneRenderer>(
@@ -189,6 +200,9 @@ struct Session
         initialCamera = scene->Document().Get(scene->Document().activeCamera).transform;
         swapchain = runtime->CreateSwapchain({child.value, GetModuleHandleW(nullptr)}, 1, 1);
         options.pipeline = renderer::PipelineType::Deferred;
+        options.profile = profiling;
+        stats.validation_enabled = device->GetReport().validationEnabled;
+        stats.profiling_enabled = profiling;
         options.shadowResolution = 128;
         scene->ValidatePipeline(options.pipeline);
         logger.Write(LogLevel::Info, "Embedded child HWND created; UI owns the message loop");
@@ -205,6 +219,7 @@ struct Session
     }
     void Tick(float dt, bool paused)
     {
+        const auto tickStart = Clock::now();
         Require(IsWindow(child.value), "Viewport child HWND has already been destroyed");
         RECT rect;
         if (!GetClientRect(child.value, &rect))
@@ -221,19 +236,38 @@ struct Session
             ++stats.paused_ticks;
             return;
         }
+        auto start = Clock::now();
         device->PollDiagnostics();
+        stats.diagnostics_ns = ElapsedNs(start);
+        stats.resize_ns = 0;
         if (stats.width != width || stats.height != height)
         {
+            start = Clock::now();
             runtime->WaitIdle();
             swapchain->Resize(width, height);
             initialized.clear();
             stats.width = width;
             stats.height = height;
             ++stats.resizes;
+            stats.resize_ns = ElapsedNs(start);
         }
-        auto& completion = completions[stats.frames % completions.size()];
+        const auto slot = stats.frames % completions.size();
+        auto& completion = completions[slot];
+        start = Clock::now();
         runtime->Wait(completion);
+        stats.fence_wait_ns = ElapsedNs(start);
+        if (profiles[slot].ticks)
+        {
+            double nanoseconds = 0;
+            for (const auto& timing : profiles[slot].Read(*runtime))
+                nanoseconds += timing.nanoseconds;
+            stats.gpu_ns = static_cast<uint64_t>(std::max(0.0, nanoseconds));
+            stats.gpu_frame = profileFrames[slot];
+            profiles[slot] = {};
+        }
+        start = Clock::now();
         const auto acquired = swapchain->Acquire();
+        stats.acquire_ns = ElapsedNs(start);
         if (!acquired.texture)
         {
             runtime->WaitIdle();
@@ -258,22 +292,32 @@ struct Session
             scene->Document().MoveCamera(motion, rotation);
         }
         yaw = pitch = 0;
-        const auto result =
-            scene->Render(acquired.texture, initial, swapchain.get(), false, {}, options);
+        start = Clock::now();
+        auto result = scene->Render(acquired.texture, initial, swapchain.get(), false, {}, options);
+        stats.render_ns = ElapsedNs(start);
+        stats.graph_compile_ns = result.compileNs;
+        stats.graph_prepare_ns = result.prepareNs;
+        stats.graph_record_ns = result.recordNs;
         completion = result.completion;
+        profiles[slot] = std::move(result.profile);
+        profileFrames[slot] = stats.frames + 1;
         stats.reflection_samples = result.reflectionSamples;
         initialized[acquired.index] = true;
+        start = Clock::now();
         swapchain->Present();
+        stats.present_ns = ElapsedNs(start);
         ++stats.frames;
         stats.pipeline = static_cast<uint32_t>(options.pipeline);
         stats.native_bytes = runtime->GetMemoryStats().used;
         stats.peak_bytes = runtime->GetMemoryStats().highWater;
+        stats.tick_ns = ElapsedNs(tickStart);
     }
     rl_viewport_close_report Close()
     {
         if (runtime)
         {
             runtime->WaitIdle();
+            profiles = {};
             swapchain.reset();
             scene.reset();
             runtime->WaitIdle();
@@ -339,9 +383,10 @@ template <class F> rl_status Guard(F&& operation)
 
 uint32_t RENDERLAB_EDITOR_CALL rl_editor_abi_version()
 {
-    return 1;
+    return 2;
 }
 rl_status RENDERLAB_EDITOR_CALL rl_viewport_create(void* parent, uint32_t backend,
+                                                   uint32_t validation, uint32_t profiling,
                                                    const char* project, const char* shaders,
                                                    const char* log, rl_viewport_handle* handle,
                                                    void** child)
@@ -353,8 +398,9 @@ rl_status RENDERLAB_EDITOR_CALL rl_viewport_create(void* parent, uint32_t backen
     return Guard(
         [&]
         {
-            Require(parent && IsWindow(static_cast<HWND>(parent)) && backend <= 1 && project &&
-                        shaders && log && handle && child,
+            Require(parent && IsWindow(static_cast<HWND>(parent)) && backend <= 1 &&
+                        validation <= 1 && profiling <= 1 && project && shaders && log && handle &&
+                        child,
                     "Invalid viewport creation arguments");
             Require(GetWindowThreadProcessId(static_cast<HWND>(parent), nullptr) ==
                         GetCurrentThreadId(),
@@ -363,8 +409,9 @@ rl_status RENDERLAB_EDITOR_CALL rl_viewport_create(void* parent, uint32_t backen
                 if (!sessions[i].session)
                 {
                     auto session = std::make_unique<Session>(
-                        static_cast<HWND>(parent), backend, platform::Utf8ToWide(project),
-                        platform::Utf8ToWide(shaders), platform::Utf8ToWide(log));
+                        static_cast<HWND>(parent), backend, validation != 0, profiling != 0,
+                        platform::Utf8ToWide(project), platform::Utf8ToWide(shaders),
+                        platform::Utf8ToWide(log));
                     *handle = (uint64_t(sessions[i].generation) << 32) | (i + 1);
                     *child = session->child.value;
                     sessions[i].session = std::move(session);

@@ -58,25 +58,31 @@ Avalonia 提供宿主父窗口，Bridge 创建并拥有真正的渲染子 HWND�
 
 UI 线程方案让最小原型容易验证所有权，但首帧 Shader 编译、渲染录制、GPU 等待和 Resize 会阻塞界面。它不是生产编辑器的性能方案。正式工作流需要时，再把渲染运行时迁入单一 owner thread，用批量命令和只读快照沟通；届时必须重新验证窗口线程、输入转发、Resize 与销毁握手。
 
-## C ABI v1
+## C ABI v2
 
 公共 C 头文件为 `src/editor/native/editor_bridge.h`，托管声明为 `src/editor/managed/RenderLab.Editor/Interop/NativeMethods.cs`。DLL 与托管程序随同一版本构建，不提供跨版本插件兼容性。
 
 | 契约 | 约定 |
 | --- | --- |
-| 调用约定 | Windows x64、C 导出、Cdecl；先校验 ABI version 为 1 |
+| 调用约定 | Windows x64、C 导出、Cdecl；先校验 ABI version 为 2；创建参数显式包含 validation/profiling 的 uint32 开关 |
 | Session 身份 | uint64 不透明 Handle：低 32 位为槽位加一，高 32 位为 generation；原型最多四个活动 Session |
 | 线程 | 父 HWND 属于当前线程；所有 Session API 只允许创建线程调用；后台线程返回 `RL_WRONG_THREAD` |
 | 字符串 | 路径为 UTF-8、NUL 结尾，只借用到当前调用返回；内部转换为 Win32 宽字符路径 |
 | 内存 | 不跨边界暴露 STL、内部对象指针或 GPU 对象；HWND 只用于托管和输入 |
 | 错误 | 成功为 0；C++ 异常在 API 边界转换为状态码，具体错误保存在调用线程的缓冲区 |
 | 错误缓冲区 | `required` 包含 NUL；空指针/零容量可以查询大小；容量不足不写入、不截断；先读错误再调用其他 API |
-| Stats | 顺序布局、6 个 uint64 加 8 个 uint32，共 80 字节；托管和原生均验证大小 |
+| Stats | 顺序布局、原有 80 字节之后追加 12 个 uint64 计时/源帧字段和 2 个 uint32 模式字段，共 184 字节；托管和原生均验证大小 |
 | CloseReport | 2 个 uint64 加 2 个 uint32，共 24 字节；记录账本剩余字节、高水位和设备验证错误数 |
 
 创建失败不发布 Handle 或子 HWND；已销毁的 Handle 即使槽位被复用也返回 `RL_INVALID_HANDLE`。Configure 的 pipeline 为 1 Forward、2 Deferred、3 RayTracing，先验证能力再更换选择。窗口点击获得原生焦点，WASD/QE 移动、方向键或右键拖动旋转；失焦清除按键并释放鼠标捕获，捕获被夺走时清除拖动状态。
 
 视线输入采用屏幕坐标：右/下为正，统一在 `editor/native/camera_input.hpp` 转换为朝 −Z 相机的旋转，因此右键向右拖向右看、向下拖向下看，方向键与拖动一致。相机数学仍保持右手系、正 yaw 向左、正 pitch 向上的约定。`editor.input` CPU 回归检查初始/已旋转姿态下的四向视线与前进方向，防止只检查有按键消息而漏掉方向反转。
+
+## 帧诊断检查点
+
+右侧显示活动帧的 FPS/P95 与 Native、Fence、Acquire、Render、Present、GPU Pass 总时间；统计最多保留 240 帧，UI 每 250 ms 发布一次，暂停不计作长帧，重建会清空历史。FPS 来自渲染回调间隔，不是显示器扫描输出的测量。GPU 时间来自完成的较早帧，`gpu_frame` 标记源帧；只在原有帧槽等待完成后读回，未额外等待 GPU。GPU Pass 计时之和也不等于整个设备的占用时间。
+
+Release 默认关闭验证，Debug 与未显式指定验证开关的 smoke 默认开启验证；`--validation on|off` 覆盖默认值。`--profile on|off` 控制 Graph GPU 查询，关闭时显示 off。Benchmark 入口已实现但尚未运行验收，阶段状态和剩余任务以计划为准；当前调度仍是 UI STA/16 ms Timer/VSync。
 
 ## 自检与限制
 

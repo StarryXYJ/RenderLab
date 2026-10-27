@@ -1,5 +1,6 @@
 using System.Runtime.InteropServices;
 using System.Text.Json;
+using System.Diagnostics;
 using Avalonia.Threading;
 using RenderLab.Editor.Configuration;
 using RenderLab.Editor.Diagnostics;
@@ -12,6 +13,7 @@ public sealed class NativeViewportService : IDisposable
 {
     private readonly EditorOptions options;
     private int logSequence;
+    internal FrameTimingWindow Timings { get; } = new();
     internal uint AbiVersion { get; private set; }
     internal ulong Session { get; private set; }
     internal nint Child { get; private set; }
@@ -24,7 +26,11 @@ public sealed class NativeViewportService : IDisposable
     internal event Action<Exception>? Failed;
     internal event Action? RecreateRequested;
 
-    public NativeViewportService(EditorOptions options) => this.options = options;
+    public NativeViewportService(EditorOptions options)
+    {
+        this.options = options;
+        Pipeline = options.Pipeline;
+    }
 
     internal nint Create(nint parent)
     {
@@ -34,14 +40,16 @@ public sealed class NativeViewportService : IDisposable
             throw new InvalidOperationException("The viewport service is already attached to a host.");
         }
         AbiVersion = NativeMethods.AbiVersion();
-        if (AbiVersion != 1 || Marshal.SizeOf<ViewportStats>() != 80 || Marshal.SizeOf<CloseReport>() != 24)
+        if (AbiVersion != 2 || Marshal.SizeOf<ViewportStats>() != 184 || Marshal.SizeOf<CloseReport>() != 24)
         {
             throw new InvalidOperationException("Managed/native bridge ABI mismatch.");
         }
         NativeMethods.Check(NativeMethods.Create(parent, options.Backend == "dx12" ? 0u : 1u,
+            options.Validation ? 1u : 0u, options.Profiling ? 1u : 0u,
             options.Project, options.Shaders, Path.Combine(options.Output, $"native-{++logSequence}.log"),
             out var session, out var child));
         Session = session;
+        Timings.Reset();
         Child = child;
         try
         {
@@ -72,6 +80,7 @@ public sealed class NativeViewportService : IDisposable
         NativeMethods.Check(NativeMethods.Tick(Session, deltaSeconds, IsPaused || hidden ? 1u : 0u));
         NativeMethods.Check(NativeMethods.GetStats(Session, out var stats));
         Stats = stats;
+        Timings.Observe(stats, Stopwatch.GetTimestamp() / (double)Stopwatch.Frequency);
         FrameCompleted?.Invoke(stats);
     }
 

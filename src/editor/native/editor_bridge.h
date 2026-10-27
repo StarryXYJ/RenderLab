@@ -29,6 +29,10 @@ extern "C"
     {
         uint64_t frames, resizes, paused_ticks, input_frames, native_bytes, peak_bytes;
         uint32_t width, height, dpi, reflection_samples, focused, captured, pressed_keys, pipeline;
+        uint64_t tick_ns, fence_wait_ns, acquire_ns, render_ns, present_ns, resize_ns;
+        uint64_t diagnostics_ns, graph_compile_ns, graph_prepare_ns, graph_record_ns;
+        uint64_t gpu_ns, gpu_frame;
+        uint32_t validation_enabled, profiling_enabled;
     } rl_viewport_stats;
     typedef struct rl_viewport_close_report
     {
@@ -40,9 +44,10 @@ extern "C"
     /* UTF-8 paths are borrowed for this call. backend: 0 DX12, 1 Vulkan. UI STA only.
      * The bridge owns the returned child HWND; the managed host must destroy the session first.
      */
-    RENDERLAB_EDITOR_API rl_status RENDERLAB_EDITOR_CALL rl_viewport_create(
-        void* parent_hwnd, uint32_t backend, const char* project_utf8, const char* shaders_utf8,
-        const char* log_utf8, rl_viewport_handle* session, void** child_hwnd);
+    RENDERLAB_EDITOR_API rl_status RENDERLAB_EDITOR_CALL
+    rl_viewport_create(void* parent_hwnd, uint32_t backend, uint32_t validation, uint32_t profiling,
+                       const char* project_utf8, const char* shaders_utf8, const char* log_utf8,
+                       rl_viewport_handle* session, void** child_hwnd);
     /* All session calls run on its creating thread. No message loop is pumped by the bridge. */
     RENDERLAB_EDITOR_API rl_status RENDERLAB_EDITOR_CALL
     rl_viewport_tick(rl_viewport_handle session, float delta_seconds, uint32_t paused);

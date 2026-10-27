@@ -8,6 +8,9 @@ internal struct ViewportStats
 {
     public ulong Frames, Resizes, PausedTicks, InputFrames, NativeBytes, PeakBytes;
     public uint Width, Height, Dpi, ReflectionSamples, Focused, Captured, PressedKeys, Pipeline;
+    public ulong TickNs, FenceWaitNs, AcquireNs, RenderNs, PresentNs, ResizeNs;
+    public ulong DiagnosticsNs, GraphCompileNs, GraphPrepareNs, GraphRecordNs, GpuNs, GpuFrame;
+    public uint ValidationEnabled, ProfilingEnabled;
 }
 
 [StructLayout(LayoutKind.Sequential)]
@@ -25,7 +28,7 @@ internal static class NativeMethods
     internal static extern uint AbiVersion();
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "rl_viewport_create")]
-    internal static extern int Create(nint parent, uint backend,
+    internal static extern int Create(nint parent, uint backend, uint validation, uint profiling,
         [MarshalAs(UnmanagedType.LPUTF8Str)] string project,
         [MarshalAs(UnmanagedType.LPUTF8Str)] string shaders,
         [MarshalAs(UnmanagedType.LPUTF8Str)] string log,

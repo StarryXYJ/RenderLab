@@ -12,6 +12,7 @@ public partial class MainWindow : Window
 {
     private readonly NativeViewportService? viewportService;
     private readonly SmokeTest? smoke;
+    private readonly ViewportBenchmark? benchmark;
     internal RenderViewportHost Viewport { get; private set; } = null!;
     internal MainWindowViewModel ViewModel => (MainWindowViewModel)DataContext!;
     internal TextBox FocusBox => ManagedInput;
@@ -45,6 +46,10 @@ public partial class MainWindow : Window
         if (options.Smoke)
         {
             smoke = new SmokeTest(this, options);
+        }
+        else if (options.BenchmarkSeconds > 0)
+        {
+            benchmark = new ViewportBenchmark(this, viewportService, options);
         }
     }
 

@@ -3,6 +3,8 @@ using CommunityToolkit.Mvvm.Input;
 using RenderLab.Editor.Services;
 using RenderLab.Editor.Configuration;
 using RenderLab.Editor.Interop;
+using RenderLab.Editor.Diagnostics;
+using System.Diagnostics;
 
 namespace RenderLab.Editor.ViewModels;
 
@@ -10,6 +12,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
 {
     private readonly NativeViewportService viewport;
     private bool restoringSettings;
+    private readonly RefreshGate refresh = new();
     public string Title { get; }
     public string BackendName { get; }
     public IReadOnlyList<string> Pipelines { get; } = ["Forward", "Deferred", "Ray Tracing"];
@@ -34,9 +37,13 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     [ObservableProperty]
     private string errorText = "";
 
+    [ObservableProperty]
+    private string performanceText = "Waiting for frame timings…";
+
     public MainWindowViewModel(NativeViewportService viewport, EditorOptions options)
     {
         this.viewport = viewport;
+        SelectedPipelineIndex = (int)options.Pipeline - 1;
         Title = $"RenderLab · Avalonia Host · {options.Backend.ToUpperInvariant()}";
         BackendName = options.Backend == "dx12" ? "Direct3D 12" : "Vulkan";
         viewport.FrameCompleted += UpdateStats;
@@ -111,11 +118,14 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
 
     private void UpdateStats(ViewportStats stats)
     {
-        if (stats.Frames % 8 != 0 && stats.PausedTicks == 0)
+        if (!refresh.TryPublish(Stopwatch.GetTimestamp() / (double)Stopwatch.Frequency))
         {
             return;
         }
-        StatusText = $"{stats.Width} × {stats.Height} px   ·   DPI {stats.Dpi}   ·   frame {stats.Frames}   ·   RT {stats.ReflectionSamples} spp";
+        var summary = viewport.Timings.Summarize();
+        var gpu = summary.GpuP95Ms is { } gpuMs ? $"{gpuMs:F2} ms" : stats.ProfilingEnabled == 0 ? "off" : "pending";
+        StatusText = $"{summary.Fps:F1} FPS · frame P95 {summary.FrameP95Ms:F1} ms · {stats.Width} × {stats.Height} px · frame {stats.Frames} · RT {stats.ReflectionSamples} spp";
+        PerformanceText = $"Active frame P95\nNative: {summary.NativeP95Ms:F2} ms\nFence: {summary.FenceWaitP95Ms:F2} ms\nAcquire: {summary.AcquireP95Ms:F2} ms\nRender: {summary.RenderP95Ms:F2} ms\nPresent: {summary.PresentP95Ms:F2} ms\nGPU passes: {gpu}\nValidation: {(stats.ValidationEnabled != 0 ? "on" : "off")}";
         DetailsText = $"NativeControlHost\nC ABI v{viewport.AbiVersion} / UI STA\n\nClient: {stats.Width} × {stats.Height} px\nScale: {stats.Dpi / 96.0:F2}\nResizes: {stats.Resizes}\nPaused ticks: {stats.PausedTicks}\nNative: {stats.NativeBytes / 1048576.0:F1} MiB\n\nFocus: {stats.Focused}\nCapture: {stats.Captured}";
     }
 

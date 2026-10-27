@@ -325,7 +325,13 @@ R1 契约修订、B1 样例整理/Benchmark、B2 调查和 B3 资源复用已完
 
 M7.1c DONE（2026 年 10 月 27 日）：根 `RenderLab.slnx` 提供托管 IDE 入口，根 SDK/Directory.Build.props 统一规则和项目隔离输出；应用整理为 `src/editor/managed/RenderLab.Editor`，原生桥接为 `src/editor/native`，输入回归为 `tests/editor/native`。Configuration、Diagnostics、Interop 与既有 MVVM/服务目录使用对应命名空间，构建入口为 `tools/build-editor.ps1`。解决方案 list/locked restore/Release build、原生 Release 构建和 `editor.input` 通过，DX12/Vulkan 自动自检通过，证据 `out/m7/layout/{dx12,vulkan}`；长期目录和运行路径见架构及手册。没有将生成的 CMake vcxproj 纳入解决方案。
 
-M7.1d IN_PROGRESS：补帧性能诊断、修状态刷新、配置验证开关，并根据实测处理调度瓶颈。完成后记录实际数据和保留限制。
+M7.1d IN_PROGRESS（换设备检查点，2026 年 10 月 27 日）：已加入原生 Tick/Fence/Acquire/Render/Present/Resize/Diagnostics 与 Graph 分段计时，GPU Pass 时间复用两帧完成点读取；C ABI 升为 v2，Stats 为 184 字节。托管侧加入 240 帧活动窗口统计、FPS/P95、固定 250 ms 状态刷新，排除暂停间隔并在重建时清空历史；Release 默认关闭验证，Debug/默认 smoke 开启验证，`--validation on|off`、`--profile on|off` 可显式配置。解决方案已加入真正的 NUnit 测试项目；删除了迁移遗留的父目录锁文件。
+
+检查点验证：原生 Release、托管 Release 及托管测试项目构建通过，5 项 NUnit 测试通过（帧间隔/P95、暂停排除、Session 重置、窗口淘汰/GPU 源帧、刷新节流）。DX12/Vulkan 均通过 `--smoke --validation on`；CPU/GPU 计时有效，每后端两次关闭均账本 0、验证错误 0。证据位于 `out/m7/timings/smoke-{dx12,vulkan}`。本机原生构建树为 `out/build/m5-release`。
+
+剩余：`ViewportBenchmark` 与 `--benchmark-seconds`/`--warmup-seconds` 已实现但尚未运行验收；需要采集验证 on/off 和双后端的相同配置基线，确认各段耗时与帧时间分布，再处理渲染 owner thread、Present/Timer 节奏、Resize 合并与静态视口刷新策略。当前仍为 UI STA + 16 ms Timer + VSync，不能宣称卡顿已解决。新计时版本的 Debug 构建、关闭 GPU profile 的回归、文档最终整理和格式/编码最终复核仍需完成。没有推进 Docking、跨屏 DPI 或完整编辑器工作流。
+
+换设备接续：根 `RenderLab.slnx` 是 IDE 入口，`tools/build-editor.ps1` 编排 CMake 和托管构建，SDK/包版本均已锁定；新设备配置 `windows-release` 后运行脚本，再执行托管测试与双后端 smoke。`out` 被忽略，旧二进制、NuGet 缓存和原始运行证据不会随 Git 同步，需重建/重测；阶段完成前不标 DONE。检查点提交只保存在本机，尚未推送。
 
 - [x] 最小 C ABI、Handle 代际、字符串/缓冲区所有权和错误返回。
 - [x] Avalonia 原生视口托管，双后端 Present、当前 DPI 像素尺寸、resize、最小化和关闭的自动验证。
