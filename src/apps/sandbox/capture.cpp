@@ -100,6 +100,7 @@ void CaptureScene(rhi::Runtime& runtime, const rhi::DeviceReport& device, const 
     const auto memory = runtime.GetMemoryStats();
     const auto descriptors = runtime.GetDescriptorStats();
     const auto uploads = scene.UploadStatistics();
+    const auto rayScene = scene.RayStatistics();
     auto captureOptions = settings;
     captureOptions.profile = false;
     const auto capture =
@@ -109,7 +110,8 @@ void CaptureScene(rhi::Runtime& runtime, const rhi::DeviceReport& device, const 
                        rhi::TextureRowPitch(options.width));
     if (recording || !options.profilePath.empty())
         statistics.Save(reportPath, options, device, memory, recording.get(),
-                        options.cpuProfile ? &cpuOperations : nullptr, &descriptors, &uploads);
+                        options.cpuProfile ? &cpuOperations : nullptr, &descriptors, &uploads,
+                        &rayScene);
     if (recording)
     {
         const auto summary = recording->Summary(reportPath);

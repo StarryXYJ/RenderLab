@@ -89,6 +89,8 @@ struct SceneRenderer::Impl
     std::array<std::shared_ptr<rhi::Pipeline>, 5> reflectionReconstruction;
     std::array<std::shared_ptr<rhi::Buffer>, 5> raySurfaceBuffers;
     std::array<std::vector<std::byte>, 5> raySurfaceBytes;
+    std::vector<std::string> packedRayMeshes;
+    RaySceneStatistics rayStatistics;
     uint64_t raySurfaceVersion = 0, rayAtlasVersion = 0;
     EnvironmentImage rayAtlas;
     std::shared_ptr<rhi::TextureView> rayAtlasView;
@@ -208,6 +210,48 @@ struct SceneRenderer::Impl
         commands->Barrier(destination, rhi::State::CopyDest, state);
         runtime.Wait(runtime.Submit(std::move(commands)));
         return destination;
+    }
+    void UploadRaySurfaces(const std::array<std::span<const std::byte>, 5>& sources)
+    {
+        uint64_t bytes = 0;
+        std::array<bool, 5> changed{};
+        for (size_t i = 0; i < sources.size(); ++i)
+            if (!sources[i].empty() &&
+                (!raySurfaceBuffers[i] || !std::ranges::equal(sources[i], raySurfaceBytes[i])))
+            {
+                changed[i] = true;
+                bytes += sources[i].size();
+            }
+        if (!bytes)
+            return;
+        auto staging =
+            runtime.CreateBuffer({bytes, rhi::Memory::Upload, "RayTracing.Surfaces.Upload"});
+        auto mapped = staging->Map();
+        auto buffers = raySurfaceBuffers;
+        auto commands = runtime.CreateCommands();
+        commands->Barrier(staging, rhi::State::HostWrite, rhi::State::CopySource);
+        uint64_t offset = 0;
+        for (size_t i = 0; i < sources.size(); ++i)
+            if (changed[i])
+            {
+                const auto size = sources[i].size();
+                std::memcpy(mapped.data() + offset, sources[i].data(), size);
+                buffers[i] = runtime.CreateBuffer(
+                    {size, rhi::Memory::Device, "RayTracing.Surface" + std::to_string(i)});
+                commands->Barrier(buffers[i], rhi::State::Undefined, rhi::State::CopyDest);
+                commands->Copy(staging, buffers[i], size, offset);
+                commands->Barrier(buffers[i], rhi::State::CopyDest, rhi::State::ShaderRead);
+                offset += size;
+            }
+        runtime.Wait(runtime.Submit(std::move(commands)));
+        // Publish only complete immutable uploads. Older submissions retain their own buffers.
+        raySurfaceBuffers = std::move(buffers);
+        for (size_t i = 0; i < sources.size(); ++i)
+            if (changed[i])
+                raySurfaceBytes[i].assign(sources[i].begin(), sources[i].end());
+        ++raySurfaceVersion;
+        ++rayStatistics.uploadBatches;
+        rayStatistics.uploadedBytes += bytes;
     }
     std::shared_ptr<rhi::TextureView> UploadFloat(const std::string& name,
                                                   const EnvironmentImage& image)
@@ -779,6 +823,10 @@ rhi::UploadPool::Statistics SceneRenderer::UploadStatistics() const
 {
     return impl_->uploadPool.Stats();
 }
+RaySceneStatistics SceneRenderer::RayStatistics() const
+{
+    return impl_->rayStatistics;
+}
 SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::State initial,
                                     rhi::Swapchain* swapchain, bool readback,
                                     const std::filesystem::path& dump, SceneRenderOptions options)
@@ -820,6 +868,9 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
     std::vector<RayInstanceData> rayInstanceData;
     std::vector<RayMaterialData> rayMaterials;
     std::map<std::string, uint32_t> rayMeshIndices;
+    std::map<std::string, uint32_t> rayMaterialIndices;
+    std::vector<const assets::Mesh*> rayMeshSources;
+    std::vector<std::string> rayGeometryKeys;
     std::vector<AccelerationScene::Instance> rayInstances;
     if (rayTracing)
     {
@@ -841,10 +892,16 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
                                             "masked materials require any-hit alpha evaluation");
             const auto key = model.id + "/" + mesh->id;
             const auto& geometry = self.geometry.at(key);
-            rayMeshes.push_back({key, geometry.vertices, geometry.indices,
-                                 static_cast<uint32_t>(mesh->vertices.size()),
-                                 static_cast<uint32_t>(mesh->indices.size()),
-                                 sizeof(assets::Vertex)});
+            if (!rayMeshIndices.contains(key))
+            {
+                rayMeshIndices.emplace(key, static_cast<uint32_t>(rayMeshes.size()));
+                rayMeshes.push_back({key, geometry.vertices, geometry.indices,
+                                     static_cast<uint32_t>(mesh->vertices.size()),
+                                     static_cast<uint32_t>(mesh->indices.size()),
+                                     sizeof(assets::Vertex)});
+                rayMeshSources.push_back(&*mesh);
+                rayGeometryKeys.push_back(key + "/" + model.key);
+            }
             AccelerationScene::Instance rayInstance{
                 key, {}, static_cast<uint32_t>(rayInstances.size()), 2};
             std::copy_n(instance.world.values.begin(), 12, rayInstance.transform.begin());
@@ -858,42 +915,56 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
             rayInstances.push_back(std::move(rayInstance));
             if (reflections)
             {
-                if (!rayMeshIndices.contains(key))
+                const auto materialKey =
+                    instance.material.empty()
+                        ? model.id + "/" + model.materials.at(mesh->material).id
+                        : instance.material;
+                if (!rayMaterialIndices.contains(materialKey))
                 {
-                    rayMeshIndices.emplace(key, static_cast<uint32_t>(rayMeshesData.size()));
-                    rayMeshesData.push_back({static_cast<uint32_t>(rayVertices.size()),
-                                             static_cast<uint32_t>(rayIndices.size())});
-                    rayVertices.insert(rayVertices.end(), mesh->vertices.begin(),
-                                       mesh->vertices.end());
-                    rayIndices.insert(rayIndices.end(), mesh->indices.begin(), mesh->indices.end());
+                    rayMaterialIndices.emplace(materialKey,
+                                               static_cast<uint32_t>(rayMaterials.size()));
+                    rayMaterials.push_back(self.RayMaterial(material));
                 }
                 rayInstanceData.push_back(
-                    {rayMeshIndices.at(key), static_cast<uint32_t>(rayMaterials.size())});
-                rayMaterials.push_back(self.RayMaterial(material));
+                    {rayMeshIndices.at(key), rayMaterialIndices.at(materialKey)});
             }
         }
         self.accelerationScene.EnsureMeshes(rayMeshes);
         if (reflections)
         {
             self.EnsureReflectionPrograms();
-            const auto cache = [&](auto& data, size_t index)
+            const bool geometryChanged =
+                rayGeometryKeys != self.packedRayMeshes || !self.raySurfaceBuffers[0];
+            if (geometryChanged)
+                for (const auto* mesh : rayMeshSources)
+                {
+                    rayMeshesData.push_back({static_cast<uint32_t>(rayVertices.size()),
+                                             static_cast<uint32_t>(rayIndices.size())});
+                    rayVertices.insert(rayVertices.end(), mesh->vertices.begin(),
+                                       mesh->vertices.end());
+                    rayIndices.insert(rayIndices.end(), mesh->indices.begin(), mesh->indices.end());
+                }
+            std::array<std::span<const std::byte>, 5> sources{};
+            const auto source = [&](auto& data, size_t index)
             {
                 if (data.empty())
                     data.resize(1);
-                const auto bytes = std::as_bytes(std::span{data});
-                if (self.raySurfaceBuffers[index] &&
-                    std::ranges::equal(bytes, self.raySurfaceBytes[index]))
-                    return;
-                self.raySurfaceBytes[index].assign(bytes.begin(), bytes.end());
-                self.raySurfaceBuffers[index] = self.Upload(
-                    bytes, "RayTracing.Surface" + std::to_string(index), rhi::State::ShaderRead);
-                ++self.raySurfaceVersion;
+                sources[index] = std::as_bytes(std::span{data});
             };
-            cache(rayVertices, 0);
-            cache(rayIndices, 1);
-            cache(rayMeshesData, 2);
-            cache(rayInstanceData, 3);
-            cache(rayMaterials, 4);
+            if (geometryChanged)
+            {
+                source(rayVertices, 0);
+                source(rayIndices, 1);
+                source(rayMeshesData, 2);
+            }
+            source(rayInstanceData, 3);
+            source(rayMaterials, 4);
+            self.UploadRaySurfaces(sources);
+            if (geometryChanged)
+            {
+                self.packedRayMeshes = std::move(rayGeometryKeys);
+                ++self.rayStatistics.geometryPacks;
+            }
             self.RayTile("white", false);
             if (self.rayAtlasDirty)
             {

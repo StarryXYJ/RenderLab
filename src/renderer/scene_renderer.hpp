@@ -65,6 +65,11 @@ struct SceneReadback
     std::shared_ptr<rhi::Buffer> reflectionStatistics;
     uint64_t compileNs = 0, prepareNs = 0, recordNs = 0;
 };
+/// Cumulative ray-surface preparation work; no timing overhead.
+struct RaySceneStatistics
+{
+    uint64_t geometryPacks = 0, uploadBatches = 0, uploadedBytes = 0;
+};
 /** @brief Project/scene to the existing Forward composition. Runtime outlives the renderer. */
 class SceneRenderer final
 {
@@ -82,6 +87,7 @@ public:
     const scene::Snapshot& LastSnapshot() const;
     const std::map<std::string, assets::Model>& Models() const;
     rhi::UploadPool::Statistics UploadStatistics() const;
+    RaySceneStatistics RayStatistics() const;
     /** @brief Extracts scene values and submits the existing Forward/Graph composition.
      * initial must match the target state; output is Present for a swapchain, otherwise CopySource.
      * Normal frames do not wait for GPU completion. Optional readback uses a padded row pitch.

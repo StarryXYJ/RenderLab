@@ -110,7 +110,8 @@ void Statistics::Save(const std::filesystem::path& path, const Options& options,
                       const benchmark::Recording* recording,
                       const rhi::CpuProfileSnapshot* cpuOperations,
                       const rhi::DescriptorStats* descriptors,
-                      const rhi::UploadPool::Statistics* uploads) const
+                      const rhi::UploadPool::Statistics* uploads,
+                      const renderer::RaySceneStatistics* rayScene) const
 {
     const auto summary = [](const Samples& samples)
     {
@@ -166,6 +167,10 @@ void Statistics::Save(const std::filesystem::path& path, const Options& options,
                                                   {"reservedBytes", uploads->reservedBytes},
                                                   {"batchHighWaterBytes", uploads->highWaterBytes},
                                                   {"batches", uploads->batches}};
+    if (rayScene)
+        result["resourceReuse"]["rayScene"] = {{"geometryPacks", rayScene->geometryPacks},
+                                               {"uploadBatches", rayScene->uploadBatches},
+                                               {"uploadedBytes", rayScene->uploadedBytes}};
     result["adapterIdentity"] = {{"vendorId", adapter.vendorId},
                                  {"deviceId", adapter.deviceId},
                                  {"software", adapter.software}};

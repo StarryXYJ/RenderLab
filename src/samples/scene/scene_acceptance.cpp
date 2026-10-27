@@ -175,7 +175,13 @@ void VerifyScene(rhi::Runtime& runtime, shader::Target target, const std::filesy
             return result;
         };
         auto firstReflection = reflectionRender("reflection-first", reflectionOptions);
+        const auto firstPreparation = renderer.RayStatistics();
         auto accumulated = reflectionRender("reflection-accumulated", reflectionOptions);
+        detail::Require(
+            firstPreparation.geometryPacks == 1 && firstPreparation.uploadBatches == 1 &&
+                renderer.RayStatistics().geometryPacks == firstPreparation.geometryPacks &&
+                renderer.RayStatistics().uploadBatches == firstPreparation.uploadBatches,
+            "Static ray surfaces were repacked or reuploaded after their initial batch");
         runtime.Wait(accumulated.completion);
         detail::Require(
             firstReflection.reflectionSamples == 1 && firstReflection.reflectionHistoryReset &&
@@ -201,6 +207,10 @@ void VerifyScene(rhi::Runtime& runtime, shader::Target target, const std::filesy
             if (sample % 2 == 0)
                 runtime.Wait(stationary.completion);
         }
+        detail::Require(renderer.RayStatistics().geometryPacks == firstPreparation.geometryPacks &&
+                            renderer.RayStatistics().uploadBatches ==
+                                firstPreparation.uploadBatches,
+                        "Stationary ray-surface cache performed repeated work");
         std::string costs;
         uint32_t reflectionPasses = 0;
         for (const auto& timing : firstReflection.profile.Read(runtime))
@@ -262,6 +272,10 @@ void VerifyScene(rhi::Runtime& runtime, shader::Target target, const std::filesy
                   rhi::TextureRowPitch(640));
         document.MoveCamera({.2f, 0, 0}, {0, 2, 0});
         auto cameraChanged = reflectionRender("reflection-camera-change", reflectionOptions);
+        detail::Require(renderer.RayStatistics().geometryPacks == firstPreparation.geometryPacks &&
+                            renderer.RayStatistics().uploadBatches ==
+                                firstPreparation.uploadBatches,
+                        "Camera movement repacked or uploaded static ray surfaces");
         detail::Require(cameraChanged.reflectionHistoryReset,
                         "Camera motion did not invalidate reflection history");
         detail::Require(cameraChanged.reflectionTemporalFrames == 2,
@@ -288,6 +302,7 @@ void VerifyScene(rhi::Runtime& runtime, shader::Target target, const std::filesy
                         "Scene transform did not reset temporal history");
         document = original;
         auto beforeMaterial = reflectionRender("reflection-before-material", reflectionOptions);
+        const auto beforeMaterialPreparation = renderer.RayStatistics();
         const auto materialSource =
             std::ranges::find_if(document.objects, [](const auto& value)
                                  { return value.mesh && !value.mesh->materials.empty(); });
@@ -305,6 +320,11 @@ void VerifyScene(rhi::Runtime& runtime, shader::Target target, const std::filesy
             }
         detail::Require(replaced, "Reflection fixture needs multiple mesh objects");
         auto materialChanged = reflectionRender("reflection-material-change", reflectionOptions);
+        detail::Require(renderer.RayStatistics().geometryPacks ==
+                                beforeMaterialPreparation.geometryPacks &&
+                            renderer.RayStatistics().uploadBatches ==
+                                beforeMaterialPreparation.uploadBatches + 1,
+                        "Material-only edit repacked geometry or split its surface upload batch");
         detail::Require(materialChanged.reflectionHistoryReset,
                         "Material change did not invalidate reflection history");
         detail::Require(materialChanged.reflectionTemporalFrames == 1,
@@ -323,11 +343,16 @@ void VerifyScene(rhi::Runtime& runtime, shader::Target target, const std::filesy
         auto shadowMaterial = originalMaterial;
         material::Set(shadowMaterial, litTemplate, "cast_shadows", std::array<double, 1>{0});
         auto beforeShadowPolicy = reflectionRender("reflection-before-caster", reflectionOptions);
+        const auto beforeShadowPreparation = renderer.RayStatistics();
         runtime.Wait(beforeShadowPolicy.completion);
         material::Save(shadowMaterial, materialPath);
         std::filesystem::last_write_time(
             materialPath, std::filesystem::file_time_type::clock::now() + std::chrono::seconds(1));
         auto shadowPolicy = reflectionRender("reflection-caster-disabled", reflectionOptions);
+        detail::Require(
+            renderer.RayStatistics().geometryPacks == beforeShadowPreparation.geometryPacks &&
+                renderer.RayStatistics().uploadBatches == beforeShadowPreparation.uploadBatches,
+            "ShadowCaster-only edit unnecessarily repacked or uploaded ray surfaces");
         runtime.Wait(shadowPolicy.completion);
         detail::Require(shadowPolicy.reflectionHistoryReset &&
                             shadowPolicy.reflectionSamples == 1 &&

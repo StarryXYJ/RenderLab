@@ -365,6 +365,8 @@ M5 的 AS 实现通过明确的 BuildInput、BuildWrite 与 Read 用途把底层
 
 Ray Tracing Pipeline 使用类型化 RayTracing Pass 与显式 ShaderTableRead；单个通用三角形 Hit Group 通过 InstanceID、Mesh 和 Material 索引消费基础 PBR。ShaderTable 保持不可变并持有对应 PSO；Shader 代际变化同时重建 PSO 和表，旧命令引用保护在途版本。有限图集与显式 LOD 0 先于 M6 的描述符数组，数据 ABI 和限制见上述光追文档。
 
+光追几何投影按有序唯一 Mesh 身份和导入内容 key 缓存，静态顶点/索引仅在选择变化时重打包；实例/材质表单独比较，同帧相同材质身份只求值一次。变化表合并为一次 staging 上传与完成等待，完成后发布不可变 Buffer，旧命令继续保活旧版。该优化依赖当前不可变导入模型，不把未来动态几何隐式当成静态缓存；累计打包/上传工作通过 Renderer 统计和 headless 报告暴露。
+
 M5 混合反射由独立 Trace、静止历史累积、显示重建和 Combine Pass 实现；一次可见法线 GGX（VNDF）specular 采样使用通用 PBR Hit Group，Miss 消费环境，合成显式替换 IBL specular。ViewID 使用相机身份，未滤波双缓冲按 1/N 持续求平均；相机/场景/材质/尺寸/照明变化失效，采样序列在兼容场景的相机运动中继续。原始单样本与未滤波历史保持独立正确性入口。
 
 原始单帧另经 Statistics Pass 维护与 progressive 样本/计数匹配的去调制亮度中心矩，以及稳定的局部滤波控制值；每个 progressive View 的双槽各使用八字节/像素结构化缓冲，与均值一起失效和提交发布。显示开关关闭时仍维护统计，避免重开后丢失历史样本。

@@ -30,7 +30,8 @@ public:
               const benchmark::Recording* recording = nullptr,
               const rhi::CpuProfileSnapshot* cpuOperations = nullptr,
               const rhi::DescriptorStats* descriptors = nullptr,
-              const rhi::UploadPool::Statistics* uploads = nullptr) const;
+              const rhi::UploadPool::Statistics* uploads = nullptr,
+              const renderer::RaySceneStatistics* rayScene = nullptr) const;
 
 private:
     struct Samples

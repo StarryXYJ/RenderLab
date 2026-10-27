@@ -242,7 +242,7 @@ R1 契约修订、B1 样例整理/Benchmark、B2 调查和 B3 资源复用已完
 状态：IN_PROGRESS，日期：2026 年 10 月 27 日。
 
 - CastShadows 修复 DONE：有效实例 mask 进入两套历史签名；隔离材质开关/恢复均重置，首帧与新 Renderer 逐字节一致。MSVC Debug Sandbox、Release Sandbox/Player/Graph 构建；RTX 5060 上 Release Graph 与双后端反射 3/3，validation errors=0。契约见 [光追历史](../docs/raytracing.md#histories-and-invalidation)。
-- [ ] 静态几何按输入身份缓存打包，变更上传合批；验证静止/相机运动不重复打包，材质/成员变化及在途版本正确。
+- 静态场景准备优化 DONE：有序 Mesh/导入 key 缓存打包，同帧材质身份去重，变化表一次 staging/提交/等待；新增累计工作量与 headless 报告。MSVC Release Sandbox/Player 构建；双后端反射专项 2/2，静止/移动零重复打包上传、材质编辑一次合批、Caster 编辑零表上传，validation errors=0。586 张回归 BMP 与前版逐字节一致；13 万顶点隔离场景三次短测 CPU Render 均值 DX12 7.25→1.08ms、Vulkan 6.75→.85ms，六对截图相同，不推广为窗口 FPS。入口：[契约](../docs/raytracing.md)、[数据与复现](../docs/performance/m5-pipeline-opt.md)。
 - [ ] 按实测优化引导格式、历史缓存和高 spp 旁路，保持未滤波 FP32 参考；分别记录成本、画面与限制。
 - [ ] 评估几何法线偏移与纹理 footprint 的数据契约，能可靠验证的改动分步实施，其余明确保留。
 

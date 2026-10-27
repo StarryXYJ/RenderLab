@@ -110,6 +110,19 @@ base color, metallic/roughness, normal, occlusion and emission are sampled at ex
 There are no raster derivatives or implicit mip selection. This deliberately bounded representation
 is independent of material asset count and does not require M6 descriptor arrays.
 
+The renderer caches the ordered unique mesh identities and imported content keys. Immutable model
+vertices/indices and mesh offsets are repacked only when that selection changes, not on camera or
+transform changes. Instance/material tables remain independently compared; repeated material
+identities are evaluated once per frame. Referenced image versions are still checked, so texture
+edits can replace the atlas and invalidate history. This relies on the current immutable imported
+model contract; future dynamic geometry must supply a content generation.
+
+Changed surface tables share one staging buffer and one upload submission/wait. The renderer
+publishes the replacement buffers only after upload completion, and older commands retain prior
+versions. First use and content edits can still stall; this is not an asynchronous upload path.
+`SceneRenderer::RayStatistics()` reports cumulative geometry packs, upload batches and uploaded
+bytes. Headless reports export them under `resourceReuse.rayScene` (including startup/warmup work).
+
 `--as-test` also executes real TraceRays hit/miss cases, indexed PBR evaluation, explicit texture
 sampling and two rebuilt PSO/table generations on each backend. Ray Query results do not stand in
 for these native pipeline checks.
