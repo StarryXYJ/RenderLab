@@ -81,7 +81,9 @@ RHI 定义 GPU 对象与命令语义。Render Graph 编译一帧工作的资源�
 
 编辑器阶段先使用进程内原生库与 P/Invoke，桥接接口采用不透明 Handle、固定宽度字段、UTF-8 和明确的缓冲区所有权。STL 容器、C++ 异常和内部对象指针不跨边界。按编辑操作批量交互，不把 RHI 逐个包装成 C# 对象。桥接双方随同一版本发布，不建设跨版本插件 ABI。
 
-完整编辑器阶段再处理 Docking、DPI、输入焦点、鼠标捕获和原生视口托管。Windows 首选 NativeControlHost 托管子 HWND，C++ 使用该窗口创建 Surface；视口内 Gizmo 和调试覆盖由原生编辑器渲染层绘制。独立 Sandbox 使用自己的原生窗口。视口宿主明确窗口所有权和销毁协议，避免窗口销毁后仍提交渲染。
+Windows 编辑器使用 Avalonia 管理整个窗口和普通面板，NativeControlHost 托管由 C++ 创建的渲染子 HWND；C++ 使用该窗口创建 Surface，复用 SceneRenderer 与双后端 Swapchain。[提前集成原型](../docs/editor-host.md) 已验证 UI STA 线程上的最小生命周期和双后端 Present，采用代际 Handle、UTF-8 和显式关闭协议，先释放 GPU/展示再销毁子窗口。原型的渲染/编译/GPU 等待会阻塞 UI，后续按实际需要引入独立渲染 owner thread。跨屏 DPI、Docking、浮动窗口重挂接和真实交互仍需完整编辑器阶段验证。
+
+子 HWND 存在 airspace 限制，视口内 Gizmo 和调试覆盖由原生编辑器渲染层绘制；普通 Avalonia 控件安排在视口周边。独立 Sandbox 使用自己的原生窗口。视口宿主明确窗口所有权和销毁协议，避免窗口销毁后仍提交渲染。
 
 Windows Sandbox 在窗口和设备创建前为窗口线程初始化 COM STA，持有至宿主对象销毁后；headless 使用 MTA。WIC 资源解码复用已有 apartment，仅无宿主初始化的导入线程临时持有 MTA，避免首帧纹理解码结束时卸载展示线程的 COM。具体契约见 [场景资源](../docs/m4-scene.md#静态-gltf-与缓存)。
 

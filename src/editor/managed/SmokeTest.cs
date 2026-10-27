@@ -1,0 +1,173 @@
+using System.Diagnostics;
+using System.Text.Json;
+using Avalonia;
+using Avalonia.Controls;
+using Avalonia.Controls.ApplicationLifetimes;
+using Avalonia.Threading;
+
+namespace RenderLab.Editor.Host;
+
+internal sealed class SmokeTest
+{
+    private readonly MainWindow window;
+    private readonly HostOptions options;
+    private readonly List<string> checks = [];
+    private readonly Stopwatch elapsed = Stopwatch.StartNew();
+    private int stage, ticks;
+    private ulong oldHandle, savedFrames, savedResizes, savedPaused, savedInput;
+    private bool completed;
+
+    internal SmokeTest(MainWindow window, HostOptions options)
+    {
+        this.window = window;
+        this.options = options;
+        window.FrameCompleted += Update;
+    }
+
+    private static void Require(bool condition, string message)
+    {
+        if (!condition)
+        {
+            throw new InvalidOperationException(message);
+        }
+    }
+
+    private void CheckPixels(ViewportStats stats)
+    {
+        Require(Math.Abs(stats.Width - window.Viewport.Bounds.Width * window.RenderScaling) <= 2 &&
+            Math.Abs(stats.Height - window.Viewport.Bounds.Height * window.RenderScaling) <= 2,
+            "Native client size does not match Avalonia DIP-to-pixel layout.");
+    }
+
+    private void Update(ViewportStats stats)
+    {
+        if (completed)
+        {
+            return;
+        }
+        try
+        {
+            Require(elapsed.Elapsed < TimeSpan.FromSeconds(120), "Viewport smoke timed out.");
+            if (++ticks < 8 || stats.Frames < 8)
+            {
+                return;
+            }
+            ticks = 0;
+            var host = window.Viewport;
+            var root = window.TryGetPlatformHandle()!.Handle;
+            switch (stage++)
+            {
+                case 0:
+                    Require(NativeMethods.IsChild(root, host.Child), "Viewport is not embedded in the Avalonia window.");
+                    CheckPixels(stats);
+                    Require(NativeMethods.GetStats(ulong.MaxValue, out _) == 2, "Invalid handle accepted.");
+                    var small = new byte[] { 0x5A };
+                    Require(NativeMethods.LastError(small, 1, out var required) == 5 && required > 1 && small[0] == 0x5A,
+                        "Error buffer was truncated or overwritten.");
+                    Require(Task.Run(() => NativeMethods.GetStats(host.Session, out _)).GetAwaiter().GetResult() == 3,
+                        "Wrong-thread access was accepted.");
+                    Require(NativeMethods.Configure(host.Session, 99, 0, 0) == 1, "Invalid pipeline accepted.");
+                    checks.Add("embedded HWND, current DPI pixel layout, invalid handles, error buffer, owner thread, invalid settings");
+                    savedResizes = stats.Resizes;
+                    window.Width = 1060;
+                    window.Height = 700;
+                    break;
+                case 1:
+                    Require(stats.Resizes > savedResizes, "Window resize did not reach swapchain.");
+                    CheckPixels(stats);
+                    checks.Add("resize and DIP-to-pixel client dimensions");
+                    savedInput = stats.InputFrames;
+                    NativeMethods.SetFocus(host.Child);
+                    NativeMethods.SendMessage(host.Child, 0x0100, 'W', 0);
+                    break;
+                case 2:
+                    Require(stats.InputFrames > savedInput && stats.PressedKeys > 0, "Focused camera input was not consumed.");
+                    NativeMethods.SendMessage(host.Child, 0x0204, 2, 0);
+                    break;
+                case 3:
+                    Require(stats.Captured != 0, "Right mouse capture failed.");
+                    NativeMethods.SetFocus(root);
+                    window.FocusBox.Focus();
+                    break;
+                case 4:
+                    Require(stats.Focused == 0 && stats.Captured == 0 && stats.PressedKeys == 0,
+                        "Focus loss did not release capture and keys.");
+                    checks.Add("camera input, right mouse capture and managed-focus release");
+                    savedFrames = stats.Frames;
+                    savedPaused = stats.PausedTicks;
+                    window.WindowState = WindowState.Minimized;
+                    break;
+                case 5:
+                    Require(stats.PausedTicks > savedPaused && stats.Frames <= savedFrames + 1,
+                        "Minimized window continued rendering.");
+                    window.WindowState = WindowState.Normal;
+                    break;
+                case 6:
+                    Require(stats.Frames > savedFrames + 1, "Restored window did not resume rendering.");
+                    checks.Add("minimize pauses rendering and restore resumes");
+                    savedFrames = stats.Frames;
+                    savedPaused = stats.PausedTicks;
+                    host.IsVisible = false;
+                    break;
+                case 7:
+                    Require(stats.PausedTicks > savedPaused && stats.Frames <= savedFrames + 1,
+                        "Hidden viewport continued rendering.");
+                    host.IsVisible = true;
+                    break;
+                case 8:
+                    Require(stats.Frames > savedFrames + 1, "Shown viewport did not resume.");
+                    checks.Add("hide/show viewport");
+                    host.Configure(1, 0, true);
+                    break;
+                case 9:
+                    Require(stats.Pipeline == 1, "Forward selection was not applied.");
+                    host.Configure(3, .5f);
+                    break;
+                case 10:
+                    Require(stats.Pipeline == 3 && stats.ReflectionSamples > 0, "Ray tracing did not present.");
+                    checks.Add("Forward / Deferred / RayTracing presentation and exposure");
+                    oldHandle = host.Session;
+                    window.RecreateViewport();
+                    break;
+                case 11:
+                    Require(host.Session != oldHandle && NativeMethods.GetStats(oldHandle, out _) == 2,
+                        "Destroyed session generation was reused.");
+                    Require(window.CloseReports.Count == 1 && window.CloseReports[0].RemainingBytes == 0 &&
+                        window.CloseReports[0].ValidationErrors == 0, "First viewport shutdown leaked or failed validation.");
+                    checks.Add("detach/recreate, stale generation rejection, GPU-before-HWND shutdown");
+                    Finish(stats);
+                    break;
+            }
+        }
+        catch (Exception error)
+        {
+            Fail(error);
+        }
+    }
+
+    private void Finish(ViewportStats stats)
+    {
+        window.Viewport.CloseViewport();
+        Require(window.CloseReports.Count == 2 && window.CloseReports.All(r => r.RemainingBytes == 0 && r.ValidationErrors == 0),
+            "Final native shutdown did not release all resources cleanly.");
+        completed = true;
+        File.WriteAllText(Path.Combine(options.Output, "smoke.json"), JsonSerializer.Serialize(new
+        {
+            backend = options.Backend, avalonia = "12.0.5", passed = true,
+            checks, stats, closeReports = window.CloseReports,
+            dpiBoundary = "Current monitor scale verified; cross-monitor DPI transition not tested."
+        }, MainWindow.JsonOptions));
+        ((IClassicDesktopStyleApplicationLifetime)Application.Current!.ApplicationLifetime!).Shutdown(0);
+    }
+
+    internal void Fail(Exception error)
+    {
+        if (completed)
+        {
+            return;
+        }
+        completed = true;
+        File.WriteAllText(Path.Combine(options.Output, "smoke-failure.txt"), error.ToString());
+        Dispatcher.UIThread.Post(() => ((IClassicDesktopStyleApplicationLifetime)Application.Current!.ApplicationLifetime!).Shutdown(1));
+    }
+}

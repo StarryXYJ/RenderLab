@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <TargetFramework>net10.0</TargetFramework>
+    <PlatformTarget>x64</PlatformTarget>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
+    <NativeBuildDir Condition="'$(NativeBuildDir)' == ''">$(MSBuildProjectDirectory)/../../../out/build/windows-release</NativeBuildDir>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Avalonia.Desktop" Version="12.0.5" />
+    <PackageReference Include="Avalonia.Themes.Fluent" Version="12.0.5" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="$(NativeBuildDir)/renderlab_editor_bridge.dll;$(NativeBuildDir)/dxcompiler.dll;$(NativeBuildDir)/WinPixEventRuntime.dll" Link="%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="$(NativeBuildDir)/shaders/RenderLab/**/*" Link="shaders/RenderLab/%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+  <Target Name="CheckNativeBridge" BeforeTargets="Build">
+    <Error Condition="!Exists('$(NativeBuildDir)/renderlab_editor_bridge.dll')" Text="Build the renderlab_editor_bridge CMake target first, or set NativeBuildDir." />
+  </Target>
+</Project>

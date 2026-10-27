@@ -322,6 +322,37 @@ python -m unittest discover -s tools/benchmark -p "test_*.py"
 
 分析可接受多个完成 manifest 或单次 v2 report，支持独立重画图/新增统计。比较器拒绝截断、失败或配置/设备不匹配的结果；它不会把 Debug/Validation 测试标为正式性能基线。当前为逐帧 GPU 完成点等待的 headless 测量，不代表窗口 Present 的流水吞吐。样例源码按 src/samples/common、rhi、graph、material、scene 分类；一次性迁移脚本已清理，tools/benchmark 为正式维护工具。
 
+## Avalonia 嵌入原型
+
+额外需要 .NET SDK 10.0.401（managed/global.json 允许同 feature band 的更新补丁）和 PowerShell 7。Avalonia Desktop/Fluent 固定 12.0.5，包图由 `src/editor/managed/packages.lock.json` 锁定。原型只支持 Windows x64，属于 M7.1 的提前集成试验；设计、生命周期和未验证边界见 [宿主契约](../docs/editor-host.md)。
+
+在 x64 Developer PowerShell 中配置原生 Release 构建，然后运行脚本。脚本构建 Bridge、按锁文件恢复托管依赖，并将 DLL、运行依赖和 Shader 复制到托管输出目录。使用已有 Ninja/NMake 构建树时通过 `-NativeBuildDir` 指定目录，Configuration 应与原生构建树匹配。
+
+```powershell
+cmake --preset windows-release
+./tools/build-editor-host.ps1
+./out/editor-host/bin/Release/net10.0/RenderLab.Editor.Host.exe --backend dx12
+./out/editor-host/bin/Release/net10.0/RenderLab.Editor.Host.exe --backend vulkan
+```
+
+有完整 NuGet 缓存的离线机器可以增加 `-OfflinePackageCache C:/你的目录/.nuget/packages`；恢复仍使用 locked mode。直接运行 dotnet 时进入 `src/editor/managed` 以采用 SDK 锁定；需要自定义原生路径时使用 `-p:NativeBuildDir=绝对路径`。构建脚本跳过本原型没有使用的 Avalonia 商业产品构建遥测，不修改用户全局设置。
+
+默认加载源码仓库的 `sample/m4/RayTracing.rlproject`，初始为 Deferred。`--project` 可以指定其他项目，`--shaders` 可指定引擎 Shader 根目录；默认使用 exe 同目录的 shaders。周边控件提供管线、曝光、暂停、重置相机和重建视口；点击原生视口后使用 WASD/QE、方向键或右键拖动。此原型未打包示例项目，移出仓库运行时必须显式提供项目路径。
+
+双后端自检应分别运行。WinExe 在终端的启动/等待语义可能不同，需要可靠退出码时使用 `Start-Process -Wait -PassThru`；下面的隐藏启动用于无人值守自检，手动检查界面直接运行上面的命令。
+
+```powershell
+foreach ($backend in @('dx12', 'vulkan'))
+{
+    $hostTest = Start-Process ./out/editor-host/bin/Release/net10.0/RenderLab.Editor.Host.exe `
+        -ArgumentList "--backend $backend --smoke --output out/m7/smoke/$backend" `
+        -WindowStyle Hidden -Wait -PassThru
+    if ($hostTest.ExitCode -ne 0) { throw "Editor host smoke failed: $backend" }
+}
+```
+
+成功输出 `smoke.json` 和 `close-reports.json`，失败输出 `smoke-failure.txt` 或 `managed-error.txt`。日志/测试报告默认写入仓库的 `out/m7/<backend>`；可用 `--output` 设置独立目录，避免旧报告混淆。本次实测使用 `out/build/m5-release` 原生构建树，原始报告在 `out/m7/嵌入验证/dx12-manifest` 与 `out/m7/嵌入验证/vulkan`。
+
 ## 验证结果与边界
 
 M0 的设备初始化历史见 [M0 基础模块](../docs/m0-foundation.md)。M1 的 API、生命周期、分配预算和支持范围见 [最小 RHI](../docs/m1-rhi.md)，各阶段的实际验收配置与结论统一见 [阶段计划](../design/phaseplan.md)。
