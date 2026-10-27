@@ -5,7 +5,7 @@
 ## 当前状态
 
 - 当前实施阶段：M0–M5、R1、B1–B3 DONE。
-- 当前工作项：M5 静止反射收敛修复已完成；M6/M8 未启动。
+- 当前工作项：M5 运动反射稳定性修复已完成并验证，保留高光偏差/细节模糊边界；M6/M8 未启动。
 - 用户约定：每个子阶段验收完成即提交 Git，无阻塞时在当前授权范围内继续推进。
 
 | 阶段 | 目标 | 前置依赖 | 状态 |
@@ -163,7 +163,7 @@ R1 契约修订、B1 样例整理/Benchmark、B2 调查和 B3 资源复用已完
 
 验证：MSVC Debug/Release NMake 构建。RTX 5060 上 Debug 所选 16 项通过（Core/Graph；双后端 AS/TraceRays、Ray Query Scene、反射参考、surface、deferred、rhi、tools_window），追加 ShaderTable 范围/尺寸边界后 Graph 与双后端 AS/反射 5/5。Release 双后端 AS/TraceRays 与反射专项 4/4；上述 GPU 验收 validation errors=0。独立窗口各 54 帧、10 次重建、10 次挂起，实际渲染三种菜单选择。反射覆盖确定性 raw、静止累积、相机/场景/材质/尺寸/照明失效、ViewID 隔离、空场景与在途版本。Release/validation off 的 1280×720 短测各预热 64 帧、测量 240 帧，保留两后端三管线成本和参考图；不是长测或窗口 FPS 结论。
 
-边界：静态不透明三角形；反射仅内置 Lit/Unlit，Masked 显式拒绝，透明走 Forward 且不进入 AS。三张 RGBA32F GBuffer 与浮点历史占用较高；有限图集为 64×64/显式 LOD 0，最多 62 个图像/色彩空间/文件版本；无动态几何/压缩、any-hit/callable、对象运动矢量、反射虚拟位置重投影或自动光追 Shader 文件监视。自定义 Copper 需保留 Forward，原始资源不做隐式 PBR 映射。其他 GPU 未验证，WARP 探测未完成。Path Tracing 按 M8、Forward+ 按 M6 保留，未提前实施。
+边界：静态不透明三角形；反射仅内置 Lit/Unlit，Masked 显式拒绝，透明走 Forward 且不进入 AS。三张 RGBA32F GBuffer 与浮点历史占用较高；有限图集为 64×64/显式 LOD 0，最多 62 个图像/色彩空间/文件版本；无动态几何/压缩、any-hit/callable、对象运动矢量、通用曲面反射重投影或自动光追 Shader 文件监视。自定义 Copper 需保留 Forward，原始资源不做隐式 PBR 映射。其他 GPU 未验证，WARP 探测未完成。Path Tracing 按 M8、Forward+ 按 M6 保留，未提前实施。
 
 入口：[Deferred](../docs/deferred-pipeline.md)、[光追接口/生命周期/ShaderTable 重建](../docs/raytracing.md)、[样例与运行](../manual/build.md#ray-tracing-组合与-ray-query)、[GPU 成本/参考图](../docs/performance/m5-reflections.md)。独立验证入口分别为 `--pipeline deferred`、`--as-test`（Ray Query 与 TraceRays 分别记录）、`--scene-test --pipeline raytracing`；每个子阶段按验收提交，过程由 Git 历史追溯。
 
@@ -199,11 +199,23 @@ R1 契约修订、B1 样例整理/Benchmark、B2 调查和 B3 资源复用已完
 
 状态：DONE，日期：2026 年 10 月 27 日。
 
+本条记录最初的主表面时间滤波；后续运动闪烁修复替换了其显示链路，当前契约与结果见下条修复。
+
 结果：独立 Temporal Pass 在空间滤波后以当前深度和前帧矩阵重投影静态主表面，逐 bilinear tap 用世界位置/法线/粗糙度验证，配合随机命中距离/视角置信度、3×3 邻域 RGB 裁剪和最多 16 的像素历史长度。场景/材质/光照/投影/尺寸/ViewID 或大幅相机跳转失效；仅活动 View 持有两套三张 RGBA32F 引导，提交成功才发布。未滤波 1/N 与 Raw 保持独立，2048 spp 时淡出滤波；同场景相机运动继续采样序列，Raw 仍固定样本零。面板/CLI 可单独切回空间基线，来源帧计数不表示 GPU 接受像素数。
 
 验证：MSVC Debug/Release Sandbox/Player 构建，DXIL/SPIR-V 编译。RTX 5060 上 Debug 18 项通过（1+17）、Release AS/反射/持续 1080p 窗口 6/6；补齐公共头显式 Include 后追加双后端 GPU AS/Temporal 2/2。真实 GPU 合约覆盖 9×7 尺寸、常量、噪声、源重置、整数/亚像素重投影、出屏/深度/法线/粗糙度拒绝、历史裁剪、长度上限与镜面/高 spp/背景/Unlit。两场景强光慢/快移动三模式终点对 2048 spp 参考；RayTracing 样例比仅空间滤波 MSE 再降约 21.5%/27.0%（不是全序列闪烁或任意拖影保证）。双后端 2048 spp 时间开关 RGB 逐字节一致。720p/validation off 短测 Temporal GPU 均值 DX12/Vulkan 0.219/0.133ms；1440p Player 各 32 帧 native 高水位约 1142/1141 MiB，257×193 诊断和窗口重建通过，validation errors=0，关闭后 ledger 归零。window smoke 渲染前会先变为 640/641×360，持续高分辨率由独立固定尺寸窗口验证。
 
 边界：首版静态相机重投影；没有对象运动矢量、反射虚拟位置、时间矩/自适应采样或完整 SVGF/NRD。主表面重投影不完整表达反射运动，仍可能残余噪声/拖影与 HDR 裁剪偏差。六张持久 RGBA32F 增加 96 字节/像素，尚未压缩；其他 GPU/4K 未验证。入口：[契约](../docs/temporal-reflections.md)、[图像/误差/成本/复现](../docs/performance/m5-temporal.md)。
+
+### M5 修复：运动反射白点闪烁
+
+状态：DONE，日期：2026 年 10 月 27 日。
+
+结果：参考 AMD 反射降噪、SVGF 和 NRD 输入契约，实现独立单帧去调制/稳定命中引导、接收表面与局部平面反射双候选重投影、时间亮度矩与最多 32 的有效历史长度、三尺度方差引导重建及材质 Resolve。逐像素诊断可选；普通帧仅用 1×1 诊断目标。两张版本化中间纹理显式交替，不增加通用内存 Alias。原始采样与 progressive 1/N 保持独立，高 spp、镜面等精确旁路；拒绝损失真实高光的输入亮度截断。
+
+验证：MSVC Debug/Release Sandbox/Player 构建。RTX 5060 / NVIDIA 591.74 上 Debug Core 与双后端场景/窗口/RHI 等 17/17，追加 RenderGraph/双后端 AS 与新增 shader 合约 3/3；Release 双后端 AS/反射完整序列/持续 1080p 6/6。包含独立虚拟 UV、部分 bilinear 支持归一化、矩统计、去调制往返及旁路检查。强光慢/快/显露轨迹各移动 16 帧、停止 8 帧，逐姿态参考与终点参考：Release 使用 256/2048 spp，默认 Debug 使用 32/128 spp；修改前完整序列基线为 DX12 慢/快。当前慢/快平均 RGB MSE 从约 8.40/8.18 降到 5.48/7.04，残差差分 MSE 从 6.85/7.90 降到 .295/2.440；同时记录有符号亮度误差与逐帧图。资源复用前后 586 张 BMP 逐字节一致。两后端 257×193 高 spp 时间开关截图相同（测量帧 2048、额外截图 2049；shader 合约直接检查 2048）。1440p Player 各固定 32 帧 native 高水位约 1312.5/1311.5 MiB，低于默认 2048 MiB。上述 GPU/窗口 validation errors=0，关闭后 ledger 归零。720p/validation off 新重建六个 GPU Pass 合计约 .992/.862ms，短测非窗口 FPS。
+
+边界：固定静态样例的运动稳定性改善，不保证任意场景消除闪烁。快速运动末段/停止后部分帧误差仍高于旧版，负亮度偏差有所增加；细节模糊、局部高光损失、反射遮挡与曲面拖影仍有取舍。没有动态对象运动矢量、完整 NRD/SVGF、辐射缓存或自适应采样。其他 GPU/4K 未验证。入口：[接口](../docs/temporal-reflections.md)、[设计依据](design-review.md#运动反射白点闪烁设计复查)、[完整序列/图像/指标/成本/复现](../docs/performance/m5-reflection-stability.md)。
 
 ## M6 GPU Driven 与执行优化
 

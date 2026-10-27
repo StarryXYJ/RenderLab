@@ -119,7 +119,7 @@ for these native pipeline checks.
 Ray Tracing now requires all three enabled capabilities: AS, Ray Query and Ray Tracing Pipeline.
 The composition is GBuffer → Ray Query shadows → Deferred Lighting → reflection trace → stationary
 accumulation → optional spatial denoise → optional camera temporal denoise → reflection combine → Forward transparency → display. The Graph exposes separate
-`RayTracing.Reflection.Trace`, `.Accumulate`, optional `.Denoise` / `.Temporal` and `.Combine` timings and dependencies.
+`RayTracing.Reflection.Trace`, `.Accumulate`, optional reconstruction passes and `.Combine` timings and dependencies.
 
 Trace reads Depth, world Normal/Roughness, Albedo/Metallic, TLAS and indexed geometry/material
 buffers. One visible-normal GGX (VNDF) importance-sampled specular ray produces RGBA32F `RayTracing.RawRadiance`.
@@ -171,7 +171,8 @@ preflighted in the window host and restore the last working pipeline with a conc
 resetting the sample count. **Reflection (denoised)** / `--view reflection-denoised` always requests
 the filtered diagnostic, independently of the Final checkbox. Raw and History always stay unfiltered.
 
-The independent Compute pass reads accumulated radiance, primary depth/world normals/roughness,
+The standalone spatial baseline (temporal reconstruction disabled) reads accumulated radiance,
+primary depth/world normals/roughness,
 albedo/metallic and the current stochastic hit-distance guide. A bounded 5x5 joint bilateral kernel
 uses a projection-derived world-space footprint and a hard primary plane-distance guard, normal,
 roughness, material and soft hit-distance weights. It does not compare radiance brightness or clamp
@@ -207,22 +208,25 @@ See [measurements and limits](performance/m5-denoise.md) for hardware evidence.
 
 ### Camera temporal denoising
 
-The optional independent `RayTracing.Reflection.Temporal` pass reprojects static primary geometry
-with current depth and previous view-projection, rejects individual bilinear taps using stored world
-position/normal/roughness, and clips HDR history to a geometry-checked current neighborhood. It caps
-per-pixel history length at 16 and attenuates view-dependent reflections; stationary 2048 spp and sharp
-mirrors bypass it. Scene/material/light/projection/size changes and large camera cuts reset the source.
-There are no animated-geometry velocities or reflected virtual-surface motion vectors.
+The default display path prepares independent single-frame radiance with material demodulation and
+stabilized in-lobe distance, tests receiver and planar reflection-virtual-position reprojection,
+accumulates luminance moments and up to 32 frames, and reconstructs short histories with three
+variance-guided spatial scales. Resolve restores materials and fades to the independent progressive
+mean; stationary 2048 spp and sharp mirrors return that exact reference. No input radiance clamp is
+used. Scene/material/light/projection/size changes and large camera cuts reset the source. There are
+no animated-geometry velocities or general curved-mirror reprojection.
 
-`reflectionTemporal` / `--temporal-denoise on|off` (default on) adds temporal reuse to the spatial
-filter. The panel **Temporal reprojection (requires denoise)** checkbox allows the spatial-only
+`reflectionTemporal` / `--temporal-denoise on|off` (default on) selects this reconstruction path.
+The panel **Temporal reprojection (requires denoise)** checkbox allows the original spatial-only
 reference. Raw and History stay unfiltered; `reflectionHistory=false` disables temporal reuse. The
 report's temporal source frame count is CPU compatibility, not accepted pixels or reflection spp.
-Only the active ViewID retains temporal guides (three RGBA32F textures in each of two sets), in
+Only the active ViewID retains temporal guides (four RGBA32F textures in each of two sets), in
 addition to the existing unfiltered up-to-four-view histories. Switching ViewID makes temporal reuse
 cold. The Sobol sequence now continues across camera movement for the same scene, while the exact
 unfiltered mean still resets; Raw/reference mode remains sample zero. See [the temporal contract](temporal-reflections.md)
-for guide layout, clipping, cut thresholds, memory, limitations and [motion evidence](performance/m5-temporal.md).
+for guide layout, clipping, cut thresholds, memory, limitations and
+[current sequence evidence](performance/m5-reflection-stability.md). The
+[first temporal report](performance/m5-temporal.md) describes the superseded filter.
 
 ### Material and sampling boundary
 

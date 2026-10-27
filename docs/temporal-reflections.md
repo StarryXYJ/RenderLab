@@ -1,86 +1,118 @@
-# Reflection camera reprojection and temporal denoising
+# Reflection reconstruction and temporal reprojection
 
-This is a bounded first implementation for static opaque scenes and camera movement. It does not
-implement animated geometry motion vectors, virtual reflected-surface motion or a complete SVGF/NRD
-pipeline. All primary instance transform/material/light changes invalidate the temporal source.
+The default display denoiser supports static opaque scenes and camera movement. It uses a
+reflection-specific reconstruction path; it is an original bounded implementation informed by
+[AMD FidelityFX Reflection Denoiser](https://gpuopen.com/manuals/fidelityfx_sdk/techniques/denoiser/#amd-fidelityfx-reflection-denoiser),
+[SVGF](https://research.nvidia.com/labs/rtr/publication/schied2017spatiotemporal/) and
+[NRD input requirements](https://github.com/NVIDIA-RTX/NRD#noisy-inputs). No third-party denoiser
+code or SDK is integrated. Design decisions and the rejected input-clamping experiment are in
+[the design review](../design/design-review.md#运动反射白点闪烁设计复查).
 
 ## Composition and controls
 
-`Trace -> unfiltered progressive Accumulate -> spatial Denoise -> Temporal -> Combine`.
-The last two passes are display filters with separate history. They never write back to the
-unfiltered 1/N radiance history. Raw and History texture views remain unfiltered.
+Two branches consume the same traced sample:
 
-Final/HDR use `SceneRenderOptions::reflectionDenoise` as the filter master switch and
-`reflectionTemporal` for temporal reuse (both default true). The native panel exposes **RT denoise
-(Final / HDR)** and **Temporal reprojection (requires denoise)**. CLI `--denoise off` disables both;
-`--temporal-denoise off` retains the spatial filter. Denoised diagnostic view requests the spatial
-filter independently of the master checkbox and uses temporal filtering when its own switch is on.
-Raw and `reflectionHistory=false` fix sample zero and disable temporal reuse. Switching filters
-never resets an otherwise valid unfiltered stationary mean. Disabling temporal filtering makes its
-next enabled frame cold; disabled histories retain their bounded allocations for reuse.
+- Reference: `Trace -> progressive Accumulate`. This remains the unfiltered 1/N estimator.
+- Display: `Trace -> Prepare -> Temporal -> Filter1 -> Filter2 -> Filter3 -> Resolve -> Combine`.
 
-The report/panel's temporal source frame count measures consecutive compatible CPU source frames,
-not accepted GPU pixels, local history length or reflection spp. GPU rejection is per pixel. The
-ordinary RT spp counter continues to reset on camera movement, independently of this source count.
+The display branch never feeds the progressive mean, and its moments never count progressive means
+as independent samples. `reflectionDenoise` / `--denoise on|off` is the master display switch.
+`reflectionTemporal` / `--temporal-denoise on|off` selects the reconstruction path or the original
+standalone 5x5 spatial baseline. Both default on. The panel retains **RT denoise (Final / HDR)** and
+**Temporal reprojection (requires denoise)**. Denoised view displays the resolved result; Raw and
+History are always unfiltered. `reflectionHistory=false` fixes sample zero and disables temporal
+reuse. Toggles preserve a compatible progressive mean; disabling temporal reuse makes its next
+enabled frame cold.
 
-## Reprojection
+Prepare reconstructs primary world position from depth and removes a bounded material factor
+`max(.02, F0 * EnvironmentBrdf.x + EnvironmentBrdf.y)` using the same LUT as IBL. Geometry-checked
+3x3 filtering stabilizes the single-frame radiance. Positive in-lobe distances use a weighted
+harmonic mean; environment-only neighborhoods use 10000 and invalid neighborhoods use zero.
+Hit/miss differences do not gate radiance filtering. A receiver-reprojected distance is smoothed
+temporally when both guides are valid. This guide is an approximation, not secondary geometry.
 
-At each valid primary pixel the shader reconstructs world position from current reversed-Z depth
-and inverse view-projection, then projects it with the previous view-projection. Negative/zero w,
-outside clip depth or UV are rejected. No explicit velocity texture is required for this static
-geometry subset. Each of four bilinear taps is validated before interpolation:
+Resolve restores exactly the same material factor and blends towards the progressive reference
+with stationary spp. Its weight is `smoothstep(.05,.15,roughness) * saturate(1-spp/2048)`.
+At 2048 spp or above, and for sharp mirrors (roughness <= .05), it returns the exact progressive
+RGB. Background and Unlit also bypass reconstruction. The recursive history weight has no spp
+fade; fading happens only in display resolve. There is no hard input-radiance cap: an evaluated
+neighborhood cap suppressed real secondary highlights and was removed.
 
-- Previous radiance alpha is at least one; previous surface is valid.
-- World-space distance is at most two current pixel footprints; displacement along the current
-  normal is at most half a footprint. Footprint derives from the actual projection at this depth.
-- Normal dot product is at least .95 and roughness difference is at most .04.
-- Current/previous stochastic reflection hit distance supplies a soft confidence penalty. It is
-  not stable secondary geometry and cannot identify every reflected edge.
+## Reprojection and temporal statistics
 
-Support below .1 rejects reuse. Accepted history is clipped in HDR RGB to the intersection of a
-geometry-checked 3x3 current neighborhood's min/max and mean +/- two standard deviations. This
-limits stale highlights but can bias or desaturate them. It does not clamp the original trace or
-unfiltered history. View-direction disagreement attenuates reuse by
-`exp(-64*(1-dot(currentView,previousView))/max(.01,roughness^2))`.
+Temporal tests two candidate history locations:
 
-Radiance alpha stores a per-pixel effective history length capped at 16, used for a bounded
-`count/(count+1)` blend, multiplied by valid support, view confidence and the same spp fade as the
-spatial filter. Sharp mirrors (roughness <= .05), background and Unlit bypass temporal filtering.
-At 2048 stationary spp and above the output RGB is exactly the current unfiltered mean; the
-history-length channel is zero so a later movement does not revive an obsolete filtered sample.
+1. **Receiver:** current primary world position projected by previous view-projection.
+2. **Reflection:** for roughness < .4 and a finite positive stabilized distance, extend the current
+   camera ray through the receiver by that distance and project this virtual position. Intersect
+   the previous-camera ray to it with the receiver's tangent plane to estimate the previous
+   receiver position. This is a planar specular approximation, not a general curved-mirror solution.
 
-## Ownership and invalidation
+Each bilinear tap must have a valid history count, normal dot >= .95, roughness delta <= .04,
+world distance <= two current pixel footprints and normal-plane displacement <= .5 footprint.
+Clip depth, positive w and screen bounds are checked before sampling. The virtual candidate
+additionally needs >= .5 support, compatible stabilized distance and a neighborhood radiance
+score comparable to the receiver candidate. Rejected candidates fall back to a valid receiver
+candidate or a cold pixel. A random single-frame distance difference never directly attenuates
+receiver radiance history.
 
-One active ViewID has two completion-protected sets of three RGBA32F textures: filtered radiance /
-length, primary world position / stochastic hit distance, and normal / roughness. The unfiltered
-mean still has its independent up-to-four-view cache. Switching active ViewID starts temporal
-reuse cold. Graph declares every previous read and current write and exports the three outputs
-as Sampled. Previous matrices/signature/index/completion are published only after submission
-succeeds. Commands retain replaced/old-size textures while in flight.
+Accepted bilinear taps are normalized. Effective previous count is reduced for support < .5;
+history weight then equals `count/(count+1)` with a maximum stored count of 32. Diagnostics expose
+both the weight and count. History RGB is clipped to a geometry-checked 5x5 current mean +/- three
+standard deviations (upper bound adds .02 in demodulated units). This limits stale content but can
+still bias specular detail. It does not alter raw samples or the progressive mean.
 
-The temporal signature includes dimensions, projection, geometry/material/atlas versions,
-instance membership/transforms, environment and lighting/shadow settings. It excludes camera pose.
-A per-frame translation over one world unit or camera direction change over 30 degrees is treated
-as a cut. These conservative fixed scene-unit thresholds can reject valid reuse at other scales;
-smaller cuts still rely on per-pixel geometry checks and clipping.
+Temporal stores first and second luminance moments, an eight-frame fast luminance estimate and
+current spatial variance. New/short histories bootstrap variance from spatial statistics.
+Three 5x5 edge-aware filters use strides 1, 2 and 4, with geometry/normal/roughness rejection and a
+luminance kernel controlled by temporal variance and effective history length. Short histories
+receive wider reconstruction. Spatial outputs do not feed the radiance/moment history, avoiding
+recursive broadening. This is a bounded variance-guided filter, not a full REBLUR/RELAX/SVGF port.
 
-The raw running mean retains its exact pose signature and resets on movement. Its independent
-Sobol sample index continues across camera movement for a compatible scene instead of repeating
-sample zero. Raw/reference mode remains deterministic. The sample sequence has a 2^24 period;
-the unfiltered mean still freezes at its exact float count limit of 2^24. Scene/projection changes
-restart the sequence. A temporal history length is never used as the unfiltered sample count.
+## Ownership, invalidation and diagnostics
 
-## Memory and limitations
+One active ViewID owns two completion-protected sets of four RGBA32F targets:
 
-The six persistent RGBA32F targets add 96 bytes/pixel: 21.09 MiB at 640x360, 189.84 MiB at
-1920x1080 or 337.50 MiB at 2560x1440, excluding native alignment and old in-flight replacements.
-They are additional to GBuffer, unfiltered histories and spatial transients. Scene host allocation
-limits remain explicit; this first implementation does not compress guides or alias resources.
+| Target | RGB / first components | Alpha / last component |
+| --- | --- | --- |
+| Radiance | Accumulated demodulated radiance | Effective history length |
+| World | Primary world position | Stabilized in-lobe distance |
+| Normal | Primary world normal | Perceptual roughness |
+| Moments | First moment, second moment, fast luminance | Spatial luminance variance |
 
-Primary reprojection cannot reproduce reflected-object motion under a moving camera. Glossy
-reflections and disocclusion can still flicker or trail; low-spp clipping/spatial filtering introduces
-bias. There are no object velocities, temporal moment history, variance-guided spatial radius,
-adaptive sampling, demodulation or reflected virtual-position reprojection. World/normal checks
-and whole-scene invalidation protect the supported static subset, not arbitrary dynamic content.
-Other hardware and 4K support require separate validation. Measurements and images are recorded
-in [the temporal record](performance/m5-temporal.md).
+Graph declares every read/write and exports all history outputs as Sampled. Matrices, signature,
+index and completion are published only after successful submission. Replaced targets stay alive
+through in-flight command ownership. Switching active ViewID starts cold; progressive histories
+keep their separate up-to-four-view cache.
+
+Scene membership/transforms/material/atlas/environment/light changes, projection or size changes
+invalidate the source. Camera translation > one world unit per frame or direction change > 30
+degrees is a cut. These fixed thresholds are conservative and scene-scale dependent. There are
+no animated-object motion vectors. The sampling sequence continues across camera movement for
+compatible scenes while progressive spp still reset on exact pose changes. Raw remains sample
+zero; sequence/count retain the existing 2^24 limit.
+
+`SceneRenderOptions::reflectionDiagnostics` optionally copies per-pixel RGBA32F diagnostics into
+`SceneReadback::reflectionDiagnostics`: history weight, effective length, path (0 cold, 1 receiver,
+2 virtual), stabilized distance. Wait for submission completion before mapping; row pitch is
+`TextureRowPitch(width, Rgba32Float)`. The normal UI binds only a zeroed 1x1 diagnostic target and
+skips per-pixel diagnostic writes (`Options.z = 0`). It does not request readback. The panel's
+`reflectionTemporalFrames` remains CPU-compatible source frames, not accepted pixels or spp.
+
+## Memory and remaining limitations
+
+Eight persistent RGBA32F targets cost 128 bytes/pixel: 28.125 MiB at 640x360, 253.125 MiB at 1080p
+or 450 MiB at 1440p, excluding alignment and in-flight replacements. This is 32 bytes/pixel more
+than the prior temporal implementation. Prepare, three filter scales and resolve alternate two
+explicitly versioned full-resolution scratch images. Graph WAR/RAW/WAW dependencies protect each
+overwrite; no stage reads an old scratch version after reuse. Full-size diagnostics are optional.
+The original standalone spatial target is omitted when this path runs. No compression or general
+memory aliasing was added; explicit host allocation limits remain.
+
+Primary disocclusion checks cannot identify every reflected disocclusion. Curved/normal-mapped
+surfaces, rapid viewpoint changes and tiny secondary highlights can still blur, trail or shimmer.
+The input remains one specular sample per pixel, without adaptive sampling or a radiance cache.
+Finite-history filtering is biased and does not prove integrator convergence. Whole-sequence
+error, residual changes, signed brightness error and stop recovery must be inspected together;
+a low flicker score alone can reward a stale or dark image. Current measurements and hardware
+limits are recorded in [the stability report](performance/m5-reflection-stability.md).

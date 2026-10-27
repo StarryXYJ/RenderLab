@@ -105,7 +105,7 @@ void RayReflectionFeature::Build(rendergraph::Graph& graph, const RenderFrame& f
             context.Dispatch((camera.width + 7) / 8, (camera.height + 7) / 8);
         });
     auto filtered = accumulated;
-    if (input.denoisePipeline)
+    if (input.denoisePipeline && !input.temporalPipeline)
     {
         graph.CreateTexture("RayTracing.DenoisedRadiance",
                             {camera.width, camera.height, rhi::Format::Rgba32Float, true, false});
@@ -134,19 +134,62 @@ void RayReflectionFeature::Build(rendergraph::Graph& graph, const RenderFrame& f
     }
     if (input.temporalPipeline)
     {
+        const auto reconstruct = [&](size_t index, const std::string& name, TextureHandle source,
+                                     TextureHandle auxiliary)
+        {
+            // Two versioned scratch images suffice; old versions are dead before reuse.
+            const auto outputName = index == 1 || index == 3 ? "RayTracing.Reconstruction.B"
+                                                             : "RayTracing.Reconstruction.A";
+            if (index < 2)
+                graph.CreateTexture(outputName, {camera.width, camera.height,
+                                                 rhi::Format::Rgba32Float, true, false});
+            auto pass = graph.AddComputePass(name);
+            const auto signal = pass.ReadTexture(source);
+            const auto extra = pass.ReadTexture(auxiliary);
+            const auto normals = pass.ReadTexture("GBuffer.NormalRoughness");
+            const auto depths = pass.ReadTexture("CameraDepth");
+            const auto materials = pass.ReadTexture("GBuffer.AlbedoMetallic");
+            const auto brdf = pass.ReadTexture(input.reflectionTextures.at(2).texture);
+            const auto& uniform = input.temporalParameters;
+            const auto constants = pass.ReadBuffer(uniform.buffer, Use::Uniform, uniform.range);
+            const auto destination = pass.WriteTexture(outputName);
+            pass.Execute(
+                [=](ComputeContext& context)
+                {
+                    context.Bind(input.reconstructionPipelines[index]);
+                    context.BindTexture(0, signal);
+                    context.BindTexture(1, extra);
+                    context.BindTexture(2, destination);
+                    context.BindBuffer(3, constants, uniform.range.offset, uniform.range.size);
+                    context.BindTexture(4, normals);
+                    context.BindTexture(5, depths);
+                    context.BindTexture(6, materials);
+                    context.BindTexture(7, brdf);
+                    context.Dispatch((camera.width + 7) / 8, (camera.height + 7) / 8);
+                });
+            if (index == 4)
+                graph.SetTexture("RayTracing.DenoisedRadiance", destination);
+            return destination;
+        };
+        const auto prepared = reconstruct(0, "RayTracing.Reflection.Prepare", raw, guide);
+        graph.CreateTexture("RayTracing.Temporal.Diagnostics",
+                            {input.reflectionDiagnostics ? camera.width : 1,
+                             input.reflectionDiagnostics ? camera.height : 1,
+                             rhi::Format::Rgba32Float, true, false});
         auto temporal = graph.AddComputePass("RayTracing.Reflection.Temporal");
-        const auto source = temporal.ReadTexture(filtered);
+        const auto diagnostic = temporal.WriteTexture("RayTracing.Temporal.Diagnostics");
+        const auto source = temporal.ReadTexture(prepared);
         const auto normals = temporal.ReadTexture("GBuffer.NormalRoughness");
         const auto depths = temporal.ReadTexture("CameraDepth");
-        const auto hit = temporal.ReadTexture(guide);
-        std::array<TextureHandle, 3> previousTemporal{source, hit, normals};
+        const auto hit = temporal.ReadTexture(prepared);
+        std::array<TextureHandle, 4> previousTemporal{source, hit, normals, source};
         for (size_t i = 0; i < previousTemporal.size(); ++i)
             if (!input.previousTemporal[i].empty())
                 previousTemporal[i] = temporal.ReadTexture(input.previousTemporal[i]);
         const auto& uniform = input.temporalParameters;
         const auto temporalConstants =
             temporal.ReadBuffer(uniform.buffer, Use::Uniform, uniform.range);
-        std::array<TextureHandle, 3> outputs;
+        std::array<TextureHandle, 4> outputs;
         for (size_t i = 0; i < outputs.size(); ++i)
             outputs[i] = temporal.WriteTexture(input.temporalOutputs[i]);
         temporal.Execute(
@@ -164,9 +207,16 @@ void RayReflectionFeature::Build(rendergraph::Graph& graph, const RenderFrame& f
                 context.BindTexture(8, normals);
                 context.BindTexture(9, outputs[1]);
                 context.BindTexture(10, outputs[2]);
+                context.BindTexture(11, previousTemporal[3]);
+                context.BindTexture(12, outputs[3]);
+                context.BindTexture(13, diagnostic);
                 context.Dispatch((camera.width + 7) / 8, (camera.height + 7) / 8);
             });
         filtered = outputs[0];
+        for (size_t scale = 1; scale <= 3; ++scale)
+            filtered = reconstruct(scale, "RayTracing.Reflection.Filter" + std::to_string(scale),
+                                   filtered, outputs[3]);
+        filtered = reconstruct(4, "RayTracing.Reflection.Resolve", filtered, accumulated);
     }
     graph.CreateTexture("RayTracing.Composite",
                         {camera.width, camera.height, rhi::Format::Rgba32Float, true, true});

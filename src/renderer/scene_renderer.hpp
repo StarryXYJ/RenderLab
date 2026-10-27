@@ -40,10 +40,13 @@ struct SceneRenderOptions
     bool reflections = true;
     /// Progressive stationary accumulation. Disable for deterministic single-sample comparisons.
     bool reflectionHistory = true;
-    /// Spatial display filter; never feeds back into progressive history.
+    /// Display reconstruction; never feeds back into progressive history.
     bool reflectionDenoise = true;
     /// Camera reprojection for static geometry; independent from the unfiltered running mean.
     bool reflectionTemporal = true;
+    /// Read back per-pixel history weight, history length, reprojection path and stable hit
+    /// distance.
+    bool reflectionDiagnostics = false;
 };
 /// @brief Submission completion point and optional pixels; wait before mapping the readback buffer.
 struct SceneReadback
@@ -55,6 +58,8 @@ struct SceneReadback
     bool reflectionHistoryReset = false;
     /// Consecutive compatible source frames, not a count of accepted pixels or reflection spp.
     uint32_t reflectionTemporalFrames = 0;
+    /// RGBA32F diagnostics with TextureRowPitch(width, Rgba32Float); wait for completion.
+    std::shared_ptr<rhi::Buffer> reflectionDiagnostics;
     uint64_t compileNs = 0, prepareNs = 0, recordNs = 0;
 };
 /** @brief Project/scene to the existing Forward composition. Runtime outlives the renderer. */

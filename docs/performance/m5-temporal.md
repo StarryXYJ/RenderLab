@@ -1,5 +1,7 @@
 # M5：反射相机重投影与时间降噪
 
+此记录对应最初的主表面时间滤波。用户随后反馈运动高光仍明显闪烁，当前实现与完整序列结果见 [运动反射稳定性修复](m5-reflection-stability.md)。以下旧指标与资源布局保留为历史基线，不代表当前降噪质量已满足所有场景。
+
 日期：2026-10-27。静态不透明场景中增加相机重投影时间滤波，保留未滤波 1/N 历史与 Raw 参考。独立 Temporal Pass 在空间滤波后处理主表面历史，通过位置/法线/粗糙度逐 tap 验证、邻域 RGB 裁剪、视角衰减和最多 16 的像素历史长度限制拖影。完整契约、失效、内存和限制见 [接口](../temporal-reflections.md)。
 
 Final/HDR 默认叠加空间和时间滤波。面板 **RT denoise (Final / HDR)** 是主开关，**Temporal reprojection (requires denoise)** / `--temporal-denoise on|off` 可回到空间基线；`--denoise off` 关闭两者。Raw / History 始终未滤波，Denoised 显示滤波结果。Camera 移动仍重置未滤波 spp，独立时间来源可继续；Temporal source 计数不表示 GPU 接受像素数。

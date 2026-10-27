@@ -64,8 +64,11 @@ struct RenderFrame
         std::shared_ptr<rhi::ShaderTable> reflectionTable;
         std::shared_ptr<rhi::Pipeline> historyPipeline, combinePipeline, denoisePipeline;
         std::shared_ptr<rhi::Pipeline> temporalPipeline;
+        // Prepare, three variance-guided scales and material/display resolve.
+        std::array<std::shared_ptr<rhi::Pipeline>, 5> reconstructionPipelines;
+        bool reflectionDiagnostics = false;
         BufferBinding temporalParameters;
-        std::array<std::string, 3> previousTemporal, temporalOutputs;
+        std::array<std::string, 4> previousTemporal, temporalOutputs;
         BufferBinding reflectionParameters;
         std::vector<BufferBinding> surfaces;
         std::vector<TextureBinding> reflectionTextures;

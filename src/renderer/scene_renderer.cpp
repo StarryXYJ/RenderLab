@@ -85,6 +85,7 @@ struct SceneRenderer::Impl
     std::shared_ptr<rhi::ShaderTable> reflectionTable;
     std::shared_ptr<rhi::Pipeline> reflectionHistory, reflectionCombine, reflectionDenoise,
         reflectionTemporal;
+    std::array<std::shared_ptr<rhi::Pipeline>, 5> reflectionReconstruction;
     std::array<std::shared_ptr<rhi::Buffer>, 5> raySurfaceBuffers;
     std::array<std::vector<std::byte>, 5> raySurfaceBytes;
     uint64_t raySurfaceVersion = 0, rayAtlasVersion = 0;
@@ -105,7 +106,7 @@ struct SceneRenderer::Impl
     struct TemporalHistory
     {
         std::string signature, viewId;
-        std::array<std::array<std::shared_ptr<rhi::Texture>, 3>, 2> textures;
+        std::array<std::array<std::shared_ptr<rhi::Texture>, 4>, 2> textures;
         std::array<bool, 2> initialized{};
         math::Mat4 viewProjection{}, view{};
         math::Vec3 cameraPosition{};
@@ -379,14 +380,29 @@ struct SceneRenderer::Impl
         reflectionDenoise = runtime.CreatePipeline(desc);
         desc = {};
         std::vector<rhi::BindingDesc> temporalLayout;
-        for (uint32_t slot = 0; slot <= 10; ++slot)
+        for (uint32_t slot = 0; slot <= 13; ++slot)
             temporalLayout.push_back({slot, slot == 3 ? rhi::BindingKind::ConstantBuffer
-                                            : slot == 2 || slot == 9 || slot == 10
+                                            : slot == 2 || slot == 9 || slot == 10 || slot >= 12
                                                 ? rhi::BindingKind::StorageTexture
                                                 : rhi::BindingKind::SampledTexture});
         desc.layout = runtime.CreateLayout(std::move(temporalLayout));
         desc.compute = module("ReflectionTemporal.hlsl", rhi::ShaderStage::Compute, "Temporal");
         reflectionTemporal = runtime.CreatePipeline(desc);
+        constexpr std::array<const char*, 5> reconstructionEntries{"Prepare", "Filter1", "Filter2",
+                                                                   "Filter4", "Resolve"};
+        for (size_t i = 0; i < reflectionReconstruction.size(); ++i)
+        {
+            desc = {};
+            std::vector<rhi::BindingDesc> layout;
+            for (uint32_t slot = 0; slot <= 7; ++slot)
+                layout.push_back({slot, slot == 3   ? rhi::BindingKind::ConstantBuffer
+                                        : slot == 2 ? rhi::BindingKind::StorageTexture
+                                                    : rhi::BindingKind::SampledTexture});
+            desc.layout = runtime.CreateLayout(std::move(layout));
+            desc.compute = module("ReflectionReconstruct.hlsl", rhi::ShaderStage::Compute,
+                                  reconstructionEntries[i]);
+            reflectionReconstruction[i] = runtime.CreatePipeline(desc);
+        }
     }
     uint32_t RayTile(const std::string& reference, bool srgb)
     {
@@ -1079,7 +1095,7 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
                 outputs = {};
                 temporal.initialized[temporalOutput] = false;
             }
-            constexpr std::array<const char*, 3> kinds{"Radiance", "World", "Normal"};
+            constexpr std::array<const char*, 4> kinds{"Radiance", "World", "Normal", "Moments"};
             for (size_t i = 0; i < outputs.size(); ++i)
             {
                 const auto outputName = std::string("RayTracing.Temporal.") + kinds[i];
@@ -1108,7 +1124,9 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
             temporalParameters.previousCameraPosition = Vector(temporal.cameraPosition);
             temporalParameters.options = {
                 validTemporal ? 1.f : 0.f,
-                static_cast<float>(std::min(reflectionSamples + 1, MaxReflectionSamples)), 0, 16};
+                static_cast<float>(std::min(reflectionSamples + 1, MaxReflectionSamples)),
+                options.reflectionDiagnostics ? 1.f : 0.f, 32};
+            frame.rayTracing.reflectionDiagnostics = options.reflectionDiagnostics;
             const auto temporalSlice =
                 uploads.Write(std::as_bytes(std::span{&temporalParameters, size_t{1}}));
             frame.rayTracing.temporalParameters = {3,
@@ -1118,6 +1136,7 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
                                                    rendergraph::Use::Uniform,
                                                    {temporalSlice.offset, temporalSlice.size}};
             frame.rayTracing.temporalPipeline = self.reflectionTemporal;
+            frame.rayTracing.reconstructionPipelines = self.reflectionReconstruction;
         }
         frame.rayTracing.sampler = self.sampler;
         constexpr std::array<uint32_t, 5> strides{32, 4, 16, 16, 80};
@@ -1388,8 +1407,7 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
     else if (options.view == SceneView::ReflectionHistory)
         displaySource = frame.rayTracing.historyRadiance;
     else if (options.view == SceneView::ReflectionDenoised)
-        displaySource = frame.rayTracing.temporalPipeline ? "RayTracing.Temporal.Radiance"
-                                                          : "RayTracing.DenoisedRadiance";
+        displaySource = "RayTracing.DenoisedRadiance";
     if (options.view == SceneView::Shadow)
         displaySource = rayTracing ? "RayTracing.ShadowVisibility" : "MainLightShadow";
     else if (options.view == SceneView::Environment)
@@ -1455,6 +1473,21 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
             context.Draw(3);
         });
     SceneReadback result;
+    if (options.reflectionDiagnostics && frame.rayTracing.temporalPipeline)
+    {
+        const auto pitch = rhi::TextureRowPitch(target->desc.width, rhi::Format::Rgba32Float);
+        result.reflectionDiagnostics =
+            self.runtime.CreateBuffer({uint64_t(pitch) * target->desc.height, rhi::Memory::Readback,
+                                       "Reflection.Diagnostics"});
+        auto buffer = graph.ImportBuffer("Reflection.Diagnostics", result.reflectionDiagnostics,
+                                         {rhi::State::CopyDest, false});
+        auto pass = graph.AddCopyPass("Reflection.Diagnostics");
+        const auto diagnostics = pass.ReadTexture("RayTracing.Temporal.Diagnostics");
+        buffer = pass.WriteBuffer(buffer);
+        pass.Execute([buffer, diagnostics, pitch](rendergraph::CopyContext& context)
+                     { context.CopyTexture(buffer, diagnostics, pitch, false); });
+        graph.Export(buffer, rhi::State::HostRead);
+    }
     if (readback)
     {
         const auto pitch = rhi::TextureRowPitch(target->desc.width);

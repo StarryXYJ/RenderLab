@@ -33,7 +33,8 @@ struct ReflectionTemporalParameters
 {
     std::array<float, 16> inverseViewProjection{}, previousViewProjection{};
     std::array<float, 4> cameraPosition{}, previousCameraPosition{};
-    // Previous source valid, stationary spp, reserved, maximum per-pixel history length.
+    // Previous source valid, stationary spp, diagnostics enabled, maximum pixel history length.
+    // Temporal moments always consume independent per-frame (not progressive mean) signals.
     std::array<float, 4> options{};
     std::array<float, 20> reserved{};
 };
