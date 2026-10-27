@@ -1,0 +1,116 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-10-27",
+  "hardware": "NVIDIA RTX 5060 / driver 591.74",
+  "configuration": "MSVC Release; validation off; fixed camera; 640x360; low (128) shadow quality",
+  "referenceSamples": 8192,
+  "notes": [
+    "MSE compares final 8-bit sRGB RGB components to the corresponding corrected 8192-sample image.",
+    "The corrected reference includes the tested prefixes; this is a finite-sample image convergence comparison, not independent ground truth or an unbiasedness proof.",
+    "Original scene/exposure/materials are unchanged; stronger-light scenario changes only directional intensity 3 -> 12 in an ignored temporary project copy.",
+    "Before images were captured on DX12 from the original e669f8d binary/shaders before rebuilding. No Vulkan-before capture was made.",
+    "No radiance clamp or denoiser. Raw view intentionally stays at one sample."
+  ],
+  "results": [
+    {
+      "scenario": "reference",
+      "directionalIntensity": 3,
+      "backend": "dx12",
+      "version": "before",
+      "samples": 256,
+      "rgbMseSrgb8": 2.504583333333333,
+      "rgbMaeSrgb8": 0.3022077546296296,
+      "componentsAbsErrorGt32": 298
+    },
+    {
+      "scenario": "reference",
+      "directionalIntensity": 3,
+      "backend": "dx12",
+      "version": "before",
+      "samples": 2048,
+      "rgbMseSrgb8": 2.384881365740741,
+      "rgbMaeSrgb8": 0.301333912037037,
+      "componentsAbsErrorGt32": 271
+    },
+    {
+      "scenario": "reference",
+      "directionalIntensity": 3,
+      "backend": "dx12",
+      "version": "after",
+      "samples": 256,
+      "rgbMseSrgb8": 0.6785112847222222,
+      "rgbMaeSrgb8": 0.1144458912037037,
+      "componentsAbsErrorGt32": 0
+    },
+    {
+      "scenario": "reference",
+      "directionalIntensity": 3,
+      "backend": "dx12",
+      "version": "after",
+      "samples": 2048,
+      "rgbMseSrgb8": 0.03039496527777778,
+      "rgbMaeSrgb8": 0.02088396990740741,
+      "componentsAbsErrorGt32": 0
+    },
+    {
+      "scenario": "reference",
+      "directionalIntensity": 3,
+      "backend": "vulkan",
+      "version": "after",
+      "samples": 256,
+      "rgbMseSrgb8": 0.6784780092592593,
+      "rgbMaeSrgb8": 0.1144849537037037,
+      "componentsAbsErrorGt32": 0
+    },
+    {
+      "scenario": "reference",
+      "directionalIntensity": 3,
+      "backend": "vulkan",
+      "version": "after",
+      "samples": 2048,
+      "rgbMseSrgb8": 0.03048900462962963,
+      "rgbMaeSrgb8": 0.02099826388888889,
+      "componentsAbsErrorGt32": 0
+    },
+    {
+      "scenario": "strong light",
+      "directionalIntensity": 12,
+      "backend": "dx12",
+      "version": "after",
+      "samples": 256,
+      "rgbMseSrgb8": 1.5715219907407407,
+      "rgbMaeSrgb8": 0.13080729166666666,
+      "componentsAbsErrorGt32": 76
+    },
+    {
+      "scenario": "strong light",
+      "directionalIntensity": 12,
+      "backend": "dx12",
+      "version": "after",
+      "samples": 2048,
+      "rgbMseSrgb8": 0.0750535300925926,
+      "rgbMaeSrgb8": 0.02691695601851852,
+      "componentsAbsErrorGt32": 0
+    },
+    {
+      "scenario": "strong light",
+      "directionalIntensity": 12,
+      "backend": "vulkan",
+      "version": "after",
+      "samples": 256,
+      "rgbMseSrgb8": 1.5722164351851853,
+      "rgbMaeSrgb8": 0.1309548611111111,
+      "componentsAbsErrorGt32": 76
+    },
+    {
+      "scenario": "strong light",
+      "directionalIntensity": 12,
+      "backend": "vulkan",
+      "version": "after",
+      "samples": 2048,
+      "rgbMseSrgb8": 0.07523148148148148,
+      "rgbMaeSrgb8": 0.027054398148148147,
+      "componentsAbsErrorGt32": 0
+    }
+  ]
+}

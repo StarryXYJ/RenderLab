@@ -15,10 +15,24 @@ struct DxDescriptorRange;
 class DxRuntime final : public Runtime
 {
 public:
-    DxRuntime(ID3D12Device* device, ID3D12CommandQueue* queue, IDXGIFactory6* factory);
+    DxRuntime(ID3D12Device* device, ID3D12CommandQueue* queue, IDXGIFactory6* factory,
+              bool accelerationStructureEnabled, bool rayQueryEnabled,
+              bool rayTracingPipelineEnabled);
     ~DxRuntime() override;
     uint64_t Completed() const override;
     double TimestampPeriodNs() const override;
+    bool SupportsAccelerationStructures() const override
+    {
+        return accelerationStructureEnabled_;
+    }
+    bool SupportsRayQuery() const override
+    {
+        return rayQueryEnabled_;
+    }
+    bool SupportsRayTracingPipeline() const override
+    {
+        return rayTracingPipelineEnabled_;
+    }
     std::shared_ptr<Buffer> CreateBuffer(const BufferDesc& desc) override;
     std::shared_ptr<Texture> CreateTexture(const TextureDesc& desc) override;
     std::shared_ptr<TextureView> CreateView(std::shared_ptr<Texture> texture,
@@ -28,10 +42,16 @@ public:
     std::shared_ptr<BindingGroup> CreateGroup(std::shared_ptr<BindingLayout> layout,
                                               std::vector<Binding> bindings) override;
     std::unique_ptr<Swapchain> CreateSwapchain(platform::NativeSurface surface, uint32_t width,
-                                               uint32_t height) override;
+                                               uint32_t height, bool vsync = true) override;
 
 protected:
+    std::shared_ptr<ShaderTable> CreateShaderTableNative(std::shared_ptr<Pipeline>) override;
     std::shared_ptr<Pipeline> CreatePipelineNative(PipelineDesc desc) override;
+    AccelerationStructureSizes
+    QueryAccelerationStructureSizesNative(const AccelerationStructureDesc& desc) override;
+    std::shared_ptr<AccelerationStructure>
+    CreateAccelerationStructureNative(AccelerationStructureDesc desc,
+                                      AccelerationStructureSizes sizes) override;
     void WaitNative(uint64_t point) override;
     struct Work : Submission
     {
@@ -50,6 +70,8 @@ private:
     ID3D12CommandQueue* queue_;
     IDXGIFactory6* factory_;
     ComPtr<ID3D12Fence> fence_;
+    ComPtr<ID3D12Device5> rayDevice_;
+    bool accelerationStructureEnabled_, rayQueryEnabled_, rayTracingPipelineEnabled_;
     ComPtr<ID3D12CommandSignature> indirect_;
     HANDLE event_ = nullptr;
     uint64_t frequency_ = 0;
@@ -59,5 +81,6 @@ private:
 
 namespace renderlab::rhi
 {
-std::unique_ptr<Runtime> CreateDx12Runtime(ID3D12Device*, ID3D12CommandQueue*, IDXGIFactory6*);
+std::unique_ptr<Runtime> CreateDx12Runtime(ID3D12Device*, ID3D12CommandQueue*, IDXGIFactory6*, bool,
+                                           bool, bool);
 } // namespace renderlab::rhi

@@ -2,7 +2,7 @@
 
 RenderLab 是面向引擎与渲染开发的 C++20 渲染引擎项目，目标包括 DX12/Vulkan 双后端、统一 Shader 编译、Shader 驱动材质、声明式 Render Graph、光栅与光追，以及可选 GPU Driven。后期编辑器采用 C#，渲染运行时保持独立。
 
-当前提供 Windows 原生 Sandbox、C++20 构建、DX12/Vulkan 设备初始化和能力报告。M0 尚不绘制画面，实际实施进度以阶段计划为准。
+当前提供 Windows 原生 Sandbox/Player、DX12/Vulkan 双后端、Shader/材质与场景资源、Render Graph、Forward/Deferred，以及 Ray Query 阴影和 TraceRays 混合反射。样例调节面板可切换已实现的管线；实际实施进度以阶段计划为准。
 
 ## 项目入口
 
@@ -11,7 +11,8 @@ RenderLab 是面向引擎与渲染开发的 C++20 渲染引擎项目，目标包
 - [设计复查](design/design-review.md)：参考项目、设计风险与取舍。
 - [工程约定](manual/conventions.md)：编码、换行、格式、命名和文件管理。
 - [构建与运行](manual/build.md)：工具链、CMake 预设、测试和启动参数。
-- [M0 基础模块](docs/m0-foundation.md)：模块接口、能力报告与验收记录。
+- [场景与样例](sample/m4/README.md)：PBR、阴影和管线切换场景。
+- [Deferred](docs/deferred-pipeline.md)、[Ray Tracing](docs/raytracing.md)：GBuffer、加速结构、ShaderTable 与混合反射。
 - [协作约定](AGENTS.md)：后续修改与阶段维护要求。
 
 ## 仓库配置
@@ -46,7 +47,7 @@ chcp 65001
 cmake --preset windows-debug
 cmake --build --preset windows-debug --parallel 4
 ctest --preset windows-debug
-./out/build/windows-debug/renderlab_sandbox.exe --backend dx12
+./out/build/windows-debug/renderlab_sandbox.exe --backend dx12 --project sample/m4/RayTracing.rlproject --debug-panel
 ```
 
 完整双后端 GPU 验证及环境要求见构建说明，后续工作由阶段计划维护。

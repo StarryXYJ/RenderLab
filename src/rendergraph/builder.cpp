@@ -229,6 +229,16 @@ BufferHandle PassBuilder::ReadWriteBuffer(std::string_view name, BufferRange ran
 {
     return ReadWriteBuffer(graph_.GetBuffer(name), range);
 }
+BufferHandle PassBuilder::ReadWriteBuffer(BufferHandle handle, Use use, BufferRange range)
+{
+    Require(use == Use::Storage || use == Use::AccelerationStructureBuildWrite,
+            "ReadWriteBuffer requires storage or acceleration-structure build access");
+    return Write(handle, use, Coverage::Preserve, range);
+}
+BufferHandle PassBuilder::ReadWriteBuffer(std::string_view name, Use use, BufferRange range)
+{
+    return ReadWriteBuffer(graph_.GetBuffer(name), use, range);
+}
 PassHandle PassBuilder::Handle() const
 {
     return graph_.GetPass(pass_);
@@ -296,5 +306,9 @@ PassHandle ComputePassBuilder::Execute(std::function<void(ComputeContext&)> fn)
 PassHandle CopyPassBuilder::Execute(std::function<void(CopyContext&)> fn)
 {
     return Finish(std::move(fn));
+}
+PassHandle RayTracingPassBuilder::Execute(std::function<void(RayTracingContext&)> callback)
+{
+    return Finish(std::move(callback));
 }
 } // namespace renderlab::rendergraph

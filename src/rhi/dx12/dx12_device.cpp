@@ -11,6 +11,7 @@
 #include <cstddef>
 #include <format>
 #include <stdexcept>
+#include <unordered_map>
 
 namespace renderlab::rhi
 {
@@ -35,6 +36,14 @@ public:
         try
         {
             PollDiagnostics();
+            if (repeatedWarnings_)
+            {
+                logger_.Write(LogLevel::Warning,
+                              std::format("DX12: {} repeated validation warnings omitted; first "
+                                          "occurrence of each message ID was logged",
+                                          repeatedWarnings_));
+                repeatedWarnings_ = 0;
+            }
         }
         catch (...)
         {
@@ -202,8 +211,8 @@ public:
         report_.details.emplace_back("resourceBindingTier",
                                      std::to_string(base.ResourceBindingTier));
         report_.details.emplace_back("rayTracingTier", std::to_string(rayTracing.RaytracingTier));
-        report_.details.emplace_back("enabledWork", "one direct queue; M1 graphics, compute, copy "
-                                                    "and indirect draw; no ray tracing commands");
+        report_.details.emplace_back("enabledWork", "one direct queue; graphics, compute, copy, "
+                                                    "indirect draw; AS/Ray Query when supported");
         report_.details.emplace_back("descriptorIndexingScope",
                                      "resource arrays; shader and tier limits still apply");
 
@@ -211,6 +220,7 @@ public:
              {std::pair{"RGBA8_UNORM", DXGI_FORMAT_R8G8B8A8_UNORM},
               std::pair{"RGBA16_FLOAT", DXGI_FORMAT_R16G16B16A16_FLOAT},
               std::pair{"RGBA32_FLOAT", DXGI_FORMAT_R32G32B32A32_FLOAT},
+              std::pair{"R32_FLOAT", DXGI_FORMAT_R32_FLOAT},
               std::pair{"D32_FLOAT", DXGI_FORMAT_D32_FLOAT},
               std::pair{"D32_FLOAT_S8X24_UINT", DXGI_FORMAT_D32_FLOAT_S8X24_UINT}})
         {
@@ -242,7 +252,9 @@ public:
     }
     std::unique_ptr<Runtime> CreateRuntime() override
     {
-        return CreateDx12Runtime(device_.Get(), queue_.Get(), factory_.Get());
+        return CreateDx12Runtime(device_.Get(), queue_.Get(), factory_.Get(),
+                                 report_.supported.accelerationStructure,
+                                 report_.supported.rayQuery, report_.supported.rayTracingPipeline);
     }
     uint32_t GetValidationErrorCount() const override
     {
@@ -273,7 +285,20 @@ public:
             }
             else if (message->Severity == D3D12_MESSAGE_SEVERITY_WARNING)
             {
-                logger_.Write(LogLevel::Warning, message->pDescription);
+                // Bound bookkeeping and retain every error. Repeated warnings must not flush
+                // the log on every frame; the shutdown summary preserves their total count.
+                const auto id = static_cast<int>(message->ID);
+                if (warningCounts_.contains(id))
+                {
+                    ++warningCounts_[id];
+                    ++repeatedWarnings_;
+                }
+                else
+                {
+                    if (warningCounts_.size() < 128)
+                        warningCounts_.emplace(id, 1);
+                    logger_.Write(LogLevel::Warning, message->pDescription);
+                }
             }
         }
         infoQueue_->ClearStoredMessages();
@@ -289,6 +314,8 @@ private:
     Logger& logger_;
     DeviceReport report_;
     uint32_t validationErrors_ = 0;
+    std::unordered_map<int, uint64_t> warningCounts_;
+    uint64_t repeatedWarnings_ = 0;
     ComPtr<IDXGIFactory6> factory_;
     ComPtr<IDXGIAdapter1> adapter_;
     ComPtr<ID3D12Device> device_;

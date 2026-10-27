@@ -28,6 +28,8 @@ VkFormat NativeFormat(Format format)
         return VK_FORMAT_D32_SFLOAT;
     case Format::Rgba32Float:
         return VK_FORMAT_R32G32B32A32_SFLOAT;
+    case Format::R32Float:
+        return VK_FORMAT_R32_SFLOAT;
     }
     throw std::invalid_argument("Unknown format");
 }
@@ -58,21 +60,22 @@ Access NativeState(State state)
     case State::Indirect:
         return {VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT, VK_ACCESS_2_INDIRECT_COMMAND_READ_BIT,
                 VK_IMAGE_LAYOUT_GENERAL};
+    case State::ShaderTableRead:
+        return {VK_PIPELINE_STAGE_2_RAY_TRACING_SHADER_BIT_KHR, VK_ACCESS_2_SHADER_READ_BIT,
+                VK_IMAGE_LAYOUT_GENERAL};
     case State::Storage:
-        return {VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+        return {VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
                 VK_ACCESS_2_SHADER_STORAGE_READ_BIT | VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
                 VK_IMAGE_LAYOUT_GENERAL};
     case State::UniformRead:
-        return {VK_PIPELINE_STAGE_2_VERTEX_SHADER_BIT | VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT |
-                    VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
-                VK_ACCESS_2_UNIFORM_READ_BIT, VK_IMAGE_LAYOUT_GENERAL};
+        return {VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT, VK_ACCESS_2_UNIFORM_READ_BIT,
+                VK_IMAGE_LAYOUT_GENERAL};
     case State::ShaderRead:
-        return {VK_PIPELINE_STAGE_2_VERTEX_SHADER_BIT | VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT |
-                    VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
-                VK_ACCESS_2_SHADER_STORAGE_READ_BIT, VK_IMAGE_LAYOUT_GENERAL};
+        return {VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT, VK_ACCESS_2_SHADER_STORAGE_READ_BIT,
+                VK_IMAGE_LAYOUT_GENERAL};
     case State::Sampled:
-        return {VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT | VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
-                VK_ACCESS_2_SHADER_SAMPLED_READ_BIT, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL};
+        return {VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT, VK_ACCESS_2_SHADER_SAMPLED_READ_BIT,
+                VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL};
     case State::ColorAttachment:
         return {VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
                 VK_ACCESS_2_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
@@ -83,6 +86,17 @@ Access NativeState(State state)
                 VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_READ_BIT |
                     VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
                 VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL};
+    case State::AccelerationStructureBuildInput:
+        return {VK_PIPELINE_STAGE_2_ACCELERATION_STRUCTURE_BUILD_BIT_KHR,
+                VK_ACCESS_2_SHADER_READ_BIT, VK_IMAGE_LAYOUT_GENERAL};
+    case State::AccelerationStructureBuildWrite:
+        return {VK_PIPELINE_STAGE_2_ACCELERATION_STRUCTURE_BUILD_BIT_KHR,
+                VK_ACCESS_2_ACCELERATION_STRUCTURE_READ_BIT_KHR |
+                    VK_ACCESS_2_ACCELERATION_STRUCTURE_WRITE_BIT_KHR,
+                VK_IMAGE_LAYOUT_GENERAL};
+    case State::AccelerationStructureRead:
+        return {VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
+                VK_ACCESS_2_ACCELERATION_STRUCTURE_READ_BIT_KHR, VK_IMAGE_LAYOUT_GENERAL};
     }
     throw std::invalid_argument("Unknown state");
 }
@@ -101,6 +115,8 @@ VkDescriptorType DescriptorType(BindingKind kind)
     case BindingKind::ReadOnlyBuffer:
     case BindingKind::StorageBuffer:
         return VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+    case BindingKind::AccelerationStructure:
+        return VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR;
     }
     throw std::invalid_argument("Unknown binding kind");
 }

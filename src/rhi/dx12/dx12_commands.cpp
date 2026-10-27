@@ -42,21 +42,40 @@ std::shared_ptr<Runtime::Submission> DxRuntime::Execute(const CommandList& comma
     uint32_t vertexStride = 0;
     ID3D12DescriptorHeap* resourceHeap = nullptr;
     ID3D12DescriptorHeap* samplerHeap = nullptr;
-    const auto barrier = [&](ID3D12Resource* resource, State before, State after)
+    const auto barrier = [&](ID3D12Resource* resource, State before, State after,
+                             bool accelerationStructureStorage = false)
     {
+        const auto nativeState = [&](State state)
+        {
+            if (accelerationStructureStorage)
+                return D3D12_RESOURCE_STATE_RAYTRACING_ACCELERATION_STRUCTURE;
+            return NativeState(state);
+        };
         D3D12_RESOURCE_BARRIER b{};
-        if (before == State::Storage && after == State::Storage)
+        if ((before == State::Storage || before == State::AccelerationStructureBuildWrite) &&
+            after == before)
         {
             b.Type = D3D12_RESOURCE_BARRIER_TYPE_UAV;
             b.UAV.pResource = resource;
         }
         else
         {
-            if (NativeState(before) == NativeState(after))
+            if (nativeState(before) == nativeState(after))
+            {
+                if (accelerationStructureStorage &&
+                    before == State::AccelerationStructureBuildWrite &&
+                    (after == State::AccelerationStructureBuildWrite ||
+                     after == State::AccelerationStructureRead))
+                {
+                    b.Type = D3D12_RESOURCE_BARRIER_TYPE_UAV;
+                    b.UAV.pResource = resource;
+                    list->ResourceBarrier(1, &b);
+                }
                 return;
+            }
             b.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
-            b.Transition = {resource, D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES, NativeState(before),
-                            NativeState(after)};
+            b.Transition = {resource, D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES, nativeState(before),
+                            nativeState(after)};
         }
         list->ResourceBarrier(1, &b);
     };
@@ -68,7 +87,8 @@ std::shared_ptr<Runtime::Submission> DxRuntime::Execute(const CommandList& comma
                 if constexpr (std::is_same_v<T, BufferBarrier>)
                 {
                     if (c.buffer->desc.memory == Memory::Device)
-                        barrier(As<DxBuffer>(c.buffer).native.Get(), c.before, c.after);
+                        barrier(As<DxBuffer>(c.buffer).native.Get(), c.before, c.after,
+                                c.buffer->desc.accelerationStructureStorage);
                 }
                 else if constexpr (std::is_same_v<T, TextureBarrier>)
                     barrier(As<DxTexture>(c.texture).native.Get(), c.before, c.after);
@@ -133,9 +153,17 @@ std::shared_ptr<Runtime::Submission> DxRuntime::Execute(const CommandList& comma
                 }
                 else if constexpr (std::is_same_v<T, SetPipeline>)
                 {
-                    compute = bool(c.pipeline->desc.compute);
+                    compute = bool(c.pipeline->desc.compute || c.pipeline->desc.rayGeneration);
                     vertexStride = c.pipeline->desc.vertexStride;
-                    list->SetPipelineState(As<DxPipeline>(c.pipeline).native.Get());
+                    if (c.pipeline->desc.rayGeneration)
+                    {
+                        ComPtr<ID3D12GraphicsCommandList4> rayList;
+                        Check(list->QueryInterface(IID_PPV_ARGS(&rayList)),
+                              "RayTracing command list");
+                        rayList->SetPipelineState1(As<DxPipeline>(c.pipeline).rayState.Get());
+                    }
+                    else
+                        list->SetPipelineState(As<DxPipeline>(c.pipeline).native.Get());
                     auto* root = As<DxLayout>(c.pipeline->desc.layout).native.Get();
                     if (compute)
                         list->SetComputeRootSignature(root);
@@ -198,6 +226,94 @@ std::shared_ptr<Runtime::Submission> DxRuntime::Execute(const CommandList& comma
                                           0);
                 else if constexpr (std::is_same_v<T, Dispatch>)
                     list->Dispatch(c.x, c.y, c.z);
+                else if constexpr (std::is_same_v<T, TraceRays>)
+                {
+                    ComPtr<ID3D12GraphicsCommandList4> rayList;
+                    Check(list->QueryInterface(IID_PPV_ARGS(&rayList)), "TraceRays command list");
+                    auto address = As<DxBuffer>(c.table->buffer).native->GetGPUVirtualAddress() +
+                                   c.table->offset;
+                    const auto stride = c.table->stride;
+                    D3D12_DISPATCH_RAYS_DESC desc{};
+                    desc.RayGenerationShaderRecord = {address, stride};
+                    desc.MissShaderTable = {address + stride, stride, stride};
+                    desc.HitGroupTable = {address + stride * 2, stride, stride};
+                    desc.Width = c.width;
+                    desc.Height = c.height;
+                    desc.Depth = c.depth;
+                    rayList->DispatchRays(&desc);
+                }
+                else if constexpr (std::is_same_v<T, BuildAccelerationStructure>)
+                {
+                    ComPtr<ID3D12GraphicsCommandList4> rayList;
+                    Check(list->QueryInterface(IID_PPV_ARGS(&rayList)),
+                          "Query ID3D12GraphicsCommandList4");
+                    const auto& accelerationStructure = *c.accelerationStructure;
+                    std::vector<D3D12_RAYTRACING_GEOMETRY_DESC> geometries;
+                    if (!accelerationStructure.desc.topLevel)
+                    {
+                        geometries.resize(accelerationStructure.desc.geometries.size());
+                        for (size_t i = 0; i < geometries.size(); ++i)
+                        {
+                            const auto& source = accelerationStructure.desc.geometries[i];
+                            auto& geometry = geometries[i];
+                            geometry.Type = D3D12_RAYTRACING_GEOMETRY_TYPE_TRIANGLES;
+                            geometry.Flags = D3D12_RAYTRACING_GEOMETRY_FLAG_OPAQUE;
+                            geometry.Triangles.VertexFormat = DXGI_FORMAT_R32G32B32_FLOAT;
+                            geometry.Triangles.VertexCount = source.vertexCount;
+                            geometry.Triangles.VertexBuffer = {
+                                As<DxBuffer>(source.vertices).native->GetGPUVirtualAddress() +
+                                    source.vertexOffset,
+                                source.vertexStride};
+                            if (source.indices)
+                            {
+                                geometry.Triangles.IndexFormat = DXGI_FORMAT_R32_UINT;
+                                geometry.Triangles.IndexCount = source.indexCount;
+                                geometry.Triangles.IndexBuffer =
+                                    As<DxBuffer>(source.indices).native->GetGPUVirtualAddress() +
+                                    source.indexOffset;
+                            }
+                            else
+                            {
+                                geometry.Triangles.IndexFormat = DXGI_FORMAT_UNKNOWN;
+                                geometry.Triangles.IndexCount = 0;
+                                geometry.Triangles.IndexBuffer = 0;
+                            }
+                        }
+                    }
+                    D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC build{};
+                    build.Inputs.Type =
+                        accelerationStructure.desc.topLevel
+                            ? D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL
+                            : D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL;
+                    build.Inputs.Flags =
+                        D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PREFER_FAST_TRACE;
+                    if (accelerationStructure.desc.allowUpdate)
+                        build.Inputs.Flags |=
+                            D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_ALLOW_UPDATE;
+                    if (c.update)
+                    {
+                        build.Inputs.Flags |=
+                            D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PERFORM_UPDATE;
+                        build.SourceAccelerationStructureData =
+                            As<DxBuffer>(accelerationStructure.storage)
+                                .native->GetGPUVirtualAddress();
+                    }
+                    build.Inputs.NumDescs =
+                        accelerationStructure.desc.topLevel
+                            ? static_cast<UINT>(accelerationStructure.desc.instances.size())
+                            : static_cast<UINT>(geometries.size());
+                    build.Inputs.DescsLayout = D3D12_ELEMENTS_LAYOUT_ARRAY;
+                    build.Inputs.pGeometryDescs = geometries.empty() ? nullptr : geometries.data();
+                    if (accelerationStructure.desc.topLevel)
+                        build.Inputs.InstanceDescs =
+                            As<DxBuffer>(accelerationStructure.instanceData)
+                                .native->GetGPUVirtualAddress();
+                    build.DestAccelerationStructureData =
+                        As<DxBuffer>(accelerationStructure.storage).native->GetGPUVirtualAddress();
+                    build.ScratchAccelerationStructureData =
+                        As<DxBuffer>(c.scratch).native->GetGPUVirtualAddress();
+                    rayList->BuildRaytracingAccelerationStructure(&build, 0, nullptr);
+                }
                 else if constexpr (std::is_same_v<T, Marker>)
                 {
                     if (c.begin)

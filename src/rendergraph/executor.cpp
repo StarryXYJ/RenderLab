@@ -108,6 +108,11 @@ void Graph::Record()
                 RasterContext context(*this, g.active, *g.commands);
                 std::get<std::function<void(RasterContext&)>>(pass.callback)(context);
             }
+            else if (pass.kind == PassKind::RayTracing)
+            {
+                RayTracingContext context(*this, g.active, *g.commands);
+                std::get<std::function<void(RayTracingContext&)>>(pass.callback)(context);
+            }
             else if (pass.kind == PassKind::Compute)
             {
                 ComputeContext context(*this, g.active, *g.commands);

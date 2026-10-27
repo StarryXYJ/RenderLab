@@ -29,6 +29,8 @@ DXGI_FORMAT NativeFormat(Format format)
         return DXGI_FORMAT_D32_FLOAT;
     case Format::Rgba32Float:
         return DXGI_FORMAT_R32G32B32A32_FLOAT;
+    case Format::R32Float:
+        return DXGI_FORMAT_R32_FLOAT;
     }
     throw std::invalid_argument("Unknown format");
 }
@@ -56,9 +58,17 @@ D3D12_RESOURCE_STATES NativeState(State state)
     case State::Storage:
         return D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
     case State::Sampled:
+    case State::ShaderTableRead:
+        return D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
     case State::ShaderRead:
         return D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE |
                D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
+    case State::AccelerationStructureBuildInput:
+        return D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
+    case State::AccelerationStructureBuildWrite:
+        return D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
+    case State::AccelerationStructureRead:
+        return D3D12_RESOURCE_STATE_RAYTRACING_ACCELERATION_STRUCTURE;
     case State::ColorAttachment:
         return D3D12_RESOURCE_STATE_RENDER_TARGET;
     case State::DepthWrite:

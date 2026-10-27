@@ -1,7 +1,8 @@
 #include "renderer/pipeline.hpp"
 
-#include "renderer/forward.hpp"
 #include "renderer/deferred.hpp"
+#include "renderer/forward.hpp"
+#include "renderer/raytracing.hpp"
 #include "rendergraph/graph.hpp"
 
 #include <algorithm>
@@ -127,7 +128,7 @@ RenderPipeline RenderPipelineBuilder::Create() const
 RenderPipelineBuilder CreatePipeline(PipelineType type, PipelineOptions options)
 {
     if (type != PipelineType::Custom && type != PipelineType::Forward &&
-        type != PipelineType::Deferred)
+        type != PipelineType::Deferred && type != PipelineType::RayTracing)
         throw std::invalid_argument("Unknown or unimplemented pipeline type");
     if (type == PipelineType::Custom &&
         (options.copyOpaqueColor || options.copyAfterTransparentColor))
@@ -148,11 +149,18 @@ RenderPipelineBuilder CreatePipeline(PipelineType type, PipelineOptions options)
                                 std::vector<std::string>{"Forward.Transparent"}),
                             7);
     }
-    else if (type == PipelineType::Deferred)
+    else if (type == PipelineType::Deferred || type == PipelineType::RayTracing)
     {
         pipeline.Append(std::make_shared<GBufferFeature>(), 1);
+        if (type == PipelineType::RayTracing)
+            pipeline.Append(std::make_shared<RayQueryShadowFeature>(), 2);
         pipeline.Append(std::make_shared<DeferredLightingFeature>(), 3);
-        pipeline.Append(std::make_shared<TransparentFeature>("Deferred.Lighting"), 5);
+        if (type == PipelineType::RayTracing)
+            pipeline.Append(std::make_shared<RayReflectionFeature>(), 4);
+        pipeline.Append(std::make_shared<TransparentFeature>(type == PipelineType::RayTracing
+                                                                 ? "RayTracing.Reflections"
+                                                                 : "Deferred.Lighting"),
+                        5);
     }
     return pipeline;
 }

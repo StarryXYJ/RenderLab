@@ -1,6 +1,9 @@
 #include "renderer/scene_renderer.hpp"
 #include "material/render_state.hpp"
+#include "renderer/acceleration_scene.hpp"
 #include "renderer/builtin_shaders.hpp"
+#include "renderer/ray_surface.hpp"
+#include "renderer/raytracing.hpp"
 
 #include "assets/io.hpp"
 #include "assets/json_io.hpp"
@@ -15,11 +18,15 @@
 #include "rhi/upload.hpp"
 #include "scene_parameters.hpp"
 #include "shader/compiler.hpp"
+#include "shader/dxc_compiler.hpp"
 
 #include <algorithm>
 #include <array>
+#include <chrono>
+#include <cmath>
 #include <cstring>
 #include <map>
+#include <optional>
 #include <stdexcept>
 #include <utility>
 
@@ -35,6 +42,7 @@ std::array<float, 4> Vector(math::Vec3 value, float w = 0)
 struct SceneRenderer::Impl
 {
     rhi::Runtime& runtime;
+    shader::Target shaderTarget;
     project::Project project;
     assets::Database database;
     scene::Scene document;
@@ -73,6 +81,89 @@ struct SceneRenderer::Impl
     material::Runtime materials;
     rendergraph::Pool pool;
     rhi::UploadPool uploadPool;
+    AccelerationScene accelerationScene;
+    std::shared_ptr<rhi::Pipeline> rayQueryShadow;
+    std::shared_ptr<rhi::ShaderTable> reflectionTable, reflectionTableWithoutGuide;
+    std::shared_ptr<rhi::Pipeline> reflectionHistory, reflectionStatistics, reflectionCombine,
+        reflectionDenoise, reflectionTemporal;
+    std::shared_ptr<rhi::Buffer> emptyReflectionStatistics;
+    std::array<std::shared_ptr<rhi::Pipeline>, 5> reflectionReconstruction;
+    std::array<std::shared_ptr<rhi::Buffer>, 5> raySurfaceBuffers;
+    std::array<std::vector<std::byte>, 5> raySurfaceBytes;
+    std::vector<std::string> packedRayMeshes;
+    RaySceneStatistics rayStatistics;
+    uint64_t raySurfaceVersion = 0, rayAtlasVersion = 0;
+    EnvironmentImage rayAtlas;
+    std::shared_ptr<rhi::TextureView> rayAtlasView;
+    std::map<std::string, uint32_t> rayTiles;
+    bool rayAtlasDirty = false;
+    struct ReflectionHistory
+    {
+        std::string signature, sequenceSignature;
+        std::array<std::shared_ptr<rhi::Texture>, 2> radiance;
+        std::array<std::shared_ptr<rhi::Buffer>, 2> statistics;
+        std::array<bool, 2> initialized{};
+        // Equal pixel counts can retain the buffer while texture dimensions change.
+        std::array<bool, 2> statisticsInitialized{};
+        uint32_t index = 0;
+        uint32_t samples = 0, sequence = 0;
+        uint64_t completion = 0, lastUse = 0;
+        uint64_t SlotBytes(size_t slot) const
+        {
+            uint64_t bytes = statistics[slot] ? statistics[slot]->desc.size : 0;
+            if (radiance[slot])
+                bytes += uint64_t(radiance[slot]->desc.width) * radiance[slot]->desc.height * 16;
+            return bytes;
+        }
+        uint64_t Bytes() const
+        {
+            return SlotBytes(0) + SlotBytes(1);
+        }
+    };
+    std::map<std::string, ReflectionHistory> reflectionViews;
+    uint64_t reflectionUseSequence = 0;
+    ReflectionHistory& AcquireReflectionHistory(const std::string& id, uint32_t width,
+                                                uint32_t height)
+    {
+        const uint64_t desired = uint64_t(width) * height * 48;
+        const auto found = reflectionViews.find(id);
+        const auto activeBytes =
+            found == reflectionViews.end()
+                ? desired
+                : std::max(desired, desired / 2 + found->second.SlotBytes(found->second.index));
+        const auto budget = runtime.GetMemoryStats().budget / 8;
+        for (;;)
+        {
+            uint64_t bytes = activeBytes;
+            auto oldest = reflectionViews.end();
+            for (auto it = reflectionViews.begin(); it != reflectionViews.end(); ++it)
+                if (it->first != id)
+                {
+                    bytes += it->second.Bytes();
+                    if (oldest == reflectionViews.end() ||
+                        it->second.lastUse < oldest->second.lastUse)
+                        oldest = it;
+                }
+            const auto count = reflectionViews.size() + (found == reflectionViews.end() ? 1 : 0);
+            if (oldest == reflectionViews.end() || (count <= 4 && bytes <= budget))
+                break;
+            reflectionViews.erase(oldest);
+            ++rayStatistics.historyEvictions;
+        }
+        // The active view is allowed to exceed the cache target; the native budget still applies.
+        return reflectionViews[id];
+    }
+    struct TemporalHistory
+    {
+        std::string signature, viewId;
+        std::array<std::array<std::shared_ptr<rhi::Texture>, 4>, 2> textures;
+        std::array<bool, 2> initialized{};
+        math::Mat4 viewProjection{}, view{};
+        math::Vec3 cameraPosition{};
+        uint32_t index = 0, frames = 0;
+        uint64_t completion = 0;
+        bool active = false;
+    } temporalHistory;
     RenderPipeline forwardPipeline =
         CreatePipeline(PipelineType::Forward)
             .AddFeature(std::make_shared<ShadowFeature>(), RenderStage::BeforeOpaque)
@@ -81,15 +172,20 @@ struct SceneRenderer::Impl
         CreatePipeline(PipelineType::Deferred)
             .AddFeature(std::make_shared<ShadowFeature>(), RenderStage::BeforeOpaque)
             .Create();
+    RenderPipeline rayTracingPipeline =
+        CreatePipeline(PipelineType::RayTracing)
+            .AddFeature(std::make_shared<ShadowFeature>(), RenderStage::BeforeOpaque)
+            .Create();
     math::Mat4 shadowMatrix = math::Mat4::Identity();
     scene::Extractor extractor;
     scene::Snapshot snapshot;
     Impl(rhi::Runtime& r, shader::Target target, const std::filesystem::path& manifest,
          const std::filesystem::path& engine)
-        : runtime(r), project(project::Project::Open(manifest, engine)), database(project),
-          document(scene::Scene::Load(database.Get(project.startScene).path)), materials(r, target),
-          // Two 2048 shadow color/depth pairs plus 720p HDR/depth fit below the RHI budget.
-          pool(r, 64, 224ull * 1024 * 1024), uploadPool(r)
+        : runtime(r), shaderTarget(target), project(project::Project::Open(manifest, engine)),
+          database(project), document(scene::Scene::Load(database.Get(project.startScene).path)),
+          materials(r, target),
+          // The host owns the native limit. Leave room for assets, AS, histories and uploads.
+          pool(r, 64, r.GetMemoryStats().budget * 3 / 4), uploadPool(r), accelerationScene(r, pool)
     {
         for (const auto& file : std::filesystem::recursive_directory_iterator(project.engine))
         {
@@ -144,11 +240,13 @@ struct SceneRenderer::Impl
         EnsureModels();
     }
     std::shared_ptr<rhi::Buffer> Upload(std::span<const std::byte> bytes, const std::string& name,
-                                        rhi::State state)
+                                        rhi::State state, bool accelerationInput = false)
     {
         auto staging = runtime.CreateBuffer({bytes.size(), rhi::Memory::Upload, name + ".Upload"});
         std::memcpy(staging->Map().data(), bytes.data(), bytes.size());
-        auto destination = runtime.CreateBuffer({bytes.size(), rhi::Memory::Device, name});
+        const bool addressable = accelerationInput && runtime.SupportsAccelerationStructures();
+        auto destination = runtime.CreateBuffer(
+            {bytes.size(), rhi::Memory::Device, name, false, addressable, addressable});
         auto commands = runtime.CreateCommands();
         commands->Barrier(staging, rhi::State::HostWrite, rhi::State::CopySource);
         commands->Barrier(destination, rhi::State::Undefined, rhi::State::CopyDest);
@@ -156,6 +254,48 @@ struct SceneRenderer::Impl
         commands->Barrier(destination, rhi::State::CopyDest, state);
         runtime.Wait(runtime.Submit(std::move(commands)));
         return destination;
+    }
+    void UploadRaySurfaces(const std::array<std::span<const std::byte>, 5>& sources)
+    {
+        uint64_t bytes = 0;
+        std::array<bool, 5> changed{};
+        for (size_t i = 0; i < sources.size(); ++i)
+            if (!sources[i].empty() &&
+                (!raySurfaceBuffers[i] || !std::ranges::equal(sources[i], raySurfaceBytes[i])))
+            {
+                changed[i] = true;
+                bytes += sources[i].size();
+            }
+        if (!bytes)
+            return;
+        auto staging =
+            runtime.CreateBuffer({bytes, rhi::Memory::Upload, "RayTracing.Surfaces.Upload"});
+        auto mapped = staging->Map();
+        auto buffers = raySurfaceBuffers;
+        auto commands = runtime.CreateCommands();
+        commands->Barrier(staging, rhi::State::HostWrite, rhi::State::CopySource);
+        uint64_t offset = 0;
+        for (size_t i = 0; i < sources.size(); ++i)
+            if (changed[i])
+            {
+                const auto size = sources[i].size();
+                std::memcpy(mapped.data() + offset, sources[i].data(), size);
+                buffers[i] = runtime.CreateBuffer(
+                    {size, rhi::Memory::Device, "RayTracing.Surface" + std::to_string(i)});
+                commands->Barrier(buffers[i], rhi::State::Undefined, rhi::State::CopyDest);
+                commands->Copy(staging, buffers[i], size, offset);
+                commands->Barrier(buffers[i], rhi::State::CopyDest, rhi::State::ShaderRead);
+                offset += size;
+            }
+        runtime.Wait(runtime.Submit(std::move(commands)));
+        // Publish only complete immutable uploads. Older submissions retain their own buffers.
+        raySurfaceBuffers = std::move(buffers);
+        for (size_t i = 0; i < sources.size(); ++i)
+            if (changed[i])
+                raySurfaceBytes[i].assign(sources[i].begin(), sources[i].end());
+        ++raySurfaceVersion;
+        ++rayStatistics.uploadBatches;
+        rayStatistics.uploadedBytes += bytes;
     }
     std::shared_ptr<rhi::TextureView> UploadFloat(const std::string& name,
                                                   const EnvironmentImage& image)
@@ -225,16 +365,293 @@ struct SceneRenderer::Impl
                 for (const auto& mesh : model.meshes)
                 {
                     const auto name = model.id + "/" + mesh.id;
-                    geometry.emplace(name, Geometry{Upload(std::as_bytes(std::span{mesh.vertices}),
-                                                           name + ".Vertices", rhi::State::Vertex),
-                                                    Upload(std::as_bytes(std::span{mesh.indices}),
-                                                           name + ".Indices", rhi::State::Index)});
+                    geometry.emplace(name,
+                                     Geometry{Upload(std::as_bytes(std::span{mesh.vertices}),
+                                                     name + ".Vertices", rhi::State::Vertex, true),
+                                              Upload(std::as_bytes(std::span{mesh.indices}),
+                                                     name + ".Indices", rhi::State::Index, true)});
                 }
                 const auto id = model.id;
                 const auto& stored = models.emplace(id, std::move(model)).first->second;
                 for (size_t i = 0; i < stored.images.size(); ++i)
                     modelImages.emplace(id + "/Image/" + std::to_string(i), &stored.images[i]);
             }
+    }
+    void EnsureRayQueryProgram()
+    {
+        if (rayQueryShadow)
+            return;
+        if (!runtime.SupportsAccelerationStructures() || !runtime.SupportsRayQuery())
+            throw std::invalid_argument(
+                "Ray Tracing requires accelerationStructure and rayQuery device capabilities");
+        shader::ProgramRequest request;
+        request.entry = {rhi::ShaderStage::Compute,
+                         project.engine / "RenderLab" / "RayQueryShadow.hlsl", "CSMain"};
+        request.target = shaderTarget;
+        request.targetProfile = "cs_6_5";
+        if (shaderTarget == shader::Target::Spirv)
+            request.defines["SPIRV"] = "1";
+        shader::DxcCompiler compiler;
+        rhi::PipelineDesc description;
+        description.layout = runtime.CreateLayout({{0, rhi::BindingKind::AccelerationStructure},
+                                                   {1, rhi::BindingKind::SampledTexture},
+                                                   {2, rhi::BindingKind::SampledTexture},
+                                                   {3, rhi::BindingKind::ConstantBuffer},
+                                                   {4, rhi::BindingKind::StorageTexture}});
+        description.compute =
+            runtime.CreateShader(rhi::ShaderStage::Compute, compiler.Compile(request), "CSMain");
+        rayQueryShadow = runtime.CreatePipeline(std::move(description));
+    }
+    void EnsureReflectionPrograms()
+    {
+        if (reflectionTable)
+            return;
+        if (!runtime.SupportsRayTracingPipeline())
+            throw std::invalid_argument("Reflections require rayTracingPipeline capability");
+        shader::DxcCompiler compiler;
+        const auto module =
+            [&](const char* file, rhi::ShaderStage stage, const char* entry, bool guide = true)
+        {
+            shader::ProgramRequest request;
+            request.entry = {stage, project.engine / "RenderLab" / file, entry};
+            request.target = shaderTarget;
+            request.defines["RENDERLAB_REFLECTION_GUIDE"] = guide ? "1" : "0";
+            if (shaderTarget == shader::Target::Spirv)
+                request.defines["SPIRV"] = "1";
+            return runtime.CreateShader(stage, compiler.Compile(request), entry);
+        };
+        rhi::PipelineDesc desc;
+        desc.layout = runtime.CreateLayout({{0, rhi::BindingKind::AccelerationStructure},
+                                            {1, rhi::BindingKind::StorageTexture},
+                                            {2, rhi::BindingKind::SampledTexture},
+                                            {3, rhi::BindingKind::SampledTexture},
+                                            {4, rhi::BindingKind::ConstantBuffer},
+                                            {5, rhi::BindingKind::ReadOnlyBuffer},
+                                            {6, rhi::BindingKind::ReadOnlyBuffer},
+                                            {7, rhi::BindingKind::ReadOnlyBuffer},
+                                            {8, rhi::BindingKind::ReadOnlyBuffer},
+                                            {9, rhi::BindingKind::ReadOnlyBuffer},
+                                            {10, rhi::BindingKind::SampledTexture},
+                                            {11, rhi::BindingKind::Sampler},
+                                            {12, rhi::BindingKind::SampledTexture},
+                                            {13, rhi::BindingKind::SampledTexture},
+                                            {14, rhi::BindingKind::StorageTexture},
+                                            {15, rhi::BindingKind::SampledTexture}});
+        desc.rayGeneration =
+            module("RayReflection.hlsl", rhi::ShaderStage::RayGeneration, "RayGeneration");
+        desc.miss = module("RayReflection.hlsl", rhi::ShaderStage::Miss, "Miss");
+        desc.closestHit = module("RayReflection.hlsl", rhi::ShaderStage::ClosestHit, "ClosestHit");
+        reflectionTable = runtime.CreateShaderTable(runtime.CreatePipeline(desc));
+        auto noGuideLayout = desc.layout->entries;
+        std::erase_if(noGuideLayout, [](const auto& binding) { return binding.slot == 14; });
+        desc.layout = runtime.CreateLayout(std::move(noGuideLayout));
+        desc.rayGeneration =
+            module("RayReflection.hlsl", rhi::ShaderStage::RayGeneration, "RayGeneration", false);
+        reflectionTableWithoutGuide = runtime.CreateShaderTable(runtime.CreatePipeline(desc));
+        desc = {};
+        desc.layout = runtime.CreateLayout({{0, rhi::BindingKind::SampledTexture},
+                                            {1, rhi::BindingKind::SampledTexture},
+                                            {2, rhi::BindingKind::StorageTexture},
+                                            {3, rhi::BindingKind::ConstantBuffer}});
+        desc.compute = module("ReflectionPost.hlsl", rhi::ShaderStage::Compute, "Accumulate");
+        reflectionHistory = runtime.CreatePipeline(desc);
+        desc = {};
+        desc.layout = runtime.CreateLayout({{0, rhi::BindingKind::SampledTexture},
+                                            {1, rhi::BindingKind::SampledTexture},
+                                            {2, rhi::BindingKind::StorageBuffer},
+                                            {3, rhi::BindingKind::ConstantBuffer},
+                                            {4, rhi::BindingKind::ReadOnlyBuffer},
+                                            {5, rhi::BindingKind::SampledTexture},
+                                            {6, rhi::BindingKind::SampledTexture},
+                                            {7, rhi::BindingKind::SampledTexture},
+                                            {8, rhi::BindingKind::SampledTexture}});
+        desc.compute = module("ReflectionStatistics.hlsl", rhi::ShaderStage::Compute, "Statistics");
+        reflectionStatistics = runtime.CreatePipeline(desc);
+        const std::array<float, 2> zeroStatistics{};
+        emptyReflectionStatistics = Upload(std::as_bytes(std::span{zeroStatistics}),
+                                           "Reflection.EmptyStatistics", rhi::State::ShaderRead);
+        desc = {};
+        desc.layout = runtime.CreateLayout({{0, rhi::BindingKind::SampledTexture},
+                                            {2, rhi::BindingKind::StorageTexture},
+                                            {3, rhi::BindingKind::ConstantBuffer},
+                                            {4, rhi::BindingKind::SampledTexture},
+                                            {5, rhi::BindingKind::SampledTexture},
+                                            {6, rhi::BindingKind::SampledTexture},
+                                            {7, rhi::BindingKind::SampledTexture},
+                                            {8, rhi::BindingKind::SampledTexture},
+                                            {9, rhi::BindingKind::SampledTexture},
+                                            {10, rhi::BindingKind::SampledTexture}});
+        desc.compute = module("ReflectionPost.hlsl", rhi::ShaderStage::Compute, "Combine");
+        reflectionCombine = runtime.CreatePipeline(desc);
+        desc = {};
+        desc.layout = runtime.CreateLayout({{0, rhi::BindingKind::SampledTexture},
+                                            {1, rhi::BindingKind::SampledTexture},
+                                            {2, rhi::BindingKind::StorageTexture},
+                                            {3, rhi::BindingKind::ConstantBuffer},
+                                            {5, rhi::BindingKind::SampledTexture},
+                                            {6, rhi::BindingKind::SampledTexture},
+                                            {7, rhi::BindingKind::SampledTexture}});
+        desc.compute = module("ReflectionDenoise.hlsl", rhi::ShaderStage::Compute, "Denoise");
+        reflectionDenoise = runtime.CreatePipeline(desc);
+        desc = {};
+        std::vector<rhi::BindingDesc> temporalLayout;
+        for (uint32_t slot = 0; slot <= 13; ++slot)
+            temporalLayout.push_back({slot, slot == 3 ? rhi::BindingKind::ConstantBuffer
+                                            : slot == 2 || slot == 9 || slot == 10 || slot >= 12
+                                                ? rhi::BindingKind::StorageTexture
+                                                : rhi::BindingKind::SampledTexture});
+        desc.layout = runtime.CreateLayout(std::move(temporalLayout));
+        desc.compute = module("ReflectionTemporal.hlsl", rhi::ShaderStage::Compute, "Temporal");
+        reflectionTemporal = runtime.CreatePipeline(desc);
+        constexpr std::array<const char*, 5> reconstructionEntries{"Prepare", "Filter1", "Filter2",
+                                                                   "Filter4", "Resolve"};
+        for (size_t i = 0; i < reflectionReconstruction.size(); ++i)
+        {
+            desc = {};
+            std::vector<rhi::BindingDesc> layout;
+            for (uint32_t slot = 0; slot <= 9; ++slot)
+                layout.push_back({slot, slot == 3   ? rhi::BindingKind::ConstantBuffer
+                                        : slot == 2 ? rhi::BindingKind::StorageTexture
+                                        : slot == 9 ? rhi::BindingKind::ReadOnlyBuffer
+                                                    : rhi::BindingKind::SampledTexture});
+            desc.layout = runtime.CreateLayout(std::move(layout));
+            desc.compute = module("ReflectionReconstruct.hlsl", rhi::ShaderStage::Compute,
+                                  reconstructionEntries[i]);
+            reflectionReconstruction[i] = runtime.CreatePipeline(desc);
+        }
+    }
+    uint32_t RayTile(const std::string& reference, bool srgb)
+    {
+        if (rayAtlas.pixels.empty())
+        {
+            rayAtlas = {RayAtlasSize, RayAtlasSize,
+                        std::vector<float>(size_t(RayAtlasSize) * RayAtlasSize * 4, 1)};
+            for (uint32_t y = 0; y < RayAtlasTilePitch; ++y)
+                for (uint32_t x = RayAtlasTilePitch; x < RayAtlasTilePitch * 2; ++x)
+                {
+                    const auto pixel = (size_t(y) * RayAtlasSize + x) * 4;
+                    rayAtlas.pixels[pixel] = rayAtlas.pixels[pixel + 1] = .5f;
+                }
+            rayAtlasDirty = true;
+        }
+        if (reference == "white")
+            return 0;
+        if (reference == "normal")
+            return 1;
+        const auto embedded = modelImages.find(reference);
+        std::string key = reference + (srgb ? "/Srgb" : "/Linear");
+        if (embedded == modelImages.end())
+            key +=
+                "/" + std::to_string(std::filesystem::last_write_time(database.Get(reference).path)
+                                         .time_since_epoch()
+                                         .count());
+        if (const auto found = rayTiles.find(key); found != rayTiles.end())
+            return found->second;
+        if (rayTiles.size() >= 62)
+            throw std::invalid_argument(
+                "Ray material atlas exceeds 62 image versions; restart or reduce texture count");
+        assets::Image decoded;
+        if (embedded == modelImages.end())
+            decoded = assets::DecodeImage(assets::detail::Read(database.Get(reference).path));
+        const auto& image = embedded != modelImages.end() ? *embedded->second : decoded;
+        const auto tile = static_cast<uint32_t>(rayTiles.size()) + 2;
+        rayTiles.emplace(key, tile);
+        const auto linear = [&](float value)
+        {
+            return srgb ? (value <= .04045f ? value / 12.92f
+                                            : std::pow((value + .055f) / 1.055f, 2.4f))
+                        : value;
+        };
+        for (uint32_t y = 0; y < RayAtlasTilePitch; ++y)
+            for (uint32_t x = 0; x < RayAtlasTilePitch; ++x)
+            {
+                const auto sx = std::min(image.width - 1, uint32_t(std::clamp(int(x) - 1, 0, 63)) *
+                                                              image.width / 64);
+                const auto sy = std::min(image.height - 1, uint32_t(std::clamp(int(y) - 1, 0, 63)) *
+                                                               image.height / 64);
+                const auto source = (size_t(sy) * image.width + sx) * 4;
+                const auto destination =
+                    (size_t(tile / 8 * 66 + y) * RayAtlasSize + tile % 8 * 66 + x) * 4;
+                for (uint32_t c = 0; c < 4; ++c)
+                    rayAtlas.pixels[destination + c] = c < 3
+                                                           ? linear(image.rgba[source + c] / 255.f)
+                                                           : image.rgba[source + c] / 255.f;
+            }
+        rayAtlasDirty = true;
+        return tile;
+    }
+    RayMaterialData RayMaterial(const MaterialInput& material)
+    {
+        if (material.package->definition.assetId != builtin::Lit &&
+            material.package->definition.assetId != "9120dfaac72c5c1c88f3a41e3ac22447")
+            throw std::invalid_argument(
+                "Ray reflections support built-in Lit/Unlit materials only");
+        RayMaterialData output;
+        output.normalFlags[1] = material.package->definition.assetId == builtin::Lit ? 0 : 1;
+        RayTile("white", false);
+        const shader::MaterialTemplate definition(material.package);
+        for (const auto& property : definition.Properties())
+        {
+            using S = shader::MaterialSemantic;
+            if (property.type.resource)
+            {
+                const auto found = material.asset.resources.find(property.id);
+                const auto& reference = found == material.asset.resources.end()
+                                            ? property.resourceDefault
+                                            : found->second.reference;
+                switch (property.semantic)
+                {
+                case S::BaseMap:
+                    output.maps[0] = RayTile(reference, true);
+                    break;
+                case S::MetallicRoughnessMap:
+                    output.maps[1] = RayTile(reference, false);
+                    break;
+                case S::OcclusionMap:
+                    output.maps[2] = RayTile(reference, false);
+                    break;
+                case S::EmissionMap:
+                    output.maps[3] = RayTile(reference, true);
+                    break;
+                case S::NormalMap:
+                    output.normalFlags[0] = RayTile(reference, false);
+                    break;
+                default:
+                    break;
+                }
+                continue;
+            }
+            const auto found = material.asset.values.find(property.id);
+            const auto& values =
+                found == material.asset.values.end() ? property.defaults : found->second.numbers;
+            const auto value = [&](size_t i) { return static_cast<float>(values.at(i)); };
+            switch (property.semantic)
+            {
+            case S::BaseColor:
+                for (uint32_t i = 0; i < 3; ++i)
+                    output.baseMetallic[i] = value(i);
+                break;
+            case S::Metallic:
+                output.baseMetallic[3] = value(0);
+                break;
+            case S::Roughness:
+                output.emissionRoughness[3] = value(0);
+                break;
+            case S::Emission:
+                for (uint32_t i = 0; i < 3; ++i)
+                    output.emissionRoughness[i] = value(i);
+                break;
+            case S::NormalScale:
+                output.options[0] = value(0);
+                break;
+            case S::OcclusionStrength:
+                output.options[1] = value(0);
+                break;
+            default:
+                break;
+            }
+        }
+        return output;
     }
     MaterialInput MaterialFor(const scene::Instance& instance, const assets::Surface& surface)
     {
@@ -408,6 +825,44 @@ scene::Scene& SceneRenderer::Document()
 {
     return impl_->document;
 }
+void SceneRenderer::ValidatePipeline(PipelineType pipeline)
+{
+    auto& self = *impl_;
+    if (pipeline == PipelineType::Forward)
+        return;
+    if (pipeline != PipelineType::Deferred && pipeline != PipelineType::RayTracing)
+        throw std::invalid_argument("Unknown rendering pipeline");
+    if (pipeline == PipelineType::RayTracing &&
+        (!self.runtime.SupportsAccelerationStructures() || !self.runtime.SupportsRayQuery() ||
+         !self.runtime.SupportsRayTracingPipeline()))
+        throw std::invalid_argument(
+            "Ray Tracing requires acceleration structures, Ray Query and TraceRays");
+    self.EnsureModels();
+    scene::Extractor extractor;
+    const auto snapshot = extractor.Extract(self.document, 1, self.models);
+    for (const auto& instance : snapshot.allInstances)
+    {
+        const auto& model = self.models.at(instance.model);
+        const auto mesh = std::ranges::find(model.meshes, instance.mesh, &assets::Mesh::id);
+        const auto material = self.MaterialFor(instance, model.materials.at(mesh->material));
+        const auto policy = material::ResolvePolicy(material.package->definition, material.asset);
+        if (policy.surface == shader::SurfaceType::Transparent)
+            continue;
+        if (!material.package->HasRole(shader::PassRole::GBuffer))
+            throw std::invalid_argument("Deferred rendering requires a GBuffer role in " +
+                                        material.package->definition.name);
+        if (pipeline == PipelineType::RayTracing)
+        {
+            if (policy.alphaClip)
+                throw std::invalid_argument("Ray Tracing currently supports opaque geometry; "
+                                            "masked materials need any-hit support");
+            if (material.package->definition.assetId != builtin::Lit &&
+                material.package->definition.assetId != "9120dfaac72c5c1c88f3a41e3ac22447")
+                throw std::invalid_argument(
+                    "Ray reflections currently support built-in Lit/Unlit materials");
+        }
+    }
+}
 const scene::Snapshot& SceneRenderer::LastSnapshot() const
 {
     return impl_->snapshot;
@@ -420,11 +875,25 @@ rhi::UploadPool::Statistics SceneRenderer::UploadStatistics() const
 {
     return impl_->uploadPool.Stats();
 }
+RaySceneStatistics SceneRenderer::RayStatistics() const
+{
+    auto result = impl_->rayStatistics;
+    result.cachedViews = impl_->reflectionViews.size();
+    for (const auto& [id, history] : impl_->reflectionViews)
+        result.historyBytes += history.Bytes();
+    return result;
+}
 SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::State initial,
                                     rhi::Swapchain* swapchain, bool readback,
                                     const std::filesystem::path& dump, SceneRenderOptions options)
 {
+    const auto preparationStart = std::chrono::steady_clock::now();
     auto& self = *impl_;
+    const bool rayTracing = options.pipeline == PipelineType::RayTracing;
+    if (options.pipeline != PipelineType::Forward && options.pipeline != PipelineType::Deferred &&
+        !rayTracing)
+        throw std::invalid_argument("Unknown or unavailable scene render pipeline");
+    const bool deferred = options.pipeline != PipelineType::Forward;
     auto uploads = self.uploadPool.Begin();
     self.EnsureModels();
     self.snapshot = self.extractor.Extract(
@@ -438,6 +907,130 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
     }
     self.UpdateEnvironment();
     self.shadowMatrix = FitDirectionalShadow(self.snapshot);
+    const bool reflections =
+        rayTracing && options.reflections &&
+        (options.view == SceneView::Final || options.view == SceneView::Hdr ||
+         options.view == SceneView::ReflectionRaw || options.view == SceneView::ReflectionHistory ||
+         options.view == SceneView::ReflectionDenoised);
+    if (!reflections)
+        self.reflectionViews.clear();
+    if ((options.view == SceneView::ReflectionRaw || options.view == SceneView::ReflectionHistory ||
+         options.view == SceneView::ReflectionDenoised) &&
+        !reflections)
+        throw std::invalid_argument(
+            "Reflection texture views require the Ray Tracing pipeline and reflections enabled");
+    std::vector<assets::Vertex> rayVertices;
+    std::vector<uint32_t> rayIndices;
+    std::vector<RayMeshData> rayMeshesData;
+    std::vector<RayInstanceData> rayInstanceData;
+    std::vector<RayMaterialData> rayMaterials;
+    std::map<std::string, uint32_t> rayMeshIndices;
+    std::map<std::string, uint32_t> rayMaterialIndices;
+    std::vector<const assets::Mesh*> rayMeshSources;
+    std::vector<std::string> rayGeometryKeys;
+    std::vector<AccelerationScene::Instance> rayInstances;
+    if (rayTracing)
+    {
+        self.EnsureRayQueryProgram();
+        std::vector<AccelerationScene::Mesh> rayMeshes;
+        for (const auto& instance : self.snapshot.allInstances)
+        {
+            const auto& model = self.models.at(instance.model);
+            const auto mesh = std::ranges::find(model.meshes, instance.mesh, &assets::Mesh::id);
+            if (mesh == model.meshes.end())
+                throw std::logic_error("Ray Tracing snapshot references a missing mesh");
+            const auto material = self.MaterialFor(instance, model.materials.at(mesh->material));
+            const auto policy =
+                material::ResolvePolicy(material.package->definition, material.asset);
+            if (policy.surface == shader::SurfaceType::Transparent)
+                continue;
+            if (policy.alphaClip)
+                throw std::invalid_argument("Ray Tracing currently supports opaque geometry; "
+                                            "masked materials require any-hit alpha evaluation");
+            const auto key = model.id + "/" + mesh->id;
+            const auto& geometry = self.geometry.at(key);
+            if (!rayMeshIndices.contains(key))
+            {
+                rayMeshIndices.emplace(key, static_cast<uint32_t>(rayMeshes.size()));
+                rayMeshes.push_back({key, geometry.vertices, geometry.indices,
+                                     static_cast<uint32_t>(mesh->vertices.size()),
+                                     static_cast<uint32_t>(mesh->indices.size()),
+                                     sizeof(assets::Vertex)});
+                rayMeshSources.push_back(&*mesh);
+                rayGeometryKeys.push_back(key + "/" + model.key);
+            }
+            AccelerationScene::Instance rayInstance{
+                key, {}, static_cast<uint32_t>(rayInstances.size()), 2};
+            std::copy_n(instance.world.values.begin(), 12, rayInstance.transform.begin());
+            if (material.package->HasRole(shader::PassRole::ShadowCaster))
+            {
+                const auto& pass = material.package->GetPass(
+                    material.package->ResolvePass(shader::PassRole::ShadowCaster));
+                if (material::PassEnabled(material.package->definition, pass, material.asset))
+                    rayInstance.mask |= 1;
+            }
+            rayInstances.push_back(std::move(rayInstance));
+            if (reflections)
+            {
+                const auto materialKey =
+                    instance.material.empty()
+                        ? model.id + "/" + model.materials.at(mesh->material).id
+                        : instance.material;
+                if (!rayMaterialIndices.contains(materialKey))
+                {
+                    rayMaterialIndices.emplace(materialKey,
+                                               static_cast<uint32_t>(rayMaterials.size()));
+                    rayMaterials.push_back(self.RayMaterial(material));
+                }
+                rayInstanceData.push_back(
+                    {rayMeshIndices.at(key), rayMaterialIndices.at(materialKey)});
+            }
+        }
+        self.accelerationScene.EnsureMeshes(rayMeshes);
+        if (reflections)
+        {
+            self.EnsureReflectionPrograms();
+            const bool geometryChanged =
+                rayGeometryKeys != self.packedRayMeshes || !self.raySurfaceBuffers[0];
+            if (geometryChanged)
+                for (const auto* mesh : rayMeshSources)
+                {
+                    rayMeshesData.push_back({static_cast<uint32_t>(rayVertices.size()),
+                                             static_cast<uint32_t>(rayIndices.size())});
+                    rayVertices.insert(rayVertices.end(), mesh->vertices.begin(),
+                                       mesh->vertices.end());
+                    rayIndices.insert(rayIndices.end(), mesh->indices.begin(), mesh->indices.end());
+                }
+            std::array<std::span<const std::byte>, 5> sources{};
+            const auto source = [&](auto& data, size_t index)
+            {
+                if (data.empty())
+                    data.resize(1);
+                sources[index] = std::as_bytes(std::span{data});
+            };
+            if (geometryChanged)
+            {
+                source(rayVertices, 0);
+                source(rayIndices, 1);
+                source(rayMeshesData, 2);
+            }
+            source(rayInstanceData, 3);
+            source(rayMaterials, 4);
+            self.UploadRaySurfaces(sources);
+            if (geometryChanged)
+            {
+                self.packedRayMeshes = std::move(rayGeometryKeys);
+                ++self.rayStatistics.geometryPacks;
+            }
+            self.RayTile("white", false);
+            if (self.rayAtlasDirty)
+            {
+                self.rayAtlasView = self.UploadFloat("RayTracing.MaterialAtlas", self.rayAtlas);
+                self.rayAtlasDirty = false;
+                ++self.rayAtlasVersion;
+            }
+        }
+    }
     rendergraph::Graph graph;
     if (target->desc.format != rhi::Format::Rgba8Srgb &&
         target->desc.format != rhi::Format::Bgra8Srgb)
@@ -448,9 +1041,6 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
     graph.ImportTexture("DisplayColor", target, {initial, initial != rhi::State::Undefined});
     graph.CreateTexture("CameraColor", {target->desc.width, target->desc.height,
                                         rhi::Format::Rgba32Float, false, true});
-    if (options.pipeline != PipelineType::Forward && options.pipeline != PipelineType::Deferred)
-        throw std::invalid_argument("Unknown or unavailable scene render pipeline");
-    const bool deferred = options.pipeline == PipelineType::Deferred;
     auto cameraDepthFormat = rhi::Format::D32;
     RenderFrame frame;
     const auto scan = [&](const std::vector<scene::Instance>& instances, shader::PassRole role,
@@ -463,7 +1053,8 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
             if (mesh == model.meshes.end())
                 throw std::logic_error("Snapshot references missing mesh");
             const auto material = self.MaterialFor(instance, model.materials.at(mesh->material));
-            const auto policy = material::ResolvePolicy(material.package->definition, material.asset);
+            const auto policy =
+                material::ResolvePolicy(material.package->definition, material.asset);
             if (role == shader::PassRole::GBuffer &&
                 policy.surface == shader::SurfaceType::Transparent)
                 continue;
@@ -482,8 +1073,8 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
                 format = rhi::Format::D32S8;
         }
     };
-    scan(self.snapshot.instances,
-         deferred ? shader::PassRole::GBuffer : shader::PassRole::Forward, cameraDepthFormat);
+    scan(self.snapshot.instances, deferred ? shader::PassRole::GBuffer : shader::PassRole::Forward,
+         cameraDepthFormat);
     if (deferred)
         scan(self.snapshot.instances, shader::PassRole::Forward, cameraDepthFormat);
     scan(self.snapshot.shadowCasters, shader::PassRole::ShadowCaster, frame.shadowDepthFormat);
@@ -513,6 +1104,229 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
         imported.emplace(view->texture.get(), name);
         return name;
     };
+    std::optional<AccelerationScene::Prepared> preparedAcceleration;
+    std::string reflectionSignature;
+    Impl::ReflectionHistory* reflectionHistory = nullptr;
+    uint32_t reflectionOutput = 0, reflectionSamples = 0, reflectionSequence = 0;
+    std::string temporalSignature;
+    uint32_t temporalOutput = 0, temporalFrames = 0;
+    if (rayTracing)
+    {
+        preparedAcceleration = self.accelerationScene.Build(graph, std::move(rayInstances));
+        frame.rayTracing.scene = preparedAcceleration->topLevel;
+        frame.rayTracing.storage = "RayTracing.SceneAS";
+        frame.rayTracing.shadowPipeline = self.rayQueryShadow;
+        RayQueryParameters parameters;
+        const auto inverse = math::Inverse(self.snapshot.viewProjection);
+        parameters.inverseViewProjection = inverse.values;
+        parameters.directionToLight = Vector(self.snapshot.light.direction);
+        parameters.shadowOptions = {
+            .002f, .001f, 10000,
+            self.snapshot.light.shadows && self.snapshot.light.intensity > 0 ? 1.f : 0.f};
+        const auto slice = uploads.Write(std::as_bytes(std::span{&parameters, size_t{1}}));
+        const auto name =
+            importBuffer(slice.buffer, "RayTracing.Parameters", rhi::State::HostWrite);
+        frame.rayTracing.parameters = {
+            3, name, rendergraph::Use::Uniform, {slice.offset, slice.size}};
+    }
+    if (reflections)
+    {
+        ReflectionParameters parameters;
+        parameters.inverseViewProjection = math::Inverse(self.snapshot.viewProjection).values;
+        parameters.cameraPosition = Vector(self.snapshot.cameraPosition);
+        parameters.directionToLight = Vector(self.snapshot.light.direction);
+        parameters.lightColor = Vector(self.snapshot.light.color, self.snapshot.light.intensity);
+        parameters.environment = {
+            self.snapshot.environmentIntensity,
+            self.snapshot.environmentRotation * float(3.141592653589793 / 180), 0, 0};
+        parameters.options[2] = self.snapshot.light.shadows ? 1.f : 0.f;
+        parameters.options[3] = static_cast<float>(MaxReflectionSamples);
+        const auto append = [&](const auto& value)
+        {
+            const auto bytes = std::as_bytes(std::span{&value, size_t{1}});
+            reflectionSignature.append(reinterpret_cast<const char*>(bytes.data()), bytes.size());
+        };
+        append(parameters);
+        // This signature omits camera pose only. Scene/material/light changes reject all reuse.
+        const auto appendTemporal = [&](const auto& value)
+        {
+            const auto bytes = std::as_bytes(std::span{&value, size_t{1}});
+            temporalSignature.append(reinterpret_cast<const char*>(bytes.data()), bytes.size());
+        };
+        appendTemporal(parameters.directionToLight);
+        appendTemporal(parameters.lightColor);
+        appendTemporal(parameters.environment);
+        appendTemporal(parameters.options);
+        appendTemporal(self.snapshot.projection.values);
+        append(target->desc.width);
+        append(target->desc.height);
+        append(self.raySurfaceVersion);
+        append(self.rayAtlasVersion);
+        append(self.environmentAmbient);
+        temporalSignature += reflectionSignature.substr(sizeof(parameters));
+        reflectionSignature += self.environmentKey;
+        temporalSignature += self.environmentKey;
+        for (const auto& instance : self.snapshot.allInstances)
+        {
+            reflectionSignature += instance.id;
+            append(instance.world.values);
+            temporalSignature += instance.id;
+            appendTemporal(instance.world.values);
+        }
+        // ShadowCaster policy changes traversal without changing the packed surface material.
+        for (const auto& instance : preparedAcceleration->instances)
+        {
+            append(instance.mask);
+            appendTemporal(instance.mask);
+        }
+        const auto& viewId = self.document.activeCamera;
+        auto& history =
+            self.AcquireReflectionHistory(viewId, target->desc.width, target->desc.height);
+        reflectionHistory = &history;
+        const bool accumulate =
+            options.reflectionHistory && options.view != SceneView::ReflectionRaw;
+        const bool valid =
+            accumulate && history.signature == reflectionSignature && history.samples > 0;
+        reflectionSamples = valid ? history.samples : 0;
+        // Continue independent samples during camera motion; Raw still fixes sample zero.
+        reflectionSequence =
+            accumulate && history.sequenceSignature == temporalSignature ? history.sequence : 0;
+        parameters.options[0] = static_cast<float>(reflectionSequence);
+        parameters.options[1] = static_cast<float>(reflectionSamples);
+        reflectionOutput = 1 - history.index;
+        auto& output = history.radiance[reflectionOutput];
+        if (!output || output->desc.width != target->desc.width ||
+            output->desc.height != target->desc.height)
+        {
+            output = self.runtime.CreateTexture({target->desc.width, target->desc.height,
+                                                 rhi::Format::Rgba32Float, true, false,
+                                                 "RayTracing.History." + viewId});
+            history.initialized[reflectionOutput] = false;
+        }
+        const auto name = "RayTracing.History." + viewId;
+        graph.ImportTexture(
+            name, output,
+            {history.initialized[reflectionOutput] ? rhi::State::Sampled : rhi::State::Undefined,
+             history.initialized[reflectionOutput], history.completion});
+        frame.rayTracing.historyRadiance = name;
+        const uint64_t statisticsBytes = uint64_t(target->desc.width) * target->desc.height * 8;
+        auto& statistics = history.statistics[reflectionOutput];
+        if (!statistics || statistics->desc.size != statisticsBytes)
+        {
+            statistics = self.runtime.CreateBuffer(
+                {statisticsBytes, rhi::Memory::Device, "Reflection.Statistics." + viewId, true});
+            history.statisticsInitialized[reflectionOutput] = false;
+        }
+        frame.rayTracing.historyStatistics = "Reflection.Statistics." + viewId;
+        graph.ImportBuffer(frame.rayTracing.historyStatistics, statistics,
+                           {history.statisticsInitialized[reflectionOutput] ? rhi::State::ShaderRead
+                                                                            : rhi::State::Undefined,
+                            history.statisticsInitialized[reflectionOutput], history.completion});
+        frame.rayTracing.previousStatistics = "Reflection.PreviousStatistics." + viewId;
+        graph.ImportBuffer(frame.rayTracing.previousStatistics,
+                           valid ? history.statistics[history.index]
+                                 : self.emptyReflectionStatistics,
+                           {rhi::State::ShaderRead, true, valid ? history.completion : 0});
+        if (valid)
+        {
+            graph.ImportTexture("RayTracing.Previous." + viewId, history.radiance[history.index],
+                                {rhi::State::Sampled, true, history.completion});
+            frame.rayTracing.previousRadiance = "RayTracing.Previous." + viewId;
+        }
+        const auto slice = uploads.Write(std::as_bytes(std::span{&parameters, size_t{1}}));
+        frame.rayTracing.reflectionParameters = {
+            4,
+            importBuffer(slice.buffer, "RayTracing.ReflectionParameters", rhi::State::HostWrite),
+            rendergraph::Use::Uniform,
+            {slice.offset, slice.size}};
+        frame.rayTracing.historyPipeline = self.reflectionHistory;
+        frame.rayTracing.statisticsPipeline = self.reflectionStatistics;
+        frame.rayTracing.combinePipeline = self.reflectionCombine;
+        if (reflectionSamples + 1 < 2048 &&
+            ((options.reflectionDenoise &&
+              (options.view == SceneView::Final || options.view == SceneView::Hdr)) ||
+             options.view == SceneView::ReflectionDenoised))
+            frame.rayTracing.denoisePipeline = self.reflectionDenoise;
+        frame.rayTracing.reflectionTable = frame.rayTracing.denoisePipeline
+                                               ? self.reflectionTable
+                                               : self.reflectionTableWithoutGuide;
+        if (frame.rayTracing.denoisePipeline && options.reflectionTemporal && accumulate)
+        {
+            auto& temporal = self.temporalHistory;
+            const auto direction = [](const math::Mat4& view)
+            { return math::Vec3{view.At(2, 0), view.At(2, 1), view.At(2, 2)}; };
+            const bool validTemporal =
+                temporal.active && temporal.signature == temporalSignature &&
+                temporal.viewId == viewId &&
+                math::Length(temporal.cameraPosition - self.snapshot.cameraPosition) <= 1.f &&
+                math::Dot(direction(temporal.view), direction(self.snapshot.view)) >= .8660254f;
+            temporalFrames = validTemporal ? temporal.frames : 0;
+            temporalOutput = 1 - temporal.index;
+            // Release old-size CPU ownership before allocating replacements; commands keep uses.
+            auto& outputs = temporal.textures[temporalOutput];
+            if (outputs[0] && (outputs[0]->desc.width != target->desc.width ||
+                               outputs[0]->desc.height != target->desc.height))
+            {
+                outputs = {};
+                temporal.initialized[temporalOutput] = false;
+            }
+            constexpr std::array<const char*, 4> kinds{"Radiance", "World", "Normal", "Moments"};
+            for (size_t i = 0; i < outputs.size(); ++i)
+            {
+                const auto outputName = std::string("RayTracing.Temporal.") + kinds[i];
+                if (!outputs[i])
+                    outputs[i] = self.runtime.CreateTexture(
+                        {target->desc.width, target->desc.height, rhi::Format::Rgba32Float, true,
+                         false, outputName});
+                graph.ImportTexture(outputName, outputs[i],
+                                    {temporal.initialized[temporalOutput] ? rhi::State::Sampled
+                                                                          : rhi::State::Undefined,
+                                     temporal.initialized[temporalOutput], temporal.completion});
+                frame.rayTracing.temporalOutputs[i] = outputName;
+                if (validTemporal)
+                {
+                    const auto previousName =
+                        std::string("RayTracing.TemporalPrevious.") + kinds[i];
+                    graph.ImportTexture(previousName, temporal.textures[temporal.index][i],
+                                        {rhi::State::Sampled, true, temporal.completion});
+                    frame.rayTracing.previousTemporal[i] = previousName;
+                }
+            }
+            ReflectionTemporalParameters temporalParameters;
+            temporalParameters.inverseViewProjection = parameters.inverseViewProjection;
+            temporalParameters.previousViewProjection = temporal.viewProjection.values;
+            temporalParameters.cameraPosition = parameters.cameraPosition;
+            temporalParameters.previousCameraPosition = Vector(temporal.cameraPosition);
+            temporalParameters.options = {
+                validTemporal ? 1.f : 0.f,
+                static_cast<float>(std::min(reflectionSamples + 1, MaxReflectionSamples)),
+                options.reflectionDiagnostics ? 1.f : 0.f, 32};
+            frame.rayTracing.reflectionDiagnostics = options.reflectionDiagnostics;
+            const auto temporalSlice =
+                uploads.Write(std::as_bytes(std::span{&temporalParameters, size_t{1}}));
+            frame.rayTracing.temporalParameters = {3,
+                                                   importBuffer(temporalSlice.buffer,
+                                                                "RayTracing.TemporalParameters",
+                                                                rhi::State::HostWrite),
+                                                   rendergraph::Use::Uniform,
+                                                   {temporalSlice.offset, temporalSlice.size}};
+            frame.rayTracing.temporalPipeline = self.reflectionTemporal;
+            frame.rayTracing.reconstructionPipelines = self.reflectionReconstruction;
+        }
+        frame.rayTracing.sampler = self.sampler;
+        constexpr std::array<uint32_t, 5> strides{32, 4, 16, 16, 80};
+        for (uint32_t i = 0; i < 5; ++i)
+            frame.rayTracing.surfaces.push_back(
+                {i + 5,
+                 importBuffer(self.raySurfaceBuffers[i], "RayTracing.Surface" + std::to_string(i),
+                              rhi::State::ShaderRead),
+                 rendergraph::Use::ShaderRead,
+                 {},
+                 strides[i]});
+        frame.rayTracing.reflectionTextures = {{10, importTexture(self.rayAtlasView)},
+                                               {13, importTexture(self.environmentAtlas)},
+                                               {15, importTexture(self.brdfLut)}};
+    }
     const material::ResourceResolver resolve =
         [&](const shader::Property& property, const std::string& reference)
     {
@@ -551,8 +1365,7 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
         const auto material = self.MaterialFor(instance, surface);
         const auto policy = material::ResolvePolicy(material.package->definition, material.asset);
         auto role = requestedRole;
-        if (role == shader::PassRole::GBuffer &&
-            policy.surface == shader::SurfaceType::Transparent)
+        if (role == shader::PassRole::GBuffer && policy.surface == shader::SurfaceType::Transparent)
             role = shader::PassRole::Forward;
         if (role == shader::PassRole::ShadowCaster && !material.package->HasRole(role))
             return;
@@ -565,14 +1378,13 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
         const bool transparent = policy.surface == shader::SurfaceType::Transparent;
         material::Preparation prepare;
         prepare.pass = role;
-        prepare.colorFormats = role == shader::PassRole::GBuffer
-                                   ? std::vector<rhi::Format>{rhi::Format::Rgba32Float,
-                                                             rhi::Format::Rgba32Float,
-                                                             rhi::Format::Rgba32Float}
-                                   : std::vector<rhi::Format>{rhi::Format::Rgba32Float};
-        prepare.depthStencilFormat = role == shader::PassRole::ShadowCaster
-                                         ? frame.shadowDepthFormat
-                                         : cameraDepthFormat;
+        prepare.colorFormats =
+            role == shader::PassRole::GBuffer
+                ? std::vector<rhi::Format>{rhi::Format::Rgba32Float, rhi::Format::Rgba32Float,
+                                           rhi::Format::Rgba32Float}
+                : std::vector<rhi::Format>{rhi::Format::Rgba32Float};
+        prepare.depthStencilFormat =
+            role == shader::PassRole::ShadowCaster ? frame.shadowDepthFormat : cameraDepthFormat;
         const auto& w = instance.world;
         const math::Vec3 x{w.At(0, 0), w.At(1, 0), w.At(2, 0)},
             y{w.At(0, 1), w.At(1, 1), w.At(2, 1)}, z{w.At(0, 2), w.At(1, 2), w.At(2, 2)};
@@ -670,8 +1482,7 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
     for (const auto& instance : self.snapshot.shadowCasters)
         prepareDraw(instance, shader::PassRole::ShadowCaster);
     for (const auto& instance : self.snapshot.instances)
-        prepareDraw(instance,
-                    deferred ? shader::PassRole::GBuffer : shader::PassRole::Forward);
+        prepareDraw(instance, deferred ? shader::PassRole::GBuffer : shader::PassRole::Forward);
     if (deferred)
     {
         material::Preparation prepare;
@@ -680,12 +1491,13 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
         prepare.vertexStride = 8;
         prepare.attributes = {{"POSITION", 0, rhi::VertexFormat::Float2, 0}};
         const auto pass = self.deferredLighting->ResolvePass(prepare.pass);
-        const auto bind = [&](const shader::BlockContract& contract,
-                              const rhi::UploadArena::Slice& slice)
+        const auto bind =
+            [&](const shader::BlockContract& contract, const rhi::UploadArena::Slice& slice)
         {
             const auto handle = self.deferredLighting->SchemaBinding(pass, contract);
             if (!handle)
-                throw std::logic_error("Deferred lighting shader is missing a scene parameter block");
+                throw std::logic_error(
+                    "Deferred lighting shader is missing a scene parameter block");
             rhi::Binding value{};
             value.buffer = slice.buffer;
             value.offset = slice.offset;
@@ -698,12 +1510,12 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
         bind(SceneShadowDataContract, frameConstants.shadow);
         const auto inverse = math::Inverse(self.snapshot.viewProjection);
         const std::vector<double> inverseValues(inverse.values.begin(), inverse.values.end());
-        prepare.constants[self.deferredLighting->BlockBinding(pass,
-                                                              "DeferredLightingParameters")] = {
-            {"InverseViewProjection", {"float4x4", 1, inverseValues}}};
-        for (const auto name : {"GBufferAlbedoMetallic", "GBufferNormalRoughness",
-                                "GBufferEmissionOcclusion", "CameraDepth", "EnvironmentAtlas",
-                                "BrdfLut", "MainLightShadow"})
+        prepare.constants[self.deferredLighting->BlockBinding(pass, "DeferredLightingParameters")] =
+            {{"InverseViewProjection", {"float4x4", 1, inverseValues}},
+             {"RayTracedShadows", {"uint", 1, {rayTracing ? 1.0 : 0.0}}}};
+        for (const auto name :
+             {"GBufferAlbedoMetallic", "GBufferNormalRoughness", "GBufferEmissionOcclusion",
+              "CameraDepth", "EnvironmentAtlas", "BrdfLut", "MainLightShadow", "ShadowVisibility"})
             prepare.deferredResources.insert(self.deferredLighting->ResourceBinding(pass, name));
         auto prepared = self.materials.Prepare(
             self.deferredLighting,
@@ -721,12 +1533,17 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
                 { return value.slot == binding.slot && value.space == binding.space; });
             if (entry == prepared.pipeline->desc.layout->entries.end() || !binding.buffer)
                 throw std::logic_error("Deferred lighting binding layout mismatch");
-            const auto name = importBuffer(
-                binding.buffer, "Deferred.Lighting.Constants." + std::to_string(binding.space) +
-                                   "." + std::to_string(binding.slot),
-                rhi::State::HostWrite);
-            draw.buffers.push_back({binding.slot, name, rendergraph::Use::Uniform,
-                                    {binding.offset, binding.size}, binding.stride, binding.space});
+            const auto name =
+                importBuffer(binding.buffer,
+                             "Deferred.Lighting.Constants." + std::to_string(binding.space) + "." +
+                                 std::to_string(binding.slot),
+                             rhi::State::HostWrite);
+            draw.buffers.push_back({binding.slot,
+                                    name,
+                                    rendergraph::Use::Uniform,
+                                    {binding.offset, binding.size},
+                                    binding.stride,
+                                    binding.space});
         }
         const std::map<std::string, std::string> textureNames{
             {"GBufferAlbedoMetallic", "GBuffer.AlbedoMetallic"},
@@ -735,7 +1552,9 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
             {"CameraDepth", "CameraDepth"},
             {"EnvironmentAtlas", importTexture(self.environmentAtlas)},
             {"BrdfLut", importTexture(self.brdfLut)},
-            {"MainLightShadow", "MainLightShadow"}};
+            {"MainLightShadow", "MainLightShadow"},
+            {"ShadowVisibility", rayTracing ? "RayTracing.ShadowVisibility"
+                                            : importTexture(self.textures.at("white/Linear"))}};
         for (const auto& handle : prepared.deferredResources)
         {
             const auto& resource = self.deferredLighting->GetResource(handle);
@@ -746,13 +1565,29 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
                 {resource.slot, found->second, static_cast<uint32_t>(resource.scope)});
         }
     }
-    if (deferred)
+    if (rayTracing)
+        self.rayTracingPipeline.Build(graph, frame);
+    else if (deferred)
         self.deferredPipeline.Build(graph, frame);
     else
         self.forwardPipeline.Build(graph, frame);
+    if (reflections)
+    {
+        graph.Export(graph.GetTexture(frame.rayTracing.historyRadiance), rhi::State::Sampled);
+        graph.Export(graph.GetBuffer(frame.rayTracing.historyStatistics), rhi::State::ShaderRead);
+    }
+    if (frame.rayTracing.temporalPipeline)
+        for (const auto& name : frame.rayTracing.temporalOutputs)
+            graph.Export(graph.GetTexture(name), rhi::State::Sampled);
     std::string displaySource = "CameraColor";
+    if (options.view == SceneView::ReflectionRaw)
+        displaySource = "RayTracing.RawRadiance";
+    else if (options.view == SceneView::ReflectionHistory)
+        displaySource = frame.rayTracing.historyRadiance;
+    else if (options.view == SceneView::ReflectionDenoised)
+        displaySource = "RayTracing.DenoisedRadiance";
     if (options.view == SceneView::Shadow)
-        displaySource = "MainLightShadow";
+        displaySource = rayTracing ? "RayTracing.ShadowVisibility" : "MainLightShadow";
     else if (options.view == SceneView::Environment)
         displaySource = importTexture(self.environmentAtlas);
     else if (options.view == SceneView::Brdf)
@@ -816,6 +1651,36 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
             context.Draw(3);
         });
     SceneReadback result;
+    if (options.reflectionDiagnostics && frame.rayTracing.statisticsPipeline)
+    {
+        const auto bytes = uint64_t(target->desc.width) * target->desc.height * 8;
+        result.reflectionStatistics = self.runtime.CreateBuffer(
+            {bytes, rhi::Memory::Readback, "Reflection.Statistics.Readback"});
+        auto buffer =
+            graph.ImportBuffer("Reflection.Statistics.Readback", result.reflectionStatistics,
+                               {rhi::State::CopyDest, false});
+        auto pass = graph.AddCopyPass("Reflection.Statistics.Readback");
+        const auto statistics = pass.ReadBuffer(frame.rayTracing.historyStatistics);
+        buffer = pass.WriteBuffer(buffer);
+        pass.Execute([statistics, buffer, bytes](rendergraph::CopyContext& context)
+                     { context.Copy(statistics, buffer, bytes); });
+        graph.Export(buffer, rhi::State::HostRead);
+    }
+    if (options.reflectionDiagnostics && frame.rayTracing.temporalPipeline)
+    {
+        const auto pitch = rhi::TextureRowPitch(target->desc.width, rhi::Format::Rgba32Float);
+        result.reflectionDiagnostics =
+            self.runtime.CreateBuffer({uint64_t(pitch) * target->desc.height, rhi::Memory::Readback,
+                                       "Reflection.Diagnostics"});
+        auto buffer = graph.ImportBuffer("Reflection.Diagnostics", result.reflectionDiagnostics,
+                                         {rhi::State::CopyDest, false});
+        auto pass = graph.AddCopyPass("Reflection.Diagnostics");
+        const auto diagnostics = pass.ReadTexture("RayTracing.Temporal.Diagnostics");
+        buffer = pass.WriteBuffer(buffer);
+        pass.Execute([buffer, diagnostics, pitch](rendergraph::CopyContext& context)
+                     { context.CopyTexture(buffer, diagnostics, pitch, false); });
+        graph.Export(buffer, rhi::State::HostRead);
+    }
     if (readback)
     {
         const auto pitch = rhi::TextureRowPitch(target->desc.width);
@@ -831,9 +1696,52 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
         graph.Export(buffer, rhi::State::HostRead);
     }
     graph.Export("DisplayColor", swapchain ? rhi::State::Present : rhi::State::CopySource);
+    result.scenePrepareNs =
+        static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(
+                                  std::chrono::steady_clock::now() - preparationStart)
+                                  .count());
     graph.Compile({.profile = options.profile});
     auto submitted = graph.Execute(self.pool, swapchain);
+    if (reflectionHistory)
+    {
+        reflectionHistory->signature = std::move(reflectionSignature);
+        reflectionHistory->sequenceSignature = temporalSignature;
+        reflectionHistory->index = reflectionOutput;
+        reflectionHistory->initialized[reflectionOutput] = true;
+        reflectionHistory->statisticsInitialized[reflectionOutput] = true;
+        reflectionHistory->samples = std::min(reflectionSamples + 1, MaxReflectionSamples);
+        reflectionHistory->sequence = (reflectionSequence + 1) % MaxReflectionSamples;
+        reflectionHistory->completion = submitted.completion;
+        reflectionHistory->lastUse = ++self.reflectionUseSequence;
+    }
+    auto& temporal = self.temporalHistory;
+    temporal.active = bool(frame.rayTracing.temporalPipeline);
+    if (temporal.active)
+    {
+        temporal.signature = std::move(temporalSignature);
+        temporal.viewId = self.document.activeCamera;
+        temporal.index = temporalOutput;
+        temporal.initialized[temporalOutput] = true;
+        temporal.viewProjection = self.snapshot.viewProjection;
+        temporal.view = self.snapshot.view;
+        temporal.cameraPosition = self.snapshot.cameraPosition;
+        temporal.frames = std::min(temporalFrames + 1, MaxReflectionSamples);
+        temporal.completion = submitted.completion;
+    }
+    else
+    {
+        // Re-enabling reconstruction is already cold; inactive guides need no CPU residency.
+        // Recorded commands retain any in-flight history versions until their completion.
+        temporal.textures = {};
+        temporal.initialized = {};
+        temporal.frames = 0;
+    }
+    result.reflectionTemporalFrames = temporal.active ? temporal.frames : 0;
+    if (preparedAcceleration)
+        self.accelerationScene.Commit(std::move(*preparedAcceleration), submitted.completion);
     uploads.Seal(submitted.completion);
+    result.reflectionSamples = reflectionHistory ? reflectionHistory->samples : 0;
+    result.reflectionHistoryReset = reflectionHistory && reflectionSamples == 0;
     result.completion = submitted.completion;
     result.profile = std::move(submitted.profile);
     result.compileNs = graph.GetPlan().compileNs;

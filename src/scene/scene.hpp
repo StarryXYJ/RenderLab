@@ -107,7 +107,9 @@ struct Snapshot
     float environmentIntensity = 1, environmentRotation = 0, exposure = 0;
     MainLight light;
     std::vector<Instance> instances;
-    /// All enabled instances, including camera-culled casters. Material roles filter later.
+    /// Stable enabled scene instances, independent of camera culling and light/shadow settings.
+    std::vector<Instance> allInstances;
+    /// Enabled caster candidates when raster shadows are requested. Material roles filter later.
     std::vector<Instance> shadowCasters;
     size_t totalInstances = 0, culledInstances = 0;
 };

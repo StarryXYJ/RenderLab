@@ -10,8 +10,8 @@ class DxSwapchain final : public Swapchain
 public:
     DxSwapchain(DxRuntime& runtime, ID3D12Device* device, ID3D12CommandQueue* queue,
                 IDXGIFactory6* factory, platform::NativeSurface surface, uint32_t width,
-                uint32_t height)
-        : Swapchain(&runtime), runtime_(runtime), queue_(queue)
+                uint32_t height, bool vsync)
+        : Swapchain(&runtime), runtime_(runtime), queue_(queue), vsync_(vsync)
     {
         Check(device->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&presentFence_)),
               "Presentation fence");
@@ -23,6 +23,17 @@ public:
         desc.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
         desc.BufferCount = 3;
         desc.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD;
+        if (!vsync_)
+        {
+            ComPtr<IDXGIFactory5> factory5;
+            BOOL supported = FALSE;
+            if (SUCCEEDED(factory->QueryInterface(IID_PPV_ARGS(&factory5))) &&
+                SUCCEEDED(factory5->CheckFeatureSupport(DXGI_FEATURE_PRESENT_ALLOW_TEARING,
+                                                        &supported, sizeof(supported))) &&
+                supported)
+                flags_ = DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING;
+        }
+        desc.Flags = flags_;
         ComPtr<IDXGISwapChain1> swapchain;
         Check(factory->CreateSwapChainForHwnd(queue, static_cast<HWND>(surface.window), &desc,
                                               nullptr, nullptr, &swapchain),
@@ -52,7 +63,7 @@ public:
     }
     void Present() override
     {
-        Check(native_->Present(1, 0), "Present");
+        Check(native_->Present(vsync_ ? 1 : 0, flags_ ? DXGI_PRESENT_ALLOW_TEARING : 0), "Present");
     }
     void Resize(uint32_t width, uint32_t height) override
     {
@@ -61,7 +72,7 @@ public:
         images_.clear();
         if (!width || !height)
             return;
-        Check(native_->ResizeBuffers(3, width, height, DXGI_FORMAT_R8G8B8A8_UNORM, 0),
+        Check(native_->ResizeBuffers(3, width, height, DXGI_FORMAT_R8G8B8A8_UNORM, flags_),
               "ResizeBuffers");
         Rebuild(width, height);
     }
@@ -97,6 +108,8 @@ private:
     ID3D12CommandQueue* queue_;
     ComPtr<ID3D12Fence> presentFence_;
     uint64_t presentPoint_ = 0;
+    bool vsync_;
+    UINT flags_ = 0;
     ComPtr<IDXGISwapChain3> native_;
     std::vector<std::shared_ptr<Texture>> images_;
     std::vector<std::shared_ptr<TextureView>> views_;
@@ -104,8 +117,9 @@ private:
 } // namespace
 
 std::unique_ptr<Swapchain> DxRuntime::CreateSwapchain(platform::NativeSurface surface,
-                                                      uint32_t width, uint32_t height)
+                                                      uint32_t width, uint32_t height, bool vsync)
 {
-    return std::make_unique<DxSwapchain>(*this, device_, queue_, factory_, surface, width, height);
+    return std::make_unique<DxSwapchain>(*this, device_, queue_, factory_, surface, width, height,
+                                         vsync);
 }
 } // namespace renderlab::rhi::dx12

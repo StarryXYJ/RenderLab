@@ -8,9 +8,10 @@
 namespace renderlab::rhi::vulkan
 {
 VulkanSwapchain::VulkanSwapchain(VulkanRuntime& runtime, VkInstance instance,
-                                 VkPhysicalDevice physical, VkDevice device, VkQueue queue)
+                                 VkPhysicalDevice physical, VkDevice device, VkQueue queue,
+                                 bool vsync)
     : Swapchain(&runtime), runtime_(runtime), instance_(instance), physical_(physical),
-      device_(device), queue_(queue)
+      device_(device), queue_(queue), vsync_(vsync)
 {
 }
 
@@ -146,6 +147,23 @@ void VulkanSwapchain::Resize(uint32_t width, uint32_t height)
         info.compositeAlpha = static_cast<VkCompositeAlphaFlagBitsKHR>(
             caps.supportedCompositeAlpha & (~caps.supportedCompositeAlpha + 1));
     info.presentMode = VK_PRESENT_MODE_FIFO_KHR;
+    if (!vsync_)
+    {
+        uint32_t modeCount = 0;
+        Check(vkGetPhysicalDeviceSurfacePresentModesKHR(physical_, surface_, &modeCount, nullptr),
+              "Present mode count");
+        std::vector<VkPresentModeKHR> modes(modeCount);
+        Check(vkGetPhysicalDeviceSurfacePresentModesKHR(physical_, surface_, &modeCount,
+                                                        modes.data()),
+              "Present modes");
+        if (std::ranges::find(modes, VK_PRESENT_MODE_IMMEDIATE_KHR) != modes.end())
+            info.presentMode = VK_PRESENT_MODE_IMMEDIATE_KHR;
+        else if (std::ranges::find(modes, VK_PRESENT_MODE_MAILBOX_KHR) != modes.end())
+            info.presentMode = VK_PRESENT_MODE_MAILBOX_KHR;
+        else
+            throw std::runtime_error(
+                "Uncapped presentation requires Vulkan Immediate or Mailbox mode");
+    }
     info.clipped = VK_TRUE;
     Check(vkCreateSwapchainKHR(device_, &info, nullptr, &native_), "vkCreateSwapchainKHR");
     Check(vkGetSwapchainImagesKHR(device_, native_, &count, nullptr), "Swapchain image count");
@@ -218,10 +236,11 @@ void VulkanSwapchain::Clear()
 }
 
 std::unique_ptr<Swapchain> VulkanRuntime::CreateSwapchain(platform::NativeSurface surface,
-                                                          uint32_t width, uint32_t height)
+                                                          uint32_t width, uint32_t height,
+                                                          bool vsync)
 {
     auto swapchain =
-        std::make_unique<VulkanSwapchain>(*this, instance_, physical_, device_, queue_);
+        std::make_unique<VulkanSwapchain>(*this, instance_, physical_, device_, queue_, vsync);
     swapchain->Initialize(family_, surface);
     swapchain->timeline = timeline_;
     swapchain->Resize(width, height);

@@ -1,0 +1,563 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-10-26",
+  "adapter": "NVIDIA GeForce RTX 5060",
+  "buildConfiguration": "Release",
+  "validation": false,
+  "project": "sample/m4/RayTracing.rlproject",
+  "width": 1280,
+  "height": 720,
+  "quality": "medium (512)",
+  "warmupFrames": 64,
+  "measuredFramesPerRun": 240,
+  "runsPerConfiguration": 1,
+  "timingMode": "headless-serial",
+  "notes": [
+    "GPU pass sum excludes graph barriers and uninstrumented work.",
+    "One short run per configuration; no long-tail or statistical performance conclusion.",
+    "Stationary reflection history uses a 1/64 update after the first 64 samples.",
+    "Raw reports and frame samples were saved under ignored out/m5.4-release."
+  ],
+  "runs": [
+    {
+      "backend": "dx12",
+      "pipeline": "forward",
+      "driver": "32.0.15.9174",
+      "recordedAtUtc": "2026-10-26T11:33:19Z",
+      "sampleCount": 240,
+      "metricsMs": {
+        "cpuRenderMs": {
+          "maxMs": 0.6652,
+          "meanMs": 0.43712208333333324,
+          "minMs": 0.396,
+          "samples": 240
+        },
+        "frameTimeMs": {
+          "maxMs": 0.7938,
+          "meanMs": 0.5691387500000001,
+          "minMs": 0.5091,
+          "samples": 240
+        },
+        "gpuPassSumMs": {
+          "maxMs": 0.067712,
+          "meanMs": 0.0653017333333333,
+          "minMs": 0.064096,
+          "samples": 240
+        },
+        "gpuWaitMs": {
+          "maxMs": 0.3448,
+          "meanMs": 0.13201666666666664,
+          "minMs": 0.104,
+          "samples": 240
+        },
+        "graphCompileMs": {
+          "maxMs": 0.0148,
+          "meanMs": 0.011034583333333335,
+          "minMs": 0.01,
+          "samples": 240
+        },
+        "graphPrepareMs": {
+          "maxMs": 0.0038,
+          "meanMs": 0.002667916666666666,
+          "minMs": 0.0024,
+          "samples": 240
+        },
+        "graphRecordMs": {
+          "maxMs": 0.2238,
+          "meanMs": 0.0719191666666667,
+          "minMs": 0.0656,
+          "samples": 240
+        }
+      },
+      "gpuPasses": {
+        "Display.ToneMapping": {
+          "maxMs": 0.012384,
+          "meanMs": 0.012041200000000012,
+          "minMs": 0.011776,
+          "samples": 240
+        },
+        "Forward.Opaque": {
+          "maxMs": 0.04544,
+          "meanMs": 0.0442744,
+          "minMs": 0.044,
+          "samples": 240
+        },
+        "MainLight.Shadow": {
+          "maxMs": 0.010464,
+          "meanMs": 0.008986133333333332,
+          "minMs": 0.008128,
+          "samples": 240
+        }
+      },
+      "memory": {
+        "budgetBytes": 268435456,
+        "highWaterBytes": 29949952,
+        "processPrivateBytes": 123817984,
+        "processWorkingSetBytes": 99348480,
+        "usedBytes": 29949952
+      }
+    },
+    {
+      "backend": "dx12",
+      "pipeline": "deferred",
+      "driver": "32.0.15.9174",
+      "recordedAtUtc": "2026-10-26T11:33:20Z",
+      "sampleCount": 240,
+      "metricsMs": {
+        "cpuRenderMs": {
+          "maxMs": 0.9873,
+          "meanMs": 0.700234583333334,
+          "minMs": 0.6289,
+          "samples": 240
+        },
+        "frameTimeMs": {
+          "maxMs": 1.2907,
+          "meanMs": 0.9946137500000003,
+          "minMs": 0.8938,
+          "samples": 240
+        },
+        "gpuPassSumMs": {
+          "maxMs": 0.118112,
+          "meanMs": 0.11235346666666672,
+          "minMs": 0.110592,
+          "samples": 240
+        },
+        "gpuWaitMs": {
+          "maxMs": 0.3727,
+          "meanMs": 0.2943791666666666,
+          "minMs": 0.2609,
+          "samples": 240
+        },
+        "graphCompileMs": {
+          "maxMs": 0.0324,
+          "meanMs": 0.016274999999999998,
+          "minMs": 0.0144,
+          "samples": 240
+        },
+        "graphPrepareMs": {
+          "maxMs": 0.0049,
+          "meanMs": 0.003219166666666669,
+          "minMs": 0.0028,
+          "samples": 240
+        },
+        "graphRecordMs": {
+          "maxMs": 0.0934,
+          "meanMs": 0.07799208333333338,
+          "minMs": 0.073,
+          "samples": 240
+        }
+      },
+      "gpuPasses": {
+        "Deferred.GBuffer": {
+          "maxMs": 0.046816,
+          "meanMs": 0.043250266666666655,
+          "minMs": 0.042464,
+          "samples": 240
+        },
+        "Deferred.Lighting": {
+          "maxMs": 0.047392,
+          "meanMs": 0.046045600000000006,
+          "minMs": 0.044832,
+          "samples": 240
+        },
+        "Display.ToneMapping": {
+          "maxMs": 0.01248,
+          "meanMs": 0.012097333333333349,
+          "minMs": 0.011776,
+          "samples": 240
+        },
+        "MainLight.Shadow": {
+          "maxMs": 0.013632,
+          "meanMs": 0.010960266666666668,
+          "minMs": 0.010496,
+          "samples": 240
+        }
+      },
+      "memory": {
+        "budgetBytes": 268435456,
+        "highWaterBytes": 77201408,
+        "processPrivateBytes": 169394176,
+        "processWorkingSetBytes": 99115008,
+        "usedBytes": 77135872
+      }
+    },
+    {
+      "backend": "dx12",
+      "pipeline": "raytracing",
+      "driver": "32.0.15.9174",
+      "recordedAtUtc": "2026-10-26T11:33:22Z",
+      "sampleCount": 240,
+      "metricsMs": {
+        "cpuRenderMs": {
+          "maxMs": 1.12,
+          "meanMs": 0.8985966666666673,
+          "minMs": 0.7887,
+          "samples": 240
+        },
+        "frameTimeMs": {
+          "maxMs": 2.2514,
+          "meanMs": 1.5131362499999992,
+          "minMs": 1.336,
+          "samples": 240
+        },
+        "gpuPassSumMs": {
+          "maxMs": 0.39936000000000005,
+          "meanMs": 0.3931866666666663,
+          "minMs": 0.386528,
+          "samples": 240
+        },
+        "gpuWaitMs": {
+          "maxMs": 1.2972,
+          "meanMs": 0.6145395833333335,
+          "minMs": 0.5443,
+          "samples": 240
+        },
+        "graphCompileMs": {
+          "maxMs": 0.0574,
+          "meanMs": 0.030089583333333312,
+          "minMs": 0.0266,
+          "samples": 240
+        },
+        "graphPrepareMs": {
+          "maxMs": 0.0079,
+          "meanMs": 0.005213750000000001,
+          "minMs": 0.0044,
+          "samples": 240
+        },
+        "graphRecordMs": {
+          "maxMs": 0.183,
+          "meanMs": 0.11713458333333335,
+          "minMs": 0.1086,
+          "samples": 240
+        }
+      },
+      "gpuPasses": {
+        "Deferred.GBuffer": {
+          "maxMs": 0.050176,
+          "meanMs": 0.04615679999999995,
+          "minMs": 0.043808,
+          "samples": 240
+        },
+        "Deferred.Lighting": {
+          "maxMs": 0.034944,
+          "meanMs": 0.03375320000000001,
+          "minMs": 0.032672,
+          "samples": 240
+        },
+        "Display.ToneMapping": {
+          "maxMs": 0.020352,
+          "meanMs": 0.019099599999999998,
+          "minMs": 0.01776,
+          "samples": 240
+        },
+        "MainLight.Shadow": {
+          "maxMs": 0.0144,
+          "meanMs": 0.013437733333333346,
+          "minMs": 0.012256,
+          "samples": 240
+        },
+        "RayTracing.Reflection.Accumulate": {
+          "maxMs": 0.083904,
+          "meanMs": 0.08128320000000004,
+          "minMs": 0.07872,
+          "samples": 240
+        },
+        "RayTracing.Reflection.Combine": {
+          "maxMs": 0.067392,
+          "meanMs": 0.06514333333333336,
+          "minMs": 0.062528,
+          "samples": 240
+        },
+        "RayTracing.Reflection.Trace": {
+          "maxMs": 0.09856,
+          "meanMs": 0.09601400000000002,
+          "minMs": 0.093024,
+          "samples": 240
+        },
+        "RayTracing.Shadows": {
+          "maxMs": 0.038976,
+          "meanMs": 0.03829879999999999,
+          "minMs": 0.037664,
+          "samples": 240
+        }
+      },
+      "memory": {
+        "budgetBytes": 268435456,
+        "highWaterBytes": 149749760,
+        "processPrivateBytes": 402509824,
+        "processWorkingSetBytes": 260665344,
+        "usedBytes": 149684224
+      }
+    },
+    {
+      "backend": "vulkan",
+      "pipeline": "forward",
+      "driver": "NVIDIA; 591.74 (raw 0x93D28000)",
+      "recordedAtUtc": "2026-10-26T11:33:24Z",
+      "sampleCount": 240,
+      "metricsMs": {
+        "cpuRenderMs": {
+          "maxMs": 0.6905,
+          "meanMs": 0.42001083333333333,
+          "minMs": 0.3787,
+          "samples": 240
+        },
+        "frameTimeMs": {
+          "maxMs": 1.2323,
+          "meanMs": 0.5779020833333334,
+          "minMs": 0.523,
+          "samples": 240
+        },
+        "gpuPassSumMs": {
+          "maxMs": 0.067168,
+          "meanMs": 0.06029893333333329,
+          "minMs": 0.059615999999999995,
+          "samples": 240
+        },
+        "gpuWaitMs": {
+          "maxMs": 0.5418,
+          "meanMs": 0.15789124999999993,
+          "minMs": 0.0891,
+          "samples": 240
+        },
+        "graphCompileMs": {
+          "maxMs": 0.0848,
+          "meanMs": 0.011112916666666662,
+          "minMs": 0.0096,
+          "samples": 240
+        },
+        "graphPrepareMs": {
+          "maxMs": 0.0087,
+          "meanMs": 0.002347083333333334,
+          "minMs": 0.002,
+          "samples": 240
+        },
+        "graphRecordMs": {
+          "maxMs": 0.0962,
+          "meanMs": 0.05901249999999999,
+          "minMs": 0.0553,
+          "samples": 240
+        }
+      },
+      "gpuPasses": {
+        "Display.ToneMapping": {
+          "maxMs": 0.011872,
+          "meanMs": 0.011307866666666671,
+          "minMs": 0.010752,
+          "samples": 240
+        },
+        "Forward.Opaque": {
+          "maxMs": 0.044352,
+          "meanMs": 0.040649733333333285,
+          "minMs": 0.040256,
+          "samples": 240
+        },
+        "MainLight.Shadow": {
+          "maxMs": 0.01136,
+          "meanMs": 0.008341333333333355,
+          "minMs": 0.008224,
+          "samples": 240
+        }
+      },
+      "memory": {
+        "budgetBytes": 268435456,
+        "highWaterBytes": 29299776,
+        "processPrivateBytes": 361287680,
+        "processWorkingSetBytes": 299626496,
+        "usedBytes": 29299776
+      }
+    },
+    {
+      "backend": "vulkan",
+      "pipeline": "deferred",
+      "driver": "NVIDIA; 591.74 (raw 0x93D28000)",
+      "recordedAtUtc": "2026-10-26T11:33:26Z",
+      "sampleCount": 240,
+      "metricsMs": {
+        "cpuRenderMs": {
+          "maxMs": 0.7839,
+          "meanMs": 0.5600537500000003,
+          "minMs": 0.5042,
+          "samples": 240
+        },
+        "frameTimeMs": {
+          "maxMs": 1.1038,
+          "meanMs": 0.9023441666666666,
+          "minMs": 0.8267,
+          "samples": 240
+        },
+        "gpuPassSumMs": {
+          "maxMs": 0.11286399999999999,
+          "meanMs": 0.10973173333333335,
+          "minMs": 0.108096,
+          "samples": 240
+        },
+        "gpuWaitMs": {
+          "maxMs": 0.4721,
+          "meanMs": 0.34229041666666665,
+          "minMs": 0.288,
+          "samples": 240
+        },
+        "graphCompileMs": {
+          "maxMs": 0.0299,
+          "meanMs": 0.016388333333333335,
+          "minMs": 0.0148,
+          "samples": 240
+        },
+        "graphPrepareMs": {
+          "maxMs": 0.0048,
+          "meanMs": 0.0031975,
+          "minMs": 0.0027,
+          "samples": 240
+        },
+        "graphRecordMs": {
+          "maxMs": 0.0984,
+          "meanMs": 0.0693066666666667,
+          "minMs": 0.0641,
+          "samples": 240
+        }
+      },
+      "gpuPasses": {
+        "Deferred.GBuffer": {
+          "maxMs": 0.05216,
+          "meanMs": 0.050976933333333356,
+          "minMs": 0.05008,
+          "samples": 240
+        },
+        "Deferred.Lighting": {
+          "maxMs": 0.03904,
+          "meanMs": 0.03742066666666669,
+          "minMs": 0.036512,
+          "samples": 240
+        },
+        "Display.ToneMapping": {
+          "maxMs": 0.01216,
+          "meanMs": 0.011409999999999993,
+          "minMs": 0.0112,
+          "samples": 240
+        },
+        "MainLight.Shadow": {
+          "maxMs": 0.011136,
+          "meanMs": 0.009924133333333328,
+          "minMs": 0.009664,
+          "samples": 240
+        }
+      },
+      "memory": {
+        "budgetBytes": 268435456,
+        "highWaterBytes": 76485952,
+        "processPrivateBytes": 407113728,
+        "processWorkingSetBytes": 297525248,
+        "usedBytes": 76485696
+      }
+    },
+    {
+      "backend": "vulkan",
+      "pipeline": "raytracing",
+      "driver": "NVIDIA; 591.74 (raw 0x93D28000)",
+      "recordedAtUtc": "2026-10-26T11:33:28Z",
+      "sampleCount": 240,
+      "metricsMs": {
+        "cpuRenderMs": {
+          "maxMs": 1.7159,
+          "meanMs": 0.7145545833333334,
+          "minMs": 0.647,
+          "samples": 240
+        },
+        "frameTimeMs": {
+          "maxMs": 2.623,
+          "meanMs": 1.2983808333333335,
+          "minMs": 1.1885,
+          "samples": 240
+        },
+        "gpuPassSumMs": {
+          "maxMs": 0.334816,
+          "meanMs": 0.3269994666666666,
+          "minMs": 0.321088,
+          "samples": 240
+        },
+        "gpuWaitMs": {
+          "maxMs": 1.8587,
+          "meanMs": 0.5838262500000002,
+          "minMs": 0.5214,
+          "samples": 240
+        },
+        "graphCompileMs": {
+          "maxMs": 0.0406,
+          "meanMs": 0.029005000000000006,
+          "minMs": 0.0263,
+          "samples": 240
+        },
+        "graphPrepareMs": {
+          "maxMs": 0.0128,
+          "meanMs": 0.009419583333333328,
+          "minMs": 0.0082,
+          "samples": 240
+        },
+        "graphRecordMs": {
+          "maxMs": 0.1168,
+          "meanMs": 0.09434083333333329,
+          "minMs": 0.0896,
+          "samples": 240
+        }
+      },
+      "gpuPasses": {
+        "Deferred.GBuffer": {
+          "maxMs": 0.059968,
+          "meanMs": 0.055975200000000024,
+          "minMs": 0.054816,
+          "samples": 240
+        },
+        "Deferred.Lighting": {
+          "maxMs": 0.032832,
+          "meanMs": 0.03181826666666664,
+          "minMs": 0.031072,
+          "samples": 240
+        },
+        "Display.ToneMapping": {
+          "maxMs": 0.016352,
+          "meanMs": 0.015629599999999987,
+          "minMs": 0.015104,
+          "samples": 240
+        },
+        "MainLight.Shadow": {
+          "maxMs": 0.013184,
+          "meanMs": 0.011863466666666675,
+          "minMs": 0.011424,
+          "samples": 240
+        },
+        "RayTracing.Reflection.Accumulate": {
+          "maxMs": 0.0304,
+          "meanMs": 0.029401866666666696,
+          "minMs": 0.02832,
+          "samples": 240
+        },
+        "RayTracing.Reflection.Combine": {
+          "maxMs": 0.06304,
+          "meanMs": 0.058107999999999854,
+          "minMs": 0.054816,
+          "samples": 240
+        },
+        "RayTracing.Reflection.Trace": {
+          "maxMs": 0.086688,
+          "meanMs": 0.08368680000000009,
+          "minMs": 0.081984,
+          "samples": 240
+        },
+        "RayTracing.Shadows": {
+          "maxMs": 0.041856,
+          "meanMs": 0.04051626666666665,
+          "minMs": 0.03904,
+          "samples": 240
+        }
+      },
+      "memory": {
+        "budgetBytes": 268435456,
+        "highWaterBytes": 148962496,
+        "processPrivateBytes": 520933376,
+        "processWorkingSetBytes": 335773696,
+        "usedBytes": 148962240
+      }
+    }
+  ]
+}

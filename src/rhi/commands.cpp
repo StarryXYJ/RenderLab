@@ -25,15 +25,37 @@ void CommandList::Barrier(std::shared_ptr<Buffer> buffer, State before, State af
         return state == State::Undefined || state == State::CopySource ||
                state == State::CopyDest || state == State::Vertex || state == State::Index ||
                state == State::Indirect || state == State::HostWrite || state == State::HostRead ||
-               state == State::UniformRead || state == State::ShaderRead || state == State::Storage;
+               state == State::UniformRead || state == State::ShaderRead ||
+               state == State::Storage || state == State::AccelerationStructureBuildInput ||
+               state == State::AccelerationStructureBuildWrite ||
+               state == State::AccelerationStructureRead || state == State::ShaderTableRead;
     };
     Require(valid(before) && valid(after) && after != State::Undefined, "Invalid M1 buffer state");
+    Require(!buffer->desc.accelerationStructureStorage ||
+                after == State::AccelerationStructureBuildWrite ||
+                after == State::AccelerationStructureRead,
+            "Acceleration structure storage cannot transition to an ordinary buffer state");
+    Require(after != State::ShaderTableRead || buffer->desc.shaderTable,
+            "Buffer lacks shader-table usage");
     Require(after != State::Storage || buffer->desc.storage, "Buffer lacks storage usage");
+    Require(after != State::AccelerationStructureBuildInput ||
+                buffer->desc.accelerationStructureInput,
+            "Buffer lacks acceleration-structure build-input usage");
+    Require((after != State::AccelerationStructureBuildWrite &&
+             after != State::AccelerationStructureRead) ||
+                buffer->desc.accelerationStructureStorage || buffer->desc.storage,
+            "Buffer lacks acceleration-structure storage usage");
+    Require(after != State::AccelerationStructureRead || buffer->desc.accelerationStructureStorage,
+            "Acceleration structure traversal requires AS storage");
     if (buffer->desc.memory == Memory::Upload)
         Require((before == State::HostWrite || before == State::CopySource ||
-                 before == State::UniformRead || before == State::ShaderRead) &&
+                 before == State::UniformRead || before == State::ShaderRead ||
+                 before == State::ShaderTableRead ||
+                 before == State::AccelerationStructureBuildInput) &&
                     (after == State::CopySource || after == State::UniformRead ||
-                     after == State::ShaderRead),
+                     after == State::ShaderRead || after == State::ShaderTableRead ||
+                     (after == State::AccelerationStructureBuildInput &&
+                      buffer->desc.accelerationStructureInput)),
                 "Upload buffers allow host-write to GPU-read or transitions between GPU-read uses");
     if (buffer->desc.memory == Memory::Readback)
         Require((before == State::CopyDest || before == State::HostRead) &&
@@ -99,9 +121,9 @@ void CommandList::CopyTexture(std::shared_ptr<Texture> source, std::shared_ptr<T
     commands_.emplace_back(TextureToTextureCopy{std::move(source), std::move(destination)});
 }
 void CommandList::Begin(std::vector<std::shared_ptr<TextureView>> colors,
-                        std::shared_ptr<TextureView> depth,
-                        std::array<float, 4> clear, LoadOp colorLoad, LoadOp depthLoad,
-                        LoadOp stencilLoad, uint32_t clearStencil)
+                        std::shared_ptr<TextureView> depth, std::array<float, 4> clear,
+                        LoadOp colorLoad, LoadOp depthLoad, LoadOp stencilLoad,
+                        uint32_t clearStencil)
 {
     Require(!rendering_ && !colors.empty() && colors.size() <= 8,
             "Rendering requires one to eight color attachments");
@@ -158,7 +180,7 @@ void CommandList::Bind(std::shared_ptr<Pipeline> pipeline)
 {
     Check(pipeline);
     pipeline_ = pipeline;
-    compute_ = bool(pipeline->desc.compute);
+    compute_ = bool(pipeline->desc.compute || pipeline->desc.rayGeneration);
     group_.reset();
     vertex_.reset();
     index_.reset();
@@ -214,10 +236,37 @@ void CommandList::DrawReady(bool indexed) const
 void CommandList::Compute(uint32_t x, uint32_t y, uint32_t z)
 {
     Recording();
-    Require(!rendering_ && pipeline_ && compute_ && group_ && x && y && z && x <= 65535 &&
-                y <= 65535 && z <= 65535,
+    Require(!rendering_ && pipeline_ && pipeline_->desc.compute && group_ && x && y && z &&
+                x <= 65535 && y <= 65535 && z <= 65535,
             "Invalid dispatch state or dimensions");
     commands_.emplace_back(Dispatch{x, y, z});
+}
+void CommandList::Trace(std::shared_ptr<ShaderTable> table, uint32_t width, uint32_t height,
+                        uint32_t depth)
+{
+    Check(table);
+    Check(table->buffer);
+    Require(table->buffer->desc.shaderTable && table->stride > 0 &&
+                table->stride <= table->buffer->desc.size / 3 &&
+                table->offset <= table->buffer->desc.size - table->stride * 3,
+            "Invalid ShaderTable storage");
+    Require(!rendering_ && pipeline_ && pipeline_->desc.rayGeneration &&
+                table->pipeline == pipeline_ && group_ && width && height && depth &&
+                width <= 65535 && height <= 65535 && depth <= 65535 &&
+                uint64_t(width) * height * depth <= (1ull << 30),
+            "Invalid TraceRays state or dimensions");
+    commands_.emplace_back(TraceRays{std::move(table), width, height, depth});
+}
+void CommandList::Build(std::shared_ptr<AccelerationStructure> accelerationStructure, bool update)
+{
+    Check(accelerationStructure);
+    Require(!rendering_, "Acceleration structures must be built outside rendering");
+    Check(accelerationStructure->scratch);
+    Require(!update || accelerationStructure->desc.allowUpdate,
+            "Acceleration structure was not created for update");
+    const auto scratch = accelerationStructure->scratch;
+    commands_.emplace_back(
+        BuildAccelerationStructure{std::move(accelerationStructure), scratch, update});
 }
 void CommandList::BeginMarker(std::string name)
 {

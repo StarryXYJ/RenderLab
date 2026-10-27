@@ -42,6 +42,7 @@ template <class T>
 concept Drawable = requires(T& c) { c.Draw(3); };
 static_assert(Dispatchable<ComputeContext> && !Dispatchable<RasterContext> &&
               !Dispatchable<CopyContext>);
+static_assert(!Drawable<RayTracingContext> && !Dispatchable<RayTracingContext>);
 static_assert(Drawable<RasterContext> && !Drawable<ComputeContext> && !Drawable<CopyContext>);
 TextureHandle Texture(Graph& graph, const std::string& name = "Test.Texture")
 {
@@ -85,12 +86,15 @@ struct FakeRuntime : rhi::Runtime
     {
         return std::make_shared<rhi::Texture>(this, d);
     }
-    std::shared_ptr<rhi::TextureView> CreateView(std::shared_ptr<rhi::Texture> t) override
+    using rhi::Runtime::CreateView;
+    std::shared_ptr<rhi::TextureView> CreateView(std::shared_ptr<rhi::Texture> t,
+                                                 rhi::TextureViewUsage usage) override
     {
-        if (auto cached = t->defaultView.lock())
+        auto& cache = usage == rhi::TextureViewUsage::Sampled ? t->sampledView : t->defaultView;
+        if (auto cached = cache.lock())
             return cached;
-        auto view = std::make_shared<rhi::TextureView>(t);
-        t->defaultView = view;
+        auto view = std::make_shared<rhi::TextureView>(t, usage);
+        cache = view;
         return view;
     }
     std::shared_ptr<rhi::Sampler> CreateSampler() override
@@ -110,8 +114,8 @@ struct FakeRuntime : rhi::Runtime
     {
         return std::make_shared<rhi::Pipeline>(this, std::move(d));
     }
-    std::unique_ptr<rhi::Swapchain> CreateSwapchain(platform::NativeSurface, uint32_t,
-                                                    uint32_t) override
+    std::unique_ptr<rhi::Swapchain> CreateSwapchain(platform::NativeSurface, uint32_t, uint32_t,
+                                                    bool) override
     {
         return {};
     }
@@ -701,6 +705,34 @@ void StencilContracts()
 void ProfilingContracts()
 {
     FakeRuntime runtime;
+    {
+        struct BudgetRuntime : FakeRuntime
+        {
+            void Charge(uint64_t bytes)
+            {
+                ledger_->Add(bytes);
+            }
+            void Release(uint64_t bytes)
+            {
+                ledger_->Remove(bytes);
+            }
+        } budget;
+        Fails([&] { budget.SetAllocationBudget(0); }, "nonzero");
+        budget.SetAllocationBudget(1024);
+        budget.Charge(512);
+        Fails([&] { budget.SetAllocationBudget(511); }, "current native usage");
+        Fails([&] { budget.Charge(513); }, "requested=513 bytes, used=512 bytes, limit=1024 bytes");
+        Require(budget.GetMemoryStats().used == 512 && budget.GetMemoryStats().highWater == 512,
+                "Rejected allocation must not change ledger accounting");
+        budget.SetAllocationBudget(2048);
+        budget.Charge(1024);
+        Require(budget.GetMemoryStats().used == 1536 && budget.GetMemoryStats().budget == 2048,
+                "Configured budget must cover tracked allocations");
+        std::thread worker([&]
+                           { Fails([&] { budget.SetAllocationBudget(4096); }, "owner thread"); });
+        worker.join();
+        budget.Release(1536);
+    }
     Pool pool(runtime);
     {
         Pool views(runtime, 1, 1024);
@@ -755,6 +787,96 @@ void ProfilingContracts()
     profile.completion = 1;
     Fails([&] { profile.Read(runtime); }, "completed submission");
 }
+void AccelerationStructureContracts()
+{
+    FakeRuntime runtime;
+    rhi::AccelerationStructureDesc unsupported;
+    unsupported.name = "Unsupported.TLAS";
+    unsupported.topLevel = true;
+    Fails([&] { runtime.QueryAccelerationStructureSizes(unsupported); },
+          "does not support acceleration structures");
+    const rhi::BufferDesc storage{256, rhi::Memory::Device, "AS", false, true, false, true};
+    {
+        Graph graph;
+        auto target = graph.CreateBuffer("AS", storage);
+        auto pass = graph.AddComputePass("UpdateBeforeBuild");
+        pass.ReadWriteBuffer(target, Use::AccelerationStructureBuildWrite);
+        pass.SideEffect();
+        pass.Execute([](ComputeContext&) {});
+        Fails([&] { graph.Compile(); }, "Read before initialization");
+    }
+    {
+        Graph graph;
+        auto target = graph.CreateBuffer("AS", storage);
+        auto build = graph.AddComputePass("Build");
+        target = build.WriteBuffer(target, Use::AccelerationStructureBuildWrite);
+        build.Execute([](ComputeContext&) {});
+        auto update = graph.AddComputePass("Update");
+        target = update.ReadWriteBuffer(target, Use::AccelerationStructureBuildWrite);
+        update.Execute([](ComputeContext&) {});
+        auto trace = graph.AddComputePass("Trace");
+        trace.ReadBuffer(target, Use::AccelerationStructureRead);
+        trace.SideEffect();
+        trace.Execute([](ComputeContext&) {});
+        Require(graph.Compile().schedule.size() == 3,
+                "A preserving AS update must retain the original build producer");
+    }
+    {
+        Graph graph;
+        auto target = graph.CreateBuffer("AS", storage);
+        auto pass = graph.AddComputePass("InvalidRead");
+        Fails([&] { pass.ReadBuffer(target, Use::ShaderRead); },
+              "AS storage cannot be used as an ordinary buffer");
+    }
+}
+void ShaderTableContracts()
+{
+    FakeRuntime runtime;
+    Pool pool(runtime, 8, 1024 * 1024);
+    rhi::PipelineDesc desc;
+    desc.layout = runtime.CreateLayout({});
+    desc.rayGeneration = runtime.CreateShader(rhi::ShaderStage::RayGeneration,
+                                              std::vector<std::byte>(4), "RayGeneration");
+    auto pipeline = std::make_shared<rhi::Pipeline>(&runtime, desc);
+    auto buffer =
+        runtime.CreateBuffer({256, rhi::Memory::Upload, "Table", false, true, false, false, true});
+    auto table = std::make_shared<rhi::ShaderTable>(pipeline, buffer, 0, 64);
+    Fails([&] { runtime.CreateShaderTable(pipeline); }, "requires a ray tracing pipeline");
+    {
+        Graph graph;
+        auto records = graph.ImportBuffer("Table", buffer, {rhi::State::HostWrite, true});
+        auto pass = graph.AddRayTracingPass("PartialTable");
+        records = pass.ReadBuffer(records, Use::ShaderTableRead, {0, 64});
+        pass.SideEffect();
+        pass.Execute(
+            [=](RayTracingContext& context)
+            {
+                context.Bind(pipeline);
+                context.TraceRays(table, records, 1, 1);
+            });
+        graph.Compile();
+        Fails([&] { graph.Execute(pool); }, "exceeds declared buffer range");
+    }
+    {
+        Graph graph;
+        auto records = graph.ImportBuffer("Table", buffer, {rhi::State::HostWrite, true});
+        auto pass = graph.AddRayTracingPass("FullTable");
+        records = pass.ReadBuffer(records, Use::ShaderTableRead);
+        pass.SideEffect();
+        pass.Execute(
+            [=](RayTracingContext& context)
+            {
+                context.Bind(pipeline);
+                context.TraceRays(table, records, 1, 1);
+            });
+        graph.Compile();
+        runtime.Wait(graph.Execute(pool).completion);
+    }
+    auto commands = runtime.CreateCommands();
+    commands->Bind(pipeline);
+    commands->Bind(runtime.CreateGroup(desc.layout, {}));
+    Fails([&] { commands->Trace(table, UINT32_MAX, UINT32_MAX, UINT32_MAX); }, "Invalid TraceRays");
+}
 } // namespace
 int main()
 {
@@ -769,6 +891,8 @@ int main()
         ForwardContracts();
         StencilContracts();
         ProfilingContracts();
+        AccelerationStructureContracts();
+        ShaderTableContracts();
         std::cout << "Graph contracts passed: names, typed passes, versions, culling, hazards, "
                      "bindings and lifetime\n";
         return 0;

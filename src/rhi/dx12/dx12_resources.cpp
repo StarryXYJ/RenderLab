@@ -2,6 +2,8 @@
 #include "rhi/dx12/dx12_objects.hpp"
 #include "rhi/dx12/dx12_runtime.hpp"
 
+#include <algorithm>
+#include <cstring>
 #include <stdexcept>
 
 namespace renderlab::rhi::dx12
@@ -23,11 +25,13 @@ std::shared_ptr<Buffer> DxRuntime::CreateBuffer(const BufferDesc& desc)
     resource.MipLevels = 1;
     resource.SampleDesc.Count = 1;
     resource.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
-    if (desc.storage)
+    if (desc.storage || desc.accelerationStructureStorage)
         resource.Flags = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
     buffer->allocation.Set(ledger_,
                            device_->GetResourceAllocationInfo(0, 1, &resource).SizeInBytes);
-    const auto initial = desc.memory == Memory::Upload     ? D3D12_RESOURCE_STATE_GENERIC_READ
+    const auto initial = desc.accelerationStructureStorage
+                             ? D3D12_RESOURCE_STATE_RAYTRACING_ACCELERATION_STRUCTURE
+                         : desc.memory == Memory::Upload   ? D3D12_RESOURCE_STATE_GENERIC_READ
                          : desc.memory == Memory::Readback ? D3D12_RESOURCE_STATE_COPY_DEST
                                                            : D3D12_RESOURCE_STATE_COMMON;
     Check(device_->CreateCommittedResource(&heap, D3D12_HEAP_FLAG_NONE, &resource, initial, nullptr,
@@ -35,6 +39,94 @@ std::shared_ptr<Buffer> DxRuntime::CreateBuffer(const BufferDesc& desc)
           "CreateBuffer");
     Check(buffer->native->SetName(platform::Utf8ToWide(desc.name).c_str()), "Buffer SetName");
     return buffer;
+}
+
+AccelerationStructureSizes
+DxRuntime::QueryAccelerationStructureSizesNative(const AccelerationStructureDesc& desc)
+{
+    if (!accelerationStructureEnabled_ || !rayDevice_)
+        throw std::runtime_error("DX12 acceleration structures are not supported by this device");
+    std::vector<D3D12_RAYTRACING_GEOMETRY_DESC> geometries;
+    if (!desc.topLevel)
+    {
+        geometries.resize(desc.geometries.size());
+        for (size_t i = 0; i < desc.geometries.size(); ++i)
+        {
+            const auto& source = desc.geometries[i];
+            auto& geometry = geometries[i];
+            geometry.Type = D3D12_RAYTRACING_GEOMETRY_TYPE_TRIANGLES;
+            geometry.Flags = D3D12_RAYTRACING_GEOMETRY_FLAG_OPAQUE;
+            geometry.Triangles.VertexFormat = DXGI_FORMAT_R32G32B32_FLOAT;
+            geometry.Triangles.VertexCount = source.vertexCount;
+            geometry.Triangles.VertexBuffer = {
+                As<DxBuffer>(source.vertices).native->GetGPUVirtualAddress() + source.vertexOffset,
+                source.vertexStride};
+            if (source.indices)
+            {
+                geometry.Triangles.IndexFormat = DXGI_FORMAT_R32_UINT;
+                geometry.Triangles.IndexCount = source.indexCount;
+                geometry.Triangles.IndexBuffer =
+                    As<DxBuffer>(source.indices).native->GetGPUVirtualAddress() +
+                    source.indexOffset;
+            }
+            else
+            {
+                geometry.Triangles.IndexFormat = DXGI_FORMAT_UNKNOWN;
+                geometry.Triangles.IndexCount = 0;
+                geometry.Triangles.IndexBuffer = 0;
+            }
+        }
+    }
+    D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS inputs{};
+    inputs.Type = desc.topLevel ? D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL
+                                : D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL;
+    inputs.Flags = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PREFER_FAST_TRACE;
+    if (desc.allowUpdate)
+        inputs.Flags |= D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_ALLOW_UPDATE;
+    inputs.NumDescs = desc.topLevel ? static_cast<UINT>(desc.instances.size())
+                                    : static_cast<UINT>(geometries.size());
+    inputs.DescsLayout = D3D12_ELEMENTS_LAYOUT_ARRAY;
+    inputs.pGeometryDescs = geometries.empty() ? nullptr : geometries.data();
+    D3D12_RAYTRACING_ACCELERATION_STRUCTURE_PREBUILD_INFO info{};
+    rayDevice_->GetRaytracingAccelerationStructurePrebuildInfo(&inputs, &info);
+    return {info.ResultDataMaxSizeInBytes, info.ScratchDataSizeInBytes,
+            info.UpdateScratchDataSizeInBytes};
+}
+
+std::shared_ptr<AccelerationStructure>
+DxRuntime::CreateAccelerationStructureNative(AccelerationStructureDesc desc,
+                                             AccelerationStructureSizes sizes)
+{
+    const auto storage = CreateBuffer(
+        {sizes.storage, Memory::Device, desc.name + ".Storage", false, true, false, true});
+    const auto scratchBytes = std::max<uint64_t>(256, std::max(sizes.scratch, sizes.updateScratch));
+    const auto scratch =
+        CreateBuffer({scratchBytes, Memory::Device, desc.name + ".Scratch", true, true});
+    std::shared_ptr<Buffer> instances;
+    if (desc.topLevel)
+    {
+        const auto bytes =
+            std::max<size_t>(1, desc.instances.size()) * sizeof(D3D12_RAYTRACING_INSTANCE_DESC);
+        instances = CreateBuffer(
+            {bytes, Memory::Upload, desc.name + ".Instances", false, true, true, false});
+        auto mapped = instances->Map();
+        std::memset(mapped.data(), 0, mapped.size());
+        auto* native = reinterpret_cast<D3D12_RAYTRACING_INSTANCE_DESC*>(mapped.data());
+        for (size_t i = 0; i < desc.instances.size(); ++i)
+        {
+            const auto& source = desc.instances[i];
+            auto& target = native[i];
+            std::memcpy(target.Transform, source.transform.data(), sizeof(target.Transform));
+            target.InstanceID = source.instanceId;
+            target.InstanceMask = source.mask;
+            target.InstanceContributionToHitGroupIndex = 0;
+            target.Flags = D3D12_RAYTRACING_INSTANCE_FLAG_NONE;
+            target.AccelerationStructure =
+                As<DxBuffer>(source.bottomLevel->storage).native->GetGPUVirtualAddress();
+        }
+    }
+    return std::make_shared<DxAccelerationStructure>(this, std::move(desc), sizes, storage, scratch,
+                                                     instances);
 }
 
 std::shared_ptr<Texture> DxRuntime::CreateTexture(const TextureDesc& desc)
@@ -47,10 +139,10 @@ std::shared_ptr<Texture> DxRuntime::CreateTexture(const TextureDesc& desc)
     resource.Height = desc.height;
     resource.DepthOrArraySize = 1;
     resource.MipLevels = 1;
-    resource.Format = IsDepthFormat(desc.format)
-                          ? desc.format == Format::D32 ? DXGI_FORMAT_R32_TYPELESS
-                                                       : DXGI_FORMAT_R32G8X24_TYPELESS
-                          : NativeFormat(desc.format);
+    resource.Format =
+        IsDepthFormat(desc.format)
+            ? desc.format == Format::D32 ? DXGI_FORMAT_R32_TYPELESS : DXGI_FORMAT_R32G8X24_TYPELESS
+            : NativeFormat(desc.format);
     D3D12_FEATURE_DATA_FORMAT_SUPPORT support{};
     support.Format = NativeFormat(desc.format);
     Check(device_->CheckFeatureSupport(D3D12_FEATURE_FORMAT_SUPPORT, &support, sizeof(support)),
@@ -70,8 +162,7 @@ std::shared_ptr<Texture> DxRuntime::CreateTexture(const TextureDesc& desc)
         D3D12_FEATURE_DATA_FORMAT_SUPPORT sampled{};
         sampled.Format = desc.format == Format::D32 ? DXGI_FORMAT_R32_FLOAT
                                                     : DXGI_FORMAT_R32_FLOAT_X8X24_TYPELESS;
-        Check(device_->CheckFeatureSupport(D3D12_FEATURE_FORMAT_SUPPORT, &sampled,
-                                           sizeof(sampled)),
+        Check(device_->CheckFeatureSupport(D3D12_FEATURE_FORMAT_SUPPORT, &sampled, sizeof(sampled)),
               "Depth sampled format support");
         if ((sampled.Support1 & D3D12_FORMAT_SUPPORT1_SHADER_SAMPLE) == 0)
             throw std::runtime_error("Depth format cannot be sampled: " + desc.name);

@@ -17,8 +17,11 @@ namespace renderlab::sandbox
 renderer::SceneRenderOptions RenderOptions(const Options& options)
 {
     renderer::SceneRenderOptions render;
-    render.pipeline = options.pipeline == "deferred" ? renderer::PipelineType::Deferred
-                                                       : renderer::PipelineType::Forward;
+    render.pipeline = options.pipeline == "deferred"     ? renderer::PipelineType::Deferred
+                      : options.pipeline == "raytracing" ? renderer::PipelineType::RayTracing
+                                                         : renderer::PipelineType::Forward;
+    render.reflectionDenoise = options.reflectionDenoise;
+    render.reflectionTemporal = options.reflectionTemporal;
     render.profile = options.debugPanel || !options.profilePath.empty() || options.Benchmark();
     if (options.quality != "scene")
         render.shadowResolution = options.quality == "low"      ? 128u
@@ -32,6 +35,12 @@ renderer::SceneRenderOptions RenderOptions(const Options& options)
         render.view = renderer::SceneView::Environment;
     else if (options.view == "brdf")
         render.view = renderer::SceneView::Brdf;
+    if (options.view == "reflection-raw")
+        render.view = renderer::SceneView::ReflectionRaw;
+    if (options.view == "reflection-history")
+        render.view = renderer::SceneView::ReflectionHistory;
+    if (options.view == "reflection-denoised")
+        render.view = renderer::SceneView::ReflectionDenoised;
     return render;
 }
 void Statistics::Samples::Add(double value)
@@ -50,6 +59,9 @@ double Statistics::Samples::Mean() const
 void Statistics::Add(const renderer::SceneReadback& frame, const rhi::Runtime& runtime,
                      double cpuMs, benchmark::Sample* sample)
 {
+    reflectionSamples_ = frame.reflectionSamples;
+    reflectionTemporalFrames_ = frame.reflectionTemporalFrames;
+    reflectionResets_ += frame.reflectionHistoryReset ? 1 : 0;
     const auto timings = frame.profile.Read(runtime);
     cpu_.Add(cpuMs);
     compile_.Add(double(frame.compileNs) / 1e6);
@@ -78,10 +90,17 @@ std::string Statistics::Text(const scene::Snapshot& snapshot, rhi::MemoryStats m
     auto text =
         std::format("Completed samples: {}\nCPU render: {:.3f} ms (mean)\nGraph "
                     "compile/prepare/record: {:.3f}/{:.3f}/{:.3f} ms\nVisible / total: {} / "
-                    "{}\nRHI used / peak: {:.1f} / {:.1f} MiB\n\nGPU pass means (ms):\n",
+                    "{}\nRHI used / peak: {:.1f} / {:.1f} MiB\n",
                     cpu_.count, cpu_.Mean(), compile_.Mean(), prepare_.Mean(), record_.Mean(),
                     snapshot.instances.size(), snapshot.totalInstances,
                     double(memory.used) / (1024 * 1024), double(memory.highWater) / (1024 * 1024));
+    if (reflectionSamples_)
+        text += std::format("RT history: {} spp | observed resets: {}\n", reflectionSamples_,
+                            reflectionResets_);
+    if (reflectionTemporalFrames_)
+        text += std::format("Temporal source: {} frames (pixel rejection on GPU)\n",
+                            reflectionTemporalFrames_);
+    text += "\nGPU pass means (ms):\n";
     for (const auto& [name, pass] : passes_)
         text += std::format("{}: {:.3f}\n", name, pass.Mean());
     return text;
@@ -91,7 +110,8 @@ void Statistics::Save(const std::filesystem::path& path, const Options& options,
                       const benchmark::Recording* recording,
                       const rhi::CpuProfileSnapshot* cpuOperations,
                       const rhi::DescriptorStats* descriptors,
-                      const rhi::UploadPool::Statistics* uploads) const
+                      const rhi::UploadPool::Statistics* uploads,
+                      const renderer::RaySceneStatistics* rayScene) const
 {
     const auto summary = [](const Samples& samples)
     {
@@ -112,6 +132,8 @@ void Statistics::Save(const std::filesystem::path& path, const Options& options,
                           {"height", options.height},
                           {"quality", options.quality},
                           {"view", options.view},
+                          {"reflectionDenoise", options.reflectionDenoise},
+                          {"reflectionTemporal", options.reflectionTemporal},
                           {"pipeline", options.pipeline},
                           {"warmupFrames", options.Benchmark() ? options.warmupFrames : 0},
                           {"cpuRender", summary(cpu_)},
@@ -123,6 +145,9 @@ void Statistics::Save(const std::filesystem::path& path, const Options& options,
                             {"highWaterBytes", memory.highWater},
                             {"budgetBytes", memory.budget}}},
                           {"gpuPasses", nlohmann::json::object()}};
+    result["reflectionHistory"] = {{"samples", reflectionSamples_},
+                                   {"observedResets", reflectionResets_},
+                                   {"temporalSourceFrames", reflectionTemporalFrames_}};
     result["recordedAtUtc"] = std::format(
         "{:%FT%TZ}", std::chrono::floor<std::chrono::seconds>(std::chrono::system_clock::now()));
 #ifdef NDEBUG
@@ -142,6 +167,13 @@ void Statistics::Save(const std::filesystem::path& path, const Options& options,
                                                   {"reservedBytes", uploads->reservedBytes},
                                                   {"batchHighWaterBytes", uploads->highWaterBytes},
                                                   {"batches", uploads->batches}};
+    if (rayScene)
+        result["resourceReuse"]["rayScene"] = {{"geometryPacks", rayScene->geometryPacks},
+                                               {"uploadBatches", rayScene->uploadBatches},
+                                               {"uploadedBytes", rayScene->uploadedBytes},
+                                               {"historyEvictions", rayScene->historyEvictions},
+                                               {"cachedViews", rayScene->cachedViews},
+                                               {"historyBytes", rayScene->historyBytes}};
     result["adapterIdentity"] = {{"vendorId", adapter.vendorId},
                                  {"deviceId", adapter.deviceId},
                                  {"software", adapter.software}};

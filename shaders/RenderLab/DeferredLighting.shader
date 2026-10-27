@@ -8,6 +8,7 @@ shader "RenderLab/DeferredLighting"
         parameters
         {
             float4x4 InverseViewProjection;
+            uint RayTracedShadows;
             Texture2D<float4> GBufferAlbedoMetallic;
             Texture2D<float4> GBufferNormalRoughness;
             Texture2D<float4> GBufferEmissionOcclusion;
@@ -15,6 +16,7 @@ shader "RenderLab/DeferredLighting"
             Texture2D<float4> EnvironmentAtlas;
             Texture2D<float4> BrdfLut;
             Texture2D<float4> MainLightShadow;
+            Texture2D<float4> ShadowVisibility;
         }
         vertex = "DeferredLighting.hlsl:VSMain";
         pixel = "DeferredLighting.hlsl:PSMain";

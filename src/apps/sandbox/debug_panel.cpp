@@ -7,6 +7,7 @@
 #include <array>
 #include <format>
 #include <stdexcept>
+#include <vector>
 
 namespace renderlab::sandbox
 {
@@ -21,7 +22,9 @@ enum : int
     Freeze,
     Reset,
     Darker,
-    Brighter
+    Brighter,
+    Denoise,
+    Temporal
 };
 constexpr std::array<uint32_t, 4> Resolutions{0, 128, 512, 1024};
 struct PipelineChoice
@@ -31,13 +34,16 @@ struct PipelineChoice
 };
 constexpr std::array PipelineChoices{
     PipelineChoice{L"Forward", renderer::PipelineType::Forward},
-    PipelineChoice{L"Deferred", renderer::PipelineType::Deferred}};
+    PipelineChoice{L"Deferred", renderer::PipelineType::Deferred},
+    PipelineChoice{L"Ray Tracing", renderer::PipelineType::RayTracing}};
 } // namespace
 struct DebugPanel::Impl
 {
-    HWND window = nullptr, pipeline = nullptr, view = nullptr, quality = nullptr,
-         shadows = nullptr, freeze = nullptr, exposure = nullptr, statistics = nullptr;
+    HWND window = nullptr, pipeline = nullptr, view = nullptr, quality = nullptr, shadows = nullptr,
+         freeze = nullptr, denoise = nullptr, temporal = nullptr, exposure = nullptr,
+         statistics = nullptr;
     DebugControls controls;
+    std::vector<PipelineChoice> choices;
     static LRESULT CALLBACK Procedure(HWND window, UINT message, WPARAM wParam, LPARAM lParam)
     {
         auto* self = reinterpret_cast<Impl*>(GetWindowLongPtrW(window, GWLP_USERDATA));
@@ -57,12 +63,28 @@ struct DebugPanel::Impl
             if (HIWORD(wParam) == CBN_SELCHANGE && id == Pipeline)
             {
                 const auto index = SendMessageW(self->pipeline, CB_GETCURSEL, 0, 0);
-                if (index >= 0 && size_t(index) < PipelineChoices.size())
-                    self->controls.render.pipeline = PipelineChoices[size_t(index)].type;
+                if (index >= 0 && size_t(index) < self->choices.size())
+                {
+                    self->controls.render.pipeline = self->choices[size_t(index)].type;
+                    if (self->controls.render.pipeline != renderer::PipelineType::RayTracing &&
+                        self->controls.render.view >= renderer::SceneView::ReflectionRaw)
+                    {
+                        self->controls.render.view = renderer::SceneView::Final;
+                        SendMessageW(self->view, CB_SETCURSEL, 0, 0);
+                    }
+                }
             }
             else if (HIWORD(wParam) == CBN_SELCHANGE && id == View)
+            {
                 self->controls.render.view =
                     renderer::SceneView(SendMessageW(self->view, CB_GETCURSEL, 0, 0));
+                if (self->controls.render.view >= renderer::SceneView::ReflectionRaw &&
+                    self->controls.render.pipeline != renderer::PipelineType::RayTracing)
+                {
+                    self->controls.render.view = renderer::SceneView::Final;
+                    SendMessageW(self->view, CB_SETCURSEL, 0, 0);
+                }
+            }
             else if (HIWORD(wParam) == CBN_SELCHANGE && id == Quality)
             {
                 const auto index = SendMessageW(self->quality, CB_GETCURSEL, 0, 0);
@@ -72,6 +94,12 @@ struct DebugPanel::Impl
             else if (id == Shadows)
                 self->controls.shadows =
                     SendMessageW(self->shadows, BM_GETCHECK, 0, 0) == BST_CHECKED;
+            else if (id == Temporal)
+                self->controls.render.reflectionTemporal =
+                    SendMessageW(self->temporal, BM_GETCHECK, 0, 0) == BST_CHECKED;
+            else if (id == Denoise)
+                self->controls.render.reflectionDenoise =
+                    SendMessageW(self->denoise, BM_GETCHECK, 0, 0) == BST_CHECKED;
             else if (id == Freeze)
                 self->controls.freezeCamera =
                     SendMessageW(self->freeze, BM_GETCHECK, 0, 0) == BST_CHECKED;
@@ -102,11 +130,15 @@ struct DebugPanel::Impl
             DestroyWindow(window);
     }
 };
-DebugPanel::DebugPanel(platform::NativeSurface owner, DebugControls controls)
+DebugPanel::DebugPanel(platform::NativeSurface owner, DebugControls controls,
+                       bool rayTracingAvailable)
     : impl_(std::make_unique<Impl>())
 {
     auto& self = *impl_;
     self.controls = controls;
+    for (const auto& choice : PipelineChoices)
+        if (choice.type != renderer::PipelineType::RayTracing || rayTracingAvailable)
+            self.choices.push_back(choice);
     WNDCLASSEXW type{};
     type.cbSize = sizeof(type);
     type.lpfnWndProc = Impl::Procedure;
@@ -123,22 +155,24 @@ DebugPanel::DebugPanel(platform::NativeSurface owner, DebugControls controls)
     if (!self.window)
         throw std::runtime_error("Cannot create debug panel");
     self.Control(L"STATIC", L"Pipeline", 0, 0, 12, 12, 100, 20);
-    self.pipeline = self.Control(L"COMBOBOX", L"", CBS_DROPDOWNLIST | WS_TABSTOP, Pipeline,
-                                 112, 10, 280, 100);
+    self.pipeline =
+        self.Control(L"COMBOBOX", L"", CBS_DROPDOWNLIST | WS_TABSTOP, Pipeline, 112, 10, 280, 100);
     size_t selectedPipeline = 0;
-    for (size_t i = 0; i < PipelineChoices.size(); ++i)
+    for (size_t i = 0; i < self.choices.size(); ++i)
     {
         SendMessageW(self.pipeline, CB_ADDSTRING, 0,
-                     reinterpret_cast<LPARAM>(PipelineChoices[i].label));
-        if (PipelineChoices[i].type == controls.render.pipeline)
+                     reinterpret_cast<LPARAM>(self.choices[i].label));
+        if (self.choices[i].type == controls.render.pipeline)
             selectedPipeline = i;
     }
     SendMessageW(self.pipeline, CB_SETCURSEL, selectedPipeline, 0);
     self.Control(L"STATIC", L"Texture", 0, 0, 12, 46, 100, 20);
     self.view =
         self.Control(L"COMBOBOX", L"", CBS_DROPDOWNLIST | WS_TABSTOP, View, 112, 44, 280, 180);
-    for (const auto* name : {L"Final (ACES)", L"CameraColor (linear HDR)",
-                             L"MainLightShadow (depth)", L"Environment atlas", L"BRDF LUT"})
+    for (const auto* name :
+         {L"Final (ACES)", L"CameraColor (linear HDR)", L"MainLightShadow (depth)",
+          L"Environment atlas", L"BRDF LUT", L"Reflection (raw sample)", L"Reflection (history)",
+          L"Reflection (denoised)"})
         SendMessageW(self.view, CB_ADDSTRING, 0, reinterpret_cast<LPARAM>(name));
     SendMessageW(self.view, CB_SETCURSEL, WPARAM(controls.render.view), 0);
     self.Control(L"STATIC", L"Shadow quality", 0, 0, 12, 80, 100, 20);
@@ -159,9 +193,17 @@ DebugPanel::DebugPanel(platform::NativeSurface owner, DebugControls controls)
     self.Control(L"BUTTON", L"Reset camera", BS_PUSHBUTTON | WS_TABSTOP, Reset, 12, 152, 110, 26);
     self.Control(L"BUTTON", L"Exposure -", BS_PUSHBUTTON | WS_TABSTOP, Darker, 132, 152, 125, 26);
     self.Control(L"BUTTON", L"Exposure +", BS_PUSHBUTTON | WS_TABSTOP, Brighter, 267, 152, 125, 26);
+    self.denoise = self.Control(L"BUTTON", L"RT denoise (Final / HDR)",
+                                BS_AUTOCHECKBOX | WS_TABSTOP, Denoise, 12, 218, 380, 24);
+    SendMessageW(self.denoise, BM_SETCHECK,
+                 controls.render.reflectionDenoise ? BST_CHECKED : BST_UNCHECKED, 0);
+    self.temporal = self.Control(L"BUTTON", L"Temporal reprojection (requires denoise)",
+                                 BS_AUTOCHECKBOX | WS_TABSTOP, Temporal, 12, 246, 380, 24);
+    SendMessageW(self.temporal, BM_SETCHECK,
+                 controls.render.reflectionTemporal ? BST_CHECKED : BST_UNCHECKED, 0);
     self.exposure = self.Control(L"STATIC", L"", 0, 0, 12, 190, 380, 22);
     self.statistics =
-        self.Control(L"STATIC", L"Waiting for a retired frame...", 0, 0, 12, 224, 380, 280);
+        self.Control(L"STATIC", L"Waiting for a retired frame...", 0, 0, 12, 278, 380, 232);
     self.Control(L"STATIC",
                  L"F1: show/hide panel\nWASD/QE: move  |  Arrow keys: look\nInput goes to the "
                  L"focused window.",
@@ -190,10 +232,13 @@ void DebugPanel::VerifyControls()
     const auto saved = self.controls;
     SendMessageW(self.view, CB_SETCURSEL, 2, 0);
     SendMessageW(self.window, WM_COMMAND, MAKEWPARAM(View, CBN_SELCHANGE), 0);
-    SendMessageW(self.pipeline, CB_SETCURSEL, 0, 0);
-    SendMessageW(self.window, WM_COMMAND, MAKEWPARAM(Pipeline, CBN_SELCHANGE), 0);
-    if (self.controls.render.pipeline != renderer::PipelineType::Forward)
-        throw std::runtime_error("Native debug controls failed to select Forward");
+    for (size_t i = 0; i < self.choices.size(); ++i)
+    {
+        SendMessageW(self.pipeline, CB_SETCURSEL, i, 0);
+        SendMessageW(self.window, WM_COMMAND, MAKEWPARAM(Pipeline, CBN_SELCHANGE), 0);
+        if (self.controls.render.pipeline != self.choices[i].type)
+            throw std::runtime_error("Native debug controls failed to select a render pipeline");
+    }
     SendMessageW(self.pipeline, CB_SETCURSEL, 1, 0);
     SendMessageW(self.window, WM_COMMAND, MAKEWPARAM(Pipeline, CBN_SELCHANGE), 0);
     SendMessageW(self.window, WM_COMMAND, Brighter, 0);
@@ -202,6 +247,12 @@ void DebugPanel::VerifyControls()
     SendMessageW(self.window, WM_COMMAND, MAKEWPARAM(Quality, CBN_SELCHANGE), 0);
     SendMessageW(self.freeze, BM_SETCHECK, BST_CHECKED, 0);
     SendMessageW(self.window, WM_COMMAND, Freeze, 0);
+    SendMessageW(self.denoise, BM_SETCHECK,
+                 saved.render.reflectionDenoise ? BST_UNCHECKED : BST_CHECKED, 0);
+    SendMessageW(self.window, WM_COMMAND, Denoise, 0);
+    SendMessageW(self.temporal, BM_SETCHECK,
+                 saved.render.reflectionTemporal ? BST_UNCHECKED : BST_CHECKED, 0);
+    SendMessageW(self.window, WM_COMMAND, Temporal, 0);
     RECT client{}, control{};
     GetClientRect(self.window, &client);
     GetWindowRect(self.statistics, &control);
@@ -210,16 +261,35 @@ void DebugPanel::VerifyControls()
         self.controls.render.pipeline != renderer::PipelineType::Deferred ||
         self.controls.exposure != std::clamp(saved.exposure + .5f, -16.f, 16.f) ||
         self.controls.render.shadowResolution != 1024 || !self.controls.freezeCamera ||
+        self.controls.render.reflectionDenoise == saved.render.reflectionDenoise ||
+        self.controls.render.reflectionTemporal == saved.render.reflectionTemporal ||
         control.right > client.right || control.bottom > client.bottom)
         throw std::runtime_error("Native debug controls failed");
     self.controls = saved;
-    for (size_t i = 0; i < PipelineChoices.size(); ++i)
-        if (PipelineChoices[i].type == saved.render.pipeline)
+    SendMessageW(self.temporal, BM_SETCHECK,
+                 saved.render.reflectionTemporal ? BST_CHECKED : BST_UNCHECKED, 0);
+    SendMessageW(self.denoise, BM_SETCHECK,
+                 saved.render.reflectionDenoise ? BST_CHECKED : BST_UNCHECKED, 0);
+    for (size_t i = 0; i < self.choices.size(); ++i)
+        if (self.choices[i].type == saved.render.pipeline)
             SendMessageW(self.pipeline, CB_SETCURSEL, i, 0);
     SendMessageW(self.view, CB_SETCURSEL, WPARAM(saved.render.view), 0);
     for (size_t i = 0; i < Resolutions.size(); ++i)
         if (Resolutions[i] == saved.render.shadowResolution)
             SendMessageW(self.quality, CB_SETCURSEL, i, 0);
     SendMessageW(self.freeze, BM_SETCHECK, saved.freezeCamera ? BST_CHECKED : BST_UNCHECKED, 0);
+}
+void DebugPanel::SelectPipeline(renderer::PipelineType pipeline)
+{
+    impl_->controls.render.pipeline = pipeline;
+    for (size_t i = 0; i < impl_->choices.size(); ++i)
+        if (impl_->choices[i].type == pipeline)
+            SendMessageW(impl_->pipeline, CB_SETCURSEL, i, 0);
+    if (pipeline != renderer::PipelineType::RayTracing &&
+        impl_->controls.render.view >= renderer::SceneView::ReflectionRaw)
+    {
+        impl_->controls.render.view = renderer::SceneView::Final;
+        SendMessageW(impl_->view, CB_SETCURSEL, 0, 0);
+    }
 }
 } // namespace renderlab::sandbox

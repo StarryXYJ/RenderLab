@@ -202,6 +202,35 @@ GBuffer 格式、深度重建、透明材质路径和限制见 [Deferred Pipelin
 
 Assets 与 .meta 纳入版本管理，Library 可以清除重建。不要原地改写命令正在使用的 Upload 数据。资产首次上传可等待，普通帧仍使用现有完成点与帧管理。
 
+### Ray Tracing 组合与 Ray Query
+
+光追 progressive 历史最多缓存四个 View，并按最近使用顺序与 native 预算的 1/8 软字节目标淘汰非活动 View；高分辨率可能只保留一到两个。活动 View 不因软目标被拒绝，最终仍受 native 总限额约束。Headless 报告的 `resourceReuse.rayScene` 提供累计打包/上传次数、缓存 View 数、淘汰次数和 progressive 请求字节数。
+
+场景宿主（Sandbox/Player）默认 tracked allocation 上限为 2048 MiB，Graph 资源缓存以其中 3/4 为上限，给资产、AS、历史和上传留出余量；需要时可用 `--gpu-budget-mib 4096` 显式调整。它统计 Buffer/Texture 的 native 分配，包括 Host 可见上传/读回，不是显卡实时可用显存，也不一次性预留这些内存。独立 RHI Demo 默认仍为 256 MiB。窗口分辨率、在途帧和保留的历史视图都会影响峰值；预算不足时日志给出 requested/used/limit。
+
+窗口尺寸可能被桌面工作区限制，profile 的 width/height 来自 CLI 请求参数，不能单独证明实际客户区尺寸。高分辨率验证需检查实际资源规模（如 `--graph-dump` 的 CameraColor/DisplayColor 字节数），或使用明确尺寸的离屏目标；普通 `--window-test` 还会主动缩小窗口。
+
+支持 AS/Ray Query/TraceRays 的设备可在 Pipeline 菜单选择 **Ray Tracing**，CLI 使用 `--pipeline raytracing`。当前组合以 Deferred 为主体，通过独立 Ray Query Pass 生成方向光阴影可见性，并用 TraceRays 生成一次反射、静止历史累积与独立合成；Shadow 纹理查看项显示此可见性图。方向光的 Shadows 开关控制阴影效果。反射仅支持内置 Lit/Unlit 不透明材质。当前仅支持不透明静态几何，Masked 材质会给出诊断，透明材质仍走 Forward。
+
+```powershell
+out/build/windows-debug/renderlab_sandbox.exe --backend dx12 --validation on `
+  --project sample/m4/RayTracing.rlproject --pipeline raytracing --debug-panel
+out/build/windows-debug/renderlab_sandbox.exe --backend vulkan --headless --validation on --as-test
+ctest --test-dir out/build/windows-debug -R "acceleration_structure|ray_query_scene" --output-on-failure
+```
+
+`--as-test` 还运行原生 TraceRays 的三角形命中/未命中、索引 PBR 和 PSO/ShaderTable 代际重建检查；成功日志分别列出 Ray Query 与 TraceRays。
+
+Texture 菜单可查看 Reflection (raw sample)、Reflection (history) 与 Reflection (denoised)。Final/HDR 默认开启反射降噪重建，面板 **RT denoise (Final / HDR)** 可随时切换；CLI 用 `--denoise on|off`，不重置累积。降噪查看用 `--view reflection-denoised`，始终显示滤波结果；Raw/History 始终未滤波。粗糙度 ≤0.05 的镜面旁路，2048 spp 后旁路，滤波不回写未滤波历史。
+
+默认时间降噪使用独立单帧信号、材质去调制、稳定命中引导、接收表面/反射视差重投影及三尺度方差引导滤波。面板 **Temporal reprojection (requires denoise)** / CLI `--temporal-denoise on|off` 单独控制；关掉此项可回到原空间滤波基线，`--denoise off` 关闭两者。支持静态场景中的相机运动；场景/材质/光照变化、投影/尺寸变化或相机大幅跳转重置时间历史。反射跟踪是局部平面近似，没有对象运动矢量或通用曲面镜像跟踪，仍可能有高光偏差/拖影。面板 Temporal source 是 CPU 判定可供重投影的连续帧数，不是 GPU 接受像素数或 spp；未滤波 RT history 在移动时仍重置。[接口与限制](../docs/temporal-reflections.md)、[完整运动序列对照](../docs/performance/m5-reflection-stability.md)。
+
+默认时间降噪根据与持续 1/N 累积匹配的局部误差，连续结合静止累积与时间先验；大尺度平滑先随置信度提高而减弱，小尺度仍能处理零星亮点。控制权重限制逐帧变化，替换原先 8–64 spp 的固定交接，减轻亮点先扩散再缩小。仍有反射细节模糊和置信度估计偏差，2048 spp 精确回到未滤波结果。无需新增开关，已运行的程序需重启加载 Shader。[自适应重建对照](../docs/performance/m5-adaptive-reflections.md)、[上一版静止收敛记录](../docs/performance/m5-stationary-reflections.md)。
+
+CLI 对应 `--pipeline raytracing --view reflection-raw` / `reflection-history`；raw 固定单样本且不读旧历史，相机运动会重置累积。Final/history 静止时持续按 1/N 累积；面板的 RT history 显示实际 spp 与已观察到的重置次数，超过 64 后应继续增长。纯光栅对照用 `--pipeline forward` 或 `deferred`。自定义 Shader 缺少 GBuffer 或光追表面实现时，窗口菜单恢复原选项并显示原因；如原始 Copper 场景可继续用 Forward，三种模式对照请用下列 RayTracing 项目。
+
+RayTracing.rlproject 与 M4 项目共用 Assets，只保留不透明地面、球和立方体，适合在三种组合间对照。AS 接口、资源声明、scratch 与在途 TLAS 生命周期见 [光追基础](../docs/raytracing.md)。Path Tracing 按 M8 计划保留，Forward+ 按 M6 计划保留；实现后可加入现有类型化菜单选项表。
+
 ## M4.3 PBR 参考场景
 
 Pbr.rlproject 与原场景共用 Assets，独立选择固定材质球场景。上排从左至右是粗糙度 0.08/0.3/0.65/1 的金属，下排是对应非金属；下排第三个含 Normal Map，第四个含 Metallic-Roughness 图，底部小球演示 Unlit HDR。Studio、Normal 与 MR 图是原创程序测试纹理。
@@ -292,6 +321,67 @@ python -m unittest discover -s tools/benchmark -p "test_*.py"
 ```
 
 分析可接受多个完成 manifest 或单次 v2 report，支持独立重画图/新增统计。比较器拒绝截断、失败或配置/设备不匹配的结果；它不会把 Debug/Validation 测试标为正式性能基线。当前为逐帧 GPU 完成点等待的 headless 测量，不代表窗口 Present 的流水吞吐。样例源码按 src/samples/common、rhi、graph、material、scene 分类；一次性迁移脚本已清理，tools/benchmark 为正式维护工具。
+
+## Avalonia 嵌入原型
+
+IDE 打开根目录 `RenderLab.slnx`，应用项目位于 `src/editor/managed/RenderLab.Editor`；它负责托管项目导航和构建，C++ 依赖仍由 CMake 构建。根目录 `global.json` 锁定 SDK，`Directory.Build.props` 统一规则并将各项目产物分别放到 `out/dotnet/<项目名>/{bin,obj}`。首次运行先用下面的构建脚本准备原生 DLL/Shader，再由 IDE 启动 Editor；IDE 构建不会隐式配置或编译 CMake。自定义本机构建树时给 MSBuild 传 `-p:NativeBuildDir=绝对路径`，或将同名环境变量设为该绝对路径。
+
+额外需要 .NET SDK 10.0.401（根目录 global.json 允许同 feature band 的更新补丁）和 PowerShell 7。Avalonia/Fonts.Inter 固定 12.0.5，CommunityToolkit.Mvvm 8.4.1、Microsoft.Extensions.DependencyInjection 10.0.0；Debug 开发工具使用模板的 AvaloniaUI.DiagnosticsSupport 2.2.3。包图由 `src/editor/managed/RenderLab.Editor/packages.lock.json` 锁定。宿主作为后续 Editor 的 MVVM/DI 骨架复用，目前只支持 Windows x64，属于 M7.1 的提前集成试验；模块职责、生命周期和未验证边界见 [宿主契约](../docs/editor-host.md)。
+
+当前工程已从官方 12.0.5 MVVM 模板的 CommunityToolkit 分支整理，不需要重新生成。要在独立目录重现参考模板，可执行以下命令；不要向现有宿主目录使用 `--force` 覆盖 Bridge、manifest 或生命周期实现。
+
+```powershell
+dotnet new install Avalonia.Templates::12.0.5
+dotnet new avalonia.mvvm -n EditorReference -o out/editor-reference -f net10.0 `
+    -m CommunityToolkit -av 12.0.5 --remove-view-locator --no-restore
+```
+
+在 x64 Developer PowerShell 中配置原生 Release 构建，然后运行脚本。脚本构建 Bridge、按锁文件恢复托管依赖，并将 DLL、运行依赖和 Shader 复制到托管输出目录。使用已有 Ninja/NMake 构建树时通过 `-NativeBuildDir` 指定目录，Configuration 应与原生构建树匹配。
+
+```powershell
+cmake --preset windows-release
+./tools/build-editor.ps1
+./out/dotnet/RenderLab.Editor/bin/Release/net10.0/RenderLab.Editor.exe --backend dx12
+./out/dotnet/RenderLab.Editor/bin/Release/net10.0/RenderLab.Editor.exe --backend vulkan
+```
+
+默认目标帧率为 60，`--target-fps 1..240` 设置上限并保留 VSync；`--target-fps 0` 取消限速与强制 VSync。驱动/合成器和实际 CPU/GPU 吞吐仍可能限制帧率，静态光栅仍按需重绘。光栅视口静止后显示 Idle，输入、曝光、管线或尺寸变化后重绘；光追在达到 Renderer 的样本计数上限前继续刷新。`--validation on|off` 和 `--profile on|off` 控制设备验证与 GPU Pass 查询，Release 默认关闭验证，Debug/默认 smoke 开启验证。
+
+固定相机窗口基准显式使用连续刷新；先预热，再采集原生渲染线程的逐帧完成间隔，输出 `performance.json` 和 `frames.json`，不在每帧写文件：
+
+```powershell
+./out/dotnet/RenderLab.Editor/bin/Release/net10.0/RenderLab.Editor.exe `
+    --backend dx12 --pipeline deferred --validation off --profile on `
+    --target-fps 60 --warmup-seconds 2 --benchmark-seconds 5 `
+    --output out/m7/benchmark-dx12
+```
+
+比较后端/验证模式时保持项目、管线、像素尺寸、缩放、目标帧率与预热一致。检查报告的 `DroppedSamples` 和关闭报告；有丢样的结果不能作为完整分布，GPU Pass 时间也不代表扫描输出延迟。[调度测量](../docs/performance/editor-scheduling.md) 保留本轮基线和解释边界。
+
+有完整 NuGet 缓存的离线机器可以增加 `-OfflinePackageCache C:/你的目录/.nuget/packages`；恢复仍使用 locked mode。直接运行 dotnet 时在仓库根目录使用 `RenderLab.slnx` 作为构建入口；需要自定义原生路径时使用 `-p:NativeBuildDir=绝对路径`。构建脚本跳过本原型没有使用的 Avalonia 商业产品构建遥测，不修改用户全局设置。
+
+默认加载源码仓库的 `sample/m4/RayTracing.rlproject`，初始为 Deferred。`--project` 可以指定其他项目，`--shaders` 可指定引擎 Shader 根目录；默认使用 exe 同目录的 shaders。周边控件提供管线、曝光、暂停、重置相机和重建视口；点击原生视口后使用 WASD/QE、方向键或右键拖动。此原型未打包示例项目，移出仓库运行时必须显式提供项目路径。
+
+双后端自检应分别运行。WinExe 在终端的启动/等待语义可能不同，需要可靠退出码时使用 `Start-Process -Wait -PassThru`；下面的隐藏启动用于无人值守自检，手动检查界面直接运行上面的命令。
+
+```powershell
+foreach ($backend in @('dx12', 'vulkan'))
+{
+    $hostTest = Start-Process ./out/dotnet/RenderLab.Editor/bin/Release/net10.0/RenderLab.Editor.exe `
+        -ArgumentList "--backend $backend --smoke --output out/m7/smoke/$backend" `
+        -WindowStyle Hidden -Wait -PassThru
+    if ($hostTest.ExitCode -ne 0) { throw "Editor host smoke failed: $backend" }
+}
+```
+
+成功输出 `smoke.json` 和 `close-reports.json`，失败输出 `smoke-failure.txt` 或 `managed-error.txt`。日志/测试报告默认写入仓库的 `out/m7/<backend>`；可用 `--output` 设置独立目录，避免旧报告混淆。本次实测使用 `out/build/m5-release` 原生构建树，原始报告在 `out/m7/嵌入验证/dx12-manifest` 与 `out/m7/嵌入验证/vulkan`。
+
+MVVM/DI 修订后的双后端回归还验证实际编译绑定、按钮命令、错误回滚和重建后的配置保留，最终报告使用 `out/m7/mvvm-final/<backend>`。相机方向有独立 CPU 回归：
+
+```powershell
+cmake --build --preset windows-release --target renderlab_editor_input_tests
+ctest --preset windows-release -R '^editor.input$' --output-on-failure
+```
 
 ## 验证结果与边界
 

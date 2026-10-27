@@ -32,7 +32,7 @@ GBufferOutput PSGBuffer(Varyings input, bool frontFace : SV_IsFrontFace)
 #endif
     GBufferOutput output;
     output.albedoMetallic = float4(color.rgb, 0);
-    output.normalRoughness = float4(frontFace ? input.normalWS : -input.normalWS, 1);
+    output.normalRoughness = float4(frontFace ? input.normalWS : -input.normalWS, -1);
     output.emissionOcclusion = float4(0, 0, 0, 1);
     return output;
 }

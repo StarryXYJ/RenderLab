@@ -1,0 +1,167 @@
+{
+  "version": 1,
+  "activeCamera": "d956b425af915f83a4d4dbb5d2be31dc",
+  "ambient": [
+    0.03,
+    0.03,
+    0.03
+  ],
+  "environment": {
+    "rotation": 0,
+    "image": "a118d11d917852f38828d8428f3f6d28",
+    "intensity": 1.5
+  },
+  "exposure": 0,
+  "objects": [
+    {
+      "id": "d956b425af915f83a4d4dbb5d2be31dc",
+      "name": "camera",
+      "enabled": true,
+      "transform": {
+        "position": [
+          5,
+          4,
+          9
+        ],
+        "scale": [
+          1,
+          1,
+          1
+        ],
+        "rotation": [
+          -0.16849008466583743,
+          0.23824655840996276,
+          0.04200929630861167,
+          0.9555547539512126
+        ]
+      },
+      "camera": {
+        "fov": 50,
+        "near": 0.1,
+        "far": 100
+      }
+    },
+    {
+      "id": "ac8f98af54075be1a80acfb97615f61a",
+      "name": "sun",
+      "enabled": true,
+      "transform": {
+        "position": [
+          0,
+          0,
+          0
+        ],
+        "scale": [
+          1,
+          1,
+          1
+        ],
+        "rotation": [
+          -0.3696438106143861,
+          -0.23911761839433449,
+          -0.09904576054128762,
+          0.8923991008325228
+        ]
+      },
+      "directionalLight": {
+        "color": [
+          1,
+          0.96,
+          0.88
+        ],
+        "intensity": 3,
+        "shadows": true,
+        "shadowResolution": 512,
+        "shadowBias": 0.001,
+        "shadowNormalBias": 0.01
+      }
+    },
+    {
+      "id": "7acd89dea34354a3ad757e02b07b2767",
+      "name": "floor",
+      "enabled": true,
+      "transform": {
+        "position": [
+          0,
+          -1,
+          0
+        ],
+        "scale": [
+          6,
+          0.1,
+          5
+        ],
+        "rotation": [
+          0,
+          0,
+          0,
+          1
+        ]
+      },
+      "meshRenderer": {
+        "model": "b4748e75e72a5dba8d4439fa86854c92",
+        "materials": {
+          "724bed1a90285b9d933f9a5abbe5e9af": "dfb84be518f84b2eab13a4863a0c720d"
+        }
+      }
+    },
+    {
+      "id": "27fc715697e155bb916006635a7be418",
+      "name": "solid",
+      "enabled": true,
+      "transform": {
+        "position": [
+          -1,
+          0,
+          0
+        ],
+        "scale": [
+          0.9,
+          0.9,
+          0.9
+        ],
+        "rotation": [
+          0,
+          0,
+          0,
+          1
+        ]
+      },
+      "meshRenderer": {
+        "model": "8cb75671f1c7525abe1c98eeede99855",
+        "materials": {
+          "18609d7bc4b25b3094ca40a95c490f5a": "a4f56355e1035c3c8e1912bd9b11c6c4"
+        }
+      }
+    },
+    {
+      "id": "30e165c73c05488a8fe9c97bdb9b7b3e",
+      "name": "cube",
+      "enabled": true,
+      "transform": {
+        "position": [
+          1.3,
+          0,
+          0
+        ],
+        "scale": [
+          0.9,
+          0.9,
+          0.9
+        ],
+        "rotation": [
+          0,
+          0,
+          0,
+          1
+        ]
+      },
+      "meshRenderer": {
+        "model": "b4748e75e72a5dba8d4439fa86854c92",
+        "materials": {
+          "724bed1a90285b9d933f9a5abbe5e9af": "a4f56355e1035c3c8e1912bd9b11c6c4"
+        }
+      }
+    }
+  ]
+}

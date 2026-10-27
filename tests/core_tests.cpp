@@ -69,6 +69,19 @@ int main()
         RequireInvalid([] { ParseOptions(std::array{"--height"sv, "16385"sv}); });
         RequireInvalid([] { ParseOptions(std::array{"--quality"sv, "ultra"sv}); });
         RequireInvalid([] { ParseOptions(std::array{"--view"sv, "missing"sv}); });
+        RequireInvalid([] { ParseOptions(std::array{"--denoise"sv, "maybe"sv}); });
+        RequireInvalid([] { ParseOptions(std::array{"--temporal-denoise"sv, "maybe"sv}); });
+        Require(!ParseOptions(std::array{"--temporal-denoise"sv, "off"sv}).reflectionTemporal,
+                "Temporal denoise switch was not parsed");
+        RequireInvalid([] { ParseOptions(std::array{"--gpu-budget-mib"sv, "0"sv}); });
+        RequireInvalid([] { ParseOptions(std::array{"--gpu-budget-mib"sv, "16385"sv}); });
+        Require(ParseOptions(std::array{"--gpu-budget-mib"sv, "1024"sv}).gpuBudgetMiB == 1024,
+                "Explicit allocation budget was not parsed");
+        const auto denoise =
+            ParseOptions(std::array{"--project"sv, "p"sv, "--pipeline"sv, "raytracing"sv,
+                                    "--view"sv, "reflection-denoised"sv, "--denoise"sv, "off"sv});
+        Require(!denoise.reflectionDenoise && denoise.view == "reflection-denoised",
+                "Spatial denoise options were not parsed independently");
         RequireInvalid([] { ParseOptions(std::array{"--profile"sv, ""sv}); });
         RequireInvalid([] { ParseOptions(std::array{"--benchmark"sv, "0"sv}); });
         RequireInvalid([] { ParseOptions(std::array{"--debug-panel"sv, "--headless"sv}); });
@@ -161,6 +174,8 @@ int main()
                     TextureRowPitch(65) == 512,
                 "Texture row pitch boundaries");
         RequireInvalid([] { TextureRowPitch(UINT32_MAX); });
+        Require(FormatBytes(Format::R32Float) == 4 && TextureRowPitch(65, Format::R32Float) == 512,
+                "Scalar float guide upload/readback footprint");
 
         renderlab::rhi::DeviceReport report;
         report.backend = "test\"\\\n\t";

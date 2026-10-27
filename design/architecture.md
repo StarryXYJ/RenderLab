@@ -81,7 +81,11 @@ RHI 定义 GPU 对象与命令语义。Render Graph 编译一帧工作的资源�
 
 编辑器阶段先使用进程内原生库与 P/Invoke，桥接接口采用不透明 Handle、固定宽度字段、UTF-8 和明确的缓冲区所有权。STL 容器、C++ 异常和内部对象指针不跨边界。按编辑操作批量交互，不把 RHI 逐个包装成 C# 对象。桥接双方随同一版本发布，不建设跨版本插件 ABI。
 
-完整编辑器阶段再处理 Docking、DPI、输入焦点、鼠标捕获和原生视口托管。Windows 首选 NativeControlHost 托管子 HWND，C++ 使用该窗口创建 Surface；视口内 Gizmo 和调试覆盖由原生编辑器渲染层绘制。独立 Sandbox 使用自己的原生窗口。视口宿主明确窗口所有权和销毁协议，避免窗口销毁后仍提交渲染。
+Windows 编辑器使用 Avalonia 管理整个窗口和普通面板，NativeControlHost 托管由 C++ 创建的渲染子 HWND；C++ 使用该窗口创建 Surface，复用 SceneRenderer 与双后端 Swapchain。[提前集成原型](../docs/editor-host.md) 已验证双后端 Present，采用代际 Handle、UTF-8 和显式关闭协议。UI STA 拥有 HWND/输入，专用 MTA 渲染线程创建、使用并销毁 Device/Runtime/SceneRenderer/Swapchain；最新值邮箱传递配置与输入，完成帧快照用有界队列发布，RHI 线程所有权检查保留。关闭先停止线程、释放 GPU/展示，再在 UI 销毁 HWND；等待期间处理 Win32 同步消息以防 DXGI 死锁。目标帧率调度支持 0 表示无 CPU 限速且关闭强制 VSync；RHI Swapchain 创建参数显式选择展示同步，默认保持 VSync。Resize 合并与静态按需重绘的契约和实际验收见宿主说明及阶段计划。跨屏 DPI、Docking、浮动窗口重挂接和真实交互仍需完整编辑器阶段验证。
+
+托管宿主按官方 Avalonia MVVM 模板组织 App、Views 与 ViewModels；XAML 使用编译绑定，CommunityToolkit.Mvvm 生成属性通知和命令，App 通过 Microsoft.Extensions.DependencyInjection 装配具体依赖。ViewModel 保存 UI 状态和服务投影，不调用 P/Invoke 或持有 HWND；NativeViewportService 管理原生 Session、已接受的视口配置与错误，NativeControlHost 适配窗口生命周期和 Timer。当前服务与视口一一对应，不建设通用模块框架；后续编辑面板沿同一结构增量加入，场景、材质和资源的权威状态继续归 C++ 服务。
+
+子 HWND 存在 airspace 限制，视口内 Gizmo 和调试覆盖由原生编辑器渲染层绘制；普通 Avalonia 控件安排在视口周边。独立 Sandbox 使用自己的原生窗口。视口宿主明确窗口所有权和销毁协议，避免窗口销毁后仍提交渲染。
 
 Windows Sandbox 在窗口和设备创建前为窗口线程初始化 COM STA，持有至宿主对象销毁后；headless 使用 MTA。WIC 资源解码复用已有 apartment，仅无宿主初始化的导入线程临时持有 MTA，避免首帧纹理解码结束时卸载展示线程的 COM。具体契约见 [场景资源](../docs/m4-scene.md#静态-gltf-与缓存)。
 
@@ -361,6 +365,24 @@ BLAS 管理几何，TLAS 管理场景实例；通过统一的 InstanceID、MeshI
 
 两者都依赖加速结构，但设备能力分别检测。完整光追作为正式目标保留，第一阶段只完成最小可验证样例。路径追踪的采样序列、累积和降噪是独立渲染功能；相机、场景、材质或分辨率变化时明确失效历史。
 
+M5 的 AS 实现通过明确的 BuildInput、BuildWrite 与 Read 用途把底层存储 Buffer 纳入图依赖；构建 Context 核对目标、scratch、几何/实例输入和 BLAS 引用，绑定 Context 核对 TLAS 与已声明存储的对应关系。静态 Mesh 复用 BLAS，实例变化重建不可变 TLAS 版本；命令包单独保活 scratch，提交后可释放宿主引用。Ray Tracing 组合在 GBuffer 后用独立 Ray Query Pass 生成 ShadowVisibility，再由 Deferred Lighting 消费。能力、资源和材质边界见 [光追基础](../docs/raytracing.md)。
+
+Ray Tracing Pipeline 使用类型化 RayTracing Pass 与显式 ShaderTableRead；单个通用三角形 Hit Group 通过 InstanceID、Mesh 和 Material 索引消费基础 PBR。ShaderTable 保持不可变并持有对应 PSO；Shader 代际变化同时重建 PSO 和表，旧命令引用保护在途版本。有限图集与显式 LOD 0 先于 M6 的描述符数组，数据 ABI 和限制见上述光追文档。
+
+光追几何投影按有序唯一 Mesh 身份和导入内容 key 缓存，静态顶点/索引仅在选择变化时重打包；实例/材质表单独比较，同帧相同材质身份只求值一次。变化表合并为一次 staging 上传与完成等待，完成后发布不可变 Buffer，旧命令继续保活旧版。该优化依赖当前不可变导入模型，不把未来动态几何隐式当成静态缓存；累计打包/上传工作通过 Renderer 统计和 headless 报告暴露。
+
+M5 混合反射由独立 Trace、静止历史累积、显示重建和 Combine Pass 实现；一次可见法线 GGX（VNDF）specular 采样使用通用 PBR Hit Group，Miss 消费环境，合成显式替换 IBL specular。ViewID 使用相机身份，未滤波双缓冲按 1/N 持续求平均；相机/场景/材质/尺寸/照明变化失效，采样序列在兼容场景的相机运动中继续。原始单样本与未滤波历史保持独立正确性入口。
+
+原始单帧另经 Statistics Pass 维护与 progressive 样本/计数匹配的去调制亮度中心矩，以及稳定的局部滤波控制值；每个 progressive View 的双槽各使用八字节/像素结构化缓冲，与均值一起失效和提交发布。显示开关关闭时仍维护统计，避免重开后丢失历史样本。
+
+历史缓存最多四个 View，并按最近成功使用与 native 预算的 1/8 软字节目标淘汰非活动 progressive View；活动 View 可超过缓存目标，但不能超过 native 上限。在途命令继续保活已淘汰版本。显示降噪使用无损 R32F 命中距离，未滤波路径使用无引导 RayGen；2048 spp 及以上直接选择原始均值，省去显示重建 Pass。时间降噪不活动时在成功提交后释放 CPU 引导图引用，恢复时冷启动；原始累积、HDR 矩、世界位置仍使用 FP32。
+
+默认显示分支消费独立单帧信号，以材质去调制、几何约束预滤波和稳定命中距离准备输入，时间 Pass 比较接收表面与局部平面反射虚拟位置重投影，逐 tap 验证几何并积累亮度矩和有界历史。三尺度重建以局部误差和有效样本支持连续结合 progressive 均值与时间先验，大尺度权重随稳定置信度优先减弱；中间 alpha 传播滤波方差，Resolve 仅恢复材质并执行显示包络，移除固定 8–64 spp 交接及后置空间核。2048 spp、镜面、背景与 Unlit 精确旁路。空间输出与 progressive 均值不递归反馈到时间矩。关闭时间重建可回到原 5×5 空间基线。
+
+场景变化与相机大幅跳转使时间来源失效，仅当前活动视图保留双套四张 RGBA32F 时间目标；版本仅在提交成功后发布，在途所有权沿用 Graph/RHI。没有对象运动矢量或通用曲面反射跟踪，有限历史仍有细节模糊、高光偏差和拖影边界。显示滤波不截断原始输入亮度；内存/诊断契约见 [反射重建](../docs/temporal-reflections.md)，具体材质与图集边界见光追文档。
+
+场景宿主在 Renderer 创建前显式设置 tracked native 分配预算（默认 2048 MiB，可由 CLI 覆盖），资源图缓存取该上限的 3/4，给图外资产/AS/历史/上传留出余量；RHI 工具默认 256 MiB。预算不预留显存，不代表硬件实时预算，超额错误包含请求、占用与上限。
+
 渲染图描述可静态组织的 GPU 阶段，射线遍历、路径队列和逐路径分支留在 Shader 与积分器内部，不为每条射线生成图节点。GPU 生成的数量通过间接执行或有界 Dispatch 消费，不在热路径读回 CPU 再决定本帧命令。射线 Payload 和队列元素只携带后续工作必需的数据，避免把完整表面对象跨阶段搬运。组织方式以正确的简单基线为起点，测量分支、寄存器和内存流量后再拆分。[pbrt GPU 任务组织](https://pbr-book.org/4ed/Wavefront_Rendering_on_GPUs/Mapping_Path_Tracing_to_the_GPU)
 
 ## 可组合渲染管线
@@ -457,12 +479,13 @@ RenderLab/
     renderer/
     assets/
     project/
-    editor_services/
-    editor_bridge/
     tools/
     apps/sandbox/
     apps/player/
-    editor/                后期 C# 与 Avalonia
+    editor/
+      native/              C ABI 桥接与视口输入适配
+      managed/
+        RenderLab.Editor/  Avalonia、MVVM 与原生视口宿主
   shaders/                 引擎内置 Shader
   sample/                  演示项目
   tests/
@@ -471,6 +494,8 @@ RenderLab/
 ```
 
 构建采用 CMake Presets、C++20 和固定依赖版本。第三方优先使用 DXC、volk、VMA、D3D12 Memory Allocator、Dear ImGui 和一个 glTF 导入库。窗口层先满足 Windows 原生宿主，后续根据需要引入 SDL3。C# 编辑器单独构建，通过统一脚本编排。
+
+根目录 `RenderLab.slnx` 是托管 IDE 入口；`global.json` 锁定 SDK，`Directory.Build.props` 统一 C# 构建规则，并按项目隔离 `out/dotnet/<项目名>/bin` 与 `obj`。原生目标和依赖图仍以 CMake 为准，不将生成的 vcxproj 加入解决方案。编辑器的 Configuration、Diagnostics、Interop、Controls、Services、Views、ViewModels 分别组织参数、诊断、P/Invoke、窗口适配、服务、界面与状态；在出现实际共享需求前保留一个托管应用项目。
 
 Concepts 用于有价值的泛型约束，std::span 用于非拥有视图，std::jthread 等用于明确生命周期的后台任务。动态后端边界可以使用虚接口或函数表，帧内高频数据路径尽量采用紧凑数据结构。C++ Modules、协程和通用 Job System 根据真实需求引入。
 

@@ -2,6 +2,7 @@
 
 The scene renderer offers a Deferred composition alongside Forward. The native debug panel lists
 only implemented pipelines; its typed choice table is the extension point for future compositions.
+The [Ray Tracing composition](raytracing.md) extends this GBuffer with Ray Query visibility.
 Use `--pipeline deferred` for a headless run or choose **Deferred** from the scene debug panel.
 Forward remains the default and is selected with `--pipeline forward`.
 
@@ -13,7 +14,7 @@ shared reversed-Z `CameraDepth` attachment:
 | Resource | Channels | Space |
 | --- | --- | --- |
 | `GBuffer.AlbedoMetallic` | base color RGB, metallic A | linear RGB, scalar metallic |
-| `GBuffer.NormalRoughness` | world normal XYZ, perceptual roughness A | world space, roughness in `[0, 1]` |
+| `GBuffer.NormalRoughness` | world normal XYZ, perceptual roughness A | world space; Lit roughness in `[0, 1]`, Unlit marker `-1` |
 | `GBuffer.EmissionOcclusion` | emission RGB, occlusion A | linear RGB, scalar occlusion |
 
 `Lit.shader` and `Unlit.shader` provide a `GBuffer` pass role. Lit forward and GBuffer passes share
@@ -26,6 +27,7 @@ Unoccupied samples are identified from reversed-Z depth `0`. The color values cl
 GBuffer locations are ignored. `CameraDepth` is sampled through a depth-only view; the lighting
 pass reconstructs world position with the inverse view-projection matrix, then evaluates the same
 direct BRDF, shadow visibility, image-based lighting and emission used by the Forward material.
+The Unlit marker returns the stored base color directly and preserves its Forward output.
 
 ## Composition and limits
 

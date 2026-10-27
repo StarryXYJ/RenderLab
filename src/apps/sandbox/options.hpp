@@ -21,6 +21,8 @@ struct Options
     std::string outputPath = "out/m1";
     std::string quality = "scene", view = "final", pipeline = "forward", profilePath;
     uint32_t width = 1280, height = 720, benchmarkFrames = 0;
+    /// Zero selects the host default: scene 2048 MiB, standalone RHI demos 256 MiB.
+    uint32_t gpuBudgetMiB = 0;
     double benchmarkSeconds = 0, warmupSeconds = 0;
     uint32_t warmupFrames = 5;
     std::string samplesPath;
@@ -28,10 +30,12 @@ struct Options
     {
         return benchmarkFrames > 0 || benchmarkSeconds > 0;
     }
+    bool reflectionDenoise = true, reflectionTemporal = true;
     bool debugPanel = false, fixedCamera = false, cpuProfile = false;
     bool headless = false;
     bool windowTest = false;
     bool rhiTest = false;
+    bool accelerationStructureTest = false;
     bool sceneTest = false;
     bool graphTest = false, graphNoCull = false, graphNoUpdate = false;
     std::string graphDumpPath;

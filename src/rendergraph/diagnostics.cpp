@@ -38,14 +38,25 @@ const char* Name(rhi::State state)
         return "HostWrite";
     case rhi::State::UniformRead:
         return "UniformRead";
+    case rhi::State::ShaderTableRead:
+        return "ShaderTableRead";
     case rhi::State::ShaderRead:
         return "ShaderRead";
+    case rhi::State::AccelerationStructureBuildInput:
+        return "ASBuildInput";
+    case rhi::State::AccelerationStructureBuildWrite:
+        return "ASBuildWrite";
+    case rhi::State::AccelerationStructureRead:
+        return "ASRead";
     }
     return "Unknown";
 }
 const char* Name(PassKind kind)
 {
-    return kind == PassKind::Raster ? "Raster" : kind == PassKind::Compute ? "Compute" : "Copy";
+    return kind == PassKind::Raster    ? "Raster"
+           : kind == PassKind::Compute ? "Compute"
+           : kind == PassKind::Copy    ? "Copy"
+                                       : "RayTracing";
 }
 } // namespace
 

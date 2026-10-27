@@ -30,8 +30,15 @@ std::string_view ApplicationUsage()
            "  --backend dx12|vulkan       Backend (default: dx12)\n"
            "  --validation auto|on|off    Device validation\n"
            "  --width N --height N        Output size (default: 1280x720)\n"
+           "  --gpu-budget-mib N          Tracked allocation limit (default: 2048 MiB)\n"
            "  --quality scene|low|medium|high  Shadow quality override\n"
-           "  --view final|hdr|shadow|environment|brdf  Texture preview\n"
+           "  --temporal-denoise on|off        Camera reprojection denoising (default on)\n"
+           "  --denoise on|off                 Spatial reflection denoising (default on)\n"
+           "  --view "
+           "final|hdr|shadow|environment|brdf|reflection-raw|reflection-history|reflection-"
+           "denoised  Texture "
+           "preview\n"
+           "  --pipeline forward|deferred|raytracing  Scene rendering path\n"
            "  --fixed-camera --debug-panel  Camera and native controls\n"
            "  --headless --benchmark N    Capture or measure a fixed scene\n"
            "  --benchmark-seconds S       Measure for a duration instead of a frame count\n"
@@ -96,9 +103,16 @@ int Run(const sandbox::Options& options, const std::filesystem::path& shaderRoot
         std::format("Supported: rayPipeline={}, rayQuery={}, descriptorIndexing={}, meshShader={}",
                     report.supported.rayTracingPipeline, report.supported.rayQuery,
                     report.supported.descriptorIndexing, report.supported.meshShader));
-    if (window || options.rhiTest || options.graphTest || !options.projectPath.empty())
+    if (window || options.rhiTest || options.graphTest || options.accelerationStructureTest ||
+        !options.projectPath.empty())
     {
         auto runtime = device->CreateRuntime();
+        const auto budgetMiB = options.gpuBudgetMiB          ? options.gpuBudgetMiB
+                               : options.projectPath.empty() ? 256u
+                                                             : 2048u;
+        runtime->SetAllocationBudget(uint64_t(budgetMiB) * 1024 * 1024);
+        logger.Write(LogLevel::Info,
+                     std::format("Tracked RHI allocation limit: {} MiB", budgetMiB));
         sandbox::RunRendering(window.get(), *device, *runtime, options, shaderRoot, logger);
         runtime->WaitIdle();
         if (runtime->GetMemoryStats().used != 0)
@@ -156,7 +170,8 @@ int wmain(int argc, wchar_t** argv)
         const auto options = renderlab::sandbox::ParseOptions(arguments);
 #ifdef RENDERLAB_PLAYER
         if (!options.help && (options.projectPath.empty() || options.rhiTest || options.graphTest ||
-                              options.sceneTest || options.graphNoCull || options.graphNoUpdate))
+                              options.accelerationStructureTest || options.sceneTest ||
+                              options.graphNoCull || options.graphNoUpdate))
             throw std::invalid_argument(
                 "Player requires --project and does not run Sandbox acceptance demos");
 #endif

@@ -1,0 +1,2471 @@
+{
+  "date": "2026-10-27",
+  "baseCommit": "3b8f8bf",
+  "adapter": "NVIDIA GeForce RTX 5060",
+  "driver": "591.74",
+  "qualityBuild": "Release",
+  "qualityValidation": true,
+  "resolution": [
+    640,
+    360
+  ],
+  "staticReferenceSpp": 8192,
+  "recoveryReferenceSpp": 2048,
+  "metricDomain": "8-bit post-tonemap RGB; finite-spp reference shares sequence prefix, not independent ground truth",
+  "sourceHashes": {
+    "baseline": "06671c95dacb7f69b33037b60bf2706a145f9e309859decace591ad4b0ebcb4c",
+    "current": "37f6c325b534b3c2a2e6d825e2a85624e64bcb64bd09cc39207fe6317088e9ca"
+  },
+  "static": {
+    "dx12": {
+      "RayTracing-1": {
+        "points": [
+          {
+            "spp": 2,
+            "baseline": {
+              "rgbMse": 1.9782638888888888,
+              "signedRgbError": -0.09569155092592592,
+              "foregroundRgbMse": 5.60305850246475,
+              "positiveComponentAbove16": 0.00039207175925925927
+            },
+            "current": {
+              "rgbMse": 1.9782638888888888,
+              "signedRgbError": -0.09569155092592592,
+              "foregroundRgbMse": 5.60305850246475,
+              "positiveComponentAbove16": 0.00039207175925925927
+            }
+          },
+          {
+            "spp": 8,
+            "baseline": {
+              "rgbMse": 1.6488035300925925,
+              "signedRgbError": -0.13995515046296297,
+              "foregroundRgbMse": 4.669924315996083,
+              "positiveComponentAbove16": 3.472222222222222e-05
+            },
+            "current": {
+              "rgbMse": 1.6488035300925925,
+              "signedRgbError": -0.13995515046296297,
+              "foregroundRgbMse": 4.669924315996083,
+              "positiveComponentAbove16": 3.472222222222222e-05
+            }
+          },
+          {
+            "spp": 9,
+            "baseline": {
+              "rgbMse": 1.6848249421296295,
+              "signedRgbError": -0.14213686342592594,
+              "foregroundRgbMse": 4.771948156252433,
+              "positiveComponentAbove16": 2.4594907407407408e-05
+            },
+            "current": {
+              "rgbMse": 1.6821108217592593,
+              "signedRgbError": -0.14200086805555556,
+              "foregroundRgbMse": 4.7642609233694335,
+              "positiveComponentAbove16": 2.4594907407407408e-05
+            }
+          },
+          {
+            "spp": 16,
+            "baseline": {
+              "rgbMse": 1.602919560185185,
+              "signedRgbError": -0.13932002314814815,
+              "foregroundRgbMse": 4.539966644949004,
+              "positiveComponentAbove16": 5.787037037037037e-05
+            },
+            "current": {
+              "rgbMse": 1.4687196180555555,
+              "signedRgbError": -0.13158130787037037,
+              "foregroundRgbMse": 4.15987067746813,
+              "positiveComponentAbove16": 5.642361111111111e-05
+            }
+          },
+          {
+            "spp": 24,
+            "baseline": {
+              "rgbMse": 1.625859375,
+              "signedRgbError": -0.14002025462962964,
+              "foregroundRgbMse": 4.604939333964375,
+              "positiveComponentAbove16": 2.3148148148148147e-05
+            },
+            "current": {
+              "rgbMse": 1.1481221064814815,
+              "signedRgbError": -0.11102719907407407,
+              "foregroundRgbMse": 3.251838830360472,
+              "positiveComponentAbove16": 2.3148148148148147e-05
+            }
+          },
+          {
+            "spp": 32,
+            "baseline": {
+              "rgbMse": 1.5878703703703703,
+              "signedRgbError": -0.1406857638888889,
+              "foregroundRgbMse": 4.497342659635061,
+              "positiveComponentAbove16": 2.3148148148148147e-05
+            },
+            "current": {
+              "rgbMse": 0.7538093171296296,
+              "signedRgbError": -0.0813353587962963,
+              "foregroundRgbMse": 2.1350223937780948,
+              "positiveComponentAbove16": 3.0381944444444444e-05
+            }
+          },
+          {
+            "spp": 48,
+            "baseline": {
+              "rgbMse": 1.642857349537037,
+              "signedRgbError": -0.1418359375,
+              "foregroundRgbMse": 4.653082883613819,
+              "positiveComponentAbove16": 2.3148148148148147e-05
+            },
+            "current": {
+              "rgbMse": 0.44580729166666666,
+              "signedRgbError": -0.02800347222222222,
+              "foregroundRgbMse": 1.2626648800816256,
+              "positiveComponentAbove16": 4.9189814814814815e-05
+            }
+          },
+          {
+            "spp": 64,
+            "baseline": {
+              "rgbMse": 1.4729152199074074,
+              "signedRgbError": -0.13532841435185186,
+              "foregroundRgbMse": 4.1717539265943016,
+              "positiveComponentAbove16": 2.604166666666667e-05
+            },
+            "current": {
+              "rgbMse": 0.36593460648148146,
+              "signedRgbError": 0.00043402777777777775,
+              "foregroundRgbMse": 1.0364405980962215,
+              "positiveComponentAbove16": 8.53587962962963e-05
+            }
+          },
+          {
+            "spp": 128,
+            "baseline": {
+              "rgbMse": 1.3245543981481482,
+              "signedRgbError": -0.12853877314814816,
+              "foregroundRgbMse": 3.751549944476543,
+              "positiveComponentAbove16": 2.604166666666667e-05
+            },
+            "current": {
+              "rgbMse": 0.17454282407407407,
+              "signedRgbError": 0.00023726851851851852,
+              "foregroundRgbMse": 0.49435955433718104,
+              "positiveComponentAbove16": 1.0127314814814815e-05
+            }
+          },
+          {
+            "spp": 256,
+            "baseline": {
+              "rgbMse": 1.2212152777777778,
+              "signedRgbError": -0.12236400462962962,
+              "foregroundRgbMse": 3.4588614208268282,
+              "positiveComponentAbove16": 2.4594907407407408e-05
+            },
+            "current": {
+              "rgbMse": 0.08958912037037037,
+              "signedRgbError": 0.001941550925925926,
+              "foregroundRgbMse": 0.2537442478927721,
+              "positiveComponentAbove16": 7.2337962962962966e-06
+            }
+          },
+          {
+            "spp": 512,
+            "baseline": {
+              "rgbMse": 0.9475159143518519,
+              "signedRgbError": -0.10662181712962963,
+              "foregroundRgbMse": 2.6836597129170916,
+              "positiveComponentAbove16": 2.3148148148148147e-05
+            },
+            "current": {
+              "rgbMse": 0.062314814814814816,
+              "signedRgbError": 0.0028877314814814816,
+              "foregroundRgbMse": 0.17649493322843293,
+              "positiveComponentAbove16": 4.340277777777778e-06
+            }
+          },
+          {
+            "spp": 1024,
+            "baseline": {
+              "rgbMse": 0.42331886574074074,
+              "signedRgbError": -0.06896412037037038,
+              "foregroundRgbMse": 1.1989706647653469,
+              "positiveComponentAbove16": 1.0127314814814815e-05
+            },
+            "current": {
+              "rgbMse": 0.04696903935185185,
+              "signedRgbError": 0.0018851273148148147,
+              "foregroundRgbMse": 0.13303092513143283,
+              "positiveComponentAbove16": 0.0
+            }
+          },
+          {
+            "spp": 1800,
+            "baseline": {
+              "rgbMse": 0.06181712962962963,
+              "signedRgbError": -0.01676215277777778,
+              "foregroundRgbMse": 0.17508533402174226,
+              "positiveComponentAbove16": 0.0
+            },
+            "current": {
+              "rgbMse": 0.039467592592592596,
+              "signedRgbError": -4.9189814814814815e-05,
+              "foregroundRgbMse": 0.11178449522826082,
+              "positiveComponentAbove16": 0.0
+            }
+          },
+          {
+            "spp": 2048,
+            "baseline": {
+              "rgbMse": 0.03039496527777778,
+              "signedRgbError": -0.0005541087962962963,
+              "foregroundRgbMse": 0.08608799341094324,
+              "positiveComponentAbove16": 0.0
+            },
+            "current": {
+              "rgbMse": 0.03039496527777778,
+              "signedRgbError": -0.0005541087962962963,
+              "foregroundRgbMse": 0.08608799341094324,
+              "positiveComponentAbove16": 0.0
+            }
+          },
+          {
+            "spp": 8192,
+            "baseline": {
+              "rgbMse": 0.0,
+              "signedRgbError": 0.0,
+              "foregroundRgbMse": 0.0,
+              "positiveComponentAbove16": 0.0
+            },
+            "current": {
+              "rgbMse": 0.0,
+              "signedRgbError": 0.0,
+              "foregroundRgbMse": 0.0,
+              "positiveComponentAbove16": 0.0
+            }
+          }
+        ],
+        "sameReference": true,
+        "same2048": true,
+        "runs": {
+          "baseline": {
+            "validationErrors": 0,
+            "ledgerAfterShutdown": 0,
+            "nativeHighWater": 85852160
+          },
+          "current": {
+            "validationErrors": 0,
+            "ledgerAfterShutdown": 0,
+            "nativeHighWater": 85852160
+          }
+        }
+      },
+      "RayTracing-4": {
+        "points": [
+          {
+            "spp": 2,
+            "baseline": {
+              "rgbMse": 3.6891652199074074,
+              "signedRgbError": -0.15357204861111112,
+              "foregroundRgbMse": 10.448863100872394,
+              "positiveComponentAbove16": 0.0004427083333333333
+            },
+            "current": {
+              "rgbMse": 3.6891652199074074,
+              "signedRgbError": -0.15357204861111112,
+              "foregroundRgbMse": 10.448863100872394,
+              "positiveComponentAbove16": 0.0004427083333333333
+            }
+          },
+          {
+            "spp": 8,
+            "baseline": {
+              "rgbMse": 4.110763888888889,
+              "signedRgbError": -0.21237847222222223,
+              "foregroundRgbMse": 11.64296163349601,
+              "positiveComponentAbove16": 3.7615740740740744e-05
+            },
+            "current": {
+              "rgbMse": 4.110763888888889,
+              "signedRgbError": -0.21237847222222223,
+              "foregroundRgbMse": 11.64296163349601,
+              "positiveComponentAbove16": 3.7615740740740744e-05
+            }
+          },
+          {
+            "spp": 9,
+            "baseline": {
+              "rgbMse": 4.228544560185185,
+              "signedRgbError": -0.21445891203703704,
+              "foregroundRgbMse": 11.97655312017243,
+              "positiveComponentAbove16": 2.7488425925925926e-05
+            },
+            "current": {
+              "rgbMse": 4.2196484375,
+              "signedRgbError": -0.21423466435185184,
+              "foregroundRgbMse": 11.951356534352835,
+              "positiveComponentAbove16": 2.7488425925925926e-05
+            }
+          },
+          {
+            "spp": 16,
+            "baseline": {
+              "rgbMse": 4.221639178240741,
+              "signedRgbError": -0.2087745949074074,
+              "foregroundRgbMse": 11.956994931179597,
+              "positiveComponentAbove16": 9.114583333333334e-05
+            },
+            "current": {
+              "rgbMse": 3.830324074074074,
+              "signedRgbError": -0.19652199074074075,
+              "foregroundRgbMse": 10.848668871214263,
+              "positiveComponentAbove16": 9.403935185185185e-05
+            }
+          },
+          {
+            "spp": 24,
+            "baseline": {
+              "rgbMse": 4.2833463541666665,
+              "signedRgbError": -0.21466579861111112,
+              "foregroundRgbMse": 12.131768842120792,
+              "positiveComponentAbove16": 2.604166666666667e-05
+            },
+            "current": {
+              "rgbMse": 2.8903920717592593,
+              "signedRgbError": -0.1686762152777778,
+              "foregroundRgbMse": 8.186489155510754,
+              "positiveComponentAbove16": 5.497685185185185e-05
+            }
+          },
+          {
+            "spp": 32,
+            "baseline": {
+              "rgbMse": 4.271115451388889,
+              "signedRgbError": -0.2162745949074074,
+              "foregroundRgbMse": 12.097127122081945,
+              "positiveComponentAbove16": 2.604166666666667e-05
+            },
+            "current": {
+              "rgbMse": 1.903812210648148,
+              "signedRgbError": -0.12391927083333333,
+              "foregroundRgbMse": 5.392188197884781,
+              "positiveComponentAbove16": 8.246527777777778e-05
+            }
+          },
+          {
+            "spp": 48,
+            "baseline": {
+              "rgbMse": 4.434852430555556,
+              "signedRgbError": -0.21936342592592592,
+              "foregroundRgbMse": 12.560881163411066,
+              "positiveComponentAbove16": 2.604166666666667e-05
+            },
+            "current": {
+              "rgbMse": 1.0602879050925926,
+              "signedRgbError": -0.04466579861111111,
+              "foregroundRgbMse": 3.0030650587401295,
+              "positiveComponentAbove16": 0.00025028935185185186
+            }
+          },
+          {
+            "spp": 64,
+            "baseline": {
+              "rgbMse": 3.984939236111111,
+              "signedRgbError": -0.20950520833333333,
+              "foregroundRgbMse": 11.286587089874242,
+              "positiveComponentAbove16": 2.8935185185185186e-05
+            },
+            "current": {
+              "rgbMse": 0.8543026620370371,
+              "signedRgbError": -0.0044994212962962965,
+              "foregroundRgbMse": 2.419650796382575,
+              "positiveComponentAbove16": 0.0004152199074074074
+            }
+          },
+          {
+            "spp": 128,
+            "baseline": {
+              "rgbMse": 3.562890625,
+              "signedRgbError": -0.1981568287037037,
+              "foregroundRgbMse": 10.091214181223647,
+              "positiveComponentAbove16": 2.8935185185185186e-05
+            },
+            "current": {
+              "rgbMse": 0.39837528935185185,
+              "signedRgbError": -0.0030888310185185185,
+              "foregroundRgbMse": 1.1283226998742015,
+              "positiveComponentAbove16": 0.00012152777777777777
+            }
+          },
+          {
+            "spp": 256,
+            "baseline": {
+              "rgbMse": 3.2565928819444445,
+              "signedRgbError": -0.18683015046296297,
+              "foregroundRgbMse": 9.22368372527567,
+              "positiveComponentAbove16": 3.18287037037037e-05
+            },
+            "current": {
+              "rgbMse": 0.18629050925925925,
+              "signedRgbError": 0.00031828703703703706,
+              "foregroundRgbMse": 0.527632651890461,
+              "positiveComponentAbove16": 3.472222222222222e-05
+            }
+          },
+          {
+            "spp": 512,
+            "baseline": {
+              "rgbMse": 2.441723090277778,
+              "signedRgbError": -0.1608521412037037,
+              "foregroundRgbMse": 6.915719079990657,
+              "positiveComponentAbove16": 2.4594907407407408e-05
+            },
+            "current": {
+              "rgbMse": 0.1286791087962963,
+              "signedRgbError": 0.0016710069444444444,
+              "foregroundRgbMse": 0.3644592506996775,
+              "positiveComponentAbove16": 1.591435185185185e-05
+            }
+          },
+          {
+            "spp": 1024,
+            "baseline": {
+              "rgbMse": 1.030083912037037,
+              "signedRgbError": -0.10275752314814815,
+              "foregroundRgbMse": 2.917517958048033,
+              "positiveComponentAbove16": 1.0127314814814815e-05
+            },
+            "current": {
+              "rgbMse": 0.10188368055555555,
+              "signedRgbError": 0.0009780092592592592,
+              "foregroundRgbMse": 0.2885662655045669,
+              "positiveComponentAbove16": 2.8935185185185184e-06
+            }
+          },
+          {
+            "spp": 1800,
+            "baseline": {
+              "rgbMse": 0.1442621527777778,
+              "signedRgbError": -0.024852430555555555,
+              "foregroundRgbMse": 0.40859527702312315,
+              "positiveComponentAbove16": 0.0
+            },
+            "current": {
+              "rgbMse": 0.09163773148148148,
+              "signedRgbError": -0.0010648148148148149,
+              "foregroundRgbMse": 0.2595465516040337,
+              "positiveComponentAbove16": 0.0
+            }
+          },
+          {
+            "spp": 2048,
+            "baseline": {
+              "rgbMse": 0.0750535300925926,
+              "signedRgbError": -0.0014482060185185186,
+              "foregroundRgbMse": 0.21257493617875683,
+              "positiveComponentAbove16": 0.0
+            },
+            "current": {
+              "rgbMse": 0.0750535300925926,
+              "signedRgbError": -0.0014482060185185186,
+              "foregroundRgbMse": 0.21257493617875683,
+              "positiveComponentAbove16": 0.0
+            }
+          },
+          {
+            "spp": 8192,
+            "baseline": {
+              "rgbMse": 0.0,
+              "signedRgbError": 0.0,
+              "foregroundRgbMse": 0.0,
+              "positiveComponentAbove16": 0.0
+            },
+            "current": {
+              "rgbMse": 0.0,
+              "signedRgbError": 0.0,
+              "foregroundRgbMse": 0.0,
+              "positiveComponentAbove16": 0.0
+            }
+          }
+        ],
+        "sameReference": true,
+        "same2048": true,
+        "runs": {
+          "baseline": {
+            "validationErrors": 0,
+            "ledgerAfterShutdown": 0,
+            "nativeHighWater": 85852160
+          },
+          "current": {
+            "validationErrors": 0,
+            "ledgerAfterShutdown": 0,
+            "nativeHighWater": 85852160
+          }
+        }
+      },
+      "Pbr-1": {
+        "points": [
+          {
+            "spp": 2,
+            "baseline": {
+              "rgbMse": 1.0802184606481482,
+              "signedRgbError": -0.012078993055555556,
+              "foregroundRgbMse": 15.46713483727964,
+              "positiveComponentAbove16": 0.00023871527777777777
+            },
+            "current": {
+              "rgbMse": 1.0802184606481482,
+              "signedRgbError": -0.012078993055555556,
+              "foregroundRgbMse": 15.46713483727964,
+              "positiveComponentAbove16": 0.00023871527777777777
+            }
+          },
+          {
+            "spp": 8,
+            "baseline": {
+              "rgbMse": 0.7021310763888889,
+              "signedRgbError": -0.013948206018518518,
+              "foregroundRgbMse": 10.053508172270213,
+              "positiveComponentAbove16": 3.472222222222222e-05
+            },
+            "current": {
+              "rgbMse": 0.7021310763888889,
+              "signedRgbError": -0.013948206018518518,
+              "foregroundRgbMse": 10.053508172270213,
+              "positiveComponentAbove16": 3.472222222222222e-05
+            }
+          },
+          {
+            "spp": 9,
+            "baseline": {
+              "rgbMse": 0.7050462962962963,
+              "signedRgbError": -0.013072916666666667,
+              "foregroundRgbMse": 10.09524993267458,
+              "positiveComponentAbove16": 2.025462962962963e-05
+            },
+            "current": {
+              "rgbMse": 0.7047468171296296,
+              "signedRgbError": -0.013068576388888888,
+              "foregroundRgbMse": 10.090961821307978,
+              "positiveComponentAbove16": 2.025462962962963e-05
+            }
+          },
+          {
+            "spp": 16,
+            "baseline": {
+              "rgbMse": 0.5836892361111111,
+              "signedRgbError": -0.012473958333333333,
+              "foregroundRgbMse": 8.357591200049717,
+              "positiveComponentAbove16": 1.591435185185185e-05
+            },
+            "current": {
+              "rgbMse": 0.5651938657407407,
+              "signedRgbError": -0.011958912037037037,
+              "foregroundRgbMse": 8.092764071012782,
+              "positiveComponentAbove16": 1.591435185185185e-05
+            }
+          },
+          {
+            "spp": 24,
+            "baseline": {
+              "rgbMse": 0.5460575810185185,
+              "signedRgbError": -0.01216869212962963,
+              "foregroundRgbMse": 7.818739253827191,
+              "positiveComponentAbove16": 1.1574074074074073e-05
+            },
+            "current": {
+              "rgbMse": 0.5052155671296297,
+              "signedRgbError": -0.010363136574074073,
+              "foregroundRgbMse": 7.233940297889089,
+              "positiveComponentAbove16": 1.0127314814814815e-05
+            }
+          },
+          {
+            "spp": 32,
+            "baseline": {
+              "rgbMse": 0.6026417824074074,
+              "signedRgbError": -0.013862847222222223,
+              "foregroundRgbMse": 8.628964431462723,
+              "positiveComponentAbove16": 4.340277777777778e-06
+            },
+            "current": {
+              "rgbMse": 0.48106047453703704,
+              "signedRgbError": -0.009859664351851852,
+              "foregroundRgbMse": 6.88809479419137,
+              "positiveComponentAbove16": 4.340277777777778e-06
+            }
+          },
+          {
+            "spp": 48,
+            "baseline": {
+              "rgbMse": 0.5304673032407408,
+              "signedRgbError": -0.012513020833333333,
+              "foregroundRgbMse": 7.595529592111532,
+              "positiveComponentAbove16": 4.340277777777778e-06
+            },
+            "current": {
+              "rgbMse": 0.40826244212962964,
+              "signedRgbError": -0.005397858796296296,
+              "foregroundRgbMse": 5.845731568371553,
+              "positiveComponentAbove16": 5.787037037037037e-06
+            }
+          },
+          {
+            "spp": 64,
+            "baseline": {
+              "rgbMse": 0.5596325231481482,
+              "signedRgbError": -0.012508680555555556,
+              "foregroundRgbMse": 8.013112920265987,
+              "positiveComponentAbove16": 1.4467592592592592e-06
+            },
+            "current": {
+              "rgbMse": 0.34652488425925926,
+              "signedRgbError": -0.0028993055555555556,
+              "foregroundRgbMse": 4.961738445922151,
+              "positiveComponentAbove16": 2.170138888888889e-05
+            }
+          },
+          {
+            "spp": 128,
+            "baseline": {
+              "rgbMse": 0.5376750578703704,
+              "signedRgbError": -0.011358506944444444,
+              "foregroundRgbMse": 7.698734282103867,
+              "positiveComponentAbove16": 8.680555555555556e-06
+            },
+            "current": {
+              "rgbMse": 0.34246238425925923,
+              "signedRgbError": -0.002459490740740741,
+              "foregroundRgbMse": 4.903569283036066,
+              "positiveComponentAbove16": 1.736111111111111e-05
+            }
+          },
+          {
+            "spp": 256,
+            "baseline": {
+              "rgbMse": 0.4733449074074074,
+              "signedRgbError": -0.010752314814814815,
+              "foregroundRgbMse": 6.777577527810577,
+              "positiveComponentAbove16": 8.680555555555556e-06
+            },
+            "current": {
+              "rgbMse": 0.3305396412037037,
+              "signedRgbError": -0.0020703125,
+              "foregroundRgbMse": 4.732811302384356,
+              "positiveComponentAbove16": 1.3020833333333334e-05
+            }
+          },
+          {
+            "spp": 512,
+            "baseline": {
+              "rgbMse": 0.4285807291666667,
+              "signedRgbError": -0.009483506944444444,
+              "foregroundRgbMse": 6.136639529343525,
+              "positiveComponentAbove16": 5.787037037037037e-06
+            },
+            "current": {
+              "rgbMse": 0.2924580439814815,
+              "signedRgbError": -0.0014192708333333334,
+              "foregroundRgbMse": 4.187578977896547,
+              "positiveComponentAbove16": 1.8807870370370372e-05
+            }
+          },
+          {
+            "spp": 1024,
+            "baseline": {
+              "rgbMse": 0.32576533564814814,
+              "signedRgbError": -0.006578414351851852,
+              "foregroundRgbMse": 4.664491537712593,
+              "positiveComponentAbove16": 1.591435185185185e-05
+            },
+            "current": {
+              "rgbMse": 0.25049623842592594,
+              "signedRgbError": -0.0005627893518518519,
+              "foregroundRgbMse": 3.5867462142398443,
+              "positiveComponentAbove16": 2.7488425925925926e-05
+            }
+          },
+          {
+            "spp": 1800,
+            "baseline": {
+              "rgbMse": 0.19719039351851853,
+              "signedRgbError": -0.002439236111111111,
+              "foregroundRgbMse": 2.8234831064984567,
+              "positiveComponentAbove16": 2.3148148148148147e-05
+            },
+            "current": {
+              "rgbMse": 0.1790798611111111,
+              "signedRgbError": -0.0007754629629629629,
+              "foregroundRgbMse": 2.564166304145174,
+              "positiveComponentAbove16": 2.7488425925925926e-05
+            }
+          },
+          {
+            "spp": 2048,
+            "baseline": {
+              "rgbMse": 0.19762731481481483,
+              "signedRgbError": -0.0015104166666666666,
+              "foregroundRgbMse": 2.8297391916806496,
+              "positiveComponentAbove16": 2.604166666666667e-05
+            },
+            "current": {
+              "rgbMse": 0.19762731481481483,
+              "signedRgbError": -0.0015104166666666666,
+              "foregroundRgbMse": 2.8297391916806496,
+              "positiveComponentAbove16": 2.604166666666667e-05
+            }
+          },
+          {
+            "spp": 8192,
+            "baseline": {
+              "rgbMse": 0.0,
+              "signedRgbError": 0.0,
+              "foregroundRgbMse": 0.0,
+              "positiveComponentAbove16": 0.0
+            },
+            "current": {
+              "rgbMse": 0.0,
+              "signedRgbError": 0.0,
+              "foregroundRgbMse": 0.0,
+              "positiveComponentAbove16": 0.0
+            }
+          }
+        ],
+        "sameReference": true,
+        "same2048": true,
+        "runs": {
+          "baseline": {
+            "validationErrors": 0,
+            "ledgerAfterShutdown": 0,
+            "nativeHighWater": 86048768
+          },
+          "current": {
+            "validationErrors": 0,
+            "ledgerAfterShutdown": 0,
+            "nativeHighWater": 86048768
+          }
+        }
+      }
+    },
+    "vulkan": {
+      "RayTracing-1": {
+        "points": [
+          {
+            "spp": 2,
+            "baseline": {
+              "rgbMse": 1.9768070023148148,
+              "signedRgbError": -0.09595920138888889,
+              "foregroundRgbMse": 5.598932146647489,
+              "positiveComponentAbove16": 0.00038483796296296297
+            },
+            "current": {
+              "rgbMse": 1.9768070023148148,
+              "signedRgbError": -0.09595920138888889,
+              "foregroundRgbMse": 5.598932146647489,
+              "positiveComponentAbove16": 0.00038483796296296297
+            }
+          },
+          {
+            "spp": 8,
+            "baseline": {
+              "rgbMse": 1.6481481481481481,
+              "signedRgbError": -0.13983796296296297,
+              "foregroundRgbMse": 4.668068070529133,
+              "positiveComponentAbove16": 3.616898148148148e-05
+            },
+            "current": {
+              "rgbMse": 1.6481481481481481,
+              "signedRgbError": -0.13983796296296297,
+              "foregroundRgbMse": 4.668068070529133,
+              "positiveComponentAbove16": 3.616898148148148e-05
+            }
+          },
+          {
+            "spp": 9,
+            "baseline": {
+              "rgbMse": 1.6846455439814816,
+              "signedRgbError": -0.1420558449074074,
+              "foregroundRgbMse": 4.771440044910486,
+              "positiveComponentAbove16": 2.604166666666667e-05
+            },
+            "current": {
+              "rgbMse": 1.682013888888889,
+              "signedRgbError": -0.1419241898148148,
+              "foregroundRgbMse": 4.763986379337898,
+              "positiveComponentAbove16": 2.604166666666667e-05
+            }
+          },
+          {
+            "spp": 16,
+            "baseline": {
+              "rgbMse": 1.6026258680555556,
+              "signedRgbError": -0.13902633101851852,
+              "foregroundRgbMse": 4.539134817510172,
+              "positiveComponentAbove16": 5.787037037037037e-05
+            },
+            "current": {
+              "rgbMse": 1.4686443865740741,
+              "signedRgbError": -0.13128327546296295,
+              "foregroundRgbMse": 4.159657598518282,
+              "positiveComponentAbove16": 5.787037037037037e-05
+            }
+          },
+          {
+            "spp": 24,
+            "baseline": {
+              "rgbMse": 1.6255425347222223,
+              "signedRgbError": -0.13974681712962964,
+              "foregroundRgbMse": 4.604041943771743,
+              "positiveComponentAbove16": 2.3148148148148147e-05
+            },
+            "current": {
+              "rgbMse": 1.1478544560185184,
+              "signedRgbError": -0.11059461805555555,
+              "foregroundRgbMse": 3.2510807610196646,
+              "positiveComponentAbove16": 2.3148148148148147e-05
+            }
+          },
+          {
+            "spp": 32,
+            "baseline": {
+              "rgbMse": 1.5879007523148148,
+              "signedRgbError": -0.14064091435185186,
+              "foregroundRgbMse": 4.497428710749423,
+              "positiveComponentAbove16": 2.3148148148148147e-05
+            },
+            "current": {
+              "rgbMse": 0.7538874421296297,
+              "signedRgbError": -0.08118778935185185,
+              "foregroundRgbMse": 2.1352436680721683,
+              "positiveComponentAbove16": 3.0381944444444444e-05
+            }
+          },
+          {
+            "spp": 48,
+            "baseline": {
+              "rgbMse": 1.6423596643518519,
+              "signedRgbError": -0.14178964120370371,
+              "foregroundRgbMse": 4.651673284407129,
+              "positiveComponentAbove16": 2.3148148148148147e-05
+            },
+            "current": {
+              "rgbMse": 0.44583622685185187,
+              "signedRgbError": -0.027679398148148147,
+              "foregroundRgbMse": 1.2627468335238752,
+              "positiveComponentAbove16": 4.9189814814814815e-05
+            }
+          },
+          {
+            "spp": 64,
+            "baseline": {
+              "rgbMse": 1.4726085069444443,
+              "signedRgbError": -0.13526765046296296,
+              "foregroundRgbMse": 4.170885220106458,
+              "positiveComponentAbove16": 2.604166666666667e-05
+            },
+            "current": {
+              "rgbMse": 0.3660836226851852,
+              "signedRgbError": 0.0004557291666666667,
+              "foregroundRgbMse": 1.0368626583238063,
+              "positiveComponentAbove16": 8.53587962962963e-05
+            }
+          },
+          {
+            "spp": 128,
+            "baseline": {
+              "rgbMse": 1.3240653935185185,
+              "signedRgbError": -0.12838541666666667,
+              "foregroundRgbMse": 3.750164931302527,
+              "positiveComponentAbove16": 2.604166666666667e-05
+            },
+            "current": {
+              "rgbMse": 0.1748553240740741,
+              "signedRgbError": 5.787037037037037e-06,
+              "foregroundRgbMse": 0.4952446515134752,
+              "positiveComponentAbove16": 1.0127314814814815e-05
+            }
+          },
+          {
+            "spp": 256,
+            "baseline": {
+              "rgbMse": 1.2212731481481482,
+              "signedRgbError": -0.12256944444444444,
+              "foregroundRgbMse": 3.459025327711327,
+              "positiveComponentAbove16": 2.4594907407407408e-05
+            },
+            "current": {
+              "rgbMse": 0.08985532407407408,
+              "signedRgbError": 0.0019068287037037038,
+              "foregroundRgbMse": 0.2544982195614671,
+              "positiveComponentAbove16": 7.2337962962962966e-06
+            }
+          },
+          {
+            "spp": 512,
+            "baseline": {
+              "rgbMse": 0.9473423032407408,
+              "signedRgbError": -0.10652922453703703,
+              "foregroundRgbMse": 2.683167992263595,
+              "positiveComponentAbove16": 2.3148148148148147e-05
+            },
+            "current": {
+              "rgbMse": 0.062249710648148146,
+              "signedRgbError": 0.0029354745370370372,
+              "foregroundRgbMse": 0.17631053798337165,
+              "positiveComponentAbove16": 4.340277777777778e-06
+            }
+          },
+          {
+            "spp": 1024,
+            "baseline": {
+              "rgbMse": 0.4231929976851852,
+              "signedRgbError": -0.06902633101851852,
+              "foregroundRgbMse": 1.1986141672915616,
+              "positiveComponentAbove16": 1.1574074074074073e-05
+            },
+            "current": {
+              "rgbMse": 0.04694878472222222,
+              "signedRgbError": 0.001890914351851852,
+              "foregroundRgbMse": 0.1329735577218582,
+              "positiveComponentAbove16": 0.0
+            }
+          },
+          {
+            "spp": 1800,
+            "baseline": {
+              "rgbMse": 0.06176649305555556,
+              "signedRgbError": -0.01674045138888889,
+              "foregroundRgbMse": 0.1749419154978057,
+              "positiveComponentAbove16": 0.0
+            },
+            "current": {
+              "rgbMse": 0.039388020833333336,
+              "signedRgbError": -0.0001663773148148148,
+              "foregroundRgbMse": 0.11155912326207482,
+              "positiveComponentAbove16": 0.0
+            }
+          },
+          {
+            "spp": 2048,
+            "baseline": {
+              "rgbMse": 0.03048900462962963,
+              "signedRgbError": -0.0005237268518518518,
+              "foregroundRgbMse": 0.08635434209825398,
+              "positiveComponentAbove16": 0.0
+            },
+            "current": {
+              "rgbMse": 0.03048900462962963,
+              "signedRgbError": -0.0005237268518518518,
+              "foregroundRgbMse": 0.08635434209825398,
+              "positiveComponentAbove16": 0.0
+            }
+          },
+          {
+            "spp": 8192,
+            "baseline": {
+              "rgbMse": 0.0,
+              "signedRgbError": 0.0,
+              "foregroundRgbMse": 0.0,
+              "positiveComponentAbove16": 0.0
+            },
+            "current": {
+              "rgbMse": 0.0,
+              "signedRgbError": 0.0,
+              "foregroundRgbMse": 0.0,
+              "positiveComponentAbove16": 0.0
+            }
+          }
+        ],
+        "sameReference": true,
+        "same2048": true,
+        "runs": {
+          "baseline": {
+            "validationErrors": 0,
+            "ledgerAfterShutdown": 0,
+            "nativeHighWater": 85003456
+          },
+          "current": {
+            "validationErrors": 0,
+            "ledgerAfterShutdown": 0,
+            "nativeHighWater": 85003456
+          }
+        }
+      },
+      "RayTracing-4": {
+        "points": [
+          {
+            "spp": 2,
+            "baseline": {
+              "rgbMse": 3.6881814236111112,
+              "signedRgbError": -0.15362702546296297,
+              "foregroundRgbMse": 10.446076683835912,
+              "positiveComponentAbove16": 0.0004398148148148148
+            },
+            "current": {
+              "rgbMse": 3.6881814236111112,
+              "signedRgbError": -0.15362702546296297,
+              "foregroundRgbMse": 10.446076683835912,
+              "positiveComponentAbove16": 0.0004398148148148148
+            }
+          },
+          {
+            "spp": 8,
+            "baseline": {
+              "rgbMse": 4.110509259259259,
+              "signedRgbError": -0.2122337962962963,
+              "foregroundRgbMse": 11.642240443204216,
+              "positiveComponentAbove16": 3.90625e-05
+            },
+            "current": {
+              "rgbMse": 4.110509259259259,
+              "signedRgbError": -0.2122337962962963,
+              "foregroundRgbMse": 11.642240443204216,
+              "positiveComponentAbove16": 3.90625e-05
+            }
+          },
+          {
+            "spp": 9,
+            "baseline": {
+              "rgbMse": 4.22744212962963,
+              "signedRgbError": -0.21430266203703704,
+              "foregroundRgbMse": 11.973430694022726,
+              "positiveComponentAbove16": 2.8935185185185186e-05
+            },
+            "current": {
+              "rgbMse": 4.219032118055556,
+              "signedRgbError": -0.21408130787037036,
+              "foregroundRgbMse": 11.949610926032921,
+              "positiveComponentAbove16": 2.8935185185185186e-05
+            }
+          },
+          {
+            "spp": 16,
+            "baseline": {
+              "rgbMse": 4.220788483796296,
+              "signedRgbError": -0.20860966435185185,
+              "foregroundRgbMse": 11.954585499977464,
+              "positiveComponentAbove16": 9.114583333333334e-05
+            },
+            "current": {
+              "rgbMse": 3.829910300925926,
+              "signedRgbError": -0.19642071759259258,
+              "foregroundRgbMse": 10.847496936990096,
+              "positiveComponentAbove16": 9.548611111111112e-05
+            }
+          },
+          {
+            "spp": 24,
+            "baseline": {
+              "rgbMse": 4.282986111111111,
+              "signedRgbError": -0.21434895833333334,
+              "foregroundRgbMse": 12.130748521764785,
+              "positiveComponentAbove16": 2.604166666666667e-05
+            },
+            "current": {
+              "rgbMse": 2.890034722222222,
+              "signedRgbError": -0.16835358796296296,
+              "foregroundRgbMse": 8.185477030498973,
+              "positiveComponentAbove16": 5.497685185185185e-05
+            }
+          },
+          {
+            "spp": 32,
+            "baseline": {
+              "rgbMse": 4.270740740740741,
+              "signedRgbError": -0.21604166666666666,
+              "foregroundRgbMse": 12.096065825004814,
+              "positiveComponentAbove16": 2.604166666666667e-05
+            },
+            "current": {
+              "rgbMse": 1.9036371527777778,
+              "signedRgbError": -0.12375868055555556,
+              "foregroundRgbMse": 5.3916923795591725,
+              "positiveComponentAbove16": 8.246527777777778e-05
+            }
+          },
+          {
+            "spp": 48,
+            "baseline": {
+              "rgbMse": 4.434377893518518,
+              "signedRgbError": -0.21909143518518517,
+              "foregroundRgbMse": 12.559537126958174,
+              "positiveComponentAbove16": 2.604166666666667e-05
+            },
+            "current": {
+              "rgbMse": 1.0604065393518518,
+              "signedRgbError": -0.04453559027777778,
+              "foregroundRgbMse": 3.0034010678533525,
+              "positiveComponentAbove16": 0.00025028935185185186
+            }
+          },
+          {
+            "spp": 64,
+            "baseline": {
+              "rgbMse": 3.984402488425926,
+              "signedRgbError": -0.2094169560185185,
+              "foregroundRgbMse": 11.285066853520515,
+              "positiveComponentAbove16": 2.8935185185185186e-05
+            },
+            "current": {
+              "rgbMse": 0.8541377314814815,
+              "signedRgbError": -0.004348958333333333,
+              "foregroundRgbMse": 2.4191836617617533,
+              "positiveComponentAbove16": 0.0004152199074074074
+            }
+          },
+          {
+            "spp": 128,
+            "baseline": {
+              "rgbMse": 3.562806712962963,
+              "signedRgbError": -0.19802662037037036,
+              "foregroundRgbMse": 10.090976516241124,
+              "positiveComponentAbove16": 2.8935185185185186e-05
+            },
+            "current": {
+              "rgbMse": 0.3983087384259259,
+              "signedRgbError": -0.0029499421296296296,
+              "foregroundRgbMse": 1.1281342069570277,
+              "positiveComponentAbove16": 0.00012152777777777777
+            }
+          },
+          {
+            "spp": 256,
+            "baseline": {
+              "rgbMse": 3.256206597222222,
+              "signedRgbError": -0.18668113425925925,
+              "foregroundRgbMse": 9.22258964682164,
+              "positiveComponentAbove16": 3.18287037037037e-05
+            },
+            "current": {
+              "rgbMse": 0.1866377314814815,
+              "signedRgbError": 0.0005584490740740741,
+              "foregroundRgbMse": 0.5286160931974545,
+              "positiveComponentAbove16": 3.472222222222222e-05
+            }
+          },
+          {
+            "spp": 512,
+            "baseline": {
+              "rgbMse": 2.441205150462963,
+              "signedRgbError": -0.16055989583333333,
+              "foregroundRgbMse": 6.914252113374392,
+              "positiveComponentAbove16": 2.4594907407407408e-05
+            },
+            "current": {
+              "rgbMse": 0.12883680555555554,
+              "signedRgbError": 0.0019386574074074074,
+              "foregroundRgbMse": 0.3649058969599371,
+              "positiveComponentAbove16": 1.591435185185185e-05
+            }
+          },
+          {
+            "spp": 1024,
+            "baseline": {
+              "rgbMse": 1.0301909722222222,
+              "signedRgbError": -0.10257233796296296,
+              "foregroundRgbMse": 2.917821185784356,
+              "positiveComponentAbove16": 1.1574074074074073e-05
+            },
+            "current": {
+              "rgbMse": 0.10185329861111111,
+              "signedRgbError": 0.0011877893518518518,
+              "foregroundRgbMse": 0.28848021439020494,
+              "positiveComponentAbove16": 2.8935185185185184e-06
+            }
+          },
+          {
+            "spp": 1800,
+            "baseline": {
+              "rgbMse": 0.14433883101851852,
+              "signedRgbError": -0.024712094907407407,
+              "foregroundRgbMse": 0.40881245364508423,
+              "positiveComponentAbove16": 0.0
+            },
+            "current": {
+              "rgbMse": 0.09177951388888889,
+              "signedRgbError": -0.0009837962962962962,
+              "foregroundRgbMse": 0.2599481234710561,
+              "positiveComponentAbove16": 0.0
+            }
+          },
+          {
+            "spp": 2048,
+            "baseline": {
+              "rgbMse": 0.07523148148148148,
+              "signedRgbError": -0.0014149305555555556,
+              "foregroundRgbMse": 0.21307894984859102,
+              "positiveComponentAbove16": 0.0
+            },
+            "current": {
+              "rgbMse": 0.07523148148148148,
+              "signedRgbError": -0.0014149305555555556,
+              "foregroundRgbMse": 0.21307894984859102,
+              "positiveComponentAbove16": 0.0
+            }
+          },
+          {
+            "spp": 8192,
+            "baseline": {
+              "rgbMse": 0.0,
+              "signedRgbError": 0.0,
+              "foregroundRgbMse": 0.0,
+              "positiveComponentAbove16": 0.0
+            },
+            "current": {
+              "rgbMse": 0.0,
+              "signedRgbError": 0.0,
+              "foregroundRgbMse": 0.0,
+              "positiveComponentAbove16": 0.0
+            }
+          }
+        ],
+        "sameReference": true,
+        "same2048": true,
+        "runs": {
+          "baseline": {
+            "validationErrors": 0,
+            "ledgerAfterShutdown": 0,
+            "nativeHighWater": 85003456
+          },
+          "current": {
+            "validationErrors": 0,
+            "ledgerAfterShutdown": 0,
+            "nativeHighWater": 85003456
+          }
+        }
+      },
+      "Pbr-1": {
+        "points": [
+          {
+            "spp": 2,
+            "baseline": {
+              "rgbMse": 1.080054976851852,
+              "signedRgbError": -0.012077546296296296,
+              "foregroundRgbMse": 15.46479398421478,
+              "positiveComponentAbove16": 0.00023871527777777777
+            },
+            "current": {
+              "rgbMse": 1.080054976851852,
+              "signedRgbError": -0.012077546296296296,
+              "foregroundRgbMse": 15.46479398421478,
+              "positiveComponentAbove16": 0.00023871527777777777
+            }
+          },
+          {
+            "spp": 8,
+            "baseline": {
+              "rgbMse": 0.7019791666666667,
+              "signedRgbError": -0.013943865740740741,
+              "foregroundRgbMse": 10.05133304331614,
+              "positiveComponentAbove16": 3.472222222222222e-05
+            },
+            "current": {
+              "rgbMse": 0.7019791666666667,
+              "signedRgbError": -0.013943865740740741,
+              "foregroundRgbMse": 10.05133304331614,
+              "positiveComponentAbove16": 3.472222222222222e-05
+            }
+          },
+          {
+            "spp": 9,
+            "baseline": {
+              "rgbMse": 0.7048972800925926,
+              "signedRgbError": -0.013074363425925927,
+              "foregroundRgbMse": 10.093116234748203,
+              "positiveComponentAbove16": 2.025462962962963e-05
+            },
+            "current": {
+              "rgbMse": 0.7046006944444444,
+              "signedRgbError": -0.01306712962962963,
+              "foregroundRgbMse": 10.088869554409298,
+              "positiveComponentAbove16": 2.025462962962963e-05
+            }
+          },
+          {
+            "spp": 16,
+            "baseline": {
+              "rgbMse": 0.5835329861111112,
+              "signedRgbError": -0.012473958333333333,
+              "foregroundRgbMse": 8.355353924554098,
+              "positiveComponentAbove16": 1.591435185185185e-05
+            },
+            "current": {
+              "rgbMse": 0.5650361689814815,
+              "signedRgbError": -0.011957465277777777,
+              "foregroundRgbMse": 8.090506080003314,
+              "positiveComponentAbove16": 1.591435185185185e-05
+            }
+          },
+          {
+            "spp": 24,
+            "baseline": {
+              "rgbMse": 0.5458998842592593,
+              "signedRgbError": -0.012164351851851852,
+              "foregroundRgbMse": 7.8164812628177245,
+              "positiveComponentAbove16": 1.1574074074074073e-05
+            },
+            "current": {
+              "rgbMse": 0.505078125,
+              "signedRgbError": -0.010364583333333333,
+              "foregroundRgbMse": 7.2319723240734985,
+              "positiveComponentAbove16": 1.0127314814814815e-05
+            }
+          },
+          {
+            "spp": 32,
+            "baseline": {
+              "rgbMse": 0.6024609375,
+              "signedRgbError": -0.013861400462962963,
+              "foregroundRgbMse": 8.626374992231682,
+              "positiveComponentAbove16": 4.340277777777778e-06
+            },
+            "current": {
+              "rgbMse": 0.4809100115740741,
+              "signedRgbError": -0.009859664351851852,
+              "foregroundRgbMse": 6.885940380751144,
+              "positiveComponentAbove16": 4.340277777777778e-06
+            }
+          },
+          {
+            "spp": 48,
+            "baseline": {
+              "rgbMse": 0.5303023726851852,
+              "signedRgbError": -0.012513020833333333,
+              "foregroundRgbMse": 7.593168023532824,
+              "positiveComponentAbove16": 4.340277777777778e-06
+            },
+            "current": {
+              "rgbMse": 0.4080975115740741,
+              "signedRgbError": -0.005400752314814815,
+              "foregroundRgbMse": 5.843369999792845,
+              "positiveComponentAbove16": 5.787037037037037e-06
+            }
+          },
+          {
+            "spp": 64,
+            "baseline": {
+              "rgbMse": 0.5595052083333333,
+              "signedRgbError": -0.012508680555555556,
+              "foregroundRgbMse": 8.011289955047335,
+              "positiveComponentAbove16": 1.4467592592592592e-06
+            },
+            "current": {
+              "rgbMse": 0.3463816550925926,
+              "signedRgbError": -0.0028978587962962964,
+              "foregroundRgbMse": 4.9596876100511675,
+              "positiveComponentAbove16": 2.170138888888889e-05
+            }
+          },
+          {
+            "spp": 128,
+            "baseline": {
+              "rgbMse": 0.5376504629629629,
+              "signedRgbError": -0.011357060185185185,
+              "foregroundRgbMse": 7.698382118368446,
+              "positiveComponentAbove16": 8.680555555555556e-06
+            },
+            "current": {
+              "rgbMse": 0.34230613425925926,
+              "signedRgbError": -0.0024565972222222224,
+              "foregroundRgbMse": 4.901332007540447,
+              "positiveComponentAbove16": 1.736111111111111e-05
+            }
+          },
+          {
+            "spp": 256,
+            "baseline": {
+              "rgbMse": 0.4734418402777778,
+              "signedRgbError": -0.010750868055555555,
+              "foregroundRgbMse": 6.7789654672384145,
+              "positiveComponentAbove16": 8.680555555555556e-06
+            },
+            "current": {
+              "rgbMse": 0.3301244212962963,
+              "signedRgbError": -0.0020630787037037037,
+              "foregroundRgbMse": 4.726865949909888,
+              "positiveComponentAbove16": 1.3020833333333334e-05
+            }
+          },
+          {
+            "spp": 512,
+            "baseline": {
+              "rgbMse": 0.4286472800925926,
+              "signedRgbError": -0.009480613425925925,
+              "foregroundRgbMse": 6.137592442980548,
+              "positiveComponentAbove16": 5.787037037037037e-06
+            },
+            "current": {
+              "rgbMse": 0.2918648726851852,
+              "signedRgbError": -0.0014105902777777778,
+              "foregroundRgbMse": 4.179085617218735,
+              "positiveComponentAbove16": 1.8807870370370372e-05
+            }
+          },
+          {
+            "spp": 1024,
+            "baseline": {
+              "rgbMse": 0.3256669560185185,
+              "signedRgbError": -0.006575520833333333,
+              "foregroundRgbMse": 4.663082882770907,
+              "positiveComponentAbove16": 1.591435185185185e-05
+            },
+            "current": {
+              "rgbMse": 0.25038917824074075,
+              "signedRgbError": -0.0005598958333333334,
+              "foregroundRgbMse": 3.5852132662150686,
+              "positiveComponentAbove16": 2.7488425925925926e-05
+            }
+          },
+          {
+            "spp": 1800,
+            "baseline": {
+              "rgbMse": 0.19645109953703704,
+              "signedRgbError": -0.002437789351851852,
+              "foregroundRgbMse": 2.8128974789219647,
+              "positiveComponentAbove16": 2.3148148148148147e-05
+            },
+            "current": {
+              "rgbMse": 0.17893373842592591,
+              "signedRgbError": -0.0007711226851851852,
+              "foregroundRgbMse": 2.562074037246494,
+              "positiveComponentAbove16": 2.7488425925925926e-05
+            }
+          },
+          {
+            "spp": 2048,
+            "baseline": {
+              "rgbMse": 0.19697482638888889,
+              "signedRgbError": -0.0015147569444444444,
+              "foregroundRgbMse": 2.820396494935057,
+              "positiveComponentAbove16": 2.604166666666667e-05
+            },
+            "current": {
+              "rgbMse": 0.19697482638888889,
+              "signedRgbError": -0.0015147569444444444,
+              "foregroundRgbMse": 2.820396494935057,
+              "positiveComponentAbove16": 2.604166666666667e-05
+            }
+          },
+          {
+            "spp": 8192,
+            "baseline": {
+              "rgbMse": 0.0,
+              "signedRgbError": 0.0,
+              "foregroundRgbMse": 0.0,
+              "positiveComponentAbove16": 0.0
+            },
+            "current": {
+              "rgbMse": 0.0,
+              "signedRgbError": 0.0,
+              "foregroundRgbMse": 0.0,
+              "positiveComponentAbove16": 0.0
+            }
+          }
+        ],
+        "sameReference": true,
+        "same2048": true,
+        "runs": {
+          "baseline": {
+            "validationErrors": 0,
+            "ledgerAfterShutdown": 0,
+            "nativeHighWater": 84677248
+          },
+          "current": {
+            "validationErrors": 0,
+            "ledgerAfterShutdown": 0,
+            "nativeHighWater": 84677248
+          }
+        }
+      }
+    }
+  },
+  "recovery": {
+    "dx12": {
+      "warmupFrames": 64,
+      "motionFrames": 16,
+      "stopFrames": 128,
+      "resumeFrames": 16,
+      "translationLocalXPerMove": 0.08,
+      "yawDegreesPerMove": 0.8,
+      "directionalIntensityMultiplier": 4,
+      "points": [
+        {
+          "stopFrame": 1,
+          "spp": 2,
+          "baseline": {
+            "rgbMse": 7.269341724537037,
+            "signedRgbError": -0.26945167824074073
+          },
+          "current": {
+            "rgbMse": 7.269341724537037,
+            "signedRgbError": -0.26945167824074073
+          }
+        },
+        {
+          "stopFrame": 2,
+          "spp": 3,
+          "baseline": {
+            "rgbMse": 6.95244068287037,
+            "signedRgbError": -0.26285445601851853
+          },
+          "current": {
+            "rgbMse": 6.95244068287037,
+            "signedRgbError": -0.26285445601851853
+          }
+        },
+        {
+          "stopFrame": 4,
+          "spp": 5,
+          "baseline": {
+            "rgbMse": 6.397047164351852,
+            "signedRgbError": -0.24919126157407406
+          },
+          "current": {
+            "rgbMse": 6.397047164351852,
+            "signedRgbError": -0.24919126157407406
+          }
+        },
+        {
+          "stopFrame": 8,
+          "spp": 9,
+          "baseline": {
+            "rgbMse": 5.933550347222222,
+            "signedRgbError": -0.2381221064814815
+          },
+          "current": {
+            "rgbMse": 5.922225115740741,
+            "signedRgbError": -0.23783564814814814
+          }
+        },
+        {
+          "stopFrame": 9,
+          "spp": 10,
+          "baseline": {
+            "rgbMse": 5.736744791666666,
+            "signedRgbError": -0.2331712962962963
+          },
+          "current": {
+            "rgbMse": 5.6919921875,
+            "signedRgbError": -0.2320703125
+          }
+        },
+        {
+          "stopFrame": 16,
+          "spp": 17,
+          "baseline": {
+            "rgbMse": 5.145331307870371,
+            "signedRgbError": -0.2230541087962963
+          },
+          "current": {
+            "rgbMse": 4.486569733796296,
+            "signedRgbError": -0.20434172453703703
+          }
+        },
+        {
+          "stopFrame": 32,
+          "spp": 33,
+          "baseline": {
+            "rgbMse": 4.300368923611111,
+            "signedRgbError": -0.2045876736111111
+          },
+          "current": {
+            "rgbMse": 1.8780584490740742,
+            "signedRgbError": -0.10788483796296296
+          }
+        },
+        {
+          "stopFrame": 64,
+          "spp": 65,
+          "baseline": {
+            "rgbMse": 3.3306553819444447,
+            "signedRgbError": -0.18383535879629628
+          },
+          "current": {
+            "rgbMse": 0.9417650462962963,
+            "signedRgbError": 0.004534143518518519
+          }
+        },
+        {
+          "stopFrame": 128,
+          "spp": 129,
+          "baseline": {
+            "rgbMse": 2.9598046875,
+            "signedRgbError": -0.17145399305555556
+          },
+          "current": {
+            "rgbMse": 0.5261906828703704,
+            "signedRgbError": 0.006928530092592593
+          }
+        }
+      ],
+      "motionComparison": {
+        "move": {
+          "frames": 16,
+          "bitwiseEqual": 16,
+          "maxRgbStep": 0,
+          "differentComponents": 0
+        },
+        "resume": {
+          "frames": 16,
+          "bitwiseEqual": 15,
+          "maxRgbStep": 1,
+          "differentComponents": 1
+        }
+      },
+      "runs": {
+        "baseline": {
+          "validationErrors": 0,
+          "ledgerAfterShutdown": 0,
+          "nativeHighWater": 85852160
+        },
+        "current": {
+          "validationErrors": 0,
+          "ledgerAfterShutdown": 0,
+          "nativeHighWater": 85852160
+        }
+      }
+    },
+    "vulkan": {
+      "warmupFrames": 64,
+      "motionFrames": 16,
+      "stopFrames": 128,
+      "resumeFrames": 16,
+      "translationLocalXPerMove": 0.08,
+      "yawDegreesPerMove": 0.8,
+      "directionalIntensityMultiplier": 4,
+      "points": [
+        {
+          "stopFrame": 1,
+          "spp": 2,
+          "baseline": {
+            "rgbMse": 7.272825520833333,
+            "signedRgbError": -0.26926070601851854
+          },
+          "current": {
+            "rgbMse": 7.272825520833333,
+            "signedRgbError": -0.26926070601851854
+          }
+        },
+        {
+          "stopFrame": 2,
+          "spp": 3,
+          "baseline": {
+            "rgbMse": 6.95662037037037,
+            "signedRgbError": -0.2627662037037037
+          },
+          "current": {
+            "rgbMse": 6.95662037037037,
+            "signedRgbError": -0.2627662037037037
+          }
+        },
+        {
+          "stopFrame": 4,
+          "spp": 5,
+          "baseline": {
+            "rgbMse": 6.401048900462963,
+            "signedRgbError": -0.24905815972222223
+          },
+          "current": {
+            "rgbMse": 6.401048900462963,
+            "signedRgbError": -0.24905815972222223
+          }
+        },
+        {
+          "stopFrame": 8,
+          "spp": 9,
+          "baseline": {
+            "rgbMse": 5.935914351851852,
+            "signedRgbError": -0.23789930555555555
+          },
+          "current": {
+            "rgbMse": 5.9249869791666665,
+            "signedRgbError": -0.23760850694444444
+          }
+        },
+        {
+          "stopFrame": 9,
+          "spp": 10,
+          "baseline": {
+            "rgbMse": 5.738836805555556,
+            "signedRgbError": -0.2330758101851852
+          },
+          "current": {
+            "rgbMse": 5.69488136574074,
+            "signedRgbError": -0.23192708333333334
+          }
+        },
+        {
+          "stopFrame": 16,
+          "spp": 17,
+          "baseline": {
+            "rgbMse": 5.147654803240741,
+            "signedRgbError": -0.2228515625
+          },
+          "current": {
+            "rgbMse": 4.488151041666667,
+            "signedRgbError": -0.2042042824074074
+          }
+        },
+        {
+          "stopFrame": 32,
+          "spp": 33,
+          "baseline": {
+            "rgbMse": 4.301863425925926,
+            "signedRgbError": -0.20445891203703703
+          },
+          "current": {
+            "rgbMse": 1.8782942708333332,
+            "signedRgbError": -0.10774739583333333
+          }
+        },
+        {
+          "stopFrame": 64,
+          "spp": 65,
+          "baseline": {
+            "rgbMse": 3.330568576388889,
+            "signedRgbError": -0.18371383101851851
+          },
+          "current": {
+            "rgbMse": 0.9421440972222223,
+            "signedRgbError": 0.0045543981481481486
+          }
+        },
+        {
+          "stopFrame": 128,
+          "spp": 129,
+          "baseline": {
+            "rgbMse": 2.9595109953703704,
+            "signedRgbError": -0.17130787037037037
+          },
+          "current": {
+            "rgbMse": 0.5263773148148149,
+            "signedRgbError": 0.006944444444444444
+          }
+        }
+      ],
+      "motionComparison": {
+        "move": {
+          "frames": 16,
+          "bitwiseEqual": 16,
+          "maxRgbStep": 0,
+          "differentComponents": 0
+        },
+        "resume": {
+          "frames": 16,
+          "bitwiseEqual": 16,
+          "maxRgbStep": 0,
+          "differentComponents": 0
+        }
+      },
+      "runs": {
+        "baseline": {
+          "validationErrors": 0,
+          "ledgerAfterShutdown": 0,
+          "nativeHighWater": 85003456
+        },
+        "current": {
+          "validationErrors": 0,
+          "ledgerAfterShutdown": 0,
+          "nativeHighWater": 85003456
+        }
+      }
+    }
+  },
+  "cost": {
+    "dx12-baseline": {
+      "width": 1280,
+      "height": 720,
+      "driver": "32.0.15.9174",
+      "validation": false,
+      "memory": {
+        "budgetBytes": 2147483648,
+        "highWaterBytes": 317915136,
+        "processPrivateBytes": 575537152,
+        "processWorkingSetBytes": 271147008,
+        "usedBytes": 317849600
+      },
+      "cpuRender": {
+        "maxMs": 2.0842,
+        "meanMs": 1.21521796875,
+        "minMs": 1.0022,
+        "samples": 128
+      },
+      "gpuPasses": {
+        "Deferred.GBuffer": {
+          "maxMs": 0.0496,
+          "meanMs": 0.04591299999999997,
+          "minMs": 0.044768,
+          "samples": 128
+        },
+        "Deferred.Lighting": {
+          "maxMs": 0.035456,
+          "meanMs": 0.034156250000000006,
+          "minMs": 0.03296,
+          "samples": 128
+        },
+        "Display.ToneMapping": {
+          "maxMs": 0.021152,
+          "meanMs": 0.018990500000000004,
+          "minMs": 0.01776,
+          "samples": 128
+        },
+        "MainLight.Shadow": {
+          "maxMs": 0.009568,
+          "meanMs": 0.008870249999999998,
+          "minMs": 0.008384,
+          "samples": 128
+        },
+        "RayTracing.Reflection.Accumulate": {
+          "maxMs": 0.233664,
+          "meanMs": 0.09644375000000006,
+          "minMs": 0.093888,
+          "samples": 128
+        },
+        "RayTracing.Reflection.Combine": {
+          "maxMs": 0.224672,
+          "meanMs": 0.06569325,
+          "minMs": 0.060672,
+          "samples": 128
+        },
+        "RayTracing.Reflection.Filter1": {
+          "maxMs": 0.356768,
+          "meanMs": 0.15082074999999998,
+          "minMs": 0.147712,
+          "samples": 128
+        },
+        "RayTracing.Reflection.Filter2": {
+          "maxMs": 0.357024,
+          "meanMs": 0.14532175,
+          "minMs": 0.142304,
+          "samples": 128
+        },
+        "RayTracing.Reflection.Filter3": {
+          "maxMs": 0.295968,
+          "meanMs": 0.14560475,
+          "minMs": 0.14352,
+          "samples": 128
+        },
+        "RayTracing.Reflection.Prepare": {
+          "maxMs": 0.291104,
+          "meanMs": 0.15688199999999997,
+          "minMs": 0.15408,
+          "samples": 128
+        },
+        "RayTracing.Reflection.Resolve": {
+          "maxMs": 0.27184,
+          "meanMs": 0.08374324999999995,
+          "minMs": 0.079136,
+          "samples": 128
+        },
+        "RayTracing.Reflection.Temporal": {
+          "maxMs": 0.501856,
+          "meanMs": 0.2944977499999998,
+          "minMs": 0.284992,
+          "samples": 128
+        },
+        "RayTracing.Reflection.Trace": {
+          "maxMs": 0.311968,
+          "meanMs": 0.11546550000000004,
+          "minMs": 0.109888,
+          "samples": 128
+        },
+        "RayTracing.Shadows": {
+          "maxMs": 0.039392,
+          "meanMs": 0.03836600000000001,
+          "minMs": 0.037792,
+          "samples": 128
+        }
+      },
+      "benchmark": {
+        "complete": true,
+        "cpuProfiling": false,
+        "metricsMs": {
+          "cpuRenderMs": {
+            "maxMs": 2.0842,
+            "meanMs": 1.2152179687500002,
+            "minMs": 1.0022,
+            "samples": 128
+          },
+          "frameTimeMs": {
+            "maxMs": 4.1535,
+            "meanMs": 2.9314210937499987,
+            "minMs": 2.6519,
+            "samples": 128
+          },
+          "gpuPassSumMs": {
+            "maxMs": 1.5995840000000001,
+            "meanMs": 1.40076875,
+            "minMs": 1.372448,
+            "samples": 128
+          },
+          "gpuWaitMs": {
+            "maxMs": 2.3129,
+            "meanMs": 1.7162031249999992,
+            "minMs": 1.5947,
+            "samples": 128
+          },
+          "graphCompileMs": {
+            "maxMs": 0.1019,
+            "meanMs": 0.05478671874999999,
+            "minMs": 0.0473,
+            "samples": 128
+          },
+          "graphPrepareMs": {
+            "maxMs": 0.0118,
+            "meanMs": 0.007893749999999995,
+            "minMs": 0.0059,
+            "samples": 128
+          },
+          "graphRecordMs": {
+            "maxMs": 0.3995,
+            "meanMs": 0.18279609375000003,
+            "minMs": 0.1579,
+            "samples": 128
+          }
+        },
+        "requestedFrames": 128,
+        "requestedSeconds": 0.0,
+        "requestedWarmupFrames": 64,
+        "requestedWarmupSeconds": 0.0,
+        "sampleCount": 128,
+        "sampleSchemaVersion": 1,
+        "samplesFile": "dx12-baseline/dx12/frames.jsonl",
+        "throughputFps": 336.72425177503663,
+        "timingMode": "headless-serial",
+        "wallTimeMs": 380.133,
+        "warmupFrames": 64,
+        "warmupMs": 1813.7998
+      }
+    },
+    "vulkan-baseline": {
+      "width": 1280,
+      "height": 720,
+      "driver": "NVIDIA; 591.74 (raw 0x93D28000)",
+      "validation": false,
+      "memory": {
+        "budgetBytes": 2147483648,
+        "highWaterBytes": 317062848,
+        "processPrivateBytes": 695873536,
+        "processWorkingSetBytes": 342396928,
+        "usedBytes": 317062592
+      },
+      "cpuRender": {
+        "maxMs": 1.2907,
+        "meanMs": 0.9427367187500004,
+        "minMs": 0.8211,
+        "samples": 128
+      },
+      "gpuPasses": {
+        "Deferred.GBuffer": {
+          "maxMs": 0.058496,
+          "meanMs": 0.054558250000000016,
+          "minMs": 0.052608,
+          "samples": 128
+        },
+        "Deferred.Lighting": {
+          "maxMs": 0.033024,
+          "meanMs": 0.03207925000000001,
+          "minMs": 0.031392,
+          "samples": 128
+        },
+        "Display.ToneMapping": {
+          "maxMs": 0.019968,
+          "meanMs": 0.01626024999999999,
+          "minMs": 0.015744,
+          "samples": 128
+        },
+        "MainLight.Shadow": {
+          "maxMs": 0.011616,
+          "meanMs": 0.0090445,
+          "minMs": 0.008544,
+          "samples": 128
+        },
+        "RayTracing.Reflection.Accumulate": {
+          "maxMs": 0.032192,
+          "meanMs": 0.030220749999999987,
+          "minMs": 0.02976,
+          "samples": 128
+        },
+        "RayTracing.Reflection.Combine": {
+          "maxMs": 0.255104,
+          "meanMs": 0.05902400000000006,
+          "minMs": 0.056864,
+          "samples": 128
+        },
+        "RayTracing.Reflection.Filter1": {
+          "maxMs": 0.14128,
+          "meanMs": 0.13726400000000008,
+          "minMs": 0.136704,
+          "samples": 128
+        },
+        "RayTracing.Reflection.Filter2": {
+          "maxMs": 0.334944,
+          "meanMs": 0.13523049999999964,
+          "minMs": 0.130688,
+          "samples": 128
+        },
+        "RayTracing.Reflection.Filter3": {
+          "maxMs": 0.135648,
+          "meanMs": 0.13241199999999992,
+          "minMs": 0.130688,
+          "samples": 128
+        },
+        "RayTracing.Reflection.Prepare": {
+          "maxMs": 0.311008,
+          "meanMs": 0.14195224999999997,
+          "minMs": 0.139744,
+          "samples": 128
+        },
+        "RayTracing.Reflection.Resolve": {
+          "maxMs": 0.179392,
+          "meanMs": 0.03763274999999998,
+          "minMs": 0.03632,
+          "samples": 128
+        },
+        "RayTracing.Reflection.Temporal": {
+          "maxMs": 0.423616,
+          "meanMs": 0.24558025000000022,
+          "minMs": 0.238752,
+          "samples": 128
+        },
+        "RayTracing.Reflection.Trace": {
+          "maxMs": 0.091168,
+          "meanMs": 0.08881400000000006,
+          "minMs": 0.086816,
+          "samples": 128
+        },
+        "RayTracing.Shadows": {
+          "maxMs": 0.041728,
+          "meanMs": 0.040447250000000004,
+          "minMs": 0.03888,
+          "samples": 128
+        }
+      },
+      "benchmark": {
+        "complete": true,
+        "cpuProfiling": false,
+        "metricsMs": {
+          "cpuRenderMs": {
+            "maxMs": 1.2907,
+            "meanMs": 0.9427367187500003,
+            "minMs": 0.8211,
+            "samples": 128
+          },
+          "frameTimeMs": {
+            "maxMs": 3.1649,
+            "meanMs": 2.502125781249999,
+            "minMs": 2.273,
+            "samples": 128
+          },
+          "gpuPassSumMs": {
+            "maxMs": 1.354976,
+            "meanMs": 1.1605199999999993,
+            "minMs": 1.1385600000000002,
+            "samples": 128
+          },
+          "gpuWaitMs": {
+            "maxMs": 2.1275,
+            "meanMs": 1.5593890624999998,
+            "minMs": 1.3503,
+            "samples": 128
+          },
+          "graphCompileMs": {
+            "maxMs": 0.0724,
+            "meanMs": 0.05057968749999997,
+            "minMs": 0.0452,
+            "samples": 128
+          },
+          "graphPrepareMs": {
+            "maxMs": 0.0311,
+            "meanMs": 0.019096093750000005,
+            "minMs": 0.0156,
+            "samples": 128
+          },
+          "graphRecordMs": {
+            "maxMs": 0.26,
+            "meanMs": 0.15007031249999994,
+            "minMs": 0.1349,
+            "samples": 128
+          }
+        },
+        "requestedFrames": 128,
+        "requestedSeconds": 0.0,
+        "requestedWarmupFrames": 64,
+        "requestedWarmupSeconds": 0.0,
+        "sampleCount": 128,
+        "sampleSchemaVersion": 1,
+        "samplesFile": "vulkan-baseline/vulkan/frames.jsonl",
+        "throughputFps": 393.58856526820756,
+        "timingMode": "headless-serial",
+        "wallTimeMs": 325.2127,
+        "warmupFrames": 64,
+        "warmupMs": 1624.7071
+      }
+    },
+    "dx12-current": {
+      "width": 1280,
+      "height": 720,
+      "driver": "32.0.15.9174",
+      "validation": false,
+      "memory": {
+        "budgetBytes": 2147483648,
+        "highWaterBytes": 317915136,
+        "processPrivateBytes": 575438848,
+        "processWorkingSetBytes": 269103104,
+        "usedBytes": 317849600
+      },
+      "cpuRender": {
+        "maxMs": 2.1264,
+        "meanMs": 1.2250773437499998,
+        "minMs": 1.0201,
+        "samples": 128
+      },
+      "gpuPasses": {
+        "Deferred.GBuffer": {
+          "maxMs": 0.049216,
+          "meanMs": 0.04568349999999998,
+          "minMs": 0.044608,
+          "samples": 128
+        },
+        "Deferred.Lighting": {
+          "maxMs": 0.03664,
+          "meanMs": 0.034489000000000006,
+          "minMs": 0.033472,
+          "samples": 128
+        },
+        "Display.ToneMapping": {
+          "maxMs": 0.021664,
+          "meanMs": 0.01876750000000001,
+          "minMs": 0.017664,
+          "samples": 128
+        },
+        "MainLight.Shadow": {
+          "maxMs": 0.010016,
+          "meanMs": 0.009001250000000002,
+          "minMs": 0.008416,
+          "samples": 128
+        },
+        "RayTracing.Reflection.Accumulate": {
+          "maxMs": 0.289824,
+          "meanMs": 0.09687850000000003,
+          "minMs": 0.094016,
+          "samples": 128
+        },
+        "RayTracing.Reflection.Combine": {
+          "maxMs": 0.061888,
+          "meanMs": 0.0574705,
+          "minMs": 0.05632,
+          "samples": 128
+        },
+        "RayTracing.Reflection.Filter1": {
+          "maxMs": 0.150688,
+          "meanMs": 0.14932849999999998,
+          "minMs": 0.148288,
+          "samples": 128
+        },
+        "RayTracing.Reflection.Filter2": {
+          "maxMs": 0.146176,
+          "meanMs": 0.14397949999999998,
+          "minMs": 0.14256,
+          "samples": 128
+        },
+        "RayTracing.Reflection.Filter3": {
+          "maxMs": 0.360384,
+          "meanMs": 0.14985,
+          "minMs": 0.143648,
+          "samples": 128
+        },
+        "RayTracing.Reflection.Prepare": {
+          "maxMs": 0.315424,
+          "meanMs": 0.15733450000000002,
+          "minMs": 0.15424,
+          "samples": 128
+        },
+        "RayTracing.Reflection.Resolve": {
+          "maxMs": 0.55696,
+          "meanMs": 0.35491,
+          "minMs": 0.343648,
+          "samples": 128
+        },
+        "RayTracing.Reflection.Temporal": {
+          "maxMs": 0.481568,
+          "meanMs": 0.2920517500000001,
+          "minMs": 0.287552,
+          "samples": 128
+        },
+        "RayTracing.Reflection.Trace": {
+          "maxMs": 0.28352,
+          "meanMs": 0.11739074999999996,
+          "minMs": 0.111136,
+          "samples": 128
+        },
+        "RayTracing.Shadows": {
+          "maxMs": 0.240736,
+          "meanMs": 0.04152800000000003,
+          "minMs": 0.038112,
+          "samples": 128
+        }
+      },
+      "benchmark": {
+        "complete": true,
+        "cpuProfiling": false,
+        "metricsMs": {
+          "cpuRenderMs": {
+            "maxMs": 2.1264,
+            "meanMs": 1.2250773437499995,
+            "minMs": 1.0201,
+            "samples": 128
+          },
+          "frameTimeMs": {
+            "maxMs": 4.0934,
+            "meanMs": 3.2013992187499984,
+            "minMs": 2.9103,
+            "samples": 128
+          },
+          "gpuPassSumMs": {
+            "maxMs": 1.862112,
+            "meanMs": 1.6686632500000003,
+            "minMs": 1.638048,
+            "samples": 128
+          },
+          "gpuWaitMs": {
+            "maxMs": 2.2214,
+            "meanMs": 1.9763218749999987,
+            "minMs": 1.8556,
+            "samples": 128
+          },
+          "graphCompileMs": {
+            "maxMs": 0.0835,
+            "meanMs": 0.054867968750000023,
+            "minMs": 0.0486,
+            "samples": 128
+          },
+          "graphPrepareMs": {
+            "maxMs": 0.1072,
+            "meanMs": 0.0092125,
+            "minMs": 0.0064,
+            "samples": 128
+          },
+          "graphRecordMs": {
+            "maxMs": 0.3967,
+            "meanMs": 0.20359609374999996,
+            "minMs": 0.1593,
+            "samples": 128
+          }
+        },
+        "requestedFrames": 128,
+        "requestedSeconds": 0.0,
+        "requestedWarmupFrames": 64,
+        "requestedWarmupSeconds": 0.0,
+        "sampleCount": 128,
+        "sampleSchemaVersion": 1,
+        "samplesFile": "dx12-current/dx12/frames.jsonl",
+        "throughputFps": 308.5350682645891,
+        "timingMode": "headless-serial",
+        "wallTimeMs": 414.8637,
+        "warmupFrames": 64,
+        "warmupMs": 1733.0811
+      }
+    },
+    "vulkan-current": {
+      "width": 1280,
+      "height": 720,
+      "driver": "NVIDIA; 591.74 (raw 0x93D28000)",
+      "validation": false,
+      "memory": {
+        "budgetBytes": 2147483648,
+        "highWaterBytes": 317062848,
+        "processPrivateBytes": 694611968,
+        "processWorkingSetBytes": 342667264,
+        "usedBytes": 317062592
+      },
+      "cpuRender": {
+        "maxMs": 1.384,
+        "meanMs": 0.9638414062499997,
+        "minMs": 0.8249,
+        "samples": 128
+      },
+      "gpuPasses": {
+        "Deferred.GBuffer": {
+          "maxMs": 0.204384,
+          "meanMs": 0.05510575,
+          "minMs": 0.053024,
+          "samples": 128
+        },
+        "Deferred.Lighting": {
+          "maxMs": 0.234976,
+          "meanMs": 0.03388050000000001,
+          "minMs": 0.031584,
+          "samples": 128
+        },
+        "Display.ToneMapping": {
+          "maxMs": 0.019776,
+          "meanMs": 0.015805750000000004,
+          "minMs": 0.015296,
+          "samples": 128
+        },
+        "MainLight.Shadow": {
+          "maxMs": 0.009152,
+          "meanMs": 0.008820749999999997,
+          "minMs": 0.008448,
+          "samples": 128
+        },
+        "RayTracing.Reflection.Accumulate": {
+          "maxMs": 0.032224,
+          "meanMs": 0.03015824999999997,
+          "minMs": 0.029792,
+          "samples": 128
+        },
+        "RayTracing.Reflection.Combine": {
+          "maxMs": 0.254528,
+          "meanMs": 0.06188250000000008,
+          "minMs": 0.05888,
+          "samples": 128
+        },
+        "RayTracing.Reflection.Filter1": {
+          "maxMs": 0.268288,
+          "meanMs": 0.13874000000000009,
+          "minMs": 0.136704,
+          "samples": 128
+        },
+        "RayTracing.Reflection.Filter2": {
+          "maxMs": 0.131648,
+          "meanMs": 0.1306164999999997,
+          "minMs": 0.12864,
+          "samples": 128
+        },
+        "RayTracing.Reflection.Filter3": {
+          "maxMs": 0.340224,
+          "meanMs": 0.13290299999999977,
+          "minMs": 0.130688,
+          "samples": 128
+        },
+        "RayTracing.Reflection.Prepare": {
+          "maxMs": 0.352992,
+          "meanMs": 0.14377775,
+          "minMs": 0.140128,
+          "samples": 128
+        },
+        "RayTracing.Reflection.Resolve": {
+          "maxMs": 0.557152,
+          "meanMs": 0.3384847499999995,
+          "minMs": 0.331232,
+          "samples": 128
+        },
+        "RayTracing.Reflection.Temporal": {
+          "maxMs": 0.449344,
+          "meanMs": 0.2461472500000002,
+          "minMs": 0.23872,
+          "samples": 128
+        },
+        "RayTracing.Reflection.Trace": {
+          "maxMs": 0.228256,
+          "meanMs": 0.08986949999999999,
+          "minMs": 0.086752,
+          "samples": 128
+        },
+        "RayTracing.Shadows": {
+          "maxMs": 0.041696,
+          "meanMs": 0.04077700000000002,
+          "minMs": 0.039136,
+          "samples": 128
+        }
+      },
+      "benchmark": {
+        "complete": true,
+        "cpuProfiling": false,
+        "metricsMs": {
+          "cpuRenderMs": {
+            "maxMs": 1.384,
+            "meanMs": 0.9638414062499999,
+            "minMs": 0.8249,
+            "samples": 128
+          },
+          "frameTimeMs": {
+            "maxMs": 3.4859,
+            "meanMs": 2.8259843750000004,
+            "minMs": 2.5818,
+            "samples": 128
+          },
+          "gpuPassSumMs": {
+            "maxMs": 1.666848,
+            "meanMs": 1.4669692500000002,
+            "minMs": 1.437248,
+            "samples": 128
+          },
+          "gpuWaitMs": {
+            "maxMs": 2.1485,
+            "meanMs": 1.8621429687500004,
+            "minMs": 1.7004,
+            "samples": 128
+          },
+          "graphCompileMs": {
+            "maxMs": 0.2278,
+            "meanMs": 0.05275078125,
+            "minMs": 0.046,
+            "samples": 128
+          },
+          "graphPrepareMs": {
+            "maxMs": 0.0831,
+            "meanMs": 0.019183593750000005,
+            "minMs": 0.0152,
+            "samples": 128
+          },
+          "graphRecordMs": {
+            "maxMs": 0.3477,
+            "meanMs": 0.15228750000000002,
+            "minMs": 0.1328,
+            "samples": 128
+          }
+        },
+        "requestedFrames": 128,
+        "requestedSeconds": 0.0,
+        "requestedWarmupFrames": 64,
+        "requestedWarmupSeconds": 0.0,
+        "sampleCount": 128,
+        "sampleSchemaVersion": 1,
+        "samplesFile": "vulkan-current/vulkan/frames.jsonl",
+        "throughputFps": 348.86671465401,
+        "timingMode": "headless-serial",
+        "wallTimeMs": 366.9023,
+        "warmupFrames": 64,
+        "warmupMs": 1696.1541
+      }
+    }
+  },
+  "resolveExperiments": {
+    "fade": {
+      "32": 5.21056712962963,
+      "64": 4.301397569444444,
+      "128": 2.8233738425925927,
+      "256": 1.4229152199074073
+    },
+    "candidate": {
+      "32": 2.103394097222222,
+      "64": 1.1973017939814814,
+      "128": 0.5698191550925926,
+      "256": 0.2534302662037037
+    },
+    "wide": {
+      "32": 1.903812210648148,
+      "64": 0.8543026620370371,
+      "128": 0.39837528935185185,
+      "256": 0.18629050925925925
+    }
+  },
+  "validation": {
+    "buildConfigurations": [
+      "Debug",
+      "Release"
+    ],
+    "buildTargets": [
+      "renderlab_sandbox",
+      "renderlab_player"
+    ],
+    "nativeRuns": 16,
+    "nativeValidationErrors": 0,
+    "releaseCtestLog": "out/m5-stationary/release-ctest.txt",
+    "releaseCtestComplete": true
+  }
+}

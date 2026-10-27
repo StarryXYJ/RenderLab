@@ -2,6 +2,8 @@
 #include "rhi/vulkan/vulkan_objects.hpp"
 #include "rhi/vulkan/vulkan_runtime.hpp"
 
+#include <algorithm>
+#include <cstring>
 #include <stdexcept>
 
 namespace renderlab::rhi::vulkan
@@ -19,14 +21,153 @@ std::shared_ptr<Buffer> VulkanRuntime::CreateBuffer(const BufferDesc& desc)
                  VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT |
                  VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT | VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT |
                  VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
+    if (desc.shaderTable)
+        info.usage |= VK_BUFFER_USAGE_SHADER_BINDING_TABLE_BIT_KHR;
+    if (desc.deviceAddress)
+        info.usage |= VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
+    if (desc.accelerationStructureInput)
+        info.usage |= VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR;
+    if (desc.accelerationStructureStorage)
+        info.usage |= VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_STORAGE_BIT_KHR;
     Check(vkCreateBuffer(device_, &info, nullptr, &buffer->native), "vkCreateBuffer");
     VkMemoryRequirements requirements{};
     vkGetBufferMemoryRequirements(device_, buffer->native, &requirements);
-    Allocate(buffer->allocation, requirements, desc.memory);
+    Allocate(buffer->allocation, requirements, desc.memory, desc.deviceAddress);
     Check(vkBindBufferMemory(device_, buffer->native, buffer->allocation.memory, 0),
           "vkBindBufferMemory");
     Name(VK_OBJECT_TYPE_BUFFER, reinterpret_cast<uint64_t>(buffer->native), desc.name);
     return buffer;
+}
+
+AccelerationStructureSizes
+VulkanRuntime::QueryAccelerationStructureSizesNative(const AccelerationStructureDesc& desc)
+{
+    if (!accelerationStructureEnabled_ || !vkGetAccelerationStructureBuildSizesKHR)
+        throw std::runtime_error("Vulkan acceleration structures are not enabled on this device");
+    const auto deviceAddress = [&](const std::shared_ptr<Buffer>& buffer)
+    {
+        VkBufferDeviceAddressInfo address{};
+        address.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
+        address.buffer = As<VkBufferObject>(buffer).native;
+        return vkGetBufferDeviceAddress(device_, &address);
+    };
+    std::vector<VkAccelerationStructureGeometryKHR> geometries;
+    std::vector<uint32_t> primitiveCounts;
+    geometries.resize(desc.topLevel ? 1 : desc.geometries.size());
+    primitiveCounts.resize(geometries.size());
+    for (size_t i = 0; i < geometries.size(); ++i)
+    {
+        auto& geometry = geometries[i];
+        geometry.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_KHR;
+        geometry.flags = desc.topLevel ? 0 : VK_GEOMETRY_OPAQUE_BIT_KHR;
+        if (desc.topLevel)
+        {
+            geometry.geometryType = VK_GEOMETRY_TYPE_INSTANCES_KHR;
+            geometry.geometry.instances.sType =
+                VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_INSTANCES_DATA_KHR;
+            geometry.geometry.instances.arrayOfPointers = VK_FALSE;
+            primitiveCounts[i] = static_cast<uint32_t>(desc.instances.size());
+        }
+        else
+        {
+            const auto& source = desc.geometries[i];
+            geometry.geometryType = VK_GEOMETRY_TYPE_TRIANGLES_KHR;
+            geometry.geometry.triangles.sType =
+                VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_TRIANGLES_DATA_KHR;
+            geometry.geometry.triangles.vertexFormat = VK_FORMAT_R32G32B32_SFLOAT;
+            geometry.geometry.triangles.vertexData.deviceAddress =
+                deviceAddress(source.vertices) + source.vertexOffset;
+            geometry.geometry.triangles.vertexStride = source.vertexStride;
+            geometry.geometry.triangles.maxVertex = source.vertexCount - 1;
+            geometry.geometry.triangles.indexType =
+                source.indices ? VK_INDEX_TYPE_UINT32 : VK_INDEX_TYPE_NONE_KHR;
+            if (source.indices)
+                geometry.geometry.triangles.indexData.deviceAddress =
+                    deviceAddress(source.indices) + source.indexOffset;
+            primitiveCounts[i] = source.indices ? source.indexCount / 3 : source.vertexCount / 3;
+        }
+    }
+    VkAccelerationStructureBuildGeometryInfoKHR build{};
+    build.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_GEOMETRY_INFO_KHR;
+    build.type = desc.topLevel ? VK_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL_KHR
+                               : VK_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL_KHR;
+    build.flags = VK_BUILD_ACCELERATION_STRUCTURE_PREFER_FAST_TRACE_BIT_KHR;
+    if (desc.allowUpdate)
+        build.flags |= VK_BUILD_ACCELERATION_STRUCTURE_ALLOW_UPDATE_BIT_KHR;
+    build.mode = VK_BUILD_ACCELERATION_STRUCTURE_MODE_BUILD_KHR;
+    build.geometryCount = static_cast<uint32_t>(geometries.size());
+    build.pGeometries = geometries.data();
+    VkAccelerationStructureBuildSizesInfoKHR sizes{};
+    sizes.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_SIZES_INFO_KHR;
+    vkGetAccelerationStructureBuildSizesKHR(device_,
+                                            VK_ACCELERATION_STRUCTURE_BUILD_TYPE_DEVICE_KHR, &build,
+                                            primitiveCounts.data(), &sizes);
+    VkPhysicalDeviceAccelerationStructurePropertiesKHR accelerationProperties{};
+    accelerationProperties.sType =
+        VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ACCELERATION_STRUCTURE_PROPERTIES_KHR;
+    VkPhysicalDeviceProperties2 properties{};
+    properties.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2;
+    properties.pNext = &accelerationProperties;
+    vkGetPhysicalDeviceProperties2(physical_, &properties);
+    const auto alignment = std::max<uint64_t>(
+        1, accelerationProperties.minAccelerationStructureScratchOffsetAlignment);
+    return {sizes.accelerationStructureSize,
+            std::max<uint64_t>(1, std::max(sizes.buildScratchSize, sizes.updateScratchSize)) +
+                alignment - 1,
+            sizes.updateScratchSize};
+}
+
+std::shared_ptr<AccelerationStructure>
+VulkanRuntime::CreateAccelerationStructureNative(AccelerationStructureDesc desc,
+                                                 AccelerationStructureSizes sizes)
+{
+    const auto name = desc.name;
+    auto storage = CreateBuffer(
+        {sizes.storage, Memory::Device, desc.name + ".Storage", false, true, false, true});
+    auto scratch = CreateBuffer({std::max(sizes.scratch, sizes.updateScratch), Memory::Device,
+                                 desc.name + ".Scratch", true, true});
+    std::shared_ptr<Buffer> instances;
+    if (desc.topLevel)
+    {
+        instances = CreateBuffer({std::max<size_t>(1, desc.instances.size()) *
+                                      sizeof(VkAccelerationStructureInstanceKHR),
+                                  Memory::Upload, desc.name + ".Instances", false, true, true});
+        auto mapped = instances->Map();
+        std::memset(mapped.data(), 0, mapped.size());
+        auto* native = reinterpret_cast<VkAccelerationStructureInstanceKHR*>(mapped.data());
+        for (size_t i = 0; i < desc.instances.size(); ++i)
+        {
+            const auto& source = desc.instances[i];
+            auto& target = native[i];
+            std::memcpy(target.transform.matrix, source.transform.data(),
+                        sizeof(target.transform.matrix));
+            target.instanceCustomIndex = source.instanceId;
+            target.mask = source.mask;
+            target.instanceShaderBindingTableRecordOffset = 0;
+            target.flags = VK_GEOMETRY_INSTANCE_TRIANGLE_FACING_CULL_DISABLE_BIT_KHR;
+            VkAccelerationStructureDeviceAddressInfoKHR address{};
+            address.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_DEVICE_ADDRESS_INFO_KHR;
+            address.accelerationStructure = As<VkAccelerationStructure>(source.bottomLevel).native;
+            target.accelerationStructureReference =
+                vkGetAccelerationStructureDeviceAddressKHR(device_, &address);
+        }
+    }
+    auto accelerationStructure = std::make_shared<VkAccelerationStructure>(
+        this, std::move(desc), sizes, storage, scratch, instances);
+    accelerationStructure->device = device_;
+    VkAccelerationStructureCreateInfoKHR create{};
+    create.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_CREATE_INFO_KHR;
+    create.buffer = As<VkBufferObject>(storage).native;
+    create.size = sizes.storage;
+    create.type = accelerationStructure->desc.topLevel
+                      ? VK_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL_KHR
+                      : VK_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL_KHR;
+    Check(
+        vkCreateAccelerationStructureKHR(device_, &create, nullptr, &accelerationStructure->native),
+        "vkCreateAccelerationStructureKHR");
+    Name(VK_OBJECT_TYPE_ACCELERATION_STRUCTURE_KHR,
+         reinterpret_cast<uint64_t>(accelerationStructure->native), name);
+    return accelerationStructure;
 }
 
 std::shared_ptr<Texture> VulkanRuntime::CreateTexture(const TextureDesc& desc)
@@ -71,7 +212,7 @@ std::shared_ptr<Texture> VulkanRuntime::CreateTexture(const TextureDesc& desc)
 }
 
 std::shared_ptr<TextureView> VulkanRuntime::CreateView(std::shared_ptr<Texture> texture,
-                                                      TextureViewUsage usage)
+                                                       TextureViewUsage usage)
 {
     CheckOwner(texture);
     if (usage == TextureViewUsage::Sampled)
@@ -122,7 +263,7 @@ std::shared_ptr<Sampler> VulkanRuntime::CreateSampler()
 }
 
 void VulkanRuntime::Allocate(Allocation& allocation, const VkMemoryRequirements& requirements,
-                             Memory kind)
+                             Memory kind, bool deviceAddress)
 {
     const VkMemoryPropertyFlags flags =
         kind == Memory::Device
@@ -146,6 +287,10 @@ void VulkanRuntime::Allocate(Allocation& allocation, const VkMemoryRequirements&
     info.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
     info.allocationSize = requirements.size;
     info.memoryTypeIndex = type;
+    VkMemoryAllocateFlagsInfo addressFlags{};
+    addressFlags.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_FLAGS_INFO;
+    addressFlags.flags = VK_MEMORY_ALLOCATE_DEVICE_ADDRESS_BIT;
+    info.pNext = deviceAddress ? &addressFlags : nullptr;
     Check(vkAllocateMemory(device_, &info, nullptr, &allocation.memory), "vkAllocateMemory");
 }
 

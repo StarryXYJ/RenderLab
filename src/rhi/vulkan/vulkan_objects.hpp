@@ -140,4 +140,15 @@ struct VkPipelineObject : Pipeline
             vkDestroyPipeline(device, native, nullptr);
     }
 };
+struct VkAccelerationStructure final : AccelerationStructure
+{
+    using AccelerationStructure::AccelerationStructure;
+    VkDevice device = VK_NULL_HANDLE;
+    VkAccelerationStructureKHR native = VK_NULL_HANDLE;
+    ~VkAccelerationStructure() override
+    {
+        if (native)
+            vkDestroyAccelerationStructureKHR(device, native, nullptr);
+    }
+};
 } // namespace renderlab::rhi::vulkan

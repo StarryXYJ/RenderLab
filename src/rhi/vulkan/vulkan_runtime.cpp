@@ -5,9 +5,12 @@
 namespace renderlab::rhi::vulkan
 {
 VulkanRuntime::VulkanRuntime(VkInstance instance, VkPhysicalDevice physical, VkDevice device,
-                             VkQueue queue, uint32_t family, bool debug)
+                             VkQueue queue, uint32_t family, bool debug,
+                             bool accelerationStructureEnabled, bool rayQueryEnabled,
+                             bool rayTracingPipelineEnabled)
     : instance_(instance), physical_(physical), device_(device), queue_(queue), family_(family),
-      debug_(debug)
+      debug_(debug), accelerationStructureEnabled_(accelerationStructureEnabled),
+      rayQueryEnabled_(rayQueryEnabled), rayTracingPipelineEnabled_(rayTracingPipelineEnabled)
 {
     vkGetPhysicalDeviceMemoryProperties(physical_, &memory_);
     VkPhysicalDeviceProperties props{};
@@ -68,9 +71,11 @@ namespace renderlab::rhi
 {
 std::unique_ptr<Runtime> CreateVulkanRuntime(VkInstance instance, VkPhysicalDevice physical,
                                              VkDevice device, VkQueue queue, uint32_t family,
-                                             bool debug)
+                                             bool debug, bool accelerationStructureEnabled,
+                                             bool rayQueryEnabled, bool rayTracingPipelineEnabled)
 {
-    return std::make_unique<vulkan::VulkanRuntime>(instance, physical, device, queue, family,
-                                                   debug);
+    return std::make_unique<vulkan::VulkanRuntime>(instance, physical, device, queue, family, debug,
+                                                   accelerationStructureEnabled, rayQueryEnabled,
+                                                   rayTracingPipelineEnabled);
 }
 } // namespace renderlab::rhi

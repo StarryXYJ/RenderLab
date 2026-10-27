@@ -95,9 +95,12 @@ private:
 };
 std::vector<std::wstring> Arguments(const ProgramRequest& request, bool preprocess)
 {
-    const auto stage = request.entry.stage == rhi::ShaderStage::Vertex  ? L"vs_6_0"
-                       : request.entry.stage == rhi::ShaderStage::Pixel ? L"ps_6_0"
-                                                                        : L"cs_6_0";
+    const auto defaultStage = request.entry.stage == rhi::ShaderStage::Vertex    ? L"vs_6_0"
+                              : request.entry.stage == rhi::ShaderStage::Pixel   ? L"ps_6_0"
+                              : request.entry.stage == rhi::ShaderStage::Compute ? L"cs_6_0"
+                                                                                 : L"lib_6_5";
+    const auto stage = request.targetProfile.empty() ? std::wstring(defaultStage)
+                                                     : platform::Utf8ToWide(request.targetProfile);
     std::vector<std::wstring> args{request.entry.source.wstring(),
                                    L"-E",
                                    platform::Utf8ToWide(request.entry.function),
@@ -111,6 +114,12 @@ std::vector<std::wstring> Arguments(const ProgramRequest& request, bool preproce
                                    L"-Zpc",
                                    L"-I",
                                    request.entry.source.parent_path().wstring()};
+    if (stage.starts_with(L"lib_") && request.target == Target::Dxil)
+    {
+        args.erase(args.begin() + 1, args.begin() + 3);
+        args.push_back(L"-exports");
+        args.push_back(platform::Utf8ToWide(request.entry.function));
+    }
     if (request.target == Target::Spirv)
     {
         args.insert(args.end(), {L"-spirv", L"-fspv-target-env=vulkan1.3", L"-fvk-use-dx-layout"});

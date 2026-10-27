@@ -53,6 +53,8 @@ WIC 解码复用调用线程已有的 COM apartment，不改变其初始化计�
 
 Extractor 从 CPU 文档提取相机、主光和实例值快照，延迟回调不再访问文档。CPU 保守剔除变换后的 AABB。instance ID 组合对象/node/primitive，上一帧矩阵按该身份关联，移除后丢弃历史。历史定义为上一次提取结果，未接 TAA/运动矢量。
 
+M5 增加独立于相机和灯光开关的 `allInstances` 表供 AS 构建与射线实例索引使用；`instances` 保持相机可见集，`shadowCasters` 保持启用光栅阴影时的候选集。两种候选集都从同一实例身份和值数据派生。
+
 MeshRenderer.model 为模型 UUID，mesh 可指定 primitive 子资源 UUID；materials 将导入材质子资源 UUID 映射到用户 .material UUID。GPU Mesh/图像为可重建投影；静态资源准备时上传，常量按帧创建，命令引用/完成点保护在途资源。普通帧不调用 WaitIdle。
 
 View/Lighting/Shadow 常量每帧创建并共享，分别包含相机、主光/环境与阴影数据；Object 保存模型、法线、上一帧模型矩阵，同实例多 Pass 复用。Material 返回 PSO 与绑定值，适配成 Graph 名称/声明，由 Graph 建立绑定组；保留 generation 以复用 ShaderModule/Layout/PSO，不重复准备两份 BindingGroup。

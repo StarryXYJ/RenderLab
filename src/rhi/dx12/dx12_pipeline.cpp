@@ -3,6 +3,7 @@
 
 #include <algorithm>
 #include <array>
+#include <cstring>
 #include <stdexcept>
 
 namespace renderlab::rhi::dx12
@@ -208,13 +209,22 @@ std::shared_ptr<BindingGroup> DxRuntime::CreateGroup(std::shared_ptr<BindingLayo
             device_->CreateUnorderedAccessView(As<DxTexture>(binding.view->texture).native.Get(),
                                                nullptr, &desc, cpu);
         }
+        else if (entry.kind == BindingKind::AccelerationStructure)
+        {
+            D3D12_SHADER_RESOURCE_VIEW_DESC desc{};
+            desc.ViewDimension = D3D12_SRV_DIMENSION_RAYTRACING_ACCELERATION_STRUCTURE;
+            desc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+            desc.RaytracingAccelerationStructure.Location =
+                As<DxBuffer>(binding.accelerationStructure->storage).native->GetGPUVirtualAddress();
+            device_->CreateShaderResourceView(nullptr, &desc, cpu);
+        }
         else
         {
             D3D12_SHADER_RESOURCE_VIEW_DESC desc{};
             const auto format = binding.view->texture->desc.format;
-            desc.Format = format == Format::D32       ? DXGI_FORMAT_R32_FLOAT
-                          : format == Format::D32S8   ? DXGI_FORMAT_R32_FLOAT_X8X24_TYPELESS
-                                                     : NativeFormat(format);
+            desc.Format = format == Format::D32     ? DXGI_FORMAT_R32_FLOAT
+                          : format == Format::D32S8 ? DXGI_FORMAT_R32_FLOAT_X8X24_TYPELESS
+                                                    : NativeFormat(format);
             desc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
             desc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
             desc.Texture2D.MipLevels = 1;
@@ -231,6 +241,37 @@ std::shared_ptr<Pipeline> DxRuntime::CreatePipelineNative(PipelineDesc desc)
     const auto bytecode = [](const auto& module) -> D3D12_SHADER_BYTECODE
     { return {module->code.data(), module->code.size()}; };
     auto* root = As<DxLayout>(desc.layout).native.Get();
+    if (desc.rayGeneration)
+    {
+        const std::array<std::shared_ptr<ShaderModule>, 3> shaders{desc.rayGeneration, desc.miss,
+                                                                   desc.closestHit};
+        std::array<std::wstring, 3> names;
+        std::array<D3D12_EXPORT_DESC, 3> exports{};
+        std::array<D3D12_DXIL_LIBRARY_DESC, 3> libraries{};
+        std::array<D3D12_STATE_SUBOBJECT, 7> objects{};
+        for (size_t i = 0; i < shaders.size(); ++i)
+        {
+            names[i] = std::wstring(shaders[i]->entry.begin(), shaders[i]->entry.end());
+            exports[i].Name = names[i].c_str();
+            libraries[i] = {bytecode(shaders[i]), 1, &exports[i]};
+            objects[i] = {D3D12_STATE_SUBOBJECT_TYPE_DXIL_LIBRARY, &libraries[i]};
+        }
+        D3D12_HIT_GROUP_DESC hit{};
+        hit.HitGroupExport = L"RenderLab.TriangleHit";
+        hit.Type = D3D12_HIT_GROUP_TYPE_TRIANGLES;
+        hit.ClosestHitShaderImport = names[2].c_str();
+        D3D12_RAYTRACING_SHADER_CONFIG shaderConfig{desc.rayPayloadSize, desc.rayAttributeSize};
+        D3D12_RAYTRACING_PIPELINE_CONFIG pipelineConfig{desc.rayRecursionDepth};
+        objects[3] = {D3D12_STATE_SUBOBJECT_TYPE_HIT_GROUP, &hit};
+        objects[4] = {D3D12_STATE_SUBOBJECT_TYPE_RAYTRACING_SHADER_CONFIG, &shaderConfig};
+        objects[5] = {D3D12_STATE_SUBOBJECT_TYPE_GLOBAL_ROOT_SIGNATURE, &root};
+        objects[6] = {D3D12_STATE_SUBOBJECT_TYPE_RAYTRACING_PIPELINE_CONFIG, &pipelineConfig};
+        D3D12_STATE_OBJECT_DESC state{D3D12_STATE_OBJECT_TYPE_RAYTRACING_PIPELINE,
+                                      static_cast<UINT>(objects.size()), objects.data()};
+        Check(rayDevice_->CreateStateObject(&state, IID_PPV_ARGS(&pipeline->rayState)),
+              "RayTracingPipeline");
+        return pipeline;
+    }
     if (desc.compute)
     {
         D3D12_COMPUTE_PIPELINE_STATE_DESC state{};
@@ -297,5 +338,27 @@ std::shared_ptr<Pipeline> DxRuntime::CreatePipelineNative(PipelineDesc desc)
     }
     Check(pipeline->native->SetName(desc.compute ? L"M1.Compute" : L"M1.Graphics"), "PSO SetName");
     return pipeline;
+}
+std::shared_ptr<ShaderTable> DxRuntime::CreateShaderTableNative(std::shared_ptr<Pipeline> pipeline)
+{
+    ComPtr<ID3D12StateObjectProperties> properties;
+    Check(As<DxPipeline>(pipeline).rayState.As(&properties), "StateObjectProperties");
+    constexpr uint64_t stride = D3D12_RAYTRACING_SHADER_TABLE_BYTE_ALIGNMENT;
+    auto buffer = CreateBuffer(
+        {stride * 3, Memory::Upload, "RayTracing.ShaderTable", false, true, false, false, true});
+    auto mapped = buffer->Map();
+    std::memset(mapped.data(), 0, mapped.size());
+    const auto& desc = pipeline->desc;
+    const std::array<std::string, 3> entries{desc.rayGeneration->entry, desc.miss->entry,
+                                             "RenderLab.TriangleHit"};
+    for (size_t i = 0; i < entries.size(); ++i)
+    {
+        const std::wstring entry(entries[i].begin(), entries[i].end());
+        auto* identifier = properties->GetShaderIdentifier(entry.c_str());
+        if (!identifier)
+            throw std::runtime_error("Missing ShaderTable export");
+        std::memcpy(mapped.data() + i * stride, identifier, D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES);
+    }
+    return std::make_shared<ShaderTable>(std::move(pipeline), std::move(buffer), 0, stride);
 }
 } // namespace renderlab::rhi::dx12

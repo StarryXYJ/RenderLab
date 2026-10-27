@@ -36,15 +36,15 @@ FrameContext 的索引由 CPU 帧序号选择，与交换链图像索引独立�
 
 ## 资源、内存与屏障
 
-当前实现 2D、单 mip、单 layer、单采样纹理：RGBA8/BGRA8 UNORM、对应 sRGB、D32，以及 M4 的 RGBA32F 和 R1 的 D32S8；后两者分别用于 HDR 与深度模板附件。Storage 纹理限定 RGBA8_UNORM，深度模板不可采样/复制；完整状态契约见 [渲染状态](render-states.md)。M2 补充常量缓冲、只读与可写结构化缓冲，Binding 使用固定 space 0..3。管线显式声明单顶点流的 stride、semantic、location、float2/3/4 和 offset，RHI 不依赖样例的顶点结构。样例在自身模块定义 36 字节 position/color/uv，索引为 uint32。绑定图形管线后再绑定 Geometry；切换管线后重新绑定 Group 和 Geometry。
+当前实现 2D、单 mip、单 layer、单采样纹理：RGBA8/BGRA8 UNORM、对应 sRGB、D32、RGBA32F、D32S8 和光追引导使用的 R32F。Storage 纹理允许 RGBA8_UNORM、RGBA32_FLOAT 和 R32_FLOAT；深度采样使用独立只读 View，纹理 Copy 仍仅支持颜色格式。创建时检查原生格式的请求用途，设备报告同时列出 R32_FLOAT 能力；完整状态契约见 [渲染状态](render-states.md)。M2 补充常量缓冲、只读与可写结构化缓冲，Binding 使用固定 space 0..3。管线显式声明单顶点流的 stride、semantic、location、float2/3/4 和 offset，RHI 不依赖样例的顶点结构。样例在自身模块定义 36 字节 position/color/uv，索引为 uint32。绑定图形管线后再绑定 Geometry；切换管线后重新绑定 Group 和 Geometry。
 
 Buffer 的内存类别为 Device、Upload、Readback。仅后两类允许映射；读回前必须完成 CopyDest→HostRead 屏障并等待提交。Upload 的映射内容在消费它的提交完成前不得改写。Vulkan 首版要求 HostVisible + HostCoherent 内存类型，不引入隐藏的非一致内存刷新行为。设备资源初始状态为 Undefined，Upload 为 HostWrite，Readback 为 CopyDest。
 
-首版分配器采用 DX12 committed resource 和 Vulkan dedicated allocation，不引入尚无子分配需求的 VMA/D3D12MA 包装。AllocationLedger 记录实际原生分配大小、当前占用与高水位，共享 256 MiB 明确预算，超额报错。交换链借用图像、驱动内部分配和描述符堆不计入该数值，它不是完整显存预算报告。普通资源随安全完成点释放；命令池保持有界的最高并发数量至 Runtime 关闭。
+首版分配器采用 DX12 committed resource 和 Vulkan dedicated allocation，不引入尚无子分配需求的 VMA/D3D12MA 包装。AllocationLedger 记录实际原生分配大小、当前占用与高水位，Runtime 默认共享 256 MiB 明确预算，超额报错。宿主可在创建 Renderer/Pool 前通过 owner-thread `SetAllocationBudget(bytes)` 配置上限；零值或低于当前 native 占用会被拒绝。此设置只修改分配账本限额，不预留显存，也不改变硬件预算。Sandbox/Player 场景默认使用 2048 MiB，独立 RHI Demo 默认仍为 256 MiB，可用 `--gpu-budget-mib N`（64..16384）覆盖。失败诊断包含 requested/used/limit 字节数。交换链借用图像、驱动内部分配和描述符堆不计入该数值，它不是完整显存预算报告。普通资源随安全完成点释放；命令池保持有界的最高并发数量至 Runtime 关闭。
 
 `UploadArena` 是固定容量、显式对齐的线性上传分配器，超容量报错，不静默增长。`UploadRing` 轮换两个 Arena，BeginFrame 等待该段完成点后 Reset，EndFrame 使用实际消费该段的提交点封存。不要保留 Arena 引用并在封存后继续写入；需要多次提交消费同一段时，用最后一次提交点封存。
 
-纹理 Copy 的公共对齐约定为行间距 256 字节、Buffer offset 512 字节。`TextureRowPitch(width, format)` 提供共同布局，format 默认 RGBA8；M4.3 增加 Rgba32Float（16 字节/texel），FormatBytes 为 texel 大小的唯一入口，Vulkan 按它将字节 pitch 转成 texel row length。有效像素外的行 padding 未定义，测试只对有效像素比对。浮点 HDR 与显示约定见 [M4.3](m4-forward-pbr.md)。
+纹理 Copy 的公共对齐约定为行间距 256 字节、Buffer offset 512 字节。`TextureRowPitch(width, format)` 提供共同布局，format 默认 RGBA8；Rgba32Float 为 16 字节/texel、R32Float 为 4 字节/texel。FormatBytes 为 texel 大小的唯一入口，Vulkan 按它将字节 pitch 转成 texel row length。有效像素外的行 padding 未定义，测试只对有效像素比对。浮点 HDR 与显示约定见 [M4.3](m4-forward-pbr.md)。
 
 `State` 是首版保守的用途、访问、阶段与布局预设，覆盖 Copy、Vertex、Index、Indirect、Compute Storage、Fragment/Compute Sampled、Color、Depth 和 Present。屏障由调用者明确录制，RHI 不推断前态、不替调用者自动切换。Storage→Storage 在 DX12 发出 UAV barrier，在 Vulkan 发出 Synchronization2 内存依赖，即使布局未变也不能省略。M2 已补充 UniformRead、ShaderRead 和 Storage Buffer；HostWrite→UniformRead/ShaderRead 显式描述上传缓冲供 Shader 读取的依赖。仍不实现子资源细分、多队列与 Ownership Transfer；后续图层应生成明确计划，而非依赖本层猜测。
 
@@ -81,3 +81,7 @@ PSO 在样例准备阶段创建，录制只绑定。Direct Draw、Indexed Draw�
 ## M3 接入补充
 
 默认 Sandbox 窗口已迁入 [Render Graph](m3-rendergraph.md)，`--rhi-test` 继续使用直接 RHI 路径作为独立基线。RHI BeginRendering 支持 Color/Depth 各自的 Clear、Load、Discard，Store 固定为 Store；M1 调用保持默认 Clear。上传缓冲支持 GPU 只读用途间转换，读回缓冲支持 CopyDest/HostRead 交接及重复复制，仍需调用方满足完成要求。图内屏障完全由 Graph 生成；直接 RHI 验收继续手工声明。
+
+### 展示同步配置
+
+Runtime::CreateSwapchain 的 vsync 参数默认 true。false 请求非同步展示：DX12 使用 Present(0)，能力允许时创建及重建都保留 ALLOW_TEARING；Vulkan 优先选择 Immediate，其次 Mailbox，不支持则显式失败。选择在创建时固定，Resize 沿用，不在逐帧修改展示策略。驱动和窗口合成器仍可能施加限制，非同步提交不等于扫描输出帧率。

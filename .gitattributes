@@ -19,6 +19,7 @@ CMakeLists.txt text
 *.yaml text
 *.yml text
 *.cs text
+*.axaml text
 *.csproj text
 *.props text
 *.targets text
