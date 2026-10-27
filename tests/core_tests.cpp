@@ -174,6 +174,8 @@ int main()
                     TextureRowPitch(65) == 512,
                 "Texture row pitch boundaries");
         RequireInvalid([] { TextureRowPitch(UINT32_MAX); });
+        Require(FormatBytes(Format::R32Float) == 4 && TextureRowPitch(65, Format::R32Float) == 512,
+                "Scalar float guide upload/readback footprint");
 
         renderlab::rhi::DeviceReport report;
         report.backend = "test\"\\\n\t";

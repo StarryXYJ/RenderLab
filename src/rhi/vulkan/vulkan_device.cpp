@@ -487,6 +487,7 @@ private:
              {std::pair{"RGBA8_UNORM", VK_FORMAT_R8G8B8A8_UNORM},
               std::pair{"RGBA16_FLOAT", VK_FORMAT_R16G16B16A16_SFLOAT},
               std::pair{"RGBA32_FLOAT", VK_FORMAT_R32G32B32A32_SFLOAT},
+              std::pair{"R32_FLOAT", VK_FORMAT_R32_SFLOAT},
               std::pair{"D32_FLOAT", VK_FORMAT_D32_SFLOAT},
               std::pair{"D32_FLOAT_S8X24_UINT", VK_FORMAT_D32_SFLOAT_S8_UINT}})
         {

@@ -28,6 +28,8 @@ VkFormat NativeFormat(Format format)
         return VK_FORMAT_D32_SFLOAT;
     case Format::Rgba32Float:
         return VK_FORMAT_R32G32B32A32_SFLOAT;
+    case Format::R32Float:
+        return VK_FORMAT_R32_SFLOAT;
     }
     throw std::invalid_argument("Unknown format");
 }

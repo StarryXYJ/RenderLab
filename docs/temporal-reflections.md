@@ -61,8 +61,9 @@ Resolve restores the center material factor and retains
 envelope. Per-pixel uncertainty controls the filtering within that envelope. Resolve no longer
 performs a second 5x5 gather. The original standalone spatial baseline is unchanged.
 
-At 2048 spp or above, and for sharp mirrors (roughness <= .05), Resolve returns the exact
-progressive RGBA. Background and Unlit also bypass reconstruction. Neither the stationary spatial
+At 2048 spp or above the graph selects the exact progressive RGBA without reconstruction passes;
+Resolve retains the matching shader guard for direct contract tests. Sharp mirrors (roughness <=
+.05), background and Unlit also return the exact reference at resolve. Neither the stationary spatial
 result nor progressive means enter recursive temporal radiance or moments. Temporal statistics
 continue to consume independent single-frame inputs. Resuming camera motion selects the motion
 path again and resets stationary spp; temporal reuse still follows its validity and high-spp
@@ -172,8 +173,21 @@ or 450 MiB at 1440p, excluding alignment and in-flight replacements. This is 32 
 than the prior temporal implementation. Prepare, three filter scales and resolve alternate two
 explicitly versioned full-resolution scratch images. Graph WAR/RAW/WAW dependencies protect each
 overwrite; no stage reads an old scratch version after reuse. Full-size diagnostics are optional.
-The original standalone spatial target is omitted when this path runs. No compression or general
-memory aliasing was added; explicit host allocation limits remain.
+The original standalone spatial target is omitted when this path runs. Temporal targets remain
+uncompressed and there is no general memory aliasing; explicit host allocation limits remain.
+
+These eight targets are retained only while reconstruction is active. After a successful frame
+without temporal reconstruction (including the stationary 2048-spp bypass), CPU ownership and
+initialization flags are released; in-flight commands still retain their allocations. Re-enabling
+reconstruction or resuming motion after that bypass starts cold, as before. At 2048 spp or above,
+Prepare/Temporal/all three filters/Resolve are omitted, and the denoised texture name directly
+aliases the unfiltered progressive texture. The temporal source counter is zero on those frames.
+When reconstruction is inactive there is no temporal diagnostic readback.
+
+The transient trace-distance guide is R32F instead of RGBA32F, saving 12 bytes/pixel per allocation
+without changing the float32 value. A guide-free raygen variant omits it entirely for unfiltered
+views or disabled/bypassed filtering. The active temporal target formats are unchanged; this does
+not reduce the precision of HDR moments, world positions or the progressive reference.
 
 Each cached progressive View owns two additional eight-byte/pixel structured buffers, a combined
 16 bytes/pixel: 3.516 MiB at 640x360, 31.641 MiB at 1080p or 56.25 MiB at 1440p. They follow the

@@ -324,14 +324,15 @@ void VerifyReflectionDenoise(Runtime& runtime, shader::Target target,
                          uint32_t priorSamples = 0)
     {
         auto commands = runtime.CreateCommands();
-        const auto upload = [&](const Image& values)
+        const auto upload = [&](const Image& values, Format format = Format::Rgba32Float)
         {
-            auto image = runtime.CreateTexture(
-                {width, height, Format::Rgba32Float, false, false, "Denoise.Input"});
+            auto image =
+                runtime.CreateTexture({width, height, format, false, false, "Denoise.Input"});
             auto buffer = runtime.CreateBuffer({pitch * height, Memory::Upload, "Denoise.Upload"});
             for (uint32_t y = 0; y < height; ++y)
-                std::memcpy(buffer->Map().data() + y * pitch, values.data() + y * width,
-                            width * sizeof(Pixel));
+                for (uint32_t x = 0; x < width; ++x)
+                    std::memcpy(buffer->Map().data() + y * pitch + x * FormatBytes(format),
+                                values[y * width + x].data(), FormatBytes(format));
             commands->Barrier(buffer, State::HostWrite, State::CopySource);
             commands->Barrier(image, State::Undefined, State::CopyDest);
             commands->CopyTexture(buffer, image, pitch, true);
@@ -339,7 +340,7 @@ void VerifyReflectionDenoise(Runtime& runtime, shader::Target target,
             return runtime.CreateView(image);
         };
         auto color = upload(radiance), nr = upload(normals), am = upload(materials),
-             depths = upload(depth), hits = upload(guide);
+             depths = upload(depth), hits = upload(guide, Format::R32Float);
         renderer::ReflectionParameters parameters;
         parameters.inverseViewProjection = {1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1};
         parameters.options[1] = static_cast<float>(priorSamples);

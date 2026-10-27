@@ -170,7 +170,10 @@ void Statistics::Save(const std::filesystem::path& path, const Options& options,
     if (rayScene)
         result["resourceReuse"]["rayScene"] = {{"geometryPacks", rayScene->geometryPacks},
                                                {"uploadBatches", rayScene->uploadBatches},
-                                               {"uploadedBytes", rayScene->uploadedBytes}};
+                                               {"uploadedBytes", rayScene->uploadedBytes},
+                                               {"historyEvictions", rayScene->historyEvictions},
+                                               {"cachedViews", rayScene->cachedViews},
+                                               {"historyBytes", rayScene->historyBytes}};
     result["adapterIdentity"] = {{"vendorId", adapter.vendorId},
                                  {"deviceId", adapter.deviceId},
                                  {"software", adapter.software}};

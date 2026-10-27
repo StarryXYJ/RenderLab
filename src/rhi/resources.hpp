@@ -28,7 +28,8 @@ enum class Format
     Bgra8Srgb,
     Rgba32Float,
     D32,
-    D32S8
+    D32S8,
+    R32Float
 };
 /// @brief Uncompressed texel size used by upload/readback footprints.
 uint32_t FormatBytes(Format format);

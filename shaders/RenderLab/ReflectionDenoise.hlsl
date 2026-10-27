@@ -1,6 +1,6 @@
 #include "ImageBasedLighting.hlsli"
 Texture2D<float4> Radiance : register(t0);
-Texture2D<float4> HitGuide : register(t1);
+Texture2D<float> HitGuide : register(t1);
 #ifdef SPIRV
 [[vk::image_format("rgba32f")]]
 #endif

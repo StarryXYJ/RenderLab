@@ -139,13 +139,41 @@ void VerifyReflectionTemporalMotion(rhi::Runtime& runtime, renderer::SceneRender
         std::vector<std::byte> reference;
         for (uint32_t frame = 0; frame < endpointSpp; ++frame)
         {
+            if (trajectory == 0 && frame + 1 == 2047)
+            {
+                options.reflectionDenoise = true;
+                options.reflectionTemporal = true;
+                options.profile = true;
+            }
             const auto result = render(frame + 1 == endpointSpp);
             if (result.reflectionSamples != frame + 1)
                 throw std::runtime_error("Stationary endpoint reference did not accumulate");
             if (frame + 1 == endpointSpp)
+            {
                 reference =
                     copyPixels(result, std::format("motion-{}-reference-{}", name, endpointSpp));
+                if (trajectory == 0 && endpointSpp >= 2048)
+                {
+                    uint32_t passes = 0;
+                    for (const auto& timing : result.profile.Read(runtime))
+                        passes += timing.name.starts_with("RayTracing.Reflection.") ? 1 : 0;
+                    if (passes != 4 || result.reflectionTemporalFrames != 0)
+                        throw std::runtime_error(
+                            "High-spp bypass retained display reconstruction passes");
+                }
+            }
         }
+        if (trajectory == 0 && endpointSpp >= 2048)
+        {
+            renderer.Document().MoveCamera({.01f, 0, 0}, {});
+            const auto resumed = render();
+            if (resumed.reflectionSamples != 1 || resumed.reflectionTemporalFrames != 1)
+                throw std::runtime_error(
+                    "Motion after high-spp bypass reused stale temporal guides");
+        }
+        options.reflectionDenoise = false;
+        options.reflectionTemporal = false;
+        options.profile = false;
         std::vector<std::vector<std::byte>> references;
         for (uint32_t frame = 0; frame < sequenceFrames; ++frame)
         {

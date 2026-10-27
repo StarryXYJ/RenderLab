@@ -204,6 +204,8 @@ Assets 与 .meta 纳入版本管理，Library 可以清除重建。不要原地�
 
 ### Ray Tracing 组合与 Ray Query
 
+光追 progressive 历史最多缓存四个 View，并按最近使用顺序与 native 预算的 1/8 软字节目标淘汰非活动 View；高分辨率可能只保留一到两个。活动 View 不因软目标被拒绝，最终仍受 native 总限额约束。Headless 报告的 `resourceReuse.rayScene` 提供累计打包/上传次数、缓存 View 数、淘汰次数和 progressive 请求字节数。
+
 场景宿主（Sandbox/Player）默认 tracked allocation 上限为 2048 MiB，Graph 资源缓存以其中 3/4 为上限，给资产、AS、历史和上传留出余量；需要时可用 `--gpu-budget-mib 4096` 显式调整。它统计 Buffer/Texture 的 native 分配，包括 Host 可见上传/读回，不是显卡实时可用显存，也不一次性预留这些内存。独立 RHI Demo 默认仍为 256 MiB。窗口分辨率、在途帧和保留的历史视图都会影响峰值；预算不足时日志给出 requested/used/limit。
 
 窗口尺寸可能被桌面工作区限制，profile 的 width/height 来自 CLI 请求参数，不能单独证明实际客户区尺寸。高分辨率验证需检查实际资源规模（如 `--graph-dump` 的 CameraColor/DisplayColor 字节数），或使用明确尺寸的离屏目标；普通 `--window-test` 还会主动缩小窗口。

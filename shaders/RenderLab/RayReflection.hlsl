@@ -16,10 +16,15 @@ cbuffer ReflectionParameters : register(b4)
 };
 Texture2D<float4> AlbedoMetallic : register(t12);
 Texture2D<float4> EnvironmentAtlas : register(t13);
-#ifdef SPIRV
-[[vk::image_format("rgba32f")]]
+#ifndef RENDERLAB_REFLECTION_GUIDE
+#define RENDERLAB_REFLECTION_GUIDE 1
 #endif
-RWTexture2D<float4> HitGuide : register(u14);
+#if RENDERLAB_REFLECTION_GUIDE
+#ifdef SPIRV
+[[vk::image_format("r32f")]]
+#endif
+RWTexture2D<float> HitGuide : register(u14);
+#endif
 Texture2D<float4> BrdfLut : register(t15);
 struct Payload { float3 radiance; float distance; };
 
@@ -28,7 +33,9 @@ void RayGeneration()
 {
     uint2 pixel = DispatchRaysIndex().xy;
     uint2 size = DispatchRaysDimensions().xy;
+#if RENDERLAB_REFLECTION_GUIDE
     HitGuide[pixel] = 0;
+#endif
     float depth = Depth.Load(int3(pixel, 0));
     float4 normalRoughness = NormalRoughness.Load(int3(pixel, 0));
     if (depth <= 1e-7 || normalRoughness.w < 0)
@@ -62,7 +69,9 @@ void RayGeneration()
     Payload payload = {0.xxx, 0};
     TraceRay(Scene, RAY_FLAG_NONE, 0x02, 0, 1, 0, ray, payload);
     // Positive distance: hit, -1: environment miss, 0: rejected/invalid sample.
-    HitGuide[pixel] = float4(payload.distance, 0, 0, 0);
+#if RENDERLAB_REFLECTION_GUIDE
+    HitGuide[pixel] = payload.distance;
+#endif
     float4 albedo = AlbedoMetallic.Load(int3(pixel, 0));
     float3 fresnel = FresnelSchlick(saturate(dot(v, h)), lerp(.04.xxx, albedo.rgb, albedo.a));
     float weight = VisibleGGXWeight(nv, nl, roughness);

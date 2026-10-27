@@ -130,14 +130,17 @@ for these native pipeline checks.
 ## Hybrid reflections
 
 Ray Tracing now requires all three enabled capabilities: AS, Ray Query and Ray Tracing Pipeline.
-The composition is GBuffer → Ray Query shadows → Deferred Lighting → reflection trace → stationary
-accumulation → optional spatial denoise → optional camera temporal denoise → reflection combine → Forward transparency → display. The Graph exposes separate
+The main composition is GBuffer → Ray Query shadows → Deferred Lighting → reflection trace →
+reflection combine → Forward transparency → display. Trace feeds independent progressive mean/
+statistics and optional display-reconstruction branches before Combine. The display path selects
+either the standalone spatial baseline or Prepare → Temporal → three spatial scales → Resolve;
+the progressive mean never enters recursive temporal moments. The Graph exposes separate
 `RayTracing.Reflection.Trace`, `.Accumulate`, optional reconstruction passes and `.Combine` timings and dependencies.
 
 Trace reads Depth, world Normal/Roughness, Albedo/Metallic, TLAS and indexed geometry/material
 buffers. One visible-normal GGX (VNDF) importance-sampled specular ray produces RGBA32F `RayTracing.RawRadiance`.
-The 16-byte payload holds incoming radiance and hit distance. A separate RGBA32F
-`RayTracing.HitGuide` stores current-sample distance in x: positive for a hit, -1 for an
+The 16-byte payload holds incoming radiance and hit distance. When display filtering runs, a separate
+R32F `RayTracing.HitGuide` stores current-sample distance: positive for a hit, -1 for an
 environment miss, zero for invalid/rejected rays. Raw radiance alpha remains the hit indicator;
 unfiltered history alpha remains its running mean. ClosestHit evaluates shared PBR,
 emission, main directional lighting (with an inline shadow query) and the existing IBL; Miss
@@ -154,7 +157,7 @@ lighting and do not participate in these reflection rays.
 
 ### Histories and invalidation
 
-Histories are keyed by stable camera ID (ViewID), bounded to four views, with two completion-protected
+Histories are keyed by stable camera ID (ViewID), bounded to at most four views, with two completion-protected
 RGBA32F textures per view. Each submission reads the preceding version and writes the other texture
 on the same queue; it publishes the new index/signature only after successful submission. Resize
 replaces textures while command references retain old in-flight allocations. The running mean
@@ -169,6 +172,16 @@ generation, environment identity/ambient/intensity/rotation, directional light v
 setting. A mismatch sets history count and sample sequence to zero. Returning to an unchanged ViewID
 can resume its own history. Switching to raster or another diagnostic view clears retained histories.
 Exposure is a display transform and does not invalidate linear radiance.
+
+Inactive progressive Views are evicted by last successful use, with a soft CPU ownership target of
+one eighth of the configured native allocation budget. Selection reserves the active View's two
+radiance/statistics slots and accounts for retained previous-size data before allocating. The active
+View is always allowed even if it exceeds this cache target; the native allocation limit still
+applies. In-flight command references can retain evicted resources until completion. A returning
+View resumes only if it is still cached; high resolutions may retain fewer than four Views.
+`RayStatistics().historyBytes` / `resourceReuse.rayScene.historyBytes` count requested bytes of
+CPU-owned progressive radiance/statistics only, excluding temporal guides, native alignment and
+in-flight retired versions. Cache counts/evictions are reported alongside upload work.
 
 The effective instance masks are also part of both progressive and temporal scene signatures.
 Changing only a material's `CastShadows` policy rebuilds the TLAS and resets both histories, even
@@ -210,10 +223,13 @@ are part of the spatial pass; optional camera temporal reuse is described below.
 still starts the unfiltered accumulation over. Only stochastic reflection is
 filtered, not the Deferred direct-light term or the hard Ray Query shadow mask.
 
-The current format baseline adds two full-resolution RGBA32F transients (guide and filtered output):
-32 bytes/pixel, about 7.03 MiB at 640x360 or 28.13 MiB at 1280x720, excluding allocator alignment.
-With the filter off only the guide remains; Trace writes it along with raw radiance. High-spp
-filter bypass still dispatches a copy pass. Compression and guide-free trace variants are deferred.
+The standalone spatial path adds an R32F guide and RGBA32F filtered output: 20 bytes/pixel,
+about 4.39 MiB at 640x360 or 17.58 MiB at 1280x720, excluding allocator alignment. The single-channel
+guide preserves its original float32 distance exactly. Raw/History, disabled filtering and
+stationary 2048 spp or above select a guide-free RayGeneration/ShaderTable variant and allocate no
+hit guide. At 2048 spp or above the graph directly selects the progressive texture instead of
+dispatching a bypass copy, Prepare, Temporal, filters or Resolve. Raw radiance, progressive mean,
+temporal HDR moments and world positions retain float32 precision.
 Scene hosts configure a bounded 2048 MiB tracked-native allocation limit before renderer creation;
 standalone RHI demos keep 256 MiB. Override with `--gpu-budget-mib N` (64..16384). The SceneRenderer
 pool caps estimated cache bytes at 3/4 of that configured limit, leaving headroom for graph-external

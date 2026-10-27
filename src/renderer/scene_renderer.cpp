@@ -82,7 +82,7 @@ struct SceneRenderer::Impl
     rhi::UploadPool uploadPool;
     AccelerationScene accelerationScene;
     std::shared_ptr<rhi::Pipeline> rayQueryShadow;
-    std::shared_ptr<rhi::ShaderTable> reflectionTable;
+    std::shared_ptr<rhi::ShaderTable> reflectionTable, reflectionTableWithoutGuide;
     std::shared_ptr<rhi::Pipeline> reflectionHistory, reflectionStatistics, reflectionCombine,
         reflectionDenoise, reflectionTemporal;
     std::shared_ptr<rhi::Buffer> emptyReflectionStatistics;
@@ -106,9 +106,52 @@ struct SceneRenderer::Impl
         std::array<bool, 2> statisticsInitialized{};
         uint32_t index = 0;
         uint32_t samples = 0, sequence = 0;
-        uint64_t completion = 0;
+        uint64_t completion = 0, lastUse = 0;
+        uint64_t SlotBytes(size_t slot) const
+        {
+            uint64_t bytes = statistics[slot] ? statistics[slot]->desc.size : 0;
+            if (radiance[slot])
+                bytes += uint64_t(radiance[slot]->desc.width) * radiance[slot]->desc.height * 16;
+            return bytes;
+        }
+        uint64_t Bytes() const
+        {
+            return SlotBytes(0) + SlotBytes(1);
+        }
     };
     std::map<std::string, ReflectionHistory> reflectionViews;
+    uint64_t reflectionUseSequence = 0;
+    ReflectionHistory& AcquireReflectionHistory(const std::string& id, uint32_t width,
+                                                uint32_t height)
+    {
+        const uint64_t desired = uint64_t(width) * height * 48;
+        const auto found = reflectionViews.find(id);
+        const auto activeBytes =
+            found == reflectionViews.end()
+                ? desired
+                : std::max(desired, desired / 2 + found->second.SlotBytes(found->second.index));
+        const auto budget = runtime.GetMemoryStats().budget / 8;
+        for (;;)
+        {
+            uint64_t bytes = activeBytes;
+            auto oldest = reflectionViews.end();
+            for (auto it = reflectionViews.begin(); it != reflectionViews.end(); ++it)
+                if (it->first != id)
+                {
+                    bytes += it->second.Bytes();
+                    if (oldest == reflectionViews.end() ||
+                        it->second.lastUse < oldest->second.lastUse)
+                        oldest = it;
+                }
+            const auto count = reflectionViews.size() + (found == reflectionViews.end() ? 1 : 0);
+            if (oldest == reflectionViews.end() || (count <= 4 && bytes <= budget))
+                break;
+            reflectionViews.erase(oldest);
+            ++rayStatistics.historyEvictions;
+        }
+        // The active view is allowed to exceed the cache target; the native budget still applies.
+        return reflectionViews[id];
+    }
     struct TemporalHistory
     {
         std::string signature, viewId;
@@ -365,11 +408,13 @@ struct SceneRenderer::Impl
         if (!runtime.SupportsRayTracingPipeline())
             throw std::invalid_argument("Reflections require rayTracingPipeline capability");
         shader::DxcCompiler compiler;
-        const auto module = [&](const char* file, rhi::ShaderStage stage, const char* entry)
+        const auto module =
+            [&](const char* file, rhi::ShaderStage stage, const char* entry, bool guide = true)
         {
             shader::ProgramRequest request;
             request.entry = {stage, project.engine / "RenderLab" / file, entry};
             request.target = shaderTarget;
+            request.defines["RENDERLAB_REFLECTION_GUIDE"] = guide ? "1" : "0";
             if (shaderTarget == shader::Target::Spirv)
                 request.defines["SPIRV"] = "1";
             return runtime.CreateShader(stage, compiler.Compile(request), entry);
@@ -396,6 +441,12 @@ struct SceneRenderer::Impl
         desc.miss = module("RayReflection.hlsl", rhi::ShaderStage::Miss, "Miss");
         desc.closestHit = module("RayReflection.hlsl", rhi::ShaderStage::ClosestHit, "ClosestHit");
         reflectionTable = runtime.CreateShaderTable(runtime.CreatePipeline(desc));
+        auto noGuideLayout = desc.layout->entries;
+        std::erase_if(noGuideLayout, [](const auto& binding) { return binding.slot == 14; });
+        desc.layout = runtime.CreateLayout(std::move(noGuideLayout));
+        desc.rayGeneration =
+            module("RayReflection.hlsl", rhi::ShaderStage::RayGeneration, "RayGeneration", false);
+        reflectionTableWithoutGuide = runtime.CreateShaderTable(runtime.CreatePipeline(desc));
         desc = {};
         desc.layout = runtime.CreateLayout({{0, rhi::BindingKind::SampledTexture},
                                             {1, rhi::BindingKind::SampledTexture},
@@ -825,7 +876,11 @@ rhi::UploadPool::Statistics SceneRenderer::UploadStatistics() const
 }
 RaySceneStatistics SceneRenderer::RayStatistics() const
 {
-    return impl_->rayStatistics;
+    auto result = impl_->rayStatistics;
+    result.cachedViews = impl_->reflectionViews.size();
+    for (const auto& [id, history] : impl_->reflectionViews)
+        result.historyBytes += history.Bytes();
+    return result;
 }
 SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::State initial,
                                     rhi::Swapchain* swapchain, bool readback,
@@ -1123,9 +1178,8 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
             appendTemporal(instance.mask);
         }
         const auto& viewId = self.document.activeCamera;
-        if (!self.reflectionViews.contains(viewId) && self.reflectionViews.size() >= 4)
-            self.reflectionViews.erase(self.reflectionViews.begin());
-        auto& history = self.reflectionViews[viewId];
+        auto& history =
+            self.AcquireReflectionHistory(viewId, target->desc.width, target->desc.height);
         reflectionHistory = &history;
         const bool accumulate =
             options.reflectionHistory && options.view != SceneView::ReflectionRaw;
@@ -1183,14 +1237,17 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
             importBuffer(slice.buffer, "RayTracing.ReflectionParameters", rhi::State::HostWrite),
             rendergraph::Use::Uniform,
             {slice.offset, slice.size}};
-        frame.rayTracing.reflectionTable = self.reflectionTable;
         frame.rayTracing.historyPipeline = self.reflectionHistory;
         frame.rayTracing.statisticsPipeline = self.reflectionStatistics;
         frame.rayTracing.combinePipeline = self.reflectionCombine;
-        if ((options.reflectionDenoise &&
-             (options.view == SceneView::Final || options.view == SceneView::Hdr)) ||
-            options.view == SceneView::ReflectionDenoised)
+        if (reflectionSamples + 1 < 2048 &&
+            ((options.reflectionDenoise &&
+              (options.view == SceneView::Final || options.view == SceneView::Hdr)) ||
+             options.view == SceneView::ReflectionDenoised))
             frame.rayTracing.denoisePipeline = self.reflectionDenoise;
+        frame.rayTracing.reflectionTable = frame.rayTracing.denoisePipeline
+                                               ? self.reflectionTable
+                                               : self.reflectionTableWithoutGuide;
         if (frame.rayTracing.denoisePipeline && options.reflectionTemporal && accumulate)
         {
             auto& temporal = self.temporalHistory;
@@ -1649,6 +1706,7 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
         reflectionHistory->samples = std::min(reflectionSamples + 1, MaxReflectionSamples);
         reflectionHistory->sequence = (reflectionSequence + 1) % MaxReflectionSamples;
         reflectionHistory->completion = submitted.completion;
+        reflectionHistory->lastUse = ++self.reflectionUseSequence;
     }
     auto& temporal = self.temporalHistory;
     temporal.active = bool(frame.rayTracing.temporalPipeline);
@@ -1663,6 +1721,14 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
         temporal.cameraPosition = self.snapshot.cameraPosition;
         temporal.frames = std::min(temporalFrames + 1, MaxReflectionSamples);
         temporal.completion = submitted.completion;
+    }
+    else
+    {
+        // Re-enabling reconstruction is already cold; inactive guides need no CPU residency.
+        // Recorded commands retain any in-flight history versions until their completion.
+        temporal.textures = {};
+        temporal.initialized = {};
+        temporal.frames = 0;
     }
     result.reflectionTemporalFrames = temporal.active ? temporal.frames : 0;
     if (preparedAcceleration)

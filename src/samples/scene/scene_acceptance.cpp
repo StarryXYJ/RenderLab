@@ -358,12 +358,14 @@ void VerifyScene(rhi::Runtime& runtime, shader::Target target, const std::filesy
                             shadowPolicy.reflectionSamples == 1 &&
                             shadowPolicy.reflectionTemporalFrames == 1,
                         "ShadowCaster-only edit did not reset both reflection histories");
-        renderer::SceneRenderer fresh(runtime, target, fixture, engine);
-        fresh.Document() = document;
-        auto reference = fresh.Render(color, initial, nullptr, true, {}, reflectionOptions);
-        runtime.Wait(reference.completion);
-        detail::Require(std::ranges::equal(shadowPolicy.pixels->Map(), reference.pixels->Map()),
-                        "ShadowCaster-only edit differs from a cold renderer reference");
+        {
+            renderer::SceneRenderer fresh(runtime, target, fixture, engine);
+            fresh.Document() = document;
+            auto reference = fresh.Render(color, initial, nullptr, true, {}, reflectionOptions);
+            runtime.Wait(reference.completion);
+            detail::Require(std::ranges::equal(shadowPolicy.pixels->Map(), reference.pixels->Map()),
+                            "ShadowCaster-only edit differs from a cold renderer reference");
+        }
         material::Save(originalMaterial, materialPath);
         std::filesystem::last_write_time(
             materialPath, std::filesystem::file_time_type::clock::now() + std::chrono::seconds(2));
@@ -385,6 +387,35 @@ void VerifyScene(rhi::Runtime& runtime, shader::Target target, const std::filesy
         auto returned = reflectionRender("reflection-return-view", reflectionOptions);
         detail::Require(!returned.reflectionHistoryReset,
                         "ViewID history was not retained independently");
+        const auto addView = [&]
+        {
+            auto camera = document.Get(original.activeCamera);
+            camera.id = project::NewId();
+            document.activeCamera = camera.id;
+            document.objects.push_back(std::move(camera));
+            auto result = reflectionRender("reflection-cache-fill", reflectionOptions);
+            runtime.Wait(result.completion);
+        };
+        addView();
+        addView();
+        document.activeCamera = original.activeCamera;
+        auto touched = reflectionRender("reflection-cache-touch", reflectionOptions);
+        runtime.Wait(touched.completion);
+        const auto evictions = renderer.RayStatistics().historyEvictions;
+        addView();
+        detail::Require(renderer.RayStatistics().cachedViews == 4 &&
+                            renderer.RayStatistics().historyEvictions == evictions + 1,
+                        "Reflection View cache did not enforce its bounded capacity");
+        document.activeCamera = original.activeCamera;
+        auto recent = reflectionRender("reflection-cache-recent", reflectionOptions);
+        detail::Require(!recent.reflectionHistoryReset,
+                        "LRU cache evicted the recently touched reflection View");
+        document.activeCamera = alternateCamera.id;
+        auto oldest = reflectionRender("reflection-cache-oldest", reflectionOptions);
+        detail::Require(oldest.reflectionHistoryReset,
+                        "LRU cache retained the oldest reflection View after overflow");
+        runtime.Wait(oldest.completion);
+        document = original;
         auto small = runtime.CreateTexture(
             {320, 180, rhi::Format::Rgba8Srgb, false, true, "Reflection.Resize"});
         auto resized =

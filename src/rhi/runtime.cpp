@@ -54,8 +54,9 @@ void Runtime::Validate(const TextureDesc& desc) const
             "Texture dimensions must be in [1, 16384]");
     Require(!IsDepthFormat(desc.format) || (desc.attachment && !desc.storage),
             "Depth texture requires attachment usage and forbids storage usage");
-    Require(!desc.storage || desc.format == Format::Rgba8 || desc.format == Format::Rgba32Float,
-            "Storage textures require RGBA8_UNORM or RGBA32_FLOAT");
+    Require(!desc.storage || desc.format == Format::Rgba8 || desc.format == Format::Rgba32Float ||
+                desc.format == Format::R32Float,
+            "Storage textures require RGBA8_UNORM, R32_FLOAT or RGBA32_FLOAT");
 }
 void Runtime::Validate(const AccelerationStructureDesc& desc) const
 {

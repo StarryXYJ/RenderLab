@@ -5,7 +5,7 @@
 ## 当前状态
 
 - 当前实施阶段：M0–M5、R1、B1–B3 DONE。
-- 当前工作项：M5 光追管线优化 IN_PROGRESS：先修正 CastShadows 历史失效，再优化静态场景打包/上传与历史内存；保持参考采样和双后端验证。M6/M8 未启动。
+- 当前工作项：M5 光追管线优化已完成：Caster 历史失效、静态打包/上传、引导与历史缓存、高 spp 旁路均完成双后端验证；几何法线偏移/mip footprint 保留后续独立工作。M6/M8 未启动。
 - 用户约定：每个子阶段验收完成即提交 Git，无阻塞时在当前授权范围内继续推进。
 
 | 阶段 | 目标 | 前置依赖 | 状态 |
@@ -239,12 +239,13 @@ R1 契约修订、B1 样例整理/Benchmark、B2 调查和 B3 资源复用已完
 
 ### M5 优化：光追场景与历史资源
 
-状态：IN_PROGRESS，日期：2026 年 10 月 27 日。
+状态：DONE，日期：2026 年 10 月 27 日。
 
 - CastShadows 修复 DONE：有效实例 mask 进入两套历史签名；隔离材质开关/恢复均重置，首帧与新 Renderer 逐字节一致。MSVC Debug Sandbox、Release Sandbox/Player/Graph 构建；RTX 5060 上 Release Graph 与双后端反射 3/3，validation errors=0。契约见 [光追历史](../docs/raytracing.md#histories-and-invalidation)。
 - 静态场景准备优化 DONE：有序 Mesh/导入 key 缓存打包，同帧材质身份去重，变化表一次 staging/提交/等待；新增累计工作量与 headless 报告。MSVC Release Sandbox/Player 构建；双后端反射专项 2/2，静止/移动零重复打包上传、材质编辑一次合批、Caster 编辑零表上传，validation errors=0。586 张回归 BMP 与前版逐字节一致；13 万顶点隔离场景三次短测 CPU Render 均值 DX12 7.25→1.08ms、Vulkan 6.75→.85ms，六对截图相同，不推广为窗口 FPS。入口：[契约](../docs/raytracing.md)、[数据与复现](../docs/performance/m5-pipeline-opt.md)。
-- [ ] 按实测优化引导格式、历史缓存和高 spp 旁路，保持未滤波 FP32 参考；分别记录成本、画面与限制。
-- [ ] 评估几何法线偏移与纹理 footprint 的数据契约，能可靠验证的改动分步实施，其余明确保留。
+- 引导/历史资源优化 DONE：R32F 保留命中距离精度，无引导 RayGen 省去未使用目标；progressive 最多四 View、native 预算 1/8 软目标和 LRU，非活动时间引导释放 CPU 引用，2048 spp 起省去六个显示重建 Pass。MSVC Debug Sandbox/Core/Graph 与 Release Sandbox/Player/Core/Graph 构建；RTX 5060 上 Release 所选 Core/Graph、双后端 AS/反射/持续窗口/RHI 共 10 项通过（8 项 + 修正空间分支名称冲突后反射 2 项），Debug Core/Graph 与双后端 AS/反射 6/6。常规 GPU 回归覆盖 R32F 奇数尺寸上传/采样、四 View LRU、2047→2048 旁路与恢复运动冷启动；586 张回归图及双后端 2048 Denoised/2177 Final 共四对图像与前版逐字节一致，validation errors=0。
+- 实测：真实 2560×1440 离屏目标、双在途槽各 32 帧，native 峰值 DX12/Vulkan 1818.69/1817.75→1728.75/1727.75 MiB；1080p 三 View 字节预算探针保留两 View、一次淘汰，退出 ledger=0。720p 高 spp 单次短测 GPU Pass 总和 1.686/1.337→.472/.403ms，不是窗口 FPS。数据、探针与复现见 [性能记录](../docs/performance/m5-pipeline-opt.md)，契约见 [光追](../docs/raytracing.md)、[重建](../docs/temporal-reflections.md)。FP32 均值、HDR 矩与世界位置保持不变；其他 GPU/4K 未验证。
+- 后续 DEFERRED：稳健偏移需要主表面几何法线/误差契约与尺度/薄片/大坐标验收；纹理 footprint 需要 mip/采样资源契约，未以固定 epsilon/经验 LOD 代替实现。评估理由见 [设计复查](design-review.md#光追资源与场景准备优化评估)，未推进 M6/M8。
 
 ## M6 GPU Driven 与执行优化
 

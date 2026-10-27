@@ -69,6 +69,7 @@ struct SceneReadback
 struct RaySceneStatistics
 {
     uint64_t geometryPacks = 0, uploadBatches = 0, uploadedBytes = 0;
+    uint64_t historyEvictions = 0, cachedViews = 0, historyBytes = 0;
 };
 /** @brief Project/scene to the existing Forward composition. Runtime outlives the renderer. */
 class SceneRenderer final

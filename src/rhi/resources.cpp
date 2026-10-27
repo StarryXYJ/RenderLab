@@ -19,6 +19,7 @@ uint32_t FormatBytes(Format format)
     case Format::Rgba8Srgb:
     case Format::Bgra8Srgb:
     case Format::D32:
+    case Format::R32Float:
         return 4;
     }
     throw std::invalid_argument("Unknown texture format");
