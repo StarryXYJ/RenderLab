@@ -55,6 +55,8 @@ double Statistics::Samples::Mean() const
 void Statistics::Add(const renderer::SceneReadback& frame, const rhi::Runtime& runtime,
                      double cpuMs, benchmark::Sample* sample)
 {
+    reflectionSamples_ = frame.reflectionSamples;
+    reflectionResets_ += frame.reflectionHistoryReset ? 1 : 0;
     const auto timings = frame.profile.Read(runtime);
     cpu_.Add(cpuMs);
     compile_.Add(double(frame.compileNs) / 1e6);
@@ -83,10 +85,14 @@ std::string Statistics::Text(const scene::Snapshot& snapshot, rhi::MemoryStats m
     auto text =
         std::format("Completed samples: {}\nCPU render: {:.3f} ms (mean)\nGraph "
                     "compile/prepare/record: {:.3f}/{:.3f}/{:.3f} ms\nVisible / total: {} / "
-                    "{}\nRHI used / peak: {:.1f} / {:.1f} MiB\n\nGPU pass means (ms):\n",
+                    "{}\nRHI used / peak: {:.1f} / {:.1f} MiB\n",
                     cpu_.count, cpu_.Mean(), compile_.Mean(), prepare_.Mean(), record_.Mean(),
                     snapshot.instances.size(), snapshot.totalInstances,
                     double(memory.used) / (1024 * 1024), double(memory.highWater) / (1024 * 1024));
+    if (reflectionSamples_)
+        text += std::format("RT history: {} spp | observed resets: {}\n", reflectionSamples_,
+                            reflectionResets_);
+    text += "\nGPU pass means (ms):\n";
     for (const auto& [name, pass] : passes_)
         text += std::format("{}: {:.3f}\n", name, pass.Mean());
     return text;
@@ -128,6 +134,8 @@ void Statistics::Save(const std::filesystem::path& path, const Options& options,
                             {"highWaterBytes", memory.highWater},
                             {"budgetBytes", memory.budget}}},
                           {"gpuPasses", nlohmann::json::object()}};
+    result["reflectionHistory"] = {{"samples", reflectionSamples_},
+                                   {"observedResets", reflectionResets_}};
     result["recordedAtUtc"] = std::format(
         "{:%FT%TZ}", std::chrono::floor<std::chrono::seconds>(std::chrono::system_clock::now()));
 #ifdef NDEBUG

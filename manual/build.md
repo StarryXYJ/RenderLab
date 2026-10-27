@@ -215,7 +215,7 @@ ctest --test-dir out/build/windows-debug -R "acceleration_structure|ray_query_sc
 
 `--as-test` 还运行原生 TraceRays 的三角形命中/未命中、索引 PBR 和 PSO/ShaderTable 代际重建检查；成功日志分别列出 Ray Query 与 TraceRays。
 
-Texture 菜单可查看 Reflection (raw sample) 与 Reflection (history)。CLI 对应 `--pipeline raytracing --view reflection-raw` / `reflection-history`；raw 固定单样本且不读旧历史，相机运动会重置累积。纯光栅对照用 `--pipeline forward` 或 `deferred`。自定义 Shader 缺少 GBuffer 或光追表面实现时，窗口菜单恢复原选项并显示原因；如原始 Copper 场景可继续用 Forward，三种模式对照请用下列 RayTracing 项目。
+Texture 菜单可查看 Reflection (raw sample) 与 Reflection (history)。CLI 对应 `--pipeline raytracing --view reflection-raw` / `reflection-history`；raw 固定单样本且不读旧历史，相机运动会重置累积。Final/history 静止时持续按 1/N 累积；面板的 RT history 显示实际 spp 与已观察到的重置次数，超过 64 后应继续增长。纯光栅对照用 `--pipeline forward` 或 `deferred`。自定义 Shader 缺少 GBuffer 或光追表面实现时，窗口菜单恢复原选项并显示原因；如原始 Copper 场景可继续用 Forward，三种模式对照请用下列 RayTracing 项目。
 
 RayTracing.rlproject 与 M4 项目共用 Assets，只保留不透明地面、球和立方体，适合在三种组合间对照。AS 接口、资源声明、scratch 与在途 TLAS 生命周期见 [光追基础](../docs/raytracing.md)。Path Tracing 按 M8 计划保留，Forward+ 按 M6 计划保留；实现后可加入现有类型化菜单选项表。
 

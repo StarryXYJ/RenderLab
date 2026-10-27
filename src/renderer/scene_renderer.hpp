@@ -37,7 +37,7 @@ struct SceneRenderOptions
     /// Zero preserves the scene setting; otherwise a power of two in [128,2048].
     uint32_t shadowResolution = 0;
     bool reflections = true;
-    /// Bounded stationary accumulation. Disable for deterministic single-sample comparisons.
+    /// Progressive stationary accumulation. Disable for deterministic single-sample comparisons.
     bool reflectionHistory = true;
 };
 /// @brief Submission completion point and optional pixels; wait before mapping the readback buffer.

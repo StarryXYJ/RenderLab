@@ -940,6 +940,7 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
             self.snapshot.environmentIntensity,
             self.snapshot.environmentRotation * float(3.141592653589793 / 180), 0, 0};
         parameters.options[2] = self.snapshot.light.shadows ? 1.f : 0.f;
+        parameters.options[3] = static_cast<float>(MaxReflectionSamples);
         const auto append = [&](const auto& value)
         {
             const auto bytes = std::as_bytes(std::span{&value, size_t{1}});
@@ -1353,8 +1354,8 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
         reflectionHistory->signature = std::move(reflectionSignature);
         reflectionHistory->index = reflectionOutput;
         reflectionHistory->initialized[reflectionOutput] = true;
-        reflectionHistory->samples = std::min(reflectionSamples + 1, 63u);
-        reflectionHistory->sequence = (reflectionSequence + 1) % 1048576;
+        reflectionHistory->samples = std::min(reflectionSamples + 1, MaxReflectionSamples);
+        reflectionHistory->sequence = std::min(reflectionSequence + 1, MaxReflectionSamples);
         reflectionHistory->completion = submitted.completion;
     }
     if (preparedAcceleration)

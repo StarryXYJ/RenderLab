@@ -1,4 +1,5 @@
 #include "RaySurface.hlsli"
+#include "RaySampling.hlsli"
 #include "ImageBasedLighting.hlsli"
 RaytracingAccelerationStructure Scene : register(t0);
 #ifdef SPIRV
@@ -18,17 +19,6 @@ Texture2D<float4> EnvironmentAtlas : register(t13);
 Texture2D<float4> BrdfLut : register(t15);
 struct Payload { float3 radiance; uint hit; };
 
-uint Hash(uint value)
-{
-    value ^= value >> 16; value *= 0x7feb352d;
-    value ^= value >> 15; value *= 0x846ca68b;
-    return value ^ (value >> 16);
-}
-float Random(inout uint seed)
-{
-    seed = Hash(seed);
-    return (seed >> 8) * (1.0 / 16777216.0);
-}
 [shader("raygeneration")]
 void RayGeneration()
 {
@@ -46,14 +36,12 @@ void RayGeneration()
     float3 position = world.xyz / world.w;
     float3 n = SafeNormalize(normalRoughness.xyz), v = SafeNormalize(CameraPosition.xyz - position);
     float roughness = clamp(normalRoughness.w, .045, 1);
-    uint seed = Hash(pixel.x + pixel.y * size.x + uint(Options.x) * 230400 + 1);
-    float2 xi = float2(Random(seed), Random(seed));
-    float a = roughness * roughness;
-    float cosTheta = sqrt((1 - xi.y) / (1 + (a * a - 1) * xi.y));
-    float sinTheta = sqrt(max(0, 1 - cosTheta * cosTheta));
+    float2 xi = ReflectionSample(uint(Options.x), pixel.x + pixel.y * size.x);
     float3 tangent = SafeNormalize(cross(abs(n.y) < .999 ? float3(0,1,0) : float3(1,0,0), n));
-    float3 h = SafeNormalize(tangent * (cos(2 * RenderLabPi * xi.x) * sinTheta) +
-        cross(n, tangent) * (sin(2 * RenderLabPi * xi.x) * sinTheta) + n * cosTheta);
+    float3 bitangent = cross(n, tangent);
+    float3 localView = float3(dot(v, tangent), dot(v, bitangent), dot(v, n));
+    float3 localNormal = SampleVisibleGGX(localView, roughness * roughness, xi);
+    float3 h = SafeNormalize(tangent * localNormal.x + bitangent * localNormal.y + n * localNormal.z);
     float3 direction = reflect(-v, h);
     float nl = dot(n, direction), nv = saturate(dot(n, v));
     if (nl <= 0 || nv <= 1e-5)
@@ -70,8 +58,7 @@ void RayGeneration()
     TraceRay(Scene, RAY_FLAG_NONE, 0x02, 0, 1, 0, ray, payload);
     float4 albedo = AlbedoMetallic.Load(int3(pixel, 0));
     float3 fresnel = FresnelSchlick(saturate(dot(v, h)), lerp(.04.xxx, albedo.rgb, albedo.a));
-    float weight = 4 * VisibilitySmithGGX(nv, nl, roughness) * nl * saturate(dot(v, h)) /
-        max(dot(n, h), 1e-5);
+    float weight = VisibleGGXWeight(nv, nl, roughness);
     Radiance[pixel] = float4(payload.radiance * fresnel * weight, payload.hit);
 }
 [shader("miss")]

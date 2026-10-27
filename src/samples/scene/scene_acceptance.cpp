@@ -170,6 +170,19 @@ void VerifyScene(rhi::Runtime& runtime, shader::Target target, const std::filesy
                   rhi::TextureRowPitch(640));
         SaveImage(output / "reflection-accumulated.bmp", accumulated.pixels->Map(), 640, 360,
                   rhi::TextureRowPitch(640));
+        for (uint32_t sample = 3; sample <= 130; ++sample)
+        {
+            // Exercise the same zero-input camera path as the interactive window after motion.
+            document.MoveCamera({}, {});
+            auto stationary =
+                renderer.Render(color, initial, nullptr, false, {}, reflectionOptions);
+            initial = rhi::State::CopySource;
+            detail::Require(!stationary.reflectionHistoryReset &&
+                                stationary.reflectionSamples == sample,
+                            "Static reflection history reset or stopped growing beyond 64 samples");
+            if (sample % 2 == 0)
+                runtime.Wait(stationary.completion);
+        }
         std::string costs;
         uint32_t reflectionPasses = 0;
         for (const auto& timing : firstReflection.profile.Read(runtime))
@@ -205,6 +218,11 @@ void VerifyScene(rhi::Runtime& runtime, shader::Target target, const std::filesy
         auto cameraChanged = reflectionRender("reflection-camera-change", reflectionOptions);
         detail::Require(cameraChanged.reflectionHistoryReset,
                         "Camera motion did not invalidate reflection history");
+        document.MoveCamera({}, {});
+        auto stoppedCamera = reflectionRender("reflection-camera-stopped", reflectionOptions);
+        detail::Require(!stoppedCamera.reflectionHistoryReset &&
+                            stoppedCamera.reflectionSamples == 2,
+                        "Zero camera input after motion invalidated static reflection history");
         document = original;
         auto& changedObject = *std::ranges::find_if(document.objects, [](const auto& value)
                                                     { return value.mesh.has_value(); });

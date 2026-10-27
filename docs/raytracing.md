@@ -122,7 +122,7 @@ accumulation → reflection combine → Forward transparency → display. The Gr
 `RayTracing.Reflection.Trace`, `.Accumulate` and `.Combine` timings and dependencies.
 
 Trace reads Depth, world Normal/Roughness, Albedo/Metallic, TLAS and indexed geometry/material
-buffers. One GGX importance-sampled specular ray produces RGBA32F `RayTracing.RawRadiance`.
+buffers. One visible-normal GGX (VNDF) importance-sampled specular ray produces RGBA32F `RayTracing.RawRadiance`.
 The 16-byte payload holds incoming radiance and hit state. ClosestHit evaluates shared PBR,
 emission, main directional lighting (with an inline shadow query) and the existing IBL; Miss
 samples the environment. Recursion depth is one: secondary surfaces do not launch another
@@ -141,7 +141,10 @@ Histories are keyed by stable camera ID (ViewID), bounded to four views, with tw
 RGBA32F textures per view. Each submission reads the preceding version and writes the other texture
 on the same queue; it publishes the new index/signature only after successful submission. Resize
 replaces textures while command references retain old in-flight allocations. The running mean
-uses up to 64 samples, then a 1/64 update weight. There is no moving-camera reprojection in M5.
+uses weight `1 / (N + 1)` for every new sample, including beyond 64 frames. The count/sequence do not
+wrap early. At 2^24 samples (the exact integer limit of the float parameter ABI), accumulation holds
+the completed mean instead of changing to a fixed-weight EMA. There is no moving-camera reprojection
+in M5.
 
 The exact input signature includes current view/projection and camera position, target dimensions,
 enabled instance membership/world transforms, packed geometry/material generation, texture-atlas
@@ -183,3 +186,21 @@ These per-pass Debug/validation timings are diagnostic GPU costs, not a Release 
 Use the benchmark runner with validation disabled and record the build configuration for a
 performance comparison; include Forward or Deferred and the same scene/resolution. The initial
 Release measurements and raster/reflection images are in [the M5 cost record](performance/m5-reflections.md).
+
+## Stationary convergence correction (2026-10-27)
+
+The initial M5 implementation changed to a 1/64 EMA after 64 frames. It therefore retained a
+nonzero noise floor even when left still. That behavior is corrected to a progressive arithmetic
+mean. The reflection sampler now uses a digitally shifted 2D Sobol sequence and visible-normal GGX
+sampling (Heitz 2018). With the matching PDF, the non-Fresnel reflection throughput is `G2/G1(V)`,
+bounded by one; the old NDF sampler could generate large weights at grazing angles. No light or
+exposure reduction, firefly radiance clamp or denoiser is used to obtain the comparison.
+
+The debug panel and timing report expose the last completed frame's actual reflection sample
+count and observed history resets. In Final/history view, the count should keep increasing while
+still; Raw view intentionally stays at sample zero. Camera/scene/material/light changes still reset
+history. The sampling contract runs six view-angle/roughness cases on GPU (4096 samples each),
+checks finite bounded weights and quadrant stratification, and checks the real accumulation shader
+at reset, 1/128, 1/2048 and the maximum count. Scene acceptance includes 130 static frames and zero
+camera input after real movement. Image convergence evidence is recorded in
+[the correction record](performance/m5-convergence.md).

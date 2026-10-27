@@ -23,10 +23,19 @@ void Accumulate(uint3 id : SV_DispatchThreadID)
 {
     uint width, height; Output.GetDimensions(width, height);
     if (id.x >= width || id.y >= height) return;
+    // Stop at the exact float count limit rather than silently switching to a noisy EMA.
+    if (Options.y >= Options.w)
+    {
+        Output[id.xy] = Previous.Load(int3(id.xy,0));
+        return;
+    }
     float4 value = Current.Load(int3(id.xy,0));
     // Version mismatch sets count=0. The previous texture is never sampled in that case.
     if (Options.y > 0)
-        value = lerp(Previous.Load(int3(id.xy,0)), value, 1 / (Options.y + 1));
+    {
+        float4 previous = Previous.Load(int3(id.xy,0));
+        value = previous + (value - previous) / (Options.y + 1);
+    }
     Output[id.xy] = value;
 }
 [numthreads(8,8,1)]

@@ -3,6 +3,7 @@
 #include "assets/model.hpp"
 #include "core/log.hpp"
 #include "renderer/ray_surface.hpp"
+#include "renderer/raytracing.hpp"
 #include "rendergraph/graph.hpp"
 #include "rendergraph/pool.hpp"
 #include "rhi/commands.hpp"
@@ -10,6 +11,7 @@
 #include "shader/dxc_compiler.hpp"
 
 #include <array>
+#include <cmath>
 #include <cstring>
 #include <format>
 #include <map>
@@ -295,6 +297,122 @@ void VerifyTraceRays(Runtime& runtime, Pool& pool, shader::Target target,
     }
 }
 
+void VerifyRaySampling(Runtime& runtime, shader::Target target, const std::filesystem::path& source,
+                       Logger& logger)
+{
+    shader::DxcCompiler compiler;
+    shader::ProgramRequest request;
+    request.entry = {ShaderStage::Compute, source, "CSMain"};
+    request.target = target;
+    PipelineDesc desc;
+    desc.layout = runtime.CreateLayout({{0, BindingKind::StorageBuffer}});
+    desc.compute = runtime.CreateShader(ShaderStage::Compute, compiler.Compile(request), "CSMain");
+    auto pipeline = runtime.CreatePipeline(desc);
+    constexpr uint32_t bytes = 6 * 4 * sizeof(float);
+    auto result = runtime.CreateBuffer({bytes, Memory::Device, "Sampling.Result", true});
+    auto readback = runtime.CreateBuffer({bytes, Memory::Readback, "Sampling.Readback"});
+    Binding binding{0};
+    binding.buffer = result;
+    binding.size = bytes;
+    binding.stride = 16;
+    auto commands = runtime.CreateCommands();
+    commands->Barrier(result, State::Undefined, State::Storage);
+    commands->Bind(pipeline);
+    commands->Bind(runtime.CreateGroup(desc.layout, {binding}));
+    commands->Compute(6, 1);
+    commands->Barrier(result, State::Storage, State::CopySource);
+    commands->Copy(result, readback, bytes);
+    commands->Barrier(readback, State::CopyDest, State::HostRead);
+    runtime.Wait(runtime.Submit(std::move(commands)));
+    std::array<float, 24> values{};
+    std::memcpy(values.data(), readback->Map().data(), bytes);
+    for (uint32_t i = 0; i < 6; ++i)
+    {
+        const auto* value = values.data() + i * 4;
+        if (!std::isfinite(value[0]) || value[0] <= 0 || value[0] > 1.0001f || value[1] > 1.0001f ||
+            value[2] != 0 || value[3] != 0)
+            throw std::runtime_error(
+                "Visible GGX/Sobol sampling failed its bounded-weight/stratification contract");
+    }
+    request.entry = {ShaderStage::Compute,
+                     source.parent_path().parent_path() / "RenderLab" / "ReflectionPost.hlsl",
+                     "Accumulate"};
+    if (target == shader::Target::Spirv)
+        request.defines["SPIRV"] = "1";
+    desc = {};
+    desc.layout = runtime.CreateLayout({{0, BindingKind::SampledTexture},
+                                        {1, BindingKind::SampledTexture},
+                                        {2, BindingKind::StorageTexture},
+                                        {3, BindingKind::ConstantBuffer}});
+    desc.compute =
+        runtime.CreateShader(ShaderStage::Compute, compiler.Compile(request), "Accumulate");
+    pipeline = runtime.CreatePipeline(desc);
+    constexpr std::array<float, 4> previousPixel{1, 2, 3, .25f}, currentPixel{128, 64, 32, 1};
+    const auto texture = [&](const std::array<float, 4>& pixel, const char* name)
+    {
+        auto image = runtime.CreateTexture({1, 1, Format::Rgba32Float, false, false, name});
+        auto upload = runtime.CreateBuffer({256, Memory::Upload, std::string(name) + ".Upload"});
+        std::memcpy(upload->Map().data(), pixel.data(), sizeof(pixel));
+        auto copy = runtime.CreateCommands();
+        copy->Barrier(upload, State::HostWrite, State::CopySource);
+        copy->Barrier(image, State::Undefined, State::CopyDest);
+        copy->CopyTexture(upload, image, 256, true);
+        copy->Barrier(image, State::CopyDest, State::Sampled);
+        runtime.Wait(runtime.Submit(std::move(copy)));
+        return runtime.CreateView(image);
+    };
+    auto previous = texture(previousPixel, "Accumulation.Previous");
+    auto current = texture(currentPixel, "Accumulation.Current");
+    auto image =
+        runtime.CreateTexture({1, 1, Format::Rgba32Float, true, false, "Accumulation.Output"});
+    auto imageView = runtime.CreateView(image);
+    auto pixels = runtime.CreateBuffer({256, Memory::Readback, "Accumulation.Readback"});
+    bool initialized = false;
+    for (uint32_t count : {0u, 127u, 2047u, renderer::MaxReflectionSamples})
+    {
+        renderer::ReflectionParameters parameters;
+        parameters.options[1] = static_cast<float>(count);
+        parameters.options[3] = static_cast<float>(renderer::MaxReflectionSamples);
+        auto constants =
+            runtime.CreateBuffer({sizeof(parameters), Memory::Upload, "Accumulation.Parameters"});
+        std::memcpy(constants->Map().data(), &parameters, sizeof(parameters));
+        Binding uniform{3};
+        uniform.buffer = constants;
+        uniform.size = sizeof(parameters);
+        auto dispatch = runtime.CreateCommands();
+        dispatch->Barrier(image, initialized ? State::CopySource : State::Undefined,
+                          State::Storage);
+        dispatch->Barrier(constants, State::HostWrite, State::UniformRead);
+        dispatch->Bind(pipeline);
+        dispatch->Bind(runtime.CreateGroup(desc.layout,
+                                           {{0, current}, {1, previous}, {2, imageView}, uniform}));
+        dispatch->Compute(1, 1);
+        dispatch->Barrier(image, State::Storage, State::CopySource);
+        if (initialized)
+            dispatch->Barrier(pixels, State::HostRead, State::CopyDest);
+        dispatch->CopyTexture(pixels, image, 256, false);
+        dispatch->Barrier(pixels, State::CopyDest, State::HostRead);
+        runtime.Wait(runtime.Submit(std::move(dispatch)));
+        initialized = true;
+        std::array<float, 4> actual{};
+        std::memcpy(actual.data(), pixels->Map().data(), sizeof(actual));
+        const float blend = count >= renderer::MaxReflectionSamples ? 0.f : 1.f / (count + 1);
+        for (uint32_t channel = 0; channel < 4; ++channel)
+        {
+            const float expected =
+                previousPixel[channel] + (currentPixel[channel] - previousPixel[channel]) * blend;
+            if (!std::isfinite(actual[channel]) ||
+                std::abs(actual[channel] - expected) > 1e-5f * std::max(1.f, std::abs(expected)))
+                throw std::runtime_error(
+                    "Progressive reflection mean/limit failed beyond 64 samples");
+        }
+    }
+    logger.Write(LogLevel::Info, "Progressive reflection mean passed: reset, 1/128 and 1/2048 "
+                                 "weights, and sample count limit");
+    logger.Write(LogLevel::Info, "Visible GGX sampling passed: 6 roughness/view cases, 4096 "
+                                 "samples each; finite weights <= 1, stratified quadrants");
+}
+
 std::array<float, 12> Translation(float x)
 {
     return {1, 0, 0, x, 0, 1, 0, 0, 0, 0, 1, 0};
@@ -364,6 +482,8 @@ void VerifyAccelerationStructures(Runtime& runtime, shader::Target target,
         throw std::runtime_error("Empty TLAS returned a ray hit");
     VerifyTraceRays(runtime, pool, target, shader.parent_path() / "trace_rays_acceptance.hlsl",
                     centered, moved);
+    VerifyRaySampling(runtime, target, shader.parent_path() / "ray_sampling_acceptance.hlsl",
+                      logger);
     logger.Write(LogLevel::Info,
                  "M5.3 TraceRays indexed PBR hit/miss and ShaderTable generation rebuild passed");
     logger.Write(
