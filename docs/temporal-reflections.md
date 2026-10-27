@@ -31,12 +31,32 @@ harmonic mean; environment-only neighborhoods use 10000 and invalid neighborhood
 Hit/miss differences do not gate radiance filtering. A receiver-reprojected distance is smoothed
 temporally when both guides are valid. This guide is an approximation, not secondary geometry.
 
-Resolve restores exactly the same material factor and blends towards the progressive reference
-with stationary spp. Its weight is `smoothstep(.05,.15,roughness) * saturate(1-spp/2048)`.
-At 2048 spp or above, and for sharp mirrors (roughness <= .05), it returns the exact progressive
-RGB. Background and Unlit also bypass reconstruction. The recursive history weight has no spp
-fade; fading happens only in display resolve. There is no hard input-radiance cap: an evaluated
-neighborhood cap suppressed real secondary highlights and was removed.
+Resolve restores exactly the same material factor. For the first eight stationary spp it retains
+the motion reconstruction, blended with the progressive reference using
+`strength = smoothstep(.05,.15,roughness) * saturate(1-spp/2048)`.
+Between 8 and 64 spp, `smoothstep(8,64,spp)` transitions display to a reconstruction of the growing
+progressive mean. At 64 spp and above, temporal RGB no longer supplies display energy. This avoids
+limiting a stationary image to a clipped 32-frame history until nearly 2048 spp.
+
+The stationary reconstruction gathers a geometry-checked 5x5 neighborhood of progressive RGB,
+demodulates each tap and restores the center material factor. Gaussian weights use
+`exp(-.25*(x*x+y*y))`; luminance differences in the filtered temporal image guide the reflection
+edges with `exp(-abs(Lq-Lcenter)/max(.05,.25*max(Lq,Lcenter)))`. The guide is used only for spatial
+weights, not as the radiance being averaged. It avoids making a noisy sample or random hit/miss
+the static filter's edge test. The spatial result is blended with the center progressive mean
+using `strength`. This still has finite-radius blur and guide-dependent bias; it cannot preserve
+every tiny secondary highlight.
+
+At 2048 spp or above, and for sharp mirrors (roughness <= .05), Resolve returns the exact
+progressive RGBA. Background and Unlit also bypass reconstruction. Neither the stationary spatial
+result nor progressive means enter recursive temporal radiance or moments. Temporal statistics
+continue to consume independent single-frame inputs. Resuming camera motion selects the motion
+path again and resets stationary spp; temporal reuse still follows its validity and high-spp
+bypass rules (a history bypassed at >=2048 spp starts cold on the next moving frame). The recursive history
+weight has no spp fade; fading happens only in display resolve. There is no hard input-radiance
+cap: an evaluated neighborhood cap suppressed real secondary highlights and was removed.
+Static checkpoints and stop/resume results are recorded in
+[the stationary display report](performance/m5-stationary-reflections.md).
 
 ## Reprojection and temporal statistics
 

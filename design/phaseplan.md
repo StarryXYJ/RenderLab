@@ -217,6 +217,16 @@ R1 契约修订、B1 样例整理/Benchmark、B2 调查和 B3 资源复用已完
 
 边界：固定静态样例的运动稳定性改善，不保证任意场景消除闪烁。快速运动末段/停止后部分帧误差仍高于旧版，负亮度偏差有所增加；细节模糊、局部高光损失、反射遮挡与曲面拖影仍有取舍。没有动态对象运动矢量、完整 NRD/SVGF、辐射缓存或自适应采样。其他 GPU/4K 未验证。入口：[接口](../docs/temporal-reflections.md)、[设计依据](design-review.md#运动反射白点闪烁设计复查)、[完整序列/图像/指标/成本/复现](../docs/performance/m5-reflection-stability.md)。
 
+### M5 修复：静止显示收敛速度
+
+状态：DONE，日期：2026 年 10 月 27 日。
+
+结果：旧 Resolve 使有限 32 帧时间滤波长期主导静止显示。改为在 8–64 spp 平滑交接到持续 1/N 均值的独立 5×5 空间重建，以滤波后的时间亮度只引导邻域权重；原始采样、时间矩和历史不变，无新增 Pass/纹理或亮度截断。保留 2048 spp、镜面/背景/Unlit 精确旁路。
+
+验证：MSVC Debug/Release Sandbox/Player 构建，RTX 5060 / NVIDIA 591.74 上 Release 双后端 AS/反射完整序列/持续 1080p 6/6；三场景 × 两版本 × 双后端静止及长停止/再移动共 16 次独立采集，validation errors=0，退出 ledger=0。静止 2..2048 spp 对 8192 spp 参考，强光 128/256 spp RGB MSE 约下降 89%/94%；512 spp 已接近或优于原样例旧版 1800 spp 的误差，PBR 改善较小。双后端各场景 2048/8192 spp 版本间图像逐字节一致。长停止后恢复运动，Vulkan 32/32 帧与旧版相同，DX12 31/32 相同，其余一帧仅一分量差 1/255。720p/validation off 单次短测 Resolve GPU 增加约 .27/.30ms，native 高水位不变。
+
+边界：显示恢复改善，不改变原始积分器收敛率；固定空间半径有细节模糊与引导偏差，有限参考/共享序列不是真值，不能推广为任意场景固定 spp 无噪声。其他 GPU/4K 未验证。入口：[契约](../docs/temporal-reflections.md)、[对照/完整数值/成本/复现](../docs/performance/m5-stationary-reflections.md)。
+
 ## M6 GPU Driven 与执行优化
 
 按 CPU 基线、GPU 提交、并行录制、多队列、Alias 的顺序分别评估。M6.1 与 M6.2 完成可构成最小 GPU Driven 成果，后续优化不要求一定提升所有场景。

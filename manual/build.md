@@ -221,6 +221,8 @@ Texture 菜单可查看 Reflection (raw sample)、Reflection (history) 与 Refle
 
 默认时间降噪使用独立单帧信号、材质去调制、稳定命中引导、接收表面/反射视差重投影及三尺度方差引导滤波。面板 **Temporal reprojection (requires denoise)** / CLI `--temporal-denoise on|off` 单独控制；关掉此项可回到原空间滤波基线，`--denoise off` 关闭两者。支持静态场景中的相机运动；场景/材质/光照变化、投影/尺寸变化或相机大幅跳转重置时间历史。反射跟踪是局部平面近似，没有对象运动矢量或通用曲面镜像跟踪，仍可能有高光偏差/拖影。面板 Temporal source 是 CPU 判定可供重投影的连续帧数，不是 GPU 接受像素数或 spp；未滤波 RT history 在移动时仍重置。[接口与限制](../docs/temporal-reflections.md)、[完整运动序列对照](../docs/performance/m5-reflection-stability.md)。
 
+静止后，默认时间降噪在 8–64 spp 平滑转向对持续 1/N 累积结果的独立空间重建，避免画面长期受限于 32 帧的滤波历史；重新移动时恢复运动重建。静止滤波仍有细节模糊取舍，2048 spp 精确回到未滤波结果。无需新增开关，启动已运行的程序需重启以加载 Shader。[静止收敛对照与复现](../docs/performance/m5-stationary-reflections.md)。
+
 CLI 对应 `--pipeline raytracing --view reflection-raw` / `reflection-history`；raw 固定单样本且不读旧历史，相机运动会重置累积。Final/history 静止时持续按 1/N 累积；面板的 RT history 显示实际 spp 与已观察到的重置次数，超过 64 后应继续增长。纯光栅对照用 `--pipeline forward` 或 `deferred`。自定义 Shader 缺少 GBuffer 或光追表面实现时，窗口菜单恢复原选项并显示原因；如原始 Copper 场景可继续用 Forward，三种模式对照请用下列 RayTracing 项目。
 
 RayTracing.rlproject 与 M4 项目共用 Assets，只保留不透明地面、球和立方体，适合在三种组合间对照。AS 接口、资源声明、scratch 与在途 TLAS 生命周期见 [光追基础](../docs/raytracing.md)。Path Tracing 按 M8 计划保留，Forward+ 按 M6 计划保留；实现后可加入现有类型化菜单选项表。
