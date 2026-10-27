@@ -2,6 +2,8 @@
 
 日期：2026-10-27。基线为 `3b8f8bf`。用户反馈相机不动时仍需约 1800 spp 才达到理想效果。本次修改 `ReflectionReconstruct.hlsl` 的 Resolve；射线采样、PDF、1/N 均值、重投影及时间矩未改。[契约](../temporal-reflections.md)、[设计取舍](../../design/design-review.md#静止显示恢复)、[完整数值](m5-stationary-reflections/summary.json)。
 
+本页保留 `116754d` 的静止误差测量。用户随后反馈固定阶段交接导致亮点先扩散再缩小；后续局部误差驱动的实现与逐帧面积检查见 [自适应重建](m5-adaptive-reflections.md)。
+
 ## 原因与修改
 
 旧 Resolve 使用 `1-spp/2048` 淡出时间滤波。256 spp 时，显示仍有 87.5% 来自最多 32 帧、带邻域裁剪及空间偏差的历史；持续改善的 progressive 均值只占 12.5%。因此后期显示恢复慢，不能据此认为原始 1/N 积分器停止收敛。

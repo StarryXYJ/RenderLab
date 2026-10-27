@@ -6,6 +6,15 @@ float ReflectionLuminance(float3 value)
 {
     return dot(max(value,0),float3(.2126,.7152,.0722));
 }
+float ReflectionNoiseTolerance(float mean)
+{
+    return .1+.2*max(0,mean);
+}
+float ReflectionNoise(float variance, float mean)
+{
+    float tolerance = ReflectionNoiseTolerance(mean);
+    return variance/(variance+tolerance*tolerance);
+}
 float3 ReflectionPosition(int2 pixel, uint2 size, float depth, float4x4 inverseVP)
 {
     float2 ndc = float2((pixel.x+.5)*2/size.x-1,1-(pixel.y+.5)*2/size.y);

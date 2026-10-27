@@ -206,6 +206,8 @@ Assets 与 .meta 纳入版本管理，Library 可以清除重建。不要原地�
 
 场景宿主（Sandbox/Player）默认 tracked allocation 上限为 2048 MiB，Graph 资源缓存以其中 3/4 为上限，给资产、AS、历史和上传留出余量；需要时可用 `--gpu-budget-mib 4096` 显式调整。它统计 Buffer/Texture 的 native 分配，包括 Host 可见上传/读回，不是显卡实时可用显存，也不一次性预留这些内存。独立 RHI Demo 默认仍为 256 MiB。窗口分辨率、在途帧和保留的历史视图都会影响峰值；预算不足时日志给出 requested/used/limit。
 
+窗口尺寸可能被桌面工作区限制，profile 的 width/height 来自 CLI 请求参数，不能单独证明实际客户区尺寸。高分辨率验证需检查实际资源规模（如 `--graph-dump` 的 CameraColor/DisplayColor 字节数），或使用明确尺寸的离屏目标；普通 `--window-test` 还会主动缩小窗口。
+
 支持 AS/Ray Query/TraceRays 的设备可在 Pipeline 菜单选择 **Ray Tracing**，CLI 使用 `--pipeline raytracing`。当前组合以 Deferred 为主体，通过独立 Ray Query Pass 生成方向光阴影可见性，并用 TraceRays 生成一次反射、静止历史累积与独立合成；Shadow 纹理查看项显示此可见性图。方向光的 Shadows 开关控制阴影效果。反射仅支持内置 Lit/Unlit 不透明材质。当前仅支持不透明静态几何，Masked 材质会给出诊断，透明材质仍走 Forward。
 
 ```powershell
@@ -221,7 +223,7 @@ Texture 菜单可查看 Reflection (raw sample)、Reflection (history) 与 Refle
 
 默认时间降噪使用独立单帧信号、材质去调制、稳定命中引导、接收表面/反射视差重投影及三尺度方差引导滤波。面板 **Temporal reprojection (requires denoise)** / CLI `--temporal-denoise on|off` 单独控制；关掉此项可回到原空间滤波基线，`--denoise off` 关闭两者。支持静态场景中的相机运动；场景/材质/光照变化、投影/尺寸变化或相机大幅跳转重置时间历史。反射跟踪是局部平面近似，没有对象运动矢量或通用曲面镜像跟踪，仍可能有高光偏差/拖影。面板 Temporal source 是 CPU 判定可供重投影的连续帧数，不是 GPU 接受像素数或 spp；未滤波 RT history 在移动时仍重置。[接口与限制](../docs/temporal-reflections.md)、[完整运动序列对照](../docs/performance/m5-reflection-stability.md)。
 
-静止后，默认时间降噪在 8–64 spp 平滑转向对持续 1/N 累积结果的独立空间重建，避免画面长期受限于 32 帧的滤波历史；重新移动时恢复运动重建。静止滤波仍有细节模糊取舍，2048 spp 精确回到未滤波结果。无需新增开关，启动已运行的程序需重启以加载 Shader。[静止收敛对照与复现](../docs/performance/m5-stationary-reflections.md)。
+默认时间降噪根据与持续 1/N 累积匹配的局部误差，连续结合静止累积与时间先验；大尺度平滑先随置信度提高而减弱，小尺度仍能处理零星亮点。控制权重限制逐帧变化，替换原先 8–64 spp 的固定交接，减轻亮点先扩散再缩小。仍有反射细节模糊和置信度估计偏差，2048 spp 精确回到未滤波结果。无需新增开关，已运行的程序需重启加载 Shader。[自适应重建对照](../docs/performance/m5-adaptive-reflections.md)、[上一版静止收敛记录](../docs/performance/m5-stationary-reflections.md)。
 
 CLI 对应 `--pipeline raytracing --view reflection-raw` / `reflection-history`；raw 固定单样本且不读旧历史，相机运动会重置累积。Final/history 静止时持续按 1/N 累积；面板的 RT history 显示实际 spp 与已观察到的重置次数，超过 64 后应继续增长。纯光栅对照用 `--pipeline forward` 或 `deferred`。自定义 Shader 缺少 GBuffer 或光追表面实现时，窗口菜单恢复原选项并显示原因；如原始 Copper 场景可继续用 Forward，三种模式对照请用下列 RayTracing 项目。
 

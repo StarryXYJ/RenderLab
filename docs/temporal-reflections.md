@@ -10,9 +10,11 @@ code or SDK is integrated. Design decisions and the rejected input-clamping expe
 
 ## Composition and controls
 
-Two branches consume the same traced sample:
+Three branches consume the same traced sample:
 
 - Reference: `Trace -> progressive Accumulate`. This remains the unfiltered 1/N estimator.
+- Uncertainty: `Trace + previous progressive -> Statistics`. This keeps a matching centered moment
+  and stabilized reconstruction control, independent of the radiance mean.
 - Display: `Trace -> Prepare -> Temporal -> Filter1 -> Filter2 -> Filter3 -> Resolve -> Combine`.
 
 The display branch never feeds the progressive mean, and its moments never count progressive means
@@ -31,32 +33,71 @@ harmonic mean; environment-only neighborhoods use 10000 and invalid neighborhood
 Hit/miss differences do not gate radiance filtering. A receiver-reprojected distance is smoothed
 temporally when both guides are valid. This guide is an approximation, not secondary geometry.
 
-Resolve restores exactly the same material factor. For the first eight stationary spp it retains
-the motion reconstruction, blended with the progressive reference using
-`strength = smoothstep(.05,.15,roughness) * saturate(1-spp/2048)`.
-Between 8 and 64 spp, `smoothstep(8,64,spp)` transitions display to a reconstruction of the growing
-progressive mean. At 64 spp and above, temporal RGB no longer supplies display energy. This avoids
-limiting a stationary image to a clipped 32-frame history until nearly 2048 spp.
+Filter1 reconstructs a demodulated progressive signal using the temporal radiance as a bounded
+prior. Its initial weight is `max(control, instantaneousNoise) * historyLength /
+(historyLength + max(0, spp-1))`. A disagreement penalty further reduces the prior when its RGB
+differs from the progressive signal beyond the estimated uncertainty. It uses
+`support = (spp-1)/(historyLength+spp)` and
+`uncertainty = varianceOfMean + tolerance²/max(.01,1-control)`; divide the initial weight by
+`1 + support * squaredRgbDifference/(3*uncertainty)`. At one spp the penalty is zero and the
+temporal signal is used; additional stationary support and lower measured uncertainty reduce
+the prior continuously. These signals share
+samples, so this is a reconstruction heuristic, not an independent-estimator precision average.
+There is no fixed 8..64 spp handover or extra spatial kernel introduced after stopping.
 
-The stationary reconstruction gathers a geometry-checked 5x5 neighborhood of progressive RGB,
-demodulates each tap and restores the center material factor. Gaussian weights use
-`exp(-.25*(x*x+y*y))`; luminance differences in the filtered temporal image guide the reflection
-edges with `exp(-abs(Lq-Lcenter)/max(.05,.25*max(Lq,Lcenter)))`. The guide is used only for spatial
-weights, not as the radiance being averaged. It avoids making a noisy sample or random hit/miss
-the static filter's edge test. The spatial result is blended with the center progressive mean
-using `strength`. This still has finite-radius blur and guide-dependent bias; it cannot preserve
-every tiny secondary highlight.
+All three scales use the same reconstruction chain. The first scale responds promptly to high
+local uncertainty with `saturate(4 * max(control, instantaneousNoise))`; strides 2 and 4 use
+`control^2` and `control^4`. This retires broad filtering before fine filtering. The normal/plane/
+roughness checks remain. The first scale uses temporal luminance to guide reflection edges and
+a Gaussian `exp(-.25*r²)`; later scales use their current signal and `exp(-.5*r²)`.
+Luminance differences use a variance-driven kernel. Variance travels in scratch alpha after
+Filter1, with squared normalized weights and the actual center blend coefficient. Because
+prepared/temporal/spatial signals overlap, each scale retains a heuristic floor of .25 times its
+input variance; this is not a proven covariance bound. Scratch alpha is no longer history length
+after Filter1. The persistent temporal alpha remains accepted history length.
+
+Resolve restores the center material factor and retains
+`strength = smoothstep(.05,.15,roughness) * saturate(1-spp/2048)` only as the mirror/high-spp display
+envelope. Per-pixel uncertainty controls the filtering within that envelope. Resolve no longer
+performs a second 5x5 gather. The original standalone spatial baseline is unchanged.
 
 At 2048 spp or above, and for sharp mirrors (roughness <= .05), Resolve returns the exact
 progressive RGBA. Background and Unlit also bypass reconstruction. Neither the stationary spatial
 result nor progressive means enter recursive temporal radiance or moments. Temporal statistics
 continue to consume independent single-frame inputs. Resuming camera motion selects the motion
 path again and resets stationary spp; temporal reuse still follows its validity and high-spp
-bypass rules (a history bypassed at >=2048 spp starts cold on the next moving frame). The recursive history
+bypass rules (a history bypassed at >=2048 spp starts cold on the next moving frame). The recursive
+history
 weight has no spp fade; fading happens only in display resolve. There is no hard input-radiance
 cap: an evaluated neighborhood cap suppressed real secondary highlights and was removed.
-Static checkpoints and stop/resume results are recorded in
-[the stationary display report](performance/m5-stationary-reflections.md).
+The prior static checkpoint report is retained at
+[stationary display](performance/m5-stationary-reflections.md); the adaptive reconstruction and
+whole-sequence footprint measurements are in [adaptive filtering](performance/m5-adaptive-reflections.md).
+
+## Progressive uncertainty
+
+Every progressive history slot has a tightly packed `float2` structured buffer, eight bytes per
+pixel: centered demodulated luminance `M2/N`, and stabilized filter control in [0,1]. The first
+field uses Welford's recurrence on the original single-frame sample. The previous mean is derived
+from the matching unfiltered RGB and the stationary material factor. Its estimated mean variance
+is `(M2/N) / max(1,N-1)`. Float32 roundoff remains; the scrambled Sobol sequence is correlated,
+so this is an uncertainty proxy, not a calibrated confidence interval or a convergence proof.
+
+Only the control target borrows a geometry-checked 3x3 mean of previous centered moments. This
+avoids trusting a quiet pixel before nearby rare bright samples have been observed. The first
+eight samples additionally bootstrap from current spatial sample variance. The stored M2 remains
+unfiltered. With `tolerance = .1 + .2 * meanLuminance`, the target is
+`varianceOfMean / (varianceOfMean + tolerance²)`. Control starts at one and changes by
+`clamp(.125*(target-previous), -.04, .02)` per sample/frame. Fine-scale response can react to the
+instantaneous estimate; broad-scale weights use the stabilized control to avoid abrupt expansion.
+
+Statistics always update while reflections run, including with display denoising off, so toggles
+do not leave missing samples in the progressive moment. Raw/no-history modes reset the moment
+with the running mean. Pose/scene/light/material/size/View invalidation follows the matching
+progressive history. At the 2^24 sample limit both mean and moment are held. Statistics and their
+index/initialization/completion share progressive ownership and publish only after submission.
+Buffer initialization is tracked separately from texture initialization: an equal-pixel-count
+resize can retain the statistics buffer while replacing the dimensioned radiance texture.
 
 ## Reprojection and temporal statistics
 
@@ -84,10 +125,12 @@ still bias specular detail. It does not alter raw samples or the progressive mea
 
 Temporal stores first and second luminance moments, an eight-frame fast luminance estimate and
 current spatial variance. New/short histories bootstrap variance from spatial statistics.
-Three 5x5 edge-aware filters use strides 1, 2 and 4, with geometry/normal/roughness rejection and a
-luminance kernel controlled by temporal variance and effective history length. Short histories
-receive wider reconstruction. Spatial outputs do not feed the radiance/moment history, avoiding
-recursive broadening. This is a bounded variance-guided filter, not a full REBLUR/RELAX/SVGF port.
+The first scale uses these moments to estimate uncertainty in the temporal prior, combined with
+the progressive uncertainty. Later scales consume propagated scratch variance. The fast
+luminance and spatial-variance channels remain temporal statistics; the current spatial weights
+use the uncertainty and control described above. Short histories bootstrap a conservative
+luminance kernel. Spatial outputs do not feed the radiance/moment history, avoiding recursive
+broadening. This is a bounded variance-guided filter, not a full REBLUR/RELAX/SVGF port.
 
 ## Ownership, invalidation and diagnostics
 
@@ -118,6 +161,9 @@ zero; sequence/count retain the existing 2^24 limit.
 `TextureRowPitch(width, Rgba32Float)`. The normal UI binds only a zeroed 1x1 diagnostic target and
 skips per-pixel diagnostic writes (`Options.z = 0`). It does not request readback. The panel's
 `reflectionTemporalFrames` remains CPU-compatible source frames, not accepted pixels or spp.
+The same diagnostic option also exposes `SceneReadback::reflectionStatistics`: a tightly packed
+float2 per pixel, with the two fields described above (no texture row pitch). Wait for completion
+before mapping. This extra readback is absent from normal UI frames.
 
 ## Memory and remaining limitations
 
@@ -128,6 +174,12 @@ explicitly versioned full-resolution scratch images. Graph WAR/RAW/WAW dependenc
 overwrite; no stage reads an old scratch version after reuse. Full-size diagnostics are optional.
 The original standalone spatial target is omitted when this path runs. No compression or general
 memory aliasing was added; explicit host allocation limits remain.
+
+Each cached progressive View owns two additional eight-byte/pixel structured buffers, a combined
+16 bytes/pixel: 3.516 MiB at 640x360, 31.641 MiB at 1080p or 56.25 MiB at 1440p. They follow the
+existing up-to-four progressive View cache and completion-protected slot reuse. A single zeroed
+eight-byte buffer supplies the unread previous binding on reset. No new RGBA32F history target
+is required. The extra Statistics compute pass runs even when display filtering is off.
 
 Primary disocclusion checks cannot identify every reflected disocclusion. Curved/normal-mapped
 surfaces, rapid viewpoint changes and tiny secondary highlights can still blur, trail or shimmer.

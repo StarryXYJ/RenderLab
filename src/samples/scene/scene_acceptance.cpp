@@ -196,8 +196,9 @@ void VerifyScene(rhi::Runtime& runtime, shader::Target target, const std::filesy
                 ++reflectionPasses;
             }
         detail::Require(
-            reflectionPasses == 9,
-            "Trace/accumulation/prepare/temporal/three filters/resolve/combine did not execute");
+            reflectionPasses == 10,
+            "Trace/accumulation/statistics/prepare/temporal/three filters/resolve/combine did not "
+            "execute");
         WriteFileAtomically(output / "reflection-gpu-cost.txt",
                             std::as_bytes(std::span{costs.data(), costs.size()}));
         auto rawOptions = reflectionOptions;

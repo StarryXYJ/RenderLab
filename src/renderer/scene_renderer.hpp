@@ -60,6 +60,9 @@ struct SceneReadback
     uint32_t reflectionTemporalFrames = 0;
     /// RGBA32F diagnostics with TextureRowPitch(width, Rgba32Float); wait for completion.
     std::shared_ptr<rhi::Buffer> reflectionDiagnostics;
+    /// Optional tightly packed float2 per pixel: centered luminance moment and filter control.
+    /// The moment covers the same raw samples as progressive history; wait for completion.
+    std::shared_ptr<rhi::Buffer> reflectionStatistics;
     uint64_t compileNs = 0, prepareNs = 0, recordNs = 0;
 };
 /** @brief Project/scene to the existing Forward composition. Runtime outlives the renderer. */

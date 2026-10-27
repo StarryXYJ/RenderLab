@@ -83,8 +83,9 @@ struct SceneRenderer::Impl
     AccelerationScene accelerationScene;
     std::shared_ptr<rhi::Pipeline> rayQueryShadow;
     std::shared_ptr<rhi::ShaderTable> reflectionTable;
-    std::shared_ptr<rhi::Pipeline> reflectionHistory, reflectionCombine, reflectionDenoise,
-        reflectionTemporal;
+    std::shared_ptr<rhi::Pipeline> reflectionHistory, reflectionStatistics, reflectionCombine,
+        reflectionDenoise, reflectionTemporal;
+    std::shared_ptr<rhi::Buffer> emptyReflectionStatistics;
     std::array<std::shared_ptr<rhi::Pipeline>, 5> reflectionReconstruction;
     std::array<std::shared_ptr<rhi::Buffer>, 5> raySurfaceBuffers;
     std::array<std::vector<std::byte>, 5> raySurfaceBytes;
@@ -97,7 +98,10 @@ struct SceneRenderer::Impl
     {
         std::string signature, sequenceSignature;
         std::array<std::shared_ptr<rhi::Texture>, 2> radiance;
+        std::array<std::shared_ptr<rhi::Buffer>, 2> statistics;
         std::array<bool, 2> initialized{};
+        // Equal pixel counts can retain the buffer while texture dimensions change.
+        std::array<bool, 2> statisticsInitialized{};
         uint32_t index = 0;
         uint32_t samples = 0, sequence = 0;
         uint64_t completion = 0;
@@ -357,6 +361,21 @@ struct SceneRenderer::Impl
         reflectionHistory = runtime.CreatePipeline(desc);
         desc = {};
         desc.layout = runtime.CreateLayout({{0, rhi::BindingKind::SampledTexture},
+                                            {1, rhi::BindingKind::SampledTexture},
+                                            {2, rhi::BindingKind::StorageBuffer},
+                                            {3, rhi::BindingKind::ConstantBuffer},
+                                            {4, rhi::BindingKind::ReadOnlyBuffer},
+                                            {5, rhi::BindingKind::SampledTexture},
+                                            {6, rhi::BindingKind::SampledTexture},
+                                            {7, rhi::BindingKind::SampledTexture},
+                                            {8, rhi::BindingKind::SampledTexture}});
+        desc.compute = module("ReflectionStatistics.hlsl", rhi::ShaderStage::Compute, "Statistics");
+        reflectionStatistics = runtime.CreatePipeline(desc);
+        const std::array<float, 2> zeroStatistics{};
+        emptyReflectionStatistics = Upload(std::as_bytes(std::span{zeroStatistics}),
+                                           "Reflection.EmptyStatistics", rhi::State::ShaderRead);
+        desc = {};
+        desc.layout = runtime.CreateLayout({{0, rhi::BindingKind::SampledTexture},
                                             {2, rhi::BindingKind::StorageTexture},
                                             {3, rhi::BindingKind::ConstantBuffer},
                                             {4, rhi::BindingKind::SampledTexture},
@@ -394,9 +413,10 @@ struct SceneRenderer::Impl
         {
             desc = {};
             std::vector<rhi::BindingDesc> layout;
-            for (uint32_t slot = 0; slot <= 7; ++slot)
+            for (uint32_t slot = 0; slot <= 9; ++slot)
                 layout.push_back({slot, slot == 3   ? rhi::BindingKind::ConstantBuffer
                                         : slot == 2 ? rhi::BindingKind::StorageTexture
+                                        : slot == 9 ? rhi::BindingKind::ReadOnlyBuffer
                                                     : rhi::BindingKind::SampledTexture});
             desc.layout = runtime.CreateLayout(std::move(layout));
             desc.compute = module("ReflectionReconstruct.hlsl", rhi::ShaderStage::Compute,
@@ -1056,6 +1076,24 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
             {history.initialized[reflectionOutput] ? rhi::State::Sampled : rhi::State::Undefined,
              history.initialized[reflectionOutput], history.completion});
         frame.rayTracing.historyRadiance = name;
+        const uint64_t statisticsBytes = uint64_t(target->desc.width) * target->desc.height * 8;
+        auto& statistics = history.statistics[reflectionOutput];
+        if (!statistics || statistics->desc.size != statisticsBytes)
+        {
+            statistics = self.runtime.CreateBuffer(
+                {statisticsBytes, rhi::Memory::Device, "Reflection.Statistics." + viewId, true});
+            history.statisticsInitialized[reflectionOutput] = false;
+        }
+        frame.rayTracing.historyStatistics = "Reflection.Statistics." + viewId;
+        graph.ImportBuffer(frame.rayTracing.historyStatistics, statistics,
+                           {history.statisticsInitialized[reflectionOutput] ? rhi::State::ShaderRead
+                                                                            : rhi::State::Undefined,
+                            history.statisticsInitialized[reflectionOutput], history.completion});
+        frame.rayTracing.previousStatistics = "Reflection.PreviousStatistics." + viewId;
+        graph.ImportBuffer(frame.rayTracing.previousStatistics,
+                           valid ? history.statistics[history.index]
+                                 : self.emptyReflectionStatistics,
+                           {rhi::State::ShaderRead, true, valid ? history.completion : 0});
         if (valid)
         {
             graph.ImportTexture("RayTracing.Previous." + viewId, history.radiance[history.index],
@@ -1070,6 +1108,7 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
             {slice.offset, slice.size}};
         frame.rayTracing.reflectionTable = self.reflectionTable;
         frame.rayTracing.historyPipeline = self.reflectionHistory;
+        frame.rayTracing.statisticsPipeline = self.reflectionStatistics;
         frame.rayTracing.combinePipeline = self.reflectionCombine;
         if ((options.reflectionDenoise &&
              (options.view == SceneView::Final || options.view == SceneView::Hdr)) ||
@@ -1397,7 +1436,10 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
     else
         self.forwardPipeline.Build(graph, frame);
     if (reflections)
+    {
         graph.Export(graph.GetTexture(frame.rayTracing.historyRadiance), rhi::State::Sampled);
+        graph.Export(graph.GetBuffer(frame.rayTracing.historyStatistics), rhi::State::ShaderRead);
+    }
     if (frame.rayTracing.temporalPipeline)
         for (const auto& name : frame.rayTracing.temporalOutputs)
             graph.Export(graph.GetTexture(name), rhi::State::Sampled);
@@ -1473,6 +1515,21 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
             context.Draw(3);
         });
     SceneReadback result;
+    if (options.reflectionDiagnostics && frame.rayTracing.statisticsPipeline)
+    {
+        const auto bytes = uint64_t(target->desc.width) * target->desc.height * 8;
+        result.reflectionStatistics = self.runtime.CreateBuffer(
+            {bytes, rhi::Memory::Readback, "Reflection.Statistics.Readback"});
+        auto buffer =
+            graph.ImportBuffer("Reflection.Statistics.Readback", result.reflectionStatistics,
+                               {rhi::State::CopyDest, false});
+        auto pass = graph.AddCopyPass("Reflection.Statistics.Readback");
+        const auto statistics = pass.ReadBuffer(frame.rayTracing.historyStatistics);
+        buffer = pass.WriteBuffer(buffer);
+        pass.Execute([statistics, buffer, bytes](rendergraph::CopyContext& context)
+                     { context.Copy(statistics, buffer, bytes); });
+        graph.Export(buffer, rhi::State::HostRead);
+    }
     if (options.reflectionDiagnostics && frame.rayTracing.temporalPipeline)
     {
         const auto pitch = rhi::TextureRowPitch(target->desc.width, rhi::Format::Rgba32Float);
@@ -1511,6 +1568,7 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
         reflectionHistory->sequenceSignature = temporalSignature;
         reflectionHistory->index = reflectionOutput;
         reflectionHistory->initialized[reflectionOutput] = true;
+        reflectionHistory->statisticsInitialized[reflectionOutput] = true;
         reflectionHistory->samples = std::min(reflectionSamples + 1, MaxReflectionSamples);
         reflectionHistory->sequence = (reflectionSequence + 1) % MaxReflectionSamples;
         reflectionHistory->completion = submitted.completion;

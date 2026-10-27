@@ -15,6 +15,8 @@ Texture2D<float4> NormalRoughness : register(t4);
 Texture2D<float> Depth : register(t5);
 Texture2D<float4> AlbedoMetallic : register(t6);
 Texture2D<float4> BrdfLut : register(t7);
+Texture2D<float4> Progressive : register(t8);
+StructuredBuffer<float2> Statistics : register(t9);
 
 bool Geometry(int2 q, uint2 size, float3 position, float3 n, float roughness, float footprint,
               out float weight)
@@ -78,6 +80,38 @@ void Prepare(uint3 id : SV_DispatchThreadID)
     Output[pixel] = float4(radiance,distance);
 }
 
+float3 ReconstructionSignal(int2 pixel, uint2 size, bool firstScale, out float variance)
+{
+    float4 temporal = Source.Load(int3(pixel,0));
+    if (!firstScale)
+    {
+        variance = temporal.a;
+        return temporal.rgb;
+    }
+    float4 moments = Auxiliary.Load(int3(pixel,0));
+    float2 statistics = Statistics[pixel.y*size.x+pixel.x];
+    float count = max(1,Options.y);
+    variance = statistics.x/max(1,count-1);
+    float3 p = ReflectionPosition(pixel,size,Depth.Load(int3(pixel,0)),InverseViewProjection);
+    float3 factor = ReflectionMaterial(p,NormalRoughness.Load(int3(pixel,0)),
+        AlbedoMetallic.Load(int3(pixel,0)),CameraPosition.xyz,BrdfLut);
+    float3 progressive = Progressive.Load(int3(pixel,0)).rgb/factor;
+    // Sample support and measured uncertainty continuously reduce the finite-history prior.
+    float mean = ReflectionLuminance(progressive);
+    float tolerance = ReflectionNoiseTolerance(mean);
+    float instant = variance/(variance+tolerance*tolerance);
+    float support = max(0,count-1)/(temporal.a+count);
+    float weight = max(statistics.y,instant)*temporal.a/(temporal.a+max(0,count-1));
+    float3 difference = progressive-temporal.rgb;
+    float uncertainty = variance+tolerance*tolerance/max(.01,1-statistics.y);
+    // A stationary mean that disagrees beyond its uncertainty should not inherit prior bias.
+    weight /= 1+support*dot(difference,difference)/(3*uncertainty);
+    float temporalVariance = max(0,moments.y-moments.x*moments.x)/max(1,temporal.a);
+    variance = lerp(variance,temporalVariance,weight);
+    if (count < 8) variance = max(variance,temporalVariance*saturate(1-count/8));
+    return lerp(progressive,temporal.rgb,weight);
+}
+
 void Filter(uint3 id, int stride)
 {
     uint width,height; Output.GetDimensions(width,height);
@@ -90,13 +124,17 @@ void Filter(uint3 id, int stride)
     if (d <= 1e-7 || nr.w <= .05) return;
     float3 p = ReflectionPosition(pixel,size,d,InverseViewProjection), n = SafeNormalize(nr.xyz);
     float footprint = ReflectionFootprint(pixel,size,d,p,InverseViewProjection);
-    float4 moments = Auxiliary.Load(int3(pixel,0));
-    float luminance = ReflectionLuminance(center.rgb);
-    float variance = max(0,moments.y-moments.x*moments.x);
-    // A short history cannot estimate variance reliably. Give newly visible pixels a wider filter.
-    float sigma = max(.02,3*sqrt(variance/max(center.a,1)) +
-                           (.03+.5*saturate(1-center.a/8))*max(luminance,moments.z));
-    float3 sum = center.rgb; float total = 1;
+    float variance;
+    float3 signal = ReconstructionSignal(pixel,size,stride == 1,variance);
+    float luminance = ReflectionLuminance(signal);
+    float bootstrap = .02+.5*saturate(1-Options.y/8);
+    float sigma = max(.02,3*sqrt(variance)+bootstrap*luminance);
+    float control = Statistics[pixel.y*width+pixel.x].y;
+    float instant = ReflectionNoise(variance,luminance);
+    // Retire broad scales first. Control is temporally stabilized before any spatial gather.
+    float scaleControl = stride == 1 ? saturate(4*max(control,instant)) : pow(control,stride);
+    float strength = smoothstep(.05,.15,nr.w)*scaleControl;
+    float3 sum = signal; float total = 1, neighborVariance = 0;
     for (int y = -2; y <= 2; ++y)
     for (int x = -2; x <= 2; ++x)
     {
@@ -104,13 +142,23 @@ void Filter(uint3 id, int stride)
         int2 q = pixel+int2(x,y)*stride;
         float weight;
         if (!Geometry(q,size,p,n,nr.w,footprint,weight)) continue;
-        float3 value = Source.Load(int3(q,0)).rgb;
-        float difference = abs(ReflectionLuminance(value)-luminance);
-        weight *= exp(-.5*(x*x+y*y)-difference/sigma);
+        float otherVariance;
+        float3 value = ReconstructionSignal(q,size,stride == 1,otherVariance);
+        float guide = stride == 1 ? ReflectionLuminance(Source.Load(int3(pixel,0)).rgb)
+                                 : luminance;
+        float otherGuide = stride == 1 ? ReflectionLuminance(Source.Load(int3(q,0)).rgb) :
+                                        ReflectionLuminance(value);
+        float difference = abs(otherGuide-guide);
+        weight *= exp(-(stride == 1 ? .25 : .5)*(x*x+y*y)-difference/sigma);
         sum += value*weight; total += weight;
+        neighborVariance += weight*weight*otherVariance;
     }
-    float strength = smoothstep(.05,.2,nr.w);
-    Output[pixel] = float4(lerp(center.rgb,sum/total,strength),center.a);
+    float centerWeight = 1-strength+strength/total;
+    float filteredVariance = centerWeight*centerWeight*variance+
+        strength*strength/(total*total)*neighborVariance;
+    // Spatial and temporal samples overlap; retain a conservative covariance floor.
+    filteredVariance = max(variance*.25,filteredVariance);
+    Output[pixel] = float4(lerp(signal,sum/total,strength),filteredVariance);
 }
 [numthreads(8,8,1)] void Filter1(uint3 id : SV_DispatchThreadID) { Filter(id,1); }
 [numthreads(8,8,1)] void Filter2(uint3 id : SV_DispatchThreadID) { Filter(id,2); }
@@ -130,35 +178,5 @@ void Resolve(uint3 id : SV_DispatchThreadID)
     float3 p = ReflectionPosition(pixel,size,d,InverseViewProjection);
     float3 factor = ReflectionMaterial(p,nr,AlbedoMetallic.Load(int3(pixel,0)),CameraPosition.xyz,BrdfLut);
     float strength = smoothstep(.05,.15,nr.w)*saturate(1-Options.y/2048);
-    float3 moving = lerp(reference.rgb,Source.Load(int3(pixel,0)).rgb*factor,strength);
-    // A finite, clipped temporal history is for motion; static display uses the growing mean.
-    float stationary = smoothstep(8,64,Options.y);
-    if (stationary <= 0)
-    {
-        Output[pixel] = float4(moving,reference.a);
-        return;
-    }
-    float3 n = SafeNormalize(nr.xyz);
-    float footprint = ReflectionFootprint(pixel,size,d,p,InverseViewProjection);
-    float guide = ReflectionLuminance(Source.Load(int3(pixel,0)).rgb);
-    float3 sum = reference.rgb/factor; float total = 1;
-    for (int y = -2; y <= 2; ++y)
-    for (int x = -2; x <= 2; ++x)
-    {
-        if (x == 0 && y == 0) continue;
-        int2 q = pixel+int2(x,y);
-        float weight;
-        if (!Geometry(q,size,p,n,nr.w,footprint,weight)) continue;
-        float otherGuide = ReflectionLuminance(Source.Load(int3(q,0)).rgb);
-        // Guide the growing mean with the stable image, not a noisy sample or random hit distance.
-        weight *= exp(-.25*(x*x+y*y)-abs(otherGuide-guide)/max(.05,.25*max(guide,otherGuide)));
-        float3 position = ReflectionPosition(q,size,Depth.Load(int3(q,0)),InverseViewProjection);
-        float3 material = ReflectionMaterial(position,NormalRoughness.Load(int3(q,0)),
-            AlbedoMetallic.Load(int3(q,0)),CameraPosition.xyz,BrdfLut);
-        sum += max(0,Auxiliary.Load(int3(q,0)).rgb)/material*weight;
-        total += weight;
-    }
-    float3 growing = lerp(reference.rgb,sum/total*factor,strength);
-    // Neither this spatial reconstruction nor progressive means enter recursive temporal moments.
-    Output[pixel] = float4(lerp(moving,growing,stationary),reference.a);
+    Output[pixel] = float4(lerp(reference.rgb,Source.Load(int3(pixel,0)).rgb*factor,strength),reference.a);
 }

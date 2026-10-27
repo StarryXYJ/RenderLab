@@ -104,6 +104,35 @@ void RayReflectionFeature::Build(rendergraph::Graph& graph, const RenderFrame& f
             context.BindBuffer(3, historyConstants, parameters.range.offset, parameters.range.size);
             context.Dispatch((camera.width + 7) / 8, (camera.height + 7) / 8);
         });
+    auto statistics = graph.AddComputePass("RayTracing.Reflection.Statistics");
+    const auto statisticsRaw = statistics.ReadTexture(raw);
+    const auto statisticsPrevious = input.previousRadiance.empty()
+                                        ? statisticsRaw
+                                        : statistics.ReadTexture(input.previousRadiance);
+    const auto oldStatistics = statistics.ReadBuffer(input.previousStatistics);
+    const auto newStatistics = statistics.WriteBuffer(input.historyStatistics);
+    const auto statisticsNormal = statistics.ReadTexture("GBuffer.NormalRoughness");
+    const auto statisticsAlbedo = statistics.ReadTexture("GBuffer.AlbedoMetallic");
+    const auto statisticsDepth = statistics.ReadTexture("CameraDepth");
+    const auto statisticsBrdf = statistics.ReadTexture(input.reflectionTextures.at(2).texture);
+    const auto statisticsUniform =
+        statistics.ReadBuffer(parameters.buffer, Use::Uniform, parameters.range);
+    statistics.Execute(
+        [=](ComputeContext& context)
+        {
+            context.Bind(input.statisticsPipeline);
+            context.BindTexture(0, statisticsRaw);
+            context.BindTexture(1, statisticsPrevious);
+            context.BindBuffer(2, newStatistics, 0, 0, 8);
+            context.BindBuffer(3, statisticsUniform, parameters.range.offset,
+                               parameters.range.size);
+            context.BindBuffer(4, oldStatistics, 0, 0, 8);
+            context.BindTexture(5, statisticsNormal);
+            context.BindTexture(6, statisticsAlbedo);
+            context.BindTexture(7, statisticsDepth);
+            context.BindTexture(8, statisticsBrdf);
+            context.Dispatch((camera.width + 7) / 8, (camera.height + 7) / 8);
+        });
     auto filtered = accumulated;
     if (input.denoisePipeline && !input.temporalPipeline)
     {
@@ -150,6 +179,8 @@ void RayReflectionFeature::Build(rendergraph::Graph& graph, const RenderFrame& f
             const auto depths = pass.ReadTexture("CameraDepth");
             const auto materials = pass.ReadTexture("GBuffer.AlbedoMetallic");
             const auto brdf = pass.ReadTexture(input.reflectionTextures.at(2).texture);
+            const auto progressive = pass.ReadTexture(accumulated);
+            const auto uncertainty = pass.ReadBuffer(newStatistics);
             const auto& uniform = input.temporalParameters;
             const auto constants = pass.ReadBuffer(uniform.buffer, Use::Uniform, uniform.range);
             const auto destination = pass.WriteTexture(outputName);
@@ -165,6 +196,8 @@ void RayReflectionFeature::Build(rendergraph::Graph& graph, const RenderFrame& f
                     context.BindTexture(5, depths);
                     context.BindTexture(6, materials);
                     context.BindTexture(7, brdf);
+                    context.BindTexture(8, progressive);
+                    context.BindBuffer(9, uncertainty, 0, 0, 8);
                     context.Dispatch((camera.width + 7) / 8, (camera.height + 7) / 8);
                 });
             if (index == 4)

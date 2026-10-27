@@ -74,9 +74,10 @@ void VerifyReflectionTemporal(rhi::Runtime& runtime, shader::Target target,
             program.entry.function = reconstruction;
             PipelineDesc reconstruct;
             std::vector<BindingDesc> entries;
-            for (uint32_t slot = 0; slot <= 7; ++slot)
+            for (uint32_t slot = 0; slot <= 9; ++slot)
                 entries.push_back({slot, slot == 3   ? BindingKind::ConstantBuffer
                                          : slot == 2 ? BindingKind::StorageTexture
+                                         : slot == 9 ? BindingKind::ReadOnlyBuffer
                                                      : BindingKind::SampledTexture});
             activeLayout = runtime.CreateLayout(entries);
             reconstruct.layout = activeLayout;
@@ -119,6 +120,22 @@ void VerifyReflectionTemporal(rhi::Runtime& runtime, shader::Target target,
             commands->Barrier(lut, State::CopyDest, State::Sampled);
             bindings = {{0, upload(current)}, {1, upload(previous)}, {4, upload(normal)},
                         {5, upload(depth)},   {6, upload(material)}, {7, runtime.CreateView(lut)}};
+            auto progressive = current;
+            for (auto& pixel : progressive)
+                for (size_t channel = 0; channel < 3; ++channel)
+                    pixel[channel] *= .28f;
+            bindings.push_back({8, upload(progressive)});
+            auto statistics = runtime.CreateBuffer(
+                {width * height * 8, Memory::Upload, "Reconstruction.Statistics"});
+            const std::array<float, 2> statistic{0, 1};
+            for (uint32_t i = 0; i < width * height; ++i)
+                std::memcpy(statistics->Map().data() + i * 8, statistic.data(), 8);
+            commands->Barrier(statistics, State::HostWrite, State::ShaderRead);
+            Binding binding{9};
+            binding.buffer = statistics;
+            binding.size = width * height * 8;
+            binding.stride = 8;
+            bindings.push_back(binding);
         }
         auto uniform =
             runtime.CreateBuffer({sizeof(parameters), Memory::Upload, "Temporal.Constants"});

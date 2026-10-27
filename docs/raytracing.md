@@ -216,6 +216,12 @@ mean; stationary 2048 spp and sharp mirrors return that exact reference. No inpu
 used. Scene/material/light/projection/size changes and large camera cuts reset the source. There are
 no animated-geometry velocities or general curved-mirror reprojection.
 
+Progressive uncertainty is maintained separately from the finite temporal moments. The spatial
+chain continuously combines the growing mean and temporal prior using local uncertainty and
+sample support, retiring broad filtering before fine filtering. This replaces the fixed stationary
+handover and post-resolve gather. Each progressive View owns two eight-byte/pixel statistics
+buffers; they update even with display filtering disabled and follow progressive invalidation.
+
 `reflectionTemporal` / `--temporal-denoise on|off` (default on) selects this reconstruction path.
 The panel **Temporal reprojection (requires denoise)** checkbox allows the original spatial-only
 reference. Raw and History stay unfiltered; `reflectionHistory=false` disables temporal reuse. The
@@ -225,7 +231,8 @@ addition to the existing unfiltered up-to-four-view histories. Switching ViewID 
 cold. The Sobol sequence now continues across camera movement for the same scene, while the exact
 unfiltered mean still resets; Raw/reference mode remains sample zero. See [the temporal contract](temporal-reflections.md)
 for guide layout, clipping, cut thresholds, memory, limitations and
-[current sequence evidence](performance/m5-reflection-stability.md). The
+[adaptive reconstruction evidence](performance/m5-adaptive-reflections.md). The
+[earlier sequence report](performance/m5-reflection-stability.md) and
 [first temporal report](performance/m5-temporal.md) describes the superseded filter.
 
 ### Material and sampling boundary
