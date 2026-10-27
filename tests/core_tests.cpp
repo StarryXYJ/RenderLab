@@ -69,6 +69,12 @@ int main()
         RequireInvalid([] { ParseOptions(std::array{"--height"sv, "16385"sv}); });
         RequireInvalid([] { ParseOptions(std::array{"--quality"sv, "ultra"sv}); });
         RequireInvalid([] { ParseOptions(std::array{"--view"sv, "missing"sv}); });
+        RequireInvalid([] { ParseOptions(std::array{"--denoise"sv, "maybe"sv}); });
+        const auto denoise =
+            ParseOptions(std::array{"--project"sv, "p"sv, "--pipeline"sv, "raytracing"sv,
+                                    "--view"sv, "reflection-denoised"sv, "--denoise"sv, "off"sv});
+        Require(!denoise.reflectionDenoise && denoise.view == "reflection-denoised",
+                "Spatial denoise options were not parsed independently");
         RequireInvalid([] { ParseOptions(std::array{"--profile"sv, ""sv}); });
         RequireInvalid([] { ParseOptions(std::array{"--benchmark"sv, "0"sv}); });
         RequireInvalid([] { ParseOptions(std::array{"--debug-panel"sv, "--headless"sv}); });

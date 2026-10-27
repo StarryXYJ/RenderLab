@@ -20,6 +20,7 @@ renderer::SceneRenderOptions RenderOptions(const Options& options)
     render.pipeline = options.pipeline == "deferred"     ? renderer::PipelineType::Deferred
                       : options.pipeline == "raytracing" ? renderer::PipelineType::RayTracing
                                                          : renderer::PipelineType::Forward;
+    render.reflectionDenoise = options.reflectionDenoise;
     render.profile = options.debugPanel || !options.profilePath.empty() || options.Benchmark();
     if (options.quality != "scene")
         render.shadowResolution = options.quality == "low"      ? 128u
@@ -37,6 +38,8 @@ renderer::SceneRenderOptions RenderOptions(const Options& options)
         render.view = renderer::SceneView::ReflectionRaw;
     if (options.view == "reflection-history")
         render.view = renderer::SceneView::ReflectionHistory;
+    if (options.view == "reflection-denoised")
+        render.view = renderer::SceneView::ReflectionDenoised;
     return render;
 }
 void Statistics::Samples::Add(double value)
@@ -123,6 +126,7 @@ void Statistics::Save(const std::filesystem::path& path, const Options& options,
                           {"height", options.height},
                           {"quality", options.quality},
                           {"view", options.view},
+                          {"reflectionDenoise", options.reflectionDenoise},
                           {"pipeline", options.pipeline},
                           {"warmupFrames", options.Benchmark() ? options.warmupFrames : 0},
                           {"cpuRender", summary(cpu_)},

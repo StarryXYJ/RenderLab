@@ -118,12 +118,15 @@ for these native pipeline checks.
 
 Ray Tracing now requires all three enabled capabilities: AS, Ray Query and Ray Tracing Pipeline.
 The composition is GBuffer → Ray Query shadows → Deferred Lighting → reflection trace → stationary
-accumulation → reflection combine → Forward transparency → display. The Graph exposes separate
-`RayTracing.Reflection.Trace`, `.Accumulate` and `.Combine` timings and dependencies.
+accumulation → optional spatial denoise → reflection combine → Forward transparency → display. The Graph exposes separate
+`RayTracing.Reflection.Trace`, `.Accumulate`, optional `.Denoise` and `.Combine` timings and dependencies.
 
 Trace reads Depth, world Normal/Roughness, Albedo/Metallic, TLAS and indexed geometry/material
 buffers. One visible-normal GGX (VNDF) importance-sampled specular ray produces RGBA32F `RayTracing.RawRadiance`.
-The 16-byte payload holds incoming radiance and hit state. ClosestHit evaluates shared PBR,
+The 16-byte payload holds incoming radiance and hit distance. A separate RGBA32F
+`RayTracing.HitGuide` stores current-sample distance in x: positive for a hit, -1 for an
+environment miss, zero for invalid/rejected rays. Raw radiance alpha remains the hit indicator;
+unfiltered history alpha remains its running mean. ClosestHit evaluates shared PBR,
 emission, main directional lighting (with an inline shadow query) and the existing IBL; Miss
 samples the environment. Recursion depth is one: secondary surfaces do not launch another
 specular bounce. This is a hybrid reflection effect, not a path tracing integrator.
@@ -131,7 +134,8 @@ specular bounce. This is a hybrid reflection effect, not a path tracing integrat
 Combine replaces the existing IBL specular contribution with accumulated traced specular light,
 weighted by `1 - roughness²` and primary occlusion. Rough surfaces increasingly retain the stable
 prefiltered IBL baseline. The diffuse IBL, emission and direct-light terms stay in Deferred Lighting.
-The reference is finite-sample GGX reflection; no firefly clamp or spatial denoiser is applied.
+The reference is finite-sample GGX reflection with no firefly radiance clamp. The optional
+spatial display filter described below never changes the unfiltered reference.
 Some noise remains during motion and after resets. Transparent surfaces keep their Forward
 lighting and do not participate in these reflection rays.
 
@@ -159,6 +163,38 @@ sample)** / `--view reflection-raw` and **Reflection (history)** / `--view refle
 Raw view always uses sample zero and skips prior history, providing an unfiltered reference.
 Forward and Deferred remain the pure raster references. Unsupported material selections are
 preflighted in the window host and restore the last working pipeline with a concrete diagnostic.
+
+### Spatial denoising
+
+`SceneRenderOptions::reflectionDenoise` defaults to true for Final/HDR. The native panel checkbox
+**RT spatial denoise (Final / HDR)** and CLI `--denoise on|off` select the composite input without
+resetting the sample count. **Reflection (denoised)** / `--view reflection-denoised` always requests
+the filtered diagnostic, independently of the Final checkbox. Raw and History always stay unfiltered.
+
+The independent Compute pass reads accumulated radiance, primary depth/world normals/roughness,
+albedo/metallic and the current stochastic hit-distance guide. A bounded 5x5 joint bilateral kernel
+uses a projection-derived world-space footprint and a hard primary plane-distance guard, normal,
+roughness, material and soft hit-distance weights. It does not compare radiance brightness or clamp
+highlights. Alpha is copied unchanged. Background and Unlit pixels bypass filtering. Roughness
+<= .05 bypasses the filter to preserve sharp mirrors; strength ramps to full by .15. The display
+blend is `smoothstep(.05,.15,roughness) * saturate(1-spp/2048) / (1+spp/64)` and is exactly zero at
+2048 spp and above. Thus the high-spp output returns to the unfiltered estimator.
+
+The filtered texture is transient and **never written back into either persistent history**.
+Switching Final/History/Denoised or toggling denoising preserves a valid history (Raw still resets).
+The hit guide is also transient: it is a noisy sample, not stable reflected depth or a reprojection
+buffer. Rough reflections may still blur small reflected details; hit-distance weighting is a
+heuristic and low-spp filtering introduces spatial bias. Primary depth/normal boundaries do not
+fully identify reflected material or lighting boundaries. The 2-pixel radius cannot remove all
+low-spp noise. No motion vectors, temporal reprojection, variance estimation or temporal denoiser
+are implemented; camera movement still starts accumulation over. Only stochastic reflection is
+filtered, not the Deferred direct-light term or the hard Ray Query shadow mask.
+
+The current format baseline adds two full-resolution RGBA32F transients (guide and filtered output):
+32 bytes/pixel, about 7.03 MiB at 640x360 or 28.13 MiB at 1280x720, excluding allocator alignment.
+With the filter off only the guide remains; Trace writes it along with raw radiance. High-spp
+filter bypass still dispatches a copy pass. Compression and guide-free trace variants are deferred.
+See [measurements and limits](performance/m5-denoise.md) for hardware evidence.
 
 ### Material and sampling boundary
 

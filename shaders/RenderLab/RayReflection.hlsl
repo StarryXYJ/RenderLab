@@ -16,14 +16,19 @@ cbuffer ReflectionParameters : register(b4)
 };
 Texture2D<float4> AlbedoMetallic : register(t12);
 Texture2D<float4> EnvironmentAtlas : register(t13);
+#ifdef SPIRV
+[[vk::image_format("rgba32f")]]
+#endif
+RWTexture2D<float4> HitGuide : register(u14);
 Texture2D<float4> BrdfLut : register(t15);
-struct Payload { float3 radiance; uint hit; };
+struct Payload { float3 radiance; float distance; };
 
 [shader("raygeneration")]
 void RayGeneration()
 {
     uint2 pixel = DispatchRaysIndex().xy;
     uint2 size = DispatchRaysDimensions().xy;
+    HitGuide[pixel] = 0;
     float depth = Depth.Load(int3(pixel, 0));
     float4 normalRoughness = NormalRoughness.Load(int3(pixel, 0));
     if (depth <= 1e-7 || normalRoughness.w < 0)
@@ -56,14 +61,17 @@ void RayGeneration()
     ray.TMax = 10000;
     Payload payload = {0.xxx, 0};
     TraceRay(Scene, RAY_FLAG_NONE, 0x02, 0, 1, 0, ray, payload);
+    // Positive distance: hit, -1: environment miss, 0: rejected/invalid sample.
+    HitGuide[pixel] = float4(payload.distance, 0, 0, 0);
     float4 albedo = AlbedoMetallic.Load(int3(pixel, 0));
     float3 fresnel = FresnelSchlick(saturate(dot(v, h)), lerp(.04.xxx, albedo.rgb, albedo.a));
     float weight = VisibleGGXWeight(nv, nl, roughness);
-    Radiance[pixel] = float4(payload.radiance * fresnel * weight, payload.hit);
+    Radiance[pixel] = float4(payload.radiance * fresnel * weight, payload.distance > 0 ? 1 : 0);
 }
 [shader("miss")]
 void Miss(inout Payload payload)
 {
+    payload.distance = -1;
     payload.radiance = EnvironmentTile(WorldRayDirection(), 0, EnvironmentAtlas, Environment);
 }
 [shader("closesthit")]
@@ -71,7 +79,7 @@ void ClosestHit(inout Payload payload, BuiltInTriangleIntersectionAttributes att
 {
     bool unlit;
     MaterialSurface surface = EvaluateRaySurface(InstanceID(), PrimitiveIndex(), attributes.barycentrics, unlit);
-    payload.hit = 1;
+    payload.distance = RayTCurrent();
     if (unlit)
     {
         payload.radiance = surface.baseColor;

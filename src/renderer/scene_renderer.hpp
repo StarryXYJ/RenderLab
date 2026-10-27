@@ -27,7 +27,8 @@ enum class SceneView
     Environment,
     Brdf,
     ReflectionRaw,
-    ReflectionHistory
+    ReflectionHistory,
+    ReflectionDenoised
 };
 struct SceneRenderOptions
 {
@@ -39,6 +40,8 @@ struct SceneRenderOptions
     bool reflections = true;
     /// Progressive stationary accumulation. Disable for deterministic single-sample comparisons.
     bool reflectionHistory = true;
+    /// Spatial display filter; never feeds back into progressive history.
+    bool reflectionDenoise = true;
 };
 /// @brief Submission completion point and optional pixels; wait before mapping the readback buffer.
 struct SceneReadback

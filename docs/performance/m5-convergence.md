@@ -53,7 +53,7 @@ MSE 是最终 8-bit sRGB RGB 分量与同后端修正版 8192 spp 参考图的�
 - 原始模式故意不累积；交互复测选择 Final 或 Reflection (history)，重启新程序后观察 `RT history: N spp` 随静止时间增长。
 
 ```powershell
-out/build/m5-release/renderlab_sandbox.exe --backend dx12 --headless --validation off --project sample/m4/RayTracing.rlproject --pipeline raytracing --width 640 --height 360 --quality low --warmup-frames 0 --benchmark 2047 --output out/m5-convergence/repro
+out/build/m5-release/renderlab_sandbox.exe --backend dx12 --headless --validation off --project sample/m4/RayTracing.rlproject --pipeline raytracing --denoise off --width 640 --height 360 --quality low --warmup-frames 0 --benchmark 2047 --output out/m5-convergence/repro
 ```
 
 Debug 所选 16/16、Release 光追专项 4/4 通过，双后端原生窗口各 54 帧、10 次重建，validation errors=0。

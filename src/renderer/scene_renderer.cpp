@@ -83,7 +83,7 @@ struct SceneRenderer::Impl
     AccelerationScene accelerationScene;
     std::shared_ptr<rhi::Pipeline> rayQueryShadow;
     std::shared_ptr<rhi::ShaderTable> reflectionTable;
-    std::shared_ptr<rhi::Pipeline> reflectionHistory, reflectionCombine;
+    std::shared_ptr<rhi::Pipeline> reflectionHistory, reflectionCombine, reflectionDenoise;
     std::array<std::shared_ptr<rhi::Buffer>, 5> raySurfaceBuffers;
     std::array<std::vector<std::byte>, 5> raySurfaceBytes;
     uint64_t raySurfaceVersion = 0, rayAtlasVersion = 0;
@@ -328,6 +328,7 @@ struct SceneRenderer::Impl
                                             {11, rhi::BindingKind::Sampler},
                                             {12, rhi::BindingKind::SampledTexture},
                                             {13, rhi::BindingKind::SampledTexture},
+                                            {14, rhi::BindingKind::StorageTexture},
                                             {15, rhi::BindingKind::SampledTexture}});
         desc.rayGeneration =
             module("RayReflection.hlsl", rhi::ShaderStage::RayGeneration, "RayGeneration");
@@ -354,6 +355,16 @@ struct SceneRenderer::Impl
                                             {10, rhi::BindingKind::SampledTexture}});
         desc.compute = module("ReflectionPost.hlsl", rhi::ShaderStage::Compute, "Combine");
         reflectionCombine = runtime.CreatePipeline(desc);
+        desc = {};
+        desc.layout = runtime.CreateLayout({{0, rhi::BindingKind::SampledTexture},
+                                            {1, rhi::BindingKind::SampledTexture},
+                                            {2, rhi::BindingKind::StorageTexture},
+                                            {3, rhi::BindingKind::ConstantBuffer},
+                                            {5, rhi::BindingKind::SampledTexture},
+                                            {6, rhi::BindingKind::SampledTexture},
+                                            {7, rhi::BindingKind::SampledTexture}});
+        desc.compute = module("ReflectionDenoise.hlsl", rhi::ShaderStage::Compute, "Denoise");
+        reflectionDenoise = runtime.CreatePipeline(desc);
     }
     uint32_t RayTile(const std::string& reference, bool srgb)
     {
@@ -736,11 +747,12 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
     const bool reflections =
         rayTracing && options.reflections &&
         (options.view == SceneView::Final || options.view == SceneView::Hdr ||
-         options.view == SceneView::ReflectionRaw || options.view == SceneView::ReflectionHistory);
+         options.view == SceneView::ReflectionRaw || options.view == SceneView::ReflectionHistory ||
+         options.view == SceneView::ReflectionDenoised);
     if (!reflections)
         self.reflectionViews.clear();
-    if ((options.view == SceneView::ReflectionRaw ||
-         options.view == SceneView::ReflectionHistory) &&
+    if ((options.view == SceneView::ReflectionRaw || options.view == SceneView::ReflectionHistory ||
+         options.view == SceneView::ReflectionDenoised) &&
         !reflections)
         throw std::invalid_argument(
             "Reflection texture views require the Ray Tracing pipeline and reflections enabled");
@@ -1002,6 +1014,10 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
         frame.rayTracing.reflectionTable = self.reflectionTable;
         frame.rayTracing.historyPipeline = self.reflectionHistory;
         frame.rayTracing.combinePipeline = self.reflectionCombine;
+        if ((options.reflectionDenoise &&
+             (options.view == SceneView::Final || options.view == SceneView::Hdr)) ||
+            options.view == SceneView::ReflectionDenoised)
+            frame.rayTracing.denoisePipeline = self.reflectionDenoise;
         frame.rayTracing.sampler = self.sampler;
         constexpr std::array<uint32_t, 5> strides{32, 4, 16, 16, 80};
         for (uint32_t i = 0; i < 5; ++i)
@@ -1267,6 +1283,8 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
         displaySource = "RayTracing.RawRadiance";
     else if (options.view == SceneView::ReflectionHistory)
         displaySource = frame.rayTracing.historyRadiance;
+    else if (options.view == SceneView::ReflectionDenoised)
+        displaySource = "RayTracing.DenoisedRadiance";
     if (options.view == SceneView::Shadow)
         displaySource = rayTracing ? "RayTracing.ShadowVisibility" : "MainLightShadow";
     else if (options.view == SceneView::Environment)

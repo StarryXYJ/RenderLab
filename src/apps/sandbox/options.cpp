@@ -120,6 +120,13 @@ Options ParseOptions(std::span<const std::string_view> arguments)
         }
         else if (arg == "--view")
             options.view = value();
+        else if (arg == "--denoise")
+        {
+            const auto mode = value();
+            if (mode != "on" && mode != "off")
+                throw std::invalid_argument("--denoise must be on or off");
+            options.reflectionDenoise = mode == "on";
+        }
         else if (arg == "--pipeline")
             options.pipeline = value();
         else if (arg == "--profile")
@@ -196,9 +203,10 @@ Options ParseOptions(std::span<const std::string_view> arguments)
         throw std::invalid_argument("--quality must be scene, low, medium or high");
     if (options.view != "final" && options.view != "hdr" && options.view != "shadow" &&
         options.view != "environment" && options.view != "brdf" &&
-        options.view != "reflection-raw" && options.view != "reflection-history")
+        options.view != "reflection-raw" && options.view != "reflection-history" &&
+        options.view != "reflection-denoised")
         throw std::invalid_argument("--view must be final, hdr, shadow, environment, brdf, "
-                                    "reflection-raw or reflection-history");
+                                    "reflection-raw, reflection-history or reflection-denoised");
     if (options.pipeline != "forward" && options.pipeline != "deferred" &&
         options.pipeline != "raytracing")
         throw std::invalid_argument("--pipeline must be forward, deferred or raytracing");
@@ -244,7 +252,10 @@ std::string_view Usage()
            "  --project FILE             Load a project scene using Forward PBR/HDR\n"
            "  --width N --height N        Scene output size (default: 1280x720)\n"
            "  --quality scene|low|medium|high  Scene shadows, or 128/512/1024 resolution\n"
-           "  --view final|hdr|shadow|environment|brdf|reflection-raw|reflection-history  Select "
+           "  --denoise on|off                 Spatial reflection denoising (default on)\n"
+           "  --view "
+           "final|hdr|shadow|environment|brdf|reflection-raw|reflection-history|reflection-"
+           "denoised  Select "
            "the displayed texture\n"
            "  --pipeline forward|deferred|raytracing  Select scene rendering path\n"
            "  --debug-panel               Open native scene controls (F1 toggles)\n"

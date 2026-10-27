@@ -297,6 +297,145 @@ void VerifyTraceRays(Runtime& runtime, Pool& pool, shader::Target target,
     }
 }
 
+void VerifyReflectionDenoise(Runtime& runtime, shader::Target target,
+                             const std::filesystem::path& source, Logger& logger)
+{
+    constexpr uint32_t width = 9, height = 7, pitch = 256;
+    using Pixel = std::array<float, 4>;
+    using Image = std::array<Pixel, width * height>;
+    shader::ProgramRequest request;
+    request.entry = {ShaderStage::Compute, source, "Denoise"};
+    request.target = target;
+    if (target == shader::Target::Spirv)
+        request.defines["SPIRV"] = "1";
+    shader::DxcCompiler compiler;
+    PipelineDesc desc;
+    desc.layout = runtime.CreateLayout({{0, BindingKind::SampledTexture},
+                                        {1, BindingKind::SampledTexture},
+                                        {2, BindingKind::StorageTexture},
+                                        {3, BindingKind::ConstantBuffer},
+                                        {5, BindingKind::SampledTexture},
+                                        {6, BindingKind::SampledTexture},
+                                        {7, BindingKind::SampledTexture}});
+    desc.compute = runtime.CreateShader(ShaderStage::Compute, compiler.Compile(request), "Denoise");
+    auto pipeline = runtime.CreatePipeline(desc);
+    const auto run = [&](Image radiance, Image normals, Image materials, Image depth, Image guide,
+                         uint32_t priorSamples = 0)
+    {
+        auto commands = runtime.CreateCommands();
+        const auto upload = [&](const Image& values)
+        {
+            auto image = runtime.CreateTexture(
+                {width, height, Format::Rgba32Float, false, false, "Denoise.Input"});
+            auto buffer = runtime.CreateBuffer({pitch * height, Memory::Upload, "Denoise.Upload"});
+            for (uint32_t y = 0; y < height; ++y)
+                std::memcpy(buffer->Map().data() + y * pitch, values.data() + y * width,
+                            width * sizeof(Pixel));
+            commands->Barrier(buffer, State::HostWrite, State::CopySource);
+            commands->Barrier(image, State::Undefined, State::CopyDest);
+            commands->CopyTexture(buffer, image, pitch, true);
+            commands->Barrier(image, State::CopyDest, State::Sampled);
+            return runtime.CreateView(image);
+        };
+        auto color = upload(radiance), nr = upload(normals), am = upload(materials),
+             depths = upload(depth), hits = upload(guide);
+        renderer::ReflectionParameters parameters;
+        parameters.inverseViewProjection = {1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1};
+        parameters.options[1] = static_cast<float>(priorSamples);
+        parameters.options[3] = static_cast<float>(renderer::MaxReflectionSamples);
+        auto constants =
+            runtime.CreateBuffer({sizeof(parameters), Memory::Upload, "Denoise.Constants"});
+        std::memcpy(constants->Map().data(), &parameters, sizeof(parameters));
+        Binding uniform{3};
+        uniform.buffer = constants;
+        uniform.size = sizeof(parameters);
+        auto output = runtime.CreateTexture(
+            {width, height, Format::Rgba32Float, true, false, "Denoise.Output"});
+        auto result = runtime.CreateBuffer({pitch * height, Memory::Readback, "Denoise.Readback"});
+        commands->Barrier(constants, State::HostWrite, State::UniformRead);
+        commands->Barrier(output, State::Undefined, State::Storage);
+        commands->Bind(pipeline);
+        commands->Bind(runtime.CreateGroup(desc.layout, {{0, color},
+                                                         {1, hits},
+                                                         {2, runtime.CreateView(output)},
+                                                         uniform,
+                                                         {5, nr},
+                                                         {6, am},
+                                                         {7, depths}}));
+        commands->Compute((width + 7) / 8, (height + 7) / 8);
+        commands->Barrier(output, State::Storage, State::CopySource);
+        commands->CopyTexture(result, output, pitch, false);
+        commands->Barrier(result, State::CopyDest, State::HostRead);
+        runtime.Wait(runtime.Submit(std::move(commands)));
+        Image actual;
+        for (uint32_t y = 0; y < height; ++y)
+            std::memcpy(actual.data() + y * width, result->Map().data() + y * pitch,
+                        width * sizeof(Pixel));
+        for (const auto& pixel : actual)
+            for (auto channel : pixel)
+                if (!std::isfinite(channel))
+                    throw std::runtime_error(
+                        "Spatial reflection denoiser produced non-finite output");
+        return actual;
+    };
+    Image radiance, normals, materials, depth, guide;
+    radiance.fill({2, 3, 4, .5f});
+    normals.fill({0, 0, 1, .5f});
+    materials.fill({.5f, .5f, .5f, 0});
+    depth.fill({.25f, 0, 0, 0});
+    guide.fill({2, 0, 0, 0});
+    const auto same = [](const Image& a, const Image& b)
+    {
+        for (size_t i = 0; i < a.size(); ++i)
+            for (uint32_t c = 0; c < 4; ++c)
+                if (std::abs(a[i][c] - b[i][c]) > 1e-5f)
+                    throw std::runtime_error(
+                        "Spatial reflection denoiser violated preservation contract");
+    };
+    same(run(radiance, normals, materials, depth, guide), radiance);
+    constexpr uint32_t center = 3 * width + 4;
+    radiance[center][0] = 32;
+    auto reduced = run(radiance, normals, materials, depth, guide);
+    if (reduced[center][0] >= 16 || reduced[center - 1][0] <= 2 || reduced[center][3] != .5f)
+        throw std::runtime_error("Spatial reflection denoiser did not reduce an isolated sample");
+    same(run(radiance, normals, materials, depth, guide, 2047), radiance);
+    auto sharp = normals;
+    for (auto& pixel : sharp)
+        pixel[3] = .045f;
+    same(run(radiance, sharp, materials, depth, guide), radiance);
+    auto background = depth;
+    background.fill({0, 0, 0, 0});
+    same(run(radiance, normals, materials, background, guide), radiance);
+    auto unlit = normals;
+    for (auto& pixel : unlit)
+        pixel[3] = -1;
+    same(run(radiance, unlit, materials, depth, guide), radiance);
+    // Adjacent constant regions must not bleed across primary geometry discontinuities.
+    for (uint32_t y = 0; y < height; ++y)
+        for (uint32_t x = 0; x < width; ++x)
+            radiance[y * width + x] = x < 4 ? Pixel{1, 1, 1, .5f} : Pixel{8, 8, 8, .5f};
+    auto edges = normals;
+    auto depthEdges = depth;
+    auto hitEdges = guide;
+    for (uint32_t y = 0; y < height; ++y)
+        for (uint32_t x = 4; x < width; ++x)
+        {
+            edges[y * width + x] = {0, 1, 0, .5f};
+            depthEdges[y * width + x][0] = .9f;
+            hitEdges[y * width + x][0] = 100;
+        }
+    same(run(radiance, edges, materials, depth, guide), radiance);
+    same(run(radiance, normals, materials, depthEdges, guide), radiance);
+    auto flat = run(radiance, normals, materials, depth, guide);
+    auto hitBoundary = run(radiance, normals, materials, depth, hitEdges);
+    if (hitBoundary[center - 1][0] >= flat[center - 1][0])
+        throw std::runtime_error("Reflection hit-distance guide did not protect its boundary");
+    logger.Write(LogLevel::Info,
+                 "Spatial reflection denoise passed: odd 9x7 extent, constants, "
+                 "isolated noise, alpha, sharp/high-spp bypass, background/unlit, normal/depth "
+                 "edges and hit-distance guide");
+}
+
 void VerifyRaySampling(Runtime& runtime, shader::Target target, const std::filesystem::path& source,
                        Logger& logger)
 {
@@ -411,6 +550,9 @@ void VerifyRaySampling(Runtime& runtime, shader::Target target, const std::files
                                  "weights, and sample count limit");
     logger.Write(LogLevel::Info, "Visible GGX sampling passed: 6 roughness/view cases, 4096 "
                                  "samples each; finite weights <= 1, stratified quadrants");
+    VerifyReflectionDenoise(
+        runtime, target,
+        source.parent_path().parent_path() / "RenderLab" / "ReflectionDenoise.hlsl", logger);
 }
 
 std::array<float, 12> Translation(float x)

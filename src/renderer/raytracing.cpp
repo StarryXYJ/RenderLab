@@ -46,6 +46,8 @@ void RayReflectionFeature::Build(rendergraph::Graph& graph, const RenderFrame& f
     const auto camera = graph.GetTextureDesc(graph.GetTexture("CameraColor"));
     graph.CreateTexture("RayTracing.RawRadiance",
                         {camera.width, camera.height, rhi::Format::Rgba32Float, true, false});
+    graph.CreateTexture("RayTracing.HitGuide",
+                        {camera.width, camera.height, rhi::Format::Rgba32Float, true, false});
     const auto records = graph.ImportBuffer("RayTracing.ShaderTable", input.reflectionTable->buffer,
                                             {rhi::State::HostWrite, true});
     auto trace = graph.AddRayTracingPass("RayTracing.Reflection.Trace");
@@ -63,6 +65,7 @@ void RayReflectionFeature::Build(rendergraph::Graph& graph, const RenderFrame& f
     for (const auto& binding : input.reflectionTextures)
         textures.push_back(trace.ReadTexture(binding.texture));
     const auto raw = trace.WriteTexture("RayTracing.RawRadiance");
+    const auto guide = trace.WriteTexture("RayTracing.HitGuide");
     trace.Execute(
         [=](RayTracingContext& context)
         {
@@ -73,6 +76,7 @@ void RayReflectionFeature::Build(rendergraph::Graph& graph, const RenderFrame& f
             context.BindTexture(3, normal);
             context.BindBuffer(4, constants, parameters.range.offset, parameters.range.size);
             context.BindTexture(12, albedo);
+            context.BindTexture(14, guide);
             for (size_t i = 0; i < surfaces.size(); ++i)
             {
                 const auto& b = input.surfaces[i];
@@ -100,10 +104,38 @@ void RayReflectionFeature::Build(rendergraph::Graph& graph, const RenderFrame& f
             context.BindBuffer(3, historyConstants, parameters.range.offset, parameters.range.size);
             context.Dispatch((camera.width + 7) / 8, (camera.height + 7) / 8);
         });
+    auto filtered = accumulated;
+    if (input.denoisePipeline)
+    {
+        graph.CreateTexture("RayTracing.DenoisedRadiance",
+                            {camera.width, camera.height, rhi::Format::Rgba32Float, true, false});
+        auto denoise = graph.AddComputePass("RayTracing.Reflection.Denoise");
+        const auto source = denoise.ReadTexture(accumulated);
+        const auto hit = denoise.ReadTexture(guide);
+        const auto normals = denoise.ReadTexture("GBuffer.NormalRoughness");
+        const auto materials = denoise.ReadTexture("GBuffer.AlbedoMetallic");
+        const auto depths = denoise.ReadTexture("CameraDepth");
+        const auto uniform = denoise.ReadBuffer(parameters.buffer, Use::Uniform, parameters.range);
+        filtered = denoise.WriteTexture("RayTracing.DenoisedRadiance");
+        const auto destination = filtered;
+        denoise.Execute(
+            [=](ComputeContext& context)
+            {
+                context.Bind(input.denoisePipeline);
+                context.BindTexture(0, source);
+                context.BindTexture(1, hit);
+                context.BindTexture(2, destination);
+                context.BindBuffer(3, uniform, parameters.range.offset, parameters.range.size);
+                context.BindTexture(5, normals);
+                context.BindTexture(6, materials);
+                context.BindTexture(7, depths);
+                context.Dispatch((camera.width + 7) / 8, (camera.height + 7) / 8);
+            });
+    }
     graph.CreateTexture("RayTracing.Composite",
                         {camera.width, camera.height, rhi::Format::Rgba32Float, true, true});
     auto combine = graph.AddComputePass("RayTracing.Reflection.Combine");
-    const auto radiance = combine.ReadTexture(accumulated);
+    const auto radiance = combine.ReadTexture(filtered);
     const auto color = combine.ReadTexture("CameraColor");
     const auto combineNormal = combine.ReadTexture("GBuffer.NormalRoughness");
     const auto combineAlbedo = combine.ReadTexture("GBuffer.AlbedoMetallic");

@@ -191,8 +191,8 @@ void VerifyScene(rhi::Runtime& runtime, shader::Target target, const std::filesy
                 costs += std::format("{}: {:.6f} ms\n", timing.name, timing.nanoseconds / 1e6);
                 ++reflectionPasses;
             }
-        detail::Require(reflectionPasses == 3,
-                        "Trace/accumulation/combine did not execute as independent GPU passes");
+        detail::Require(reflectionPasses == 4,
+                        "Trace/accumulation/denoise/combine did not execute independently");
         WriteFileAtomically(output / "reflection-gpu-cost.txt",
                             std::as_bytes(std::span{costs.data(), costs.size()}));
         auto rawOptions = reflectionOptions;
@@ -205,6 +205,32 @@ void VerifyScene(rhi::Runtime& runtime, shader::Target target, const std::filesy
                             rawSecond.reflectionHistoryReset,
                         "Raw single-sample reflection reference was not deterministic");
         SaveImage(output / "reflection-raw.bmp", rawPixels, 640, 360, rhi::TextureRowPitch(640));
+        auto filteredOptions = reflectionOptions;
+        filteredOptions.reflectionHistory = false;
+        auto filtered = reflectionRender("reflection-denoised-final", filteredOptions);
+        filteredOptions.reflectionDenoise = false;
+        auto unfiltered = reflectionRender("reflection-unfiltered-final", filteredOptions);
+        runtime.Wait(unfiltered.completion);
+        detail::Require(!std::ranges::equal(filtered.pixels->Map(), unfiltered.pixels->Map()),
+                        "Spatial denoise toggle did not change the low-spp final image");
+        filteredOptions.view = renderer::SceneView::ReflectionHistory;
+        auto historyOff = reflectionRender("reflection-history-denoise-off", filteredOptions);
+        filteredOptions.reflectionDenoise = true;
+        auto historyOn = reflectionRender("reflection-history-denoise-on", filteredOptions);
+        runtime.Wait(historyOn.completion);
+        detail::Require(std::ranges::equal(historyOff.pixels->Map(), historyOn.pixels->Map()),
+                        "Spatial denoise contaminated unfiltered single-sample history");
+        filteredOptions.reflectionHistory = true;
+        filteredOptions.view = renderer::SceneView::ReflectionDenoised;
+        auto denoisedView = reflectionRender("reflection-denoised-view", filteredOptions);
+        detail::Require(!denoisedView.reflectionHistoryReset && denoisedView.reflectionSamples == 2,
+                        "Denoised view switch reset stationary history");
+        filteredOptions.reflectionDenoise = false;
+        filteredOptions.view = renderer::SceneView::Final;
+        auto toggled = reflectionRender("reflection-toggle-preserves-history", filteredOptions);
+        detail::Require(!toggled.reflectionHistoryReset && toggled.reflectionSamples == 3,
+                        "Spatial denoise toggle reset progressive accumulation");
+        runtime.Wait(toggled.completion);
         auto rasterOptions = reflectionOptions;
         rasterOptions.reflections = false;
         auto raster = reflectionRender("reflection-disabled", rasterOptions);

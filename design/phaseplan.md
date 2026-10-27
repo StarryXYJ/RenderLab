@@ -163,7 +163,7 @@ R1 契约修订、B1 样例整理/Benchmark、B2 调查和 B3 资源复用已完
 
 验证：MSVC Debug/Release NMake 构建。RTX 5060 上 Debug 所选 16 项通过（Core/Graph；双后端 AS/TraceRays、Ray Query Scene、反射参考、surface、deferred、rhi、tools_window），追加 ShaderTable 范围/尺寸边界后 Graph 与双后端 AS/反射 5/5。Release 双后端 AS/TraceRays 与反射专项 4/4；上述 GPU 验收 validation errors=0。独立窗口各 54 帧、10 次重建、10 次挂起，实际渲染三种菜单选择。反射覆盖确定性 raw、静止累积、相机/场景/材质/尺寸/照明失效、ViewID 隔离、空场景与在途版本。Release/validation off 的 1280×720 短测各预热 64 帧、测量 240 帧，保留两后端三管线成本和参考图；不是长测或窗口 FPS 结论。
 
-边界：静态不透明三角形；反射仅内置 Lit/Unlit，Masked 显式拒绝，透明走 Forward 且不进入 AS。三张 RGBA32F GBuffer 与浮点历史占用较高；有限图集为 64×64/显式 LOD 0，最多 62 个图像/色彩空间/文件版本；无动态几何/压缩、any-hit/callable、移动相机重投影、空间降噪或自动光追 Shader 文件监视。自定义 Copper 需保留 Forward，原始资源不做隐式 PBR 映射。其他 GPU 未验证，WARP 探测未完成。Path Tracing 按 M8、Forward+ 按 M6 保留，未提前实施。
+边界：静态不透明三角形；反射仅内置 Lit/Unlit，Masked 显式拒绝，透明走 Forward 且不进入 AS。三张 RGBA32F GBuffer 与浮点历史占用较高；有限图集为 64×64/显式 LOD 0，最多 62 个图像/色彩空间/文件版本；无动态几何/压缩、any-hit/callable、移动相机重投影、时间降噪或自动光追 Shader 文件监视。自定义 Copper 需保留 Forward，原始资源不做隐式 PBR 映射。其他 GPU 未验证，WARP 探测未完成。Path Tracing 按 M8、Forward+ 按 M6 保留，未提前实施。
 
 入口：[Deferred](../docs/deferred-pipeline.md)、[光追接口/生命周期/ShaderTable 重建](../docs/raytracing.md)、[样例与运行](../manual/build.md#ray-tracing-组合与-ray-query)、[GPU 成本/参考图](../docs/performance/m5-reflections.md)。独立验证入口分别为 `--pipeline deferred`、`--as-test`（Ray Query 与 TraceRays 分别记录）、`--scene-test --pipeline raytracing`；每个子阶段按验收提交，过程由 Git 历史追溯。
 
@@ -174,6 +174,16 @@ R1 契约修订、B1 样例整理/Benchmark、B2 调查和 B3 资源复用已完
 结果：修正 64 帧后固定 1/64 EMA 的残留噪声，改为持续 1/N 平均；VNDF 与匹配 PDF 避免 GGX NDF 掠射角高权重，配合逐像素扰乱 Sobol 序列。达到 2^24 float 精确整数上限后保持结果，无提前回绕/EMA；面板和报告显示实际 spp/重置计数。保留 raw 单样本与原有历史失效规则，无光强/曝光削弱、亮度裁剪或降噪。
 
 验证：RTX 5060，MSVC Debug 所选 16/16、Release 光追专项 4/4；双后端窗口各 54 帧/10 次重建，validation errors=0。新增 GPU 六组视角/粗糙度共 24576 次有限有界权重/分层检查，真实 Accumulate Shader 验证 reset、1/128、1/2048 和最大计数；130 帧历史增长及相机移动后零输入保持通过。固定场景 256→2048 spp 对 8192 spp 的 sRGB MSE 在两后端约下降 95.5%，方向光从 3 提高至 12 后约下降 95.2%；不是独立真值或任意场景完全无噪声保证。入口：[原因、图像与数值](../docs/performance/m5-convergence.md)、[接口/历史规则](../docs/raytracing.md)。
+
+### M5 扩展：反射空间降噪
+
+状态：DONE，日期：2026 年 10 月 27 日。
+
+结果：Accumulate 后独立 5×5 空间降噪，主表面深度/法线/粗糙度/材质和本帧随机命中距离约束邻域；仅供显示、不回写历史。Final/HDR 默认开启，可由面板/CLI 切换，保留 Raw / History / Denoised。镜面旁路，高 spp 逐渐减弱至 2048 spp 完全旁路；开关/普通反射视图切换不重置有效历史。
+
+验证：MSVC Debug/Release Sandbox/Player 构建。RTX 5060 上 Debug 所选 16/16、Release 光追专项 4/4，双后端额外 RT 窗口各 54 帧/10 次重建，257×193 Player 降噪诊断通过，validation errors=0。真实 GPU 合约覆盖 9×7 尺寸、常量/alpha、孤立噪点、镜面/高 spp、背景/Unlit、深度/法线与命中距离；场景覆盖滤波与历史独立及开关/视图保持 spp。两后端、两光强的 2/16/64/256/2048 spp 对未滤波 8192 spp 图像比较：16 spp 原场景 MSE 约降 64.8%、强光约降 54.2%，2048 spp 开关 RGB 逐字节相同。1280×720、预热 32/测量 128 帧单次短测，降噪 GPU 均值 DX12/Vulkan 0.248/0.222ms，不作为窗口 FPS/长测结论。
+
+边界：有限空间邻域有低 spp 偏差与细节模糊，随机命中引导不能完整识别反射边界；无运动矢量、重投影、时间降噪或方差估计，其他 GPU 未验证。额外两张 RGBA32F 瞬态目标，关闭时仍写命中引导；未提前推进 M6/M8 其他能力。入口：[接口](../docs/raytracing.md#spatial-denoising)、[操作](../manual/build.md#ray-tracing-组合与-ray-query)、[图像、数值、成本与复现](../docs/performance/m5-denoise.md)。
 
 ## M6 GPU Driven 与执行优化
 

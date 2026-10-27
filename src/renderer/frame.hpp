@@ -62,7 +62,7 @@ struct RenderFrame
         std::shared_ptr<rhi::Pipeline> shadowPipeline;
         BufferBinding parameters;
         std::shared_ptr<rhi::ShaderTable> reflectionTable;
-        std::shared_ptr<rhi::Pipeline> historyPipeline, combinePipeline;
+        std::shared_ptr<rhi::Pipeline> historyPipeline, combinePipeline, denoisePipeline;
         BufferBinding reflectionParameters;
         std::vector<BufferBinding> surfaces;
         std::vector<TextureBinding> reflectionTextures;

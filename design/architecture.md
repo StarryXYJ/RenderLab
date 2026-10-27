@@ -365,7 +365,7 @@ M5 的 AS 实现通过明确的 BuildInput、BuildWrite 与 Read 用途把底层
 
 Ray Tracing Pipeline 使用类型化 RayTracing Pass 与显式 ShaderTableRead；单个通用三角形 Hit Group 通过 InstanceID、Mesh 和 Material 索引消费基础 PBR。ShaderTable 保持不可变并持有对应 PSO；Shader 代际变化同时重建 PSO 和表，旧命令引用保护在途版本。有限图集与显式 LOD 0 先于 M6 的描述符数组，数据 ABI 和限制见上述光追文档。
 
-M5 混合反射由独立 Trace、静止历史累积和 Combine Pass 实现；一次可见法线 GGX（VNDF）specular 采样使用通用 PBR Hit Group，Miss 消费环境，合成显式替换 IBL specular。ViewID 使用相机身份，历史由 Renderer 持有两张纹理，提交成功才发布版本；相机/场景/材质/尺寸/照明变化重置，静止时按 1/N 持续求平均，使用逐像素扰乱的 Sobol 序列降低方差；无移动相机重投影或空间降噪。原始单样本入口与纯光栅管线均保留，具体有限材质和图集边界见光追文档。
+M5 混合反射由独立 Trace、静止历史累积和 Combine Pass 实现；一次可见法线 GGX（VNDF）specular 采样使用通用 PBR Hit Group，Miss 消费环境，合成显式替换 IBL specular。ViewID 使用相机身份，历史由 Renderer 持有两张纹理，提交成功才发布版本；相机/场景/材质/尺寸/照明变化重置，静止时按 1/N 持续求平均，使用逐像素扰乱的 Sobol 序列降低方差；累积后可选独立空间降噪，以主表面深度/法线/粗糙度/材质和本帧随机命中距离约束 5×5 邻域；滤波仅供显示，不反馈历史，高 spp 减弱直至旁路，保留 Raw/History/Denoised 对照。无移动相机重投影或时间降噪。原始单样本入口与纯光栅管线均保留，具体有限材质和图集边界见光追文档。
 
 渲染图描述可静态组织的 GPU 阶段，射线遍历、路径队列和逐路径分支留在 Shader 与积分器内部，不为每条射线生成图节点。GPU 生成的数量通过间接执行或有界 Dispatch 消费，不在热路径读回 CPU 再决定本帧命令。射线 Payload 和队列元素只携带后续工作必需的数据，避免把完整表面对象跨阶段搬运。组织方式以正确的简单基线为起点，测量分支、寄存器和内存流量后再拆分。[pbrt GPU 任务组织](https://pbr-book.org/4ed/Wavefront_Rendering_on_GPUs/Mapping_Path_Tracing_to_the_GPU)
 
