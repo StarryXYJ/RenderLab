@@ -63,7 +63,11 @@ const char* Name(PassKind kind)
 std::string Plan::ToJson() const
 {
     using Json = nlohmann::json;
-    Json output{{"queue", "graphics"}, {"recording", "serial"}, {"aliasing", false}};
+    Json output{{"queue", "graphics"},
+                {"recording", recordingThreads == 1 ? "serial" : "parallel-native"},
+                {"recordingThreads", recordingThreads},
+                {"recordingChunks", recordingChunks},
+                {"aliasing", false}};
     output["passes"] = Json::array();
     output["resources"] = Json::array();
     output["edges"] = Json::array();

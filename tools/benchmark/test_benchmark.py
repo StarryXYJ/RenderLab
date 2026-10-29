@@ -140,7 +140,7 @@ class BenchmarkTests(unittest.TestCase):
     def test_geometry_submission_and_pipeline_must_match(self):
         a, _, _, _ = self.recording()
         b, _, _, _ = self.recording("second", "vulkan")
-        for key, value in (("submission", "gpu-culled"), ("pipeline", "deferred")):
+        for key, value in (("submission", "gpu-culled"), ("pipeline", "deferred"), ("recordingThreads", 4)):
             report = analyze.read_json(b)
             report.pop("submission", None)
             report.pop("pipeline", None)
@@ -151,7 +151,7 @@ class BenchmarkTests(unittest.TestCase):
 
     def test_runner_preserves_geometry_submission(self):
         config, data, args = self.suite()
-        data["defaults"] = {"pipeline": "deferred", "submission": "gpu-culled"}
+        data["defaults"] = {"pipeline": "deferred", "submission": "gpu-culled", "recordingThreads": 4}
         analyze.write_json(config, data)
         _, _, _, cases = run.load_suite(config, args)
         self.assertEqual(cases[0]["submission"], "gpu-culled")
@@ -159,6 +159,7 @@ class BenchmarkTests(unittest.TestCase):
             run.run_suite(config, self.root / "output", args)
         command = analyze.read_json(self.root / "output/manifest.json")["runs"][0]["command"]
         self.assertEqual(command[command.index("--submission") + 1], "gpu-culled")
+        self.assertEqual(command[command.index("--recording-threads") + 1], "4")
         data["defaults"]["submission"] = "invalid"
         analyze.write_json(config, data)
         with self.assertRaisesRegex(ValueError, "pipeline/submission"):

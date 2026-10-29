@@ -97,6 +97,7 @@ struct Graph::Impl
     Pool* pool = nullptr;
     std::unique_ptr<rhi::CommandList> commands;
     bool profiling = false;
+    uint32_t recordingThreads = 1;
     std::shared_ptr<rhi::Buffer> timestamps;
     std::shared_ptr<detail::Allocation> timestampLease;
     void Building() const;

@@ -1,0 +1,71 @@
+{
+  "schemaVersion": 1,
+  "executable": "../../out/build/windows-release/renderlab_player.exe",
+  "backends": [
+    "dx12",
+    "vulkan"
+  ],
+  "repeats": 2,
+  "defaults": {
+    "width": 257,
+    "height": 193,
+    "pipeline": "deferred",
+    "quality": "scene",
+    "view": "final",
+    "validation": "off",
+    "cpuProfiling": true,
+    "warmupFrames": 4,
+    "warmupSeconds": 0.25,
+    "seconds": 2
+  },
+  "cases": [
+    {
+      "name": "n64-direct-t1",
+      "project": "../../out/build/windows-release/indexed-scene/dx12/Pbr/scale-64/Pbr.rlproject",
+      "submission": "direct",
+      "recordingThreads": 1
+    },
+    {
+      "name": "n64-direct-t4",
+      "project": "../../out/build/windows-release/indexed-scene/dx12/Pbr/scale-64/Pbr.rlproject",
+      "submission": "direct",
+      "recordingThreads": 4
+    },
+    {
+      "name": "n4096-indexed-t1",
+      "project": "../../out/build/windows-release/indexed-scene/dx12/Pbr/scale-4096/Pbr.rlproject",
+      "submission": "indexed-direct",
+      "recordingThreads": 1
+    },
+    {
+      "name": "n4096-indexed-t4",
+      "project": "../../out/build/windows-release/indexed-scene/dx12/Pbr/scale-4096/Pbr.rlproject",
+      "submission": "indexed-direct",
+      "recordingThreads": 4
+    },
+    {
+      "name": "n64-gpu-t1",
+      "project": "../../out/build/windows-release/indexed-scene/dx12/Pbr/scale-64/Pbr.rlproject",
+      "submission": "gpu-culled",
+      "recordingThreads": 1
+    },
+    {
+      "name": "n64-gpu-t4",
+      "project": "../../out/build/windows-release/indexed-scene/dx12/Pbr/scale-64/Pbr.rlproject",
+      "submission": "gpu-culled",
+      "recordingThreads": 4
+    },
+    {
+      "name": "n4096-gpu-t1",
+      "project": "../../out/build/windows-release/indexed-scene/dx12/Pbr/scale-4096/Pbr.rlproject",
+      "submission": "gpu-culled",
+      "recordingThreads": 1
+    },
+    {
+      "name": "n4096-gpu-t4",
+      "project": "../../out/build/windows-release/indexed-scene/dx12/Pbr/scale-4096/Pbr.rlproject",
+      "submission": "gpu-culled",
+      "recordingThreads": 4
+    }
+  ]
+}

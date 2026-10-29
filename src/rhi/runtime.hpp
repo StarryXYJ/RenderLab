@@ -8,6 +8,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <deque>
+#include <functional>
 #include <memory>
 #include <string>
 #include <thread>
@@ -16,6 +17,7 @@
 namespace renderlab::rhi
 {
 class CommandList;
+class RecordingWorkers;
 
 /** @brief One graphics queue. Monotonic completion points represent actual successful submissions.
  */
@@ -113,6 +115,12 @@ public:
 
 protected:
     Runtime();
+    void RecordNative(size_t count, const std::function<void(size_t)>& job);
+    bool CpuProfiling() const
+    {
+        return cpuProfiling_;
+    }
+    void AddCpuMeasurement(CpuOperation operation, CpuMeasurement measurement);
     CpuTimer ProfileCpu(CpuOperation operation)
     {
         return CpuTimer(cpuProfiling_ ? &cpuProfile_.at(size_t(operation)) : nullptr);
@@ -143,6 +151,7 @@ protected:
     std::shared_ptr<DescriptorStats> descriptorStats_ = std::make_shared<DescriptorStats>();
 
 private:
+    std::unique_ptr<RecordingWorkers> recordingWorkers_;
     bool cpuProfiling_ = false;
     CpuProfileSnapshot cpuProfile_{};
     struct Pending

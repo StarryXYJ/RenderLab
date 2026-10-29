@@ -15,11 +15,15 @@ const Plan& Graph::Compile(CompileOptions options)
     auto& g = *impl_;
     g.Building();
     g.profiling = options.profile;
+    Require(options.recordingThreads >= 1 && options.recordingThreads <= 16,
+            "Recording threads must be in [1, 16]");
+    g.recordingThreads = options.recordingThreads;
     Require(g.active == UINT32_MAX, "Seal the active pass with Execute before Compile");
     try
     {
         auto& plan = g.plan;
         plan = {};
+        plan.recordingThreads = g.recordingThreads;
         for (auto& pass : g.passes)
         {
             Require(pass.kind != PassKind::Raster || !pass.colors.empty(),

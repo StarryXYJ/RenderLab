@@ -142,6 +142,12 @@ Options ParseOptions(std::span<const std::string_view> arguments)
         }
         else if (arg == "--pipeline")
             options.pipeline = value();
+        else if (arg == "--recording-threads")
+        {
+            options.recordingThreads = number();
+            if (!options.recordingThreads || options.recordingThreads > 16)
+                throw std::invalid_argument("--recording-threads requires 1..16");
+        }
         else if (arg == "--submission")
             options.submission = value();
         else if (arg == "--profile")
@@ -228,6 +234,8 @@ Options ParseOptions(std::span<const std::string_view> arguments)
             "--submission must be direct, indexed-direct, cpu-indirect or gpu-culled");
     if (options.submission != "direct" && options.projectPath.empty())
         throw std::invalid_argument("--submission requires --project");
+    if (options.recordingThreads != 1 && options.projectPath.empty())
+        throw std::invalid_argument("--recording-threads requires --project");
     if (options.pipeline != "forward" && options.pipeline != "deferred" &&
         options.pipeline != "raytracing")
         throw std::invalid_argument("--pipeline must be forward, deferred or raytracing");
@@ -280,6 +288,7 @@ std::string_view Usage()
            "final|hdr|shadow|environment|brdf|reflection-raw|reflection-history|reflection-"
            "denoised  Select "
            "the displayed texture\n"
+           "  --recording-threads N       Native recording threads (1..16, default 1)\n"
            "  --submission direct|indexed-direct|cpu-indirect|gpu-culled  Geometry submission\n"
            "  --pipeline forward|deferred|raytracing  Select scene rendering path\n"
            "  --debug-panel               Open native scene controls (F1 toggles)\n"

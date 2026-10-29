@@ -58,7 +58,7 @@ def load_suite(config_path, args):
         raise ValueError("Backends must be distinct dx12/vulkan values")
     defaults = {"seconds": 10, "warmupSeconds": 2, "warmupFrames": 5, "width": 1280, "height": 720,
                 "quality": "medium", "view": "final", "validation": "off", "cpuProfiling": False,
-                "pipeline": "forward", "submission": "direct"}
+                "pipeline": "forward", "submission": "direct", "recordingThreads": 1}
     if set(config.get("defaults", {})) - set(defaults):
         raise ValueError("Unknown benchmark defaults")
     defaults.update(config.get("defaults", {}))
@@ -86,6 +86,7 @@ def load_suite(config_path, args):
         bounded(case["seconds"], .001, 3600, "seconds")
         bounded(case["warmupSeconds"], 0, 3600, "warmupSeconds")
         bounded(case["warmupFrames"], 0, 10000, "warmupFrames", True)
+        bounded(case["recordingThreads"], 1, 16, "recordingThreads", True)
         for key in ("width", "height"):
             bounded(case[key], 1, 16384, key, True)
         if case["quality"] not in ("scene", "low", "medium", "high") or case["view"] not in ("final", "hdr", "shadow", "environment", "brdf") or case["validation"] not in ("on", "off"):
@@ -125,6 +126,8 @@ def execute(command, cwd, console, timeout):
 def validate_case(report, case, backend):
     expected = {key: case[key] for key in ("width", "height", "quality", "view", "pipeline", "submission")}
     expected.update(backend=backend, validation=case["validation"] == "on")
+    if report.get("recordingThreads", 1) != case.get("recordingThreads", 1):
+        raise ValueError("Recorded settings disagree with requested recordingThreads")
     budgets = {"requestedFrames": 0, "requestedSeconds": case["seconds"],
                "requestedWarmupFrames": case["warmupFrames"], "requestedWarmupSeconds": case["warmupSeconds"]}
     if (any(report[key] != value for key, value in expected.items()) or
@@ -162,6 +165,7 @@ def run_suite(config_path, output, args):
                            "--width", str(case["width"]), "--height", str(case["height"]),
                            "--quality", case["quality"], "--view", case["view"],
                            "--pipeline", case["pipeline"], "--submission", case["submission"],
+                           "--recording-threads", str(case["recordingThreads"]),
                            "--profile", str(report), "--samples", str(directory / "frames.jsonl"),
                            "--output", str(directory / "capture"), "--report", str(capability), "--log", str(directory / "player.log")]
                 if case["cpuProfiling"]:

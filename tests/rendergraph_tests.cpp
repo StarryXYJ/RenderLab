@@ -347,7 +347,7 @@ void Lifecycle()
         t = pass.WriteTexture(t);
         pass.Execute([](ComputeContext&) { throw std::runtime_error("cancel recording"); });
         g.Export(t, rhi::State::Sampled);
-        g.Compile();
+        g.Compile({.recordingThreads = 4});
         Fails([&] { g.Execute(pool); }, "cancel recording");
         Require(runtime.LastSubmitted() == 0 && pool.Stats().allocations == 1,
                 "Cancelled packets never publish completion");
@@ -891,6 +891,34 @@ int main()
         ForwardContracts();
         StencilContracts();
         ProfilingContracts();
+        {
+            FakeRuntime runtime;
+            Pool pool(runtime);
+            Graph graph;
+            Fails([&] { graph.Compile({.recordingThreads = 0}); }, "Recording threads");
+            Fails([&] { graph.Compile({.recordingThreads = 17}); }, "Recording threads");
+            const auto owner = std::this_thread::get_id();
+            uint32_t callbacks = 0;
+            for (uint32_t i = 0; i < 16; ++i)
+            {
+                auto pass = graph.AddComputePass("Parallel." + std::to_string(i));
+                pass.SideEffect();
+                pass.Execute(
+                    [&](ComputeContext&)
+                    {
+                        Require(std::this_thread::get_id() == owner,
+                                "Graph callbacks left the owner thread");
+                        ++callbacks;
+                    });
+            }
+            const auto& plan = graph.Compile({.recordingThreads = 4});
+            graph.Execute(pool);
+            Require(callbacks == 16 && plan.recordingChunks == 4,
+                    "Graph failed to freeze and partition all live passes");
+            Require(plan.ToJson().find("parallel-native") != std::string::npos,
+                    "Graph dump misreported parallel recording");
+            runtime.WaitIdle();
+        }
         AccelerationStructureContracts();
         ShaderTableContracts();
         std::cout << "Graph contracts passed: names, typed passes, versions, culling, hazards, "

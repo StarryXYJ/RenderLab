@@ -21,6 +21,7 @@ renderer::SceneRenderOptions RenderOptions(const Options& options)
                       : options.pipeline == "raytracing" ? renderer::PipelineType::RayTracing
                                                          : renderer::PipelineType::Forward;
     render.reflectionDenoise = options.reflectionDenoise;
+    render.recordingThreads = options.recordingThreads;
     render.submission =
         options.submission == "gpu-culled"       ? renderer::GeometrySubmission::GpuCulled
         : options.submission == "cpu-indirect"   ? renderer::GeometrySubmission::CpuIndirect
@@ -143,6 +144,7 @@ void Statistics::Save(const std::filesystem::path& path, const Options& options,
                           {"reflectionTemporal", options.reflectionTemporal},
                           {"pipeline", options.pipeline},
                           {"submission", options.submission},
+                          {"recordingThreads", options.recordingThreads},
                           {"warmupFrames", options.Benchmark() ? options.warmupFrames : 0},
                           {"cpuRender", summary(cpu_)},
                           {"graphCompile", summary(compile_)},

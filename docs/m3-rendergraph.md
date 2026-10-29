@@ -1,6 +1,6 @@
 # Render Graph 与 Feature
 
-Graph 每帧构建，当前使用单 Graphics Queue 串行执行。资源依赖、剔除、屏障和提交属于 Graph；普通 Forward 的绘制与阶段组合属于 [Renderer](forward-pipeline.md)。Demo 使用空 Custom 组合注册 Feature，不使用 Forward 预设。
+Graph 每帧构建，当前使用单 Graphics Queue；M6.3 支持可选的 CPU [并行原生命令录制](parallel-recording.md)，GPU 仍按计划顺序执行。资源依赖、剔除、屏障和提交属于 Graph；普通 Forward 的绘制与阶段组合属于 [Renderer](forward-pipeline.md)。Demo 使用空 Custom 组合注册 Feature，不使用 Forward 预设。
 
 ## 资源与名称
 
@@ -78,7 +78,7 @@ Export 和 SideEffect 是存活根。Import 只表达资源来自图外，不会
 - 存活工作之间仍建立 RAW、WAR、WAW，确保共用物理资源不会被错误覆盖。
 - `graph.After(pass, predecessor)` / `Before(pass, successor)` 添加硬顺序约束，不自动保留无用 Pass，也不替代资源访问或选择新版本。
 
-编译器采用稳定拓扑排序，无约束的 Pass 按注册顺序打破平局。冲突产生环时，诊断列出相关 Pass 名称和源位置。M3 只做单队列串行执行；依赖图尚未用于 CPU 并行录制或 GPU 多队列调度。
+编译器采用稳定拓扑排序，无约束的 Pass 按注册顺序打破平局。冲突产生环时，诊断列出相关 Pass 名称和源位置。M3 的单队列基线保留；M6.3 在闭合 Pass 边界冻结并分块 RHI 包，可并行进行后端录制，回调仍在 owner 线程。
 
 ## 自动屏障与图外交接
 
@@ -106,7 +106,7 @@ Pool 在 Runtime 所有线程创建和使用，Runtime 和 Pool 都必须比使�
 
 CompileOptions.profile 可为存活 Pass 开启起止 Timestamp（最多 32 个 Pass），返回 Submission.profile；调用方确认完成后使用 profile.Read(runtime) 读取纳秒值，未完成或其他 Runtime 均拒绝。Graph 自己录制查询解析和 HostRead 屏障，读回由提交结果保活；不开启时没有该读回分配。计时不包括 Pass 间屏障或 Present；完整约定见 [M4 工具](m4-tools.md#gpu-timestamp-与完成点)。
 
-`--graph-no-cull` 关闭剔除，仍使用同一个编译器和执行器。`--graph-no-update` 让 Noise Feature 省略更新 Pass。`--graph-dump` 导出首个窗口帧的图。没有额外的立即模式或并行执行路径。
+`--graph-no-cull` 关闭剔除，仍使用同一个编译器和执行器。`--graph-no-update` 让 Noise Feature 省略更新 Pass。`--graph-dump` 导出首个窗口帧的图。没有额外的立即模式；串行和可选并行录制共用此执行器。
 
 CPU `rendergraph.contracts` 验证初始化、Full/Preserve、共享只读、WAR 重排、顺序冲突、旧句柄/版本、范围/aspect、用途、附件 Load/Clear、取消、完成点保护、池容量和越界命令。
 
@@ -123,7 +123,7 @@ GPU `gpu.{dx12,vulkan}.graph` 将六张图的输出与直接 RHI 基线及 CPU �
 | samples/graph/graph_features、graph_demo | Demo Feature 实例与 Custom 组合 |
 | samples/graph/graph_acceptance、graph_buffer_checks、forward_acceptance | GPU 行为验收 |
 
-当前仍是单视图、单 Graphics Queue、单 mip/layer、保守整 Buffer 依赖、单颜色附件和固定 Store。名称表仅属于单张图，阶段枚举由 Renderer 提供。没有全局资源黑板、多队列、并行录制、Alias、执行计划缓存或跨设备同步。相关能力在真实阶段需求出现时扩展。
+当前仍是单视图、单 Graphics Queue、单 mip/layer、保守整 Buffer 依赖和固定 Store；M5 已扩展至最多八个颜色附件。名称表仅属于单张图，阶段枚举由 Renderer 提供。没有全局资源黑板、多队列、Alias、执行计划缓存或跨设备同步。M6.3 并行录制的独立原生上下文不改变资源同步计划。
 
 普通 Forward 验收另检查透明稳定排序、阶段顺序与剔除、回调输入所有权、双后端图像和独立阶段快照。实际配置见 [阶段计划](../design/phaseplan.md)。
 

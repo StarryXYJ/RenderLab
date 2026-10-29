@@ -108,6 +108,8 @@ struct CompileOptions
     bool cull = true;
     /// Adds two timestamp slots per live pass; maximum 32 passes per graph submission.
     bool profile = false;
+    /// Native recording workers, including the caller. Callbacks/preparation stay on owner.
+    uint32_t recordingThreads = 1;
 };
 struct Edge
 {
@@ -150,6 +152,7 @@ struct ResourceInfo
 struct Plan
 {
     uint64_t compileNs = 0, prepareNs = 0, recordNs = 0;
+    uint32_t recordingThreads = 1, recordingChunks = 0;
     std::vector<PassInfo> passes;
     std::vector<ResourceInfo> resources;
     std::vector<Edge> edges;

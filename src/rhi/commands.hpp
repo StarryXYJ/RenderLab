@@ -3,9 +3,11 @@
 #include "rhi/resources.hpp"
 
 #include <array>
+#include <cstddef>
 #include <cstdint>
 #include <memory>
 #include <string>
+#include <utility>
 #include <variant>
 #include <vector>
 
@@ -168,6 +170,11 @@ public:
     void WriteTimestamp(uint32_t index);
     void ReadTimestamps(std::shared_ptr<Buffer> destination, uint32_t count = 2);
     void Cancel();
+    /// Closed, self-contained pass boundary; subsequent draws must rebind their state.
+    void RecordingBoundary();
+    void SetRecordingThreads(uint32_t count);
+    /// Immutable packet ranges, split only at explicit closed boundaries, in submission order.
+    std::vector<std::pair<size_t, size_t>> RecordingRanges() const;
     const std::vector<Command>& GetCommands() const
     {
         return commands_;
@@ -181,6 +188,8 @@ private:
     const void* owner_;
     IndirectSupport indirect_;
     std::vector<Command> commands_;
+    std::vector<size_t> recordingEnds_;
+    uint32_t recordingThreads_ = 1;
     bool consumed_ = false;
     bool rendering_ = false;
     bool compute_ = false;

@@ -18,17 +18,13 @@ enum class CpuOperation : size_t
     FenceWait,
     DescriptorPageCreate,
     DescriptorHeapBind,
+    NativeRecord,
     Count
 };
 inline constexpr std::array<std::string_view, size_t(CpuOperation::Count)> CpuOperationNames = {
-    "rhiBufferCreateMs",
-    "rhiGroupCreateMs",
-    "rhiViewCreateMs",
-    "rhiNativeSubmitMs",
-    "rhiRetireMs",
-    "rhiFenceWaitMs",
-    "rhiDescriptorPageCreateMs",
-    "rhiDescriptorHeapBindMs"};
+    "rhiBufferCreateMs", "rhiGroupCreateMs", "rhiViewCreateMs",           "rhiNativeSubmitMs",
+    "rhiRetireMs",       "rhiFenceWaitMs",   "rhiDescriptorPageCreateMs", "rhiDescriptorHeapBindMs",
+    "rhiNativeRecordMs"};
 struct CpuMeasurement
 {
     uint64_t calls = 0, nanoseconds = 0;

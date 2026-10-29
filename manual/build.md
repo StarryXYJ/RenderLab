@@ -138,6 +138,8 @@ Release 替换构建目录；测试要求支持多条间接、Count 与非零 fi
 支持范围、容量与内存边界见 [GPU Driven](../docs/gpu-driven.md#场景索引基线)。
 
 `--submission gpu-culled` 启用 Compute 视锥剔除与 GPU Count，保留上述 CPU 对照。
+
+场景可独立添加 `--recording-threads 4` 启用 CPU 并行原生命令录制，范围 1..16，默认 1；与几何提交/管线选择独立。资源准备和 Graph 回调仍在 owner 线程，单 Graphics Queue 按原序提交。使用 `--cpu-profile` 和 Benchmark 的 `recordingThreads` 配对测量；`rhiNativeRecordMs` 包含任务调度/等待，已经包含在 NativeSubmit 中。`ctest --test-dir out/build/m5-release -R 'recording.contracts|indexed_scene' --output-on-failure` 检查线程持久性、异常与双后端串并行图像/时间戳；契约见 [并行录制](../docs/parallel-recording.md)。
 规模性能套件先运行 `ctest --preset windows-release -R 'gpu.dx12.indexed_scene'` 生成固定场景，
 再执行 `python tools/benchmark/run.py sample/benchmark/gpu-driven.json --output out/benchmarks/gpu-driven`。
 该配置为短测；完整条件与局限见 [测量记录](../docs/performance/m6-gpu-driven.md)。

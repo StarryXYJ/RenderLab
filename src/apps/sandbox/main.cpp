@@ -38,6 +38,7 @@ std::string_view ApplicationUsage()
            "final|hdr|shadow|environment|brdf|reflection-raw|reflection-history|reflection-"
            "denoised  Texture "
            "preview\n"
+           "  --recording-threads N       Native recording threads (1..16, default 1)\n"
            "  --submission direct|indexed-direct|cpu-indirect|gpu-culled  Geometry submission\n"
            "  --pipeline forward|deferred|raytracing  Scene rendering path\n"
            "  --fixed-camera --debug-panel  Camera and native controls\n"

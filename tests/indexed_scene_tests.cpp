@@ -90,6 +90,23 @@ void Scene(rhi::Runtime& runtime, shader::Target target, const std::filesystem::
         Require(Pixels(runtime, gpuFrame, width, height) == indexed,
                 "GPU frustum culling pixels differ from CPU culling");
         Require(gpuFrame.indexedScene.gpuCulling, "GPU culling mode was not used");
+        for (const auto mode : {GeometrySubmission::Direct, GeometrySubmission::IndexedDirect,
+                                GeometrySubmission::CpuIndirect, GeometrySubmission::GpuCulled})
+        {
+            options.submission = mode;
+            options.recordingThreads = 4;
+            options.profile = true;
+            const auto parallel =
+                renderer.Render(color, rhi::State::CopySource, nullptr, true, {}, options);
+            const auto& expected = mode == GeometrySubmission::Direct ? direct : indexed;
+            Require(Pixels(runtime, parallel, width, height) == expected,
+                    "Serial and parallel native recording pixels differ");
+            const auto timings = parallel.profile.Read(runtime);
+            Require(!timings.empty(), "Parallel recording lost GPU timestamps");
+            for (const auto& timing : timings)
+                Require(std::isfinite(timing.nanoseconds) && timing.nanoseconds >= 0,
+                        "Parallel recording corrupted GPU timestamps");
+        }
         if (gpuFrame.culling.readback)
         {
             const auto bytes = gpuFrame.culling.readback->Map();
@@ -115,7 +132,39 @@ void Scene(rhi::Runtime& runtime, shader::Target target, const std::filesystem::
     for (const auto pipeline : {PipelineType::Forward, PipelineType::Deferred})
         check(pipeline);
     if (project.stem() == "Pbr")
+    {
         check(PipelineType::RayTracing, 129, 73);
+        // A fresh renderer records a TLAS build and TraceRays together on parallel contexts.
+        SceneRenderer rayRenderer(runtime, target, project, shaders);
+        SceneRenderOptions rayOptions;
+        rayOptions.pipeline = PipelineType::RayTracing;
+        rayOptions.submission = GeometrySubmission::GpuCulled;
+        rayOptions.reflectionHistory = false;
+        rayOptions.reflectionDenoise = false;
+        rayOptions.reflectionTemporal = false;
+        rayOptions.recordingThreads = 4;
+        rayOptions.profile = true;
+        auto colorA =
+            runtime.CreateTexture({97, 73, rhi::Format::Rgba8Srgb, false, true, "Parallel.Rays.A"});
+        auto colorB =
+            runtime.CreateTexture({97, 73, rhi::Format::Rgba8Srgb, false, true, "Parallel.Rays.B"});
+        const auto parallel = rayRenderer.Render(colorA, rhi::State::Undefined, nullptr, true,
+                                                 output / "parallel-raytracing.json", rayOptions);
+        rayOptions.recordingThreads = 1;
+        const auto serial =
+            rayRenderer.Render(colorB, rhi::State::Undefined, nullptr, true, {}, rayOptions);
+        Require(Pixels(runtime, parallel, 97, 73) == Pixels(runtime, serial, 97, 73),
+                "Parallel TLAS and TraceRays output differs from serial");
+        bool traced = false, built = false;
+        for (const auto& timing : parallel.profile.Read(runtime))
+        {
+            traced |= timing.name == "RayTracing.Reflection.Trace";
+            built |= timing.name == "RayTracing.BuildTLAS";
+            Require(std::isfinite(timing.nanoseconds) && timing.nanoseconds >= 0,
+                    "Parallel ray tracing timestamp is invalid");
+        }
+        Require(traced && built, "Parallel ray tracing test did not record trace and AS build");
+    }
     // A mirrored transform exercises PSO winding and packed normal matrices.
     const auto firstMesh = std::ranges::find_if(document.objects, [](const auto& object)
                                                 { return object.mesh.has_value(); });
@@ -147,6 +196,7 @@ void Scene(rhi::Runtime& runtime, shader::Target target, const std::filesystem::
     const auto pendingA =
         renderer.Render(colorA, rhi::State::CopySource, nullptr, true, {}, options);
     document.MoveCamera({.3f, 0, 0}, {0, 3, 0});
+    options.recordingThreads = 4;
     const auto pendingB =
         renderer.Render(colorB, rhi::State::CopySource, nullptr, true, {}, options);
     Require(Pixels(runtime, pendingA, 97, 73) == referenceA &&

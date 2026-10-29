@@ -44,6 +44,7 @@ add_library(renderlab_rhi STATIC
     src/rhi/device.cpp
     src/rhi/resources.cpp
     src/rhi/commands.cpp
+    src/rhi/recording_workers.cpp
     src/rhi/runtime.cpp
     src/rhi/pipeline_cache.cpp
     src/rhi/upload.cpp
@@ -217,6 +218,10 @@ install(DIRECTORY sample/m4/Assets DESTINATION project)
 install(FILES sample/m4/RenderLab.rlproject sample/m4/Pbr.rlproject sample/m4/Shadow.rlproject DESTINATION project)
 
 if(BUILD_TESTING)
+    add_executable(renderlab_recording_tests tests/recording_tests.cpp)
+    target_link_libraries(renderlab_recording_tests PRIVATE renderlab_options renderlab_rhi)
+    add_test(NAME recording.contracts COMMAND renderlab_recording_tests)
+    set_tests_properties(recording.contracts PROPERTIES TIMEOUT 30)
     add_executable(renderlab_indexed_scene_tests tests/indexed_scene_tests.cpp)
     target_link_libraries(renderlab_indexed_scene_tests PRIVATE renderlab_options renderlab_renderer
         renderlab_samples renderlab_rhi renderlab_content renderlab_core renderlab_platform)

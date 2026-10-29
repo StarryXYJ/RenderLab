@@ -69,6 +69,7 @@ void Graph::Record()
     auto& g = *impl_;
     Require(g.phase == detail::Phase::Prepared, "Record requires prepared graph");
     g.commands = g.pool->Device().CreateCommands();
+    g.commands->SetRecordingThreads(g.recordingThreads);
     g.phase = detail::Phase::Recording;
     const auto barrier = [&](const Barrier& b)
     {
@@ -128,6 +129,7 @@ void Graph::Record()
             if (g.timestamps)
                 g.commands->WriteTimestamp(timestamp++);
             g.commands->EndMarker();
+            g.commands->RecordingBoundary();
         }
         for (const auto& b : g.plan.finalBarriers)
             barrier(b);
@@ -139,6 +141,7 @@ void Graph::Record()
         }
         g.active = UINT32_MAX;
         g.phase = detail::Phase::Recorded;
+        g.plan.recordingChunks = static_cast<uint32_t>(g.commands->RecordingRanges().size());
         g.plan.recordNs = std::chrono::duration_cast<std::chrono::nanoseconds>(
                               std::chrono::steady_clock::now() - started)
                               .count();

@@ -2,10 +2,50 @@
 
 #include "rhi/detail/validation.hpp"
 
+#include <algorithm>
+
 namespace renderlab::rhi
 {
 using detail::Range;
 using detail::Require;
+
+void CommandList::SetRecordingThreads(uint32_t count)
+{
+    Recording();
+    Require(count >= 1 && count <= 16, "Recording threads must be in [1, 16]");
+    recordingThreads_ = count;
+}
+void CommandList::RecordingBoundary()
+{
+    Recording();
+    Require(!rendering_ && !markers_, "Recording boundary requires closed rendering and markers");
+    if (!commands_.empty() && (recordingEnds_.empty() || recordingEnds_.back() != commands_.size()))
+        recordingEnds_.push_back(commands_.size());
+    pipeline_.reset();
+    group_.reset();
+    vertex_.reset();
+    index_.reset();
+}
+std::vector<std::pair<size_t, size_t>> CommandList::RecordingRanges() const
+{
+    auto ends = recordingEnds_;
+    if (ends.empty() || ends.back() != commands_.size())
+        ends.push_back(commands_.size());
+    std::vector<std::pair<size_t, size_t>> ranges;
+    size_t begin = 0;
+    for (uint32_t i = 1; i < recordingThreads_; ++i)
+    {
+        const auto target = commands_.size() * i / recordingThreads_;
+        const auto end = *std::lower_bound(ends.begin(), ends.end(), target);
+        if (end > begin && end < commands_.size())
+        {
+            ranges.emplace_back(begin, end);
+            begin = end;
+        }
+    }
+    ranges.emplace_back(begin, commands_.size());
+    return ranges;
+}
 
 void CommandList::Recording() const
 {

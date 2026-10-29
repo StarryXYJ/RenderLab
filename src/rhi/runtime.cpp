@@ -2,6 +2,7 @@
 
 #include "rhi/commands.hpp"
 #include "rhi/detail/validation.hpp"
+#include "rhi/recording_workers.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -14,6 +15,25 @@ using detail::Require;
 
 Runtime::Runtime() = default;
 Runtime::~Runtime() = default;
+
+void Runtime::RecordNative(size_t count, const std::function<void(size_t)>& job)
+{
+    auto timer = ProfileCpu(CpuOperation::NativeRecord);
+    if (count == 1)
+        job(0);
+    else
+    {
+        if (!recordingWorkers_)
+            recordingWorkers_ = std::make_unique<RecordingWorkers>();
+        recordingWorkers_->Run(count, job);
+    }
+}
+void Runtime::AddCpuMeasurement(CpuOperation operation, CpuMeasurement measurement)
+{
+    auto& destination = cpuProfile_.at(size_t(operation));
+    destination.calls += measurement.calls;
+    destination.nanoseconds += measurement.nanoseconds;
+}
 
 void Runtime::SetAllocationBudget(uint64_t bytes)
 {

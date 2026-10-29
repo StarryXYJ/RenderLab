@@ -5,7 +5,7 @@
 ## 当前状态
 
 - 当前实施阶段：M6 IN_PROGRESS；M0–M5、R1、B1–B3 DONE。
-- 当前工作项：M6.1、M6.2 DONE；下一工作项为 M6.3 CPU 并行录制，尚未启动。M6.4/M6.5 未启动；M7 提前试验保留既有结果，M8 未启动。
+- 当前工作项：M6.1–M6.3 DONE；下一工作项为 M6.4 GPU 多队列，尚未启动。M6.5 未启动；M7 提前试验保留既有结果，M8 未启动。
 - 用户约定：每个子阶段验收完成即提交 Git，无阻塞时在当前授权范围内继续推进。此前 M7 修改已进入 Git，本轮开始时工作区干净。
 
 | 阶段 | 目标 | 前置依赖 | 状态 |
@@ -299,9 +299,17 @@ R1 契约修订、B1 样例整理/Benchmark、B2 调查和 B3 资源复用已完
 
 ### M6.3 CPU 并行录制
 
-- [ ] 固化编译后执行计划、线程独立 CommandContext 和分配上下文。
-- [ ] 录制只读的冻结访问计划与闭包数据，Shader/PSO 事先准备，绑定分配使用线程安全上下文。
-- [ ] 保持单队列，比较串行/并行录制输出和 CPU 时间。
+状态：DONE，日期：2026 年 10 月 29 日。
+
+结果：owner 线程完成 Graph 回调、资源/视图/不可变绑定与 PSO 准备，冻结 RHI 命令包后按闭合 Pass 边界分块；1..16 线程（含调用线程）的持久工作池，各块独立 DX12 Allocator/List 或 Vulkan CommandPool/Buffer。整组按原序一次提交单 Graphics Queue，由真实完成点保活。失败先 join，再移除本批次触及的上下文，不提交部分录制；GPU 时间戳与 CPU HeapBind 探针支持分块。
+
+验证：RTX 5060、MSVC NMake，Debug/Release 全目标构建成功，各所选 CPU/CLI 与双后端专项 26/26；最终头文件补全后 Release 追加 8/8，4 线程取消的 Graph 合约在两配置通过，新增并行 TLAS + TraceRays 在两配置双后端另行通过。GPU validation errors=0，场景专项销毁后账本为 0；Python Benchmark 15/15。检查 16 任务真实同时进入、线程持久/异常后复用、闭合分块完整、owner 回调、串并行像素、时间戳与在途版本。
+
+性能：Release/validation off、CPU profiling on，32 次、26139 测量帧，8 组串行/并行截图一致。请求 4 线程实际分成 2 或 4 块；原生录制均值约 0.03–0.10 ms，多数配置持平或增加，没有普遍收益，默认保持 1 线程。4096 经典 Direct 的首轮测量触及既有描述符页上限，失败记录保留、未计入最终套件；该规模用 IndexedDirect 对照，没有扩大预算。
+
+边界：回调与场景准备仍串行，单个 Pass 不拆；静态 BLAS 仍在独立同步 Graph 构建，并行 AS 证据针对 TLAS。未验证设备丢失/原生驱动故障、其他 GPU、多视口或窗口长期吞吐；本条不完成多队列与 Alias。
+
+文档：[契约与生命周期](../docs/parallel-recording.md)、[数据/hash、失败记录、成本与复现](../docs/performance/m6-parallel-recording.md)、[Benchmark 设置](../docs/benchmark.md)。
 
 ### M6.4 GPU 多队列
 
