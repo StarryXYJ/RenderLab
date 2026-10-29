@@ -46,6 +46,7 @@ struct IndexedDrawInput
     int32_t queue = 2000;
     uint32_t stencilReference = 0;
     bool gbuffer = false;
+    bool cpuVisible = true;
 };
 struct IndexedFrameBindings
 {
@@ -57,6 +58,14 @@ struct IndexedSceneStatistics
 {
     uint32_t instances = 0, visible = 0, materials = 0, textures = 0, batches = 0;
     uint64_t geometryUploads = 0;
+    bool gpuCulling = false;
+};
+struct IndexedCullDiagnostics
+{
+    /// uint32 counts[batches], then uint32 visibleIndices[capacity]; wait before mapping.
+    std::shared_ptr<rhi::Buffer> readback;
+    std::vector<uint32_t> batchOffsets, batchCapacities;
+    uint32_t visibleOffset = 0;
 };
 /** @brief Immutable per-frame indexed raster projection. Runtime outlives this owner. */
 class IndexedScene final
@@ -68,10 +77,11 @@ public:
     /// Prepare before recording; resources and tables are pinned by graph commands.
     void Build(rendergraph::Graph&, const std::vector<IndexedDrawInput>&,
                const IndexedFrameBindings&, bool indirect, std::vector<DrawPacket>& opaque,
-               std::vector<DrawPacket>& gbuffer);
+               std::vector<DrawPacket>& gbuffer, bool gpuCulling = false, bool diagnostics = false);
     /// Seal upload pages only after successful submission. A failed build may be retried.
     void Commit(uint64_t completion);
     IndexedSceneStatistics Statistics() const;
+    IndexedCullDiagnostics Diagnostics() const;
 
 private:
     struct Impl;

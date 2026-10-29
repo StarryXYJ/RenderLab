@@ -126,7 +126,8 @@ def compatible_key(report):
             identity["vendorId"], identity["deviceId"], identity["software"],
             benchmark["timingMode"], benchmark["requestedFrames"], benchmark["requestedSeconds"],
             benchmark["requestedWarmupFrames"], benchmark["requestedWarmupSeconds"],
-            benchmark.get("cpuProfiling", False))
+            benchmark.get("cpuProfiling", False), report.get("pipeline", "forward"),
+            report.get("submission", "direct"))
 
 
 def ensure_plotting():

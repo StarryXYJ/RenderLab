@@ -5,7 +5,7 @@
 ## 当前状态
 
 - 当前实施阶段：M6 IN_PROGRESS；M0–M5、R1、B1–B3 DONE。
-- 当前工作项：M6.1 可索引资源与间接提交 DONE；继续 M6.2 GPU Frustum Culling、压缩与 GPU Count 消费。M7 提前试验暂停在既有结果，M8 未启动。
+- 当前工作项：M6.1、M6.2 DONE；下一工作项为 M6.3 CPU 并行录制，尚未启动。M6.4/M6.5 未启动；M7 提前试验保留既有结果，M8 未启动。
 - 用户约定：每个子阶段验收完成即提交 Git，无阻塞时在当前授权范围内继续推进。此前 M7 修改已进入 Git，本轮开始时工作区干净。
 
 | 阶段 | 目标 | 前置依赖 | 状态 |
@@ -279,19 +279,23 @@ R1 契约修订、B1 样例整理/Benchmark、B2 调查和 B3 资源复用已完
 
 验证：RTX 5060、MSVC NMake Debug/Release 全目标构建成功，当前所选 Core/Graph/CLI 和双后端 indexed_scene/descriptor_array/indirect/rhi/graph/render_state/PBR/Deferred 各 19/19。GPU validation errors=0，专项销毁后账本为 0。索引直接与 CPU 间接图像逐字节一致；原材质路径最大误差/MSE 检查通过。覆盖 Count 0/1/2/3/99、正负 baseVertex、多实例/乱序身份、64 元素同波非一致索引、缺项/重复/越界/用途/容量拒绝、取消/退休与在途版本，以及 PBR/Masked/透明、镜像、奇数尺寸、空场景/全剔除和 Ray Query 组合。双后端真实 CLI Deferred/cpu-indirect 报告各含 9 实例/9 材质/5 纹理/1 批次、静态几何仅上传一次，关闭错误为 0。构建同时修复旧 render_state/PBR 测试的颜色附件接口遗漏；暂存回拷时间戳导致的旧目标混用已通过完整重编译或刷新源码时间戳后重编译排除。
 
-边界：最多 16384 个索引实例和 64 个图像/色彩空间版本；非内置不透明 Shader 显式拒绝，透明仍排序提交；几何首次/集合变化同步打包上传，索引与原始几何双份保留。仅 sampled-image 数组，无部分绑定/变长数组/update-after-bind；CPU 仍准备材质/状态，尚未接入 GPU 剔除或承诺性能提升，其他 GPU 未验收。a/b/c 分别验证、提交，过程见 Git 历史。
+边界：最多 16384 个索引实例和 64 个图像/色彩空间版本；非内置不透明 Shader 显式拒绝，透明仍排序提交；几何首次/集合变化同步打包上传，索引与原始几何双份保留。仅 sampled-image 数组，无部分绑定/变长数组/update-after-bind；CPU 仍准备材质/状态，GPU 剔除由 M6.2 交付，本条不单独承诺性能提升，其他 GPU 未验收。a/b/c 分别验证、提交，过程见 Git 历史。
 
 文档：[契约、布局、限制与验证](../docs/gpu-driven.md)、[运行](../manual/build.md#shader-与材质工具)。
 
 ### M6.2 GPU 剔除
 
-状态：IN_PROGRESS。
+状态：DONE，日期：2026 年 10 月 29 日。
 
-- [ ] Compute Frustum Culling、可见实例压缩、Indirect Args 和 Count。
-- [ ] 图中声明清零、写入和 Indirect Read；CPU 只遍历有限 Pipeline 批次。
-- [ ] 零物体、全剔除、全部可见、容量溢出有确定处理，禁止本帧同步读回数量。
+结果：Compute 八角/六面视锥测试、64 线程分块稳定压缩及 GPU Args/Count；图中声明清零、Storage 依赖与 Indirect/ShaderRead。GPU 模式跳过 CPU 相机剔除，CPU 只提交固定批次；可见数量在报告中标为未知，只有显式诊断才读回。零/全剔除、原序压缩和展开实例容量拒绝有确定行为。按帧冻结材质/策略，索引准备按材质/Pass/绕序复用，Pipeline 按原身份每帧准备一次；提取使用临时对象索引。
 
-验收与 CPU 剔除结果对照并测量不同规模场景。Hi-Z 和 LOD 后置，不能混入首个正确性样例。
+验证：RTX 5060、MSVC NMake，Debug/Release 全目标构建成功，所选 Content/Core/Graph/CLI 与双后端索引/数组/间接/RHI/Graph/状态/PBR/Deferred/AS-Ray Query/反射各 24/24，GPU validation errors=0，专项销毁后账本 0；Python Benchmark 校验 15/15。GPU 可见列表逐项等于 CPU 测试，覆盖 1/64/65/1024/4096 候选和线程块边界、空/全剔除、Masked/透明、镜像、在途版本及 16384 展开实例上限拒绝。
+
+性能：Release/validation off、257×193 Deferred，两轮各 36 次、共 21665 测量帧，完整原始样本通过校验；最终每组 3 种提交的 12 组截图一致，准备复用前后 36 张截图逐字节相同。4096 实例帧均值由约 135–148 ms 降至 18–22 ms，主要收益来自 CPU 准备复用；GPU 剔除额外约 0.182/0.244 ms（DX12/Vulkan），仍由 CPU 准备主导，默认保持 Direct。不是窗口 FPS、长测或任意场景收益结论。
+
+边界：静态内置 Lit/Unlit、不透明/Masked；透明与光栅阴影仍为 CPU 路径，完整快照/表上传仍有成本。每批次单组分块限制 Compute 并行度；Hi-Z、LOD、CPU 并行录制、多队列与 Alias 均未由本条完成，M6 主阶段仍为 IN_PROGRESS。其他 GPU 未验收。
+
+文档：[契约与诊断](../docs/gpu-driven.md)、[输入/二进制 hash、成本、截图校验及复现](../docs/performance/m6-gpu-driven.md)、[Benchmark 设置](../docs/benchmark.md)。
 
 ### M6.3 CPU 并行录制
 

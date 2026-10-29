@@ -223,8 +223,9 @@ Options ParseOptions(std::span<const std::string_view> arguments)
         throw std::invalid_argument("--view must be final, hdr, shadow, environment, brdf, "
                                     "reflection-raw, reflection-history or reflection-denoised");
     if (options.submission != "direct" && options.submission != "indexed-direct" &&
-        options.submission != "cpu-indirect")
-        throw std::invalid_argument("--submission must be direct, indexed-direct or cpu-indirect");
+        options.submission != "cpu-indirect" && options.submission != "gpu-culled")
+        throw std::invalid_argument(
+            "--submission must be direct, indexed-direct, cpu-indirect or gpu-culled");
     if (options.submission != "direct" && options.projectPath.empty())
         throw std::invalid_argument("--submission requires --project");
     if (options.pipeline != "forward" && options.pipeline != "deferred" &&
@@ -279,7 +280,7 @@ std::string_view Usage()
            "final|hdr|shadow|environment|brdf|reflection-raw|reflection-history|reflection-"
            "denoised  Select "
            "the displayed texture\n"
-           "  --submission direct|indexed-direct|cpu-indirect  Geometry submission\n"
+           "  --submission direct|indexed-direct|cpu-indirect|gpu-culled  Geometry submission\n"
            "  --pipeline forward|deferred|raytracing  Select scene rendering path\n"
            "  --debug-panel               Open native scene controls (F1 toggles)\n"
            "  --fixed-camera              Ignore camera movement keys\n"

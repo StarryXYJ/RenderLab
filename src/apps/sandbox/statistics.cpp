@@ -22,7 +22,8 @@ renderer::SceneRenderOptions RenderOptions(const Options& options)
                                                          : renderer::PipelineType::Forward;
     render.reflectionDenoise = options.reflectionDenoise;
     render.submission =
-        options.submission == "cpu-indirect"     ? renderer::GeometrySubmission::CpuIndirect
+        options.submission == "gpu-culled"       ? renderer::GeometrySubmission::GpuCulled
+        : options.submission == "cpu-indirect"   ? renderer::GeometrySubmission::CpuIndirect
         : options.submission == "indexed-direct" ? renderer::GeometrySubmission::IndexedDirect
                                                  : renderer::GeometrySubmission::Direct;
     render.reflectionTemporal = options.reflectionTemporal;
@@ -97,8 +98,9 @@ std::string Statistics::Text(const scene::Snapshot& snapshot, rhi::MemoryStats m
                     "compile/prepare/record: {:.3f}/{:.3f}/{:.3f} ms\nVisible / total: {} / "
                     "{}\nRHI used / peak: {:.1f} / {:.1f} MiB\n",
                     cpu_.count, cpu_.Mean(), compile_.Mean(), prepare_.Mean(), record_.Mean(),
-                    snapshot.instances.size(), snapshot.totalInstances,
-                    double(memory.used) / (1024 * 1024), double(memory.highWater) / (1024 * 1024));
+                    snapshot.cpuVisibilityKnown ? std::to_string(snapshot.instances.size()) : "GPU",
+                    snapshot.totalInstances, double(memory.used) / (1024 * 1024),
+                    double(memory.highWater) / (1024 * 1024));
     if (reflectionSamples_)
         text += std::format("RT history: {} spp | observed resets: {}\n", reflectionSamples_,
                             reflectionResets_);
@@ -154,10 +156,15 @@ void Statistics::Save(const std::filesystem::path& path, const Options& options,
     result["reflectionHistory"] = {{"samples", reflectionSamples_},
                                    {"observedResets", reflectionResets_},
                                    {"temporalSourceFrames", reflectionTemporalFrames_}};
-    result["indexedScene"] = {
-        {"instances", indexedScene_.instances}, {"visible", indexedScene_.visible},
-        {"materials", indexedScene_.materials}, {"textures", indexedScene_.textures},
-        {"batches", indexedScene_.batches},     {"geometryUploads", indexedScene_.geometryUploads}};
+    result["indexedScene"] = {{"instances", indexedScene_.instances},
+                              {"visible", indexedScene_.gpuCulling
+                                              ? nlohmann::json(nullptr)
+                                              : nlohmann::json(indexedScene_.visible)},
+                              {"visibilitySource", indexedScene_.gpuCulling ? "gpu" : "cpu"},
+                              {"materials", indexedScene_.materials},
+                              {"textures", indexedScene_.textures},
+                              {"batches", indexedScene_.batches},
+                              {"geometryUploads", indexedScene_.geometryUploads}};
     result["recordedAtUtc"] = std::format(
         "{:%FT%TZ}", std::chrono::floor<std::chrono::seconds>(std::chrono::system_clock::now()));
 #ifdef NDEBUG

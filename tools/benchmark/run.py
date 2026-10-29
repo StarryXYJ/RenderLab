@@ -57,7 +57,8 @@ def load_suite(config_path, args):
     if not backends or len(set(backends)) != len(backends) or set(backends) - {"dx12", "vulkan"}:
         raise ValueError("Backends must be distinct dx12/vulkan values")
     defaults = {"seconds": 10, "warmupSeconds": 2, "warmupFrames": 5, "width": 1280, "height": 720,
-                "quality": "medium", "view": "final", "validation": "off", "cpuProfiling": False}
+                "quality": "medium", "view": "final", "validation": "off", "cpuProfiling": False,
+                "pipeline": "forward", "submission": "direct"}
     if set(config.get("defaults", {})) - set(defaults):
         raise ValueError("Unknown benchmark defaults")
     defaults.update(config.get("defaults", {}))
@@ -80,6 +81,8 @@ def load_suite(config_path, args):
             case["cpuProfiling"] = args.cpu_profile
         if not isinstance(case["cpuProfiling"], bool):
             raise ValueError("cpuProfiling requires a boolean")
+        if case["pipeline"] not in ("forward", "deferred", "raytracing") or case["submission"] not in ("direct", "indexed-direct", "cpu-indirect", "gpu-culled"):
+            raise ValueError("Invalid pipeline/submission")
         bounded(case["seconds"], .001, 3600, "seconds")
         bounded(case["warmupSeconds"], 0, 3600, "warmupSeconds")
         bounded(case["warmupFrames"], 0, 10000, "warmupFrames", True)
@@ -120,7 +123,7 @@ def execute(command, cwd, console, timeout):
 
 
 def validate_case(report, case, backend):
-    expected = {key: case[key] for key in ("width", "height", "quality", "view")}
+    expected = {key: case[key] for key in ("width", "height", "quality", "view", "pipeline", "submission")}
     expected.update(backend=backend, validation=case["validation"] == "on")
     budgets = {"requestedFrames": 0, "requestedSeconds": case["seconds"],
                "requestedWarmupFrames": case["warmupFrames"], "requestedWarmupSeconds": case["warmupSeconds"]}
@@ -158,6 +161,7 @@ def run_suite(config_path, output, args):
                            "--warmup-seconds", str(case["warmupSeconds"]), "--warmup-frames", str(case["warmupFrames"]),
                            "--width", str(case["width"]), "--height", str(case["height"]),
                            "--quality", case["quality"], "--view", case["view"],
+                           "--pipeline", case["pipeline"], "--submission", case["submission"],
                            "--profile", str(report), "--samples", str(directory / "frames.jsonl"),
                            "--output", str(directory / "capture"), "--report", str(capability), "--log", str(directory / "player.log")]
                 if case["cpuProfiling"]:

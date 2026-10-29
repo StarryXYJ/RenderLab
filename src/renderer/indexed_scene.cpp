@@ -34,6 +34,7 @@ struct Batch
     uint32_t stencil;
     bool gbuffer;
     std::vector<uint32_t> instances;
+    std::vector<uint32_t> candidates;
 };
 } // namespace
 struct IndexedScene::Impl
@@ -43,12 +44,14 @@ struct IndexedScene::Impl
     std::unique_ptr<rhi::UploadPool::Batch> uploads;
     std::shared_ptr<rhi::BindingLayout> layout;
     std::shared_ptr<rhi::ShaderModule> vertexShader, forwardShader, gbufferShader;
+    std::shared_ptr<rhi::Pipeline> clearCounts, cull;
     std::shared_ptr<rhi::Sampler> sampler;
     std::vector<std::shared_ptr<rhi::Pipeline>> pipelines;
     std::shared_ptr<rhi::Buffer> vertices, indices;
     std::vector<std::string> geometryKeys;
     std::map<std::string, MeshRange> meshes;
     IndexedSceneStatistics stats;
+    IndexedCullDiagnostics diagnostics;
     Impl(rhi::Runtime& r, shader::Target target, const std::filesystem::path& shaders,
          const shader::Interface& types)
         : runtime(r), uploadPool(r, 8 * 1024 * 1024, 8)
@@ -86,6 +89,27 @@ struct IndexedScene::Impl
         forwardShader = module(rhi::ShaderStage::Pixel, "PSForward");
         gbufferShader = module(rhi::ShaderStage::Pixel, "PSGBuffer");
         sampler = runtime.CreateSampler();
+        const auto compute = [&](const char* entry, std::vector<rhi::BindingDesc> entries)
+        {
+            shader::ProgramRequest request;
+            request.entry = {rhi::ShaderStage::Compute, shaders / "IndexedCull.hlsl", entry};
+            request.target = target;
+            request.includeDirectories = {shaders};
+            request.generatedTypes = shader::GenerateTypesHeader(types);
+            rhi::PipelineDesc desc;
+            desc.layout = runtime.CreateLayout(std::move(entries));
+            desc.compute =
+                runtime.CreateShader(rhi::ShaderStage::Compute, compiler.Compile(request), entry);
+            return runtime.CreatePipeline(std::move(desc));
+        };
+        clearCounts = compute("Clear", {{5, rhi::BindingKind::StorageBuffer}});
+        cull = compute("Cull", {{0, rhi::BindingKind::ReadOnlyBuffer},
+                                {1, rhi::BindingKind::ReadOnlyBuffer},
+                                {2, rhi::BindingKind::ReadOnlyBuffer},
+                                {3, rhi::BindingKind::StorageBuffer},
+                                {4, rhi::BindingKind::StorageBuffer},
+                                {5, rhi::BindingKind::StorageBuffer},
+                                {6, rhi::BindingKind::ConstantBuffer}});
     }
     std::shared_ptr<rhi::Pipeline> Pipeline(const IndexedDrawInput& input)
     {
@@ -108,7 +132,7 @@ struct IndexedScene::Impl
         for (const auto& input : inputs)
         {
             Require(input.mesh && !input.meshKey.empty(), "Indexed scene requires mesh identity");
-            sources.emplace(input.meshKey, input.mesh);
+            sources.try_emplace(input.meshKey, input.mesh);
         }
         std::vector<std::string> keys;
         for (const auto& [key, mesh] : sources)
@@ -168,6 +192,10 @@ IndexedSceneStatistics IndexedScene::Statistics() const
 {
     return impl_->stats;
 }
+IndexedCullDiagnostics IndexedScene::Diagnostics() const
+{
+    return impl_->diagnostics;
+}
 void IndexedScene::Commit(uint64_t completion)
 {
     if (impl_->uploads)
@@ -178,12 +206,17 @@ void IndexedScene::Commit(uint64_t completion)
 }
 void IndexedScene::Build(rendergraph::Graph& graph, const std::vector<IndexedDrawInput>& inputs,
                          const IndexedFrameBindings& frame, bool indirect,
-                         std::vector<DrawPacket>& opaque, std::vector<DrawPacket>& gbuffer)
+                         std::vector<DrawPacket>& opaque, std::vector<DrawPacket>& gbuffer,
+                         bool gpuCulling, bool diagnostics)
 {
     using namespace rendergraph;
     auto& self = *impl_;
     self.uploads.reset();
     self.stats = {.geometryUploads = self.stats.geometryUploads};
+    self.stats.gpuCulling = gpuCulling;
+    self.diagnostics = {};
+    Require(!gpuCulling || (indirect && self.runtime.GetIndirectSupport().countBuffer),
+            "GPU culling requires enabled indirect count buffers");
     Require(inputs.size() <= IndexedInstanceCapacity, "Indexed scene exceeds 16384 instances");
     if (inputs.empty())
         return;
@@ -194,6 +227,8 @@ void IndexedScene::Build(rendergraph::Graph& graph, const std::vector<IndexedDra
     std::map<std::string, uint32_t> materialIndices;
     std::vector<IndexedMaterialData> materials;
     std::vector<IndexedInstanceData> objects;
+    objects.reserve(inputs.size());
+    std::map<const rhi::Pipeline*, std::shared_ptr<rhi::Pipeline>> framePipelines;
     std::vector<Batch> batches;
     std::map<std::tuple<int32_t, const rhi::Pipeline*, uint32_t, bool>, uint32_t> batchIndices;
     for (const auto& input : inputs)
@@ -222,7 +257,9 @@ void IndexedScene::Build(rendergraph::Graph& graph, const std::vector<IndexedDra
             materialIndices[materialKey] = static_cast<uint32_t>(materials.size());
             materials.push_back(material);
         }
-        const auto pipeline = self.Pipeline(input);
+        if (!framePipelines.contains(input.reference.get()))
+            framePipelines.emplace(input.reference.get(), self.Pipeline(input));
+        const auto& pipeline = framePipelines.at(input.reference.get());
         const auto key =
             std::tuple{input.queue, pipeline.get(), input.stencilReference, input.gbuffer};
         if (!batchIndices.contains(key))
@@ -241,7 +278,8 @@ void IndexedScene::Build(rendergraph::Graph& graph, const std::vector<IndexedDra
         object.maximum = {input.instance.bounds.maximum.x, input.instance.bounds.maximum.y,
                           input.instance.bounds.maximum.z, 0};
         object.indices = {mesh.index, materialIndices.at(materialKey), mesh.count, mesh.vertex};
-        if (math::Visible(frame.viewProjection, input.instance.bounds))
+        batches[batch].candidates.push_back(static_cast<uint32_t>(objects.size()));
+        if (!gpuCulling && input.cpuVisible)
             batches[batch].instances.push_back(static_cast<uint32_t>(objects.size()));
         objects.push_back(object);
     }
@@ -252,8 +290,19 @@ void IndexedScene::Build(rendergraph::Graph& graph, const std::vector<IndexedDra
     std::vector<uint32_t> visible;
     std::vector<rhi::DrawIndexedArguments> arguments;
     std::vector<uint32_t> offsets;
+    std::vector<uint32_t> candidates;
+    std::vector<std::array<uint32_t, 4>> batchRanges;
     for (const auto& batch : batches)
     {
+        if (gpuCulling)
+        {
+            const auto offset = static_cast<uint32_t>(candidates.size());
+            const auto count = static_cast<uint32_t>(batch.candidates.size());
+            offsets.push_back(offset);
+            batchRanges.push_back({offset, count, 0, 0});
+            candidates.insert(candidates.end(), batch.candidates.begin(), batch.candidates.end());
+            continue;
+        }
         offsets.push_back(static_cast<uint32_t>(visible.size()));
         for (const auto instance : batch.instances)
         {
@@ -265,13 +314,14 @@ void IndexedScene::Build(rendergraph::Graph& graph, const std::vector<IndexedDra
         }
     }
     self.stats.visible = static_cast<uint32_t>(visible.size());
-    if (visible.empty())
+    if (!gpuCulling && visible.empty())
         return;
     Require(!indirect ||
                 std::ranges::all_of(batches,
                                     [&](const auto& batch)
                                     {
-                                        return batch.instances.size() <=
+                                        return (gpuCulling ? batch.candidates.size()
+                                                           : batch.instances.size()) <=
                                                self.runtime.GetIndirectSupport().maxDrawCount;
                                     }),
             "Indexed batch exceeds the enabled multi-draw limit");
@@ -294,10 +344,91 @@ void IndexedScene::Build(rendergraph::Graph& graph, const std::vector<IndexedDra
     const auto objectBinding = upload(objects, "Indexed.Objects", 0, sizeof(IndexedInstanceData));
     const auto materialBinding =
         upload(materials, "Indexed.Materials", 1, sizeof(IndexedMaterialData));
-    const auto visibleBinding = upload(visible, "Indexed.Visible", 2, 4);
+    BufferBinding visibleBinding;
+    if (!gpuCulling)
+        visibleBinding = upload(visible, "Indexed.Visible", 2, 4);
     graph.ImportBuffer("Indexed.Vertices", self.vertices, {rhi::State::Vertex, true});
     graph.ImportBuffer("Indexed.Indices", self.indices, {rhi::State::Index, true});
-    if (indirect)
+    if (gpuCulling)
+    {
+        const auto candidateBinding = upload(candidates, "Indexed.Candidates", 1, 4);
+        const auto batchBinding = upload(batchRanges, "Indexed.Batches", 2, 16);
+        const uint64_t visibleBytes = uint64_t(objects.size()) * 4;
+        const uint64_t countBytes = uint64_t(batches.size()) * 4;
+        const uint64_t argumentBytes = uint64_t(objects.size()) * sizeof(rhi::DrawIndexedArguments);
+        auto gpuVisible =
+            graph.CreateBuffer("Indexed.GPUVisible", {visibleBytes, rhi::Memory::Device, "", true});
+        auto gpuArguments =
+            graph.CreateBuffer("Indexed.Arguments", {argumentBytes, rhi::Memory::Device, "", true});
+        auto counts =
+            graph.CreateBuffer("Indexed.Count", {countBytes, rhi::Memory::Device, "", true});
+        auto clear = graph.AddComputePass("Indexed.ClearCounts");
+        counts = clear.WriteBuffer(counts);
+        clear.Execute(
+            [pipeline = self.clearCounts, counts, countBytes,
+             groups = (static_cast<uint32_t>(batches.size()) + 63) / 64](ComputeContext& context)
+            {
+                context.Bind(pipeline);
+                context.BindBuffer(5, counts, 0, countBytes, 4);
+                context.Dispatch(groups, 1);
+            });
+        auto pass = graph.AddComputePass("Indexed.FrustumCulling");
+        const auto objectsHandle =
+            pass.ReadBuffer(objectBinding.buffer, Use::ShaderRead, objectBinding.range);
+        const auto candidatesHandle =
+            pass.ReadBuffer(candidateBinding.buffer, Use::ShaderRead, candidateBinding.range);
+        const auto batchesHandle =
+            pass.ReadBuffer(batchBinding.buffer, Use::ShaderRead, batchBinding.range);
+        const auto view = pass.ReadBuffer(frame.view.buffer, Use::Uniform, frame.view.range);
+        gpuVisible = pass.WriteBuffer(gpuVisible);
+        gpuArguments = pass.WriteBuffer(gpuArguments);
+        counts = pass.ReadWriteBuffer(counts);
+        pass.Execute(
+            [=, pipeline = self.cull,
+             groups = static_cast<uint32_t>(batches.size())](ComputeContext& context)
+            {
+                context.Bind(pipeline);
+                context.BindBuffer(0, objectsHandle, objectBinding.range.offset,
+                                   objectBinding.range.size, objectBinding.stride);
+                context.BindBuffer(1, candidatesHandle, candidateBinding.range.offset,
+                                   candidateBinding.range.size, 4);
+                context.BindBuffer(2, batchesHandle, batchBinding.range.offset,
+                                   batchBinding.range.size, 16);
+                context.BindBuffer(3, gpuVisible, 0, visibleBytes, 4);
+                context.BindBuffer(4, gpuArguments, 0, argumentBytes,
+                                   sizeof(rhi::DrawIndexedArguments));
+                context.BindBuffer(5, counts, 0, countBytes, 4);
+                context.BindBuffer(6, view, frame.view.range.offset, frame.view.range.size);
+                context.Dispatch(groups, 1);
+            });
+        visibleBinding = {2, "Indexed.GPUVisible", Use::ShaderRead, {0, visibleBytes}, 4, 2};
+        if (diagnostics)
+        {
+            self.diagnostics.readback = self.runtime.CreateBuffer(
+                {countBytes + visibleBytes, rhi::Memory::Readback, "Indexed.Culling.Readback"});
+            self.diagnostics.visibleOffset = static_cast<uint32_t>(countBytes);
+            for (const auto& range : batchRanges)
+            {
+                self.diagnostics.batchOffsets.push_back(range[0]);
+                self.diagnostics.batchCapacities.push_back(range[1]);
+            }
+            auto readback =
+                graph.ImportBuffer("Indexed.Culling.Readback", self.diagnostics.readback,
+                                   {rhi::State::CopyDest, false});
+            auto copy = graph.AddCopyPass("Indexed.Culling.Readback");
+            copy.ReadBuffer(counts);
+            copy.ReadBuffer(gpuVisible);
+            readback = copy.WriteBuffer(readback);
+            copy.Execute(
+                [=](CopyContext& context)
+                {
+                    context.Copy(counts, readback, countBytes);
+                    context.Copy(gpuVisible, readback, visibleBytes, 0, countBytes);
+                });
+            graph.Export(readback, rhi::State::HostRead);
+        }
+    }
+    else if (indirect)
     {
         const auto source = upload(arguments, "Indexed.CPUArgs", 0, 4);
         auto destination = graph.CreateBuffer(
@@ -313,7 +444,7 @@ void IndexedScene::Build(rendergraph::Graph& graph, const std::vector<IndexedDra
     for (uint32_t b = 0; b < batches.size(); ++b)
     {
         const auto& batch = batches[b];
-        if (batch.instances.empty())
+        if (!gpuCulling && batch.instances.empty())
             continue;
         DrawPacket draw;
         draw.pipeline = batch.pipeline;
@@ -335,7 +466,13 @@ void IndexedScene::Build(rendergraph::Graph& graph, const std::vector<IndexedDra
             draw.kind = DrawKind::IndexedIndirect;
             draw.indirect = "Indexed.Arguments";
             draw.indirectOffset = uint64_t(offsets[b]) * sizeof(rhi::DrawIndexedArguments);
-            draw.indirectMaxCount = static_cast<uint32_t>(batch.instances.size());
+            draw.indirectMaxCount = static_cast<uint32_t>(gpuCulling ? batch.candidates.size()
+                                                                     : batch.instances.size());
+            if (gpuCulling)
+            {
+                draw.indirectCount = "Indexed.Count";
+                draw.indirectCountOffset = uint64_t(b) * 4;
+            }
             destination.push_back(std::move(draw));
         }
         else

@@ -35,12 +35,15 @@ enum class GeometrySubmission
 {
     Direct,
     IndexedDirect,
-    CpuIndirect
+    CpuIndirect,
+    GpuCulled
 };
 struct SceneRenderOptions
 {
     PipelineType pipeline = PipelineType::Forward;
     GeometrySubmission submission = GeometrySubmission::Direct;
+    /// Optional count/visible-index readback from this submission; never controls its draws.
+    bool cullingDiagnostics = false;
     SceneView view = SceneView::Final;
     bool profile = false;
     /// Zero preserves the scene setting; otherwise a power of two in [128,2048].
@@ -75,6 +78,7 @@ struct SceneReadback
     /// CPU scene/material preparation and graph construction, before graph compilation.
     uint64_t scenePrepareNs = 0;
     IndexedSceneStatistics indexedScene;
+    IndexedCullDiagnostics culling;
 };
 /// Cumulative ray-surface preparation work; no timing overhead.
 struct RaySceneStatistics

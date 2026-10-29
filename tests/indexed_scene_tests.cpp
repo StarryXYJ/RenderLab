@@ -1,16 +1,20 @@
 #include "core/log.hpp"
 #include "project/project.hpp"
 #include "renderer/scene_renderer.hpp"
+#include "rendergraph/graph.hpp"
 #include "rhi/device.hpp"
 #include "rhi/runtime.hpp"
 #include "rhi/upload.hpp"
 #include "samples/common/image_io.hpp"
+#include "shader/compiler.hpp"
 
 #include <algorithm>
 #include <cmath>
 #include <cstring>
 #include <filesystem>
+#include <format>
 #include <iostream>
+#include <string>
 #include <vector>
 
 namespace
@@ -79,6 +83,27 @@ void Scene(rhi::Runtime& runtime, shader::Target target, const std::filesystem::
                             output / (std::to_string(sequence++) + ".json"), options);
         const auto indirect = Pixels(runtime, indirectFrame, width, height);
         Require(indexed == indirect, "Indexed direct and CPU indirect pixels differ");
+        options.submission = GeometrySubmission::GpuCulled;
+        options.cullingDiagnostics = true;
+        const auto gpuFrame =
+            renderer.Render(color, rhi::State::CopySource, nullptr, true, {}, options);
+        Require(Pixels(runtime, gpuFrame, width, height) == indexed,
+                "GPU frustum culling pixels differ from CPU culling");
+        Require(gpuFrame.indexedScene.gpuCulling, "GPU culling mode was not used");
+        if (gpuFrame.culling.readback)
+        {
+            const auto bytes = gpuFrame.culling.readback->Map();
+            uint32_t visible = 0;
+            for (size_t i = 0; i < gpuFrame.culling.batchCapacities.size(); ++i)
+            {
+                uint32_t count;
+                std::memcpy(&count, bytes.data() + i * 4, 4);
+                Require(count <= gpuFrame.culling.batchCapacities[i], "GPU count exceeds capacity");
+                visible += count;
+            }
+            Require(visible == indirectFrame.indexedScene.visible,
+                    "GPU and CPU visible counts differ");
+        }
         Compare(direct, indexed);
         Require(indirectFrame.indexedScene.visible <= indirectFrame.indexedScene.instances &&
                     indirectFrame.indexedScene.textures <= IndexedTextureCapacity,
@@ -129,6 +154,108 @@ void Scene(rhi::Runtime& runtime, shader::Target target, const std::filesystem::
             "In-flight indexed scene versions contaminated each other");
     Require(pendingB.indexedScene.geometryUploads == 1,
             "Static packed geometry was uploaded on camera movement or submission-mode changes");
+    if (project.stem() == "Pbr")
+    {
+        const auto prototype = *std::ranges::find_if(original.objects, [](const auto& object)
+                                                     { return object.mesh.has_value(); });
+        auto base = original;
+        std::erase_if(base.objects, [](const auto& object) { return object.mesh.has_value(); });
+        auto color =
+            runtime.CreateTexture({127, 95, rhi::Format::Rgba8Srgb, false, true, "Culling.Scale"});
+        auto initial = rhi::State::Undefined;
+        for (const uint32_t count : {1u, 64u, 65u, 1024u, 4096u})
+        {
+            document = base;
+            for (uint32_t i = 0; i < count; ++i)
+            {
+                auto object = prototype;
+                object.id = std::format("6c12000000000000{:016x}", uint64_t(i));
+                object.name = "Culling." + std::to_string(i);
+                object.parent.clear();
+                object.transform.scale = {.08f, .08f, .08f};
+                object.transform.rotation = {};
+                object.transform.position = {(float(i % 16) - 7.5f) * .3f,
+                                             (float((i / 16) % 16) - 7.5f) * .3f + 1,
+                                             float(i / 256) * .3f};
+                if (i % 3 == 1)
+                    object.transform.position.x += 1000;
+                document.objects.push_back(std::move(object));
+            }
+            options = {};
+            options.pipeline = PipelineType::Deferred;
+            options.submission = GeometrySubmission::IndexedDirect;
+            const auto cpu = renderer.Render(color, initial, nullptr, true, {}, options);
+            initial = rhi::State::CopySource;
+            const auto reference = Pixels(runtime, cpu, 127, 95);
+            options.submission = GeometrySubmission::GpuCulled;
+            options.cullingDiagnostics = true;
+            const auto gpu =
+                renderer.Render(color, initial, nullptr, true,
+                                output / ("culling-" + std::to_string(count) + ".json"), options);
+            Require(Pixels(runtime, gpu, 127, 95) == reference,
+                    "Scaled GPU/CPU culling image mismatch");
+            Require(!renderer.LastSnapshot().cpuVisibilityKnown,
+                    "GPU culling path also performed CPU camera culling");
+            std::vector<uint32_t> expected, actual;
+            const auto& snapshot = renderer.LastSnapshot();
+            for (uint32_t i = 0; i < snapshot.allInstances.size(); ++i)
+                if (math::Visible(snapshot.viewProjection, snapshot.allInstances[i].bounds))
+                    expected.push_back(i);
+            const auto bytes = gpu.culling.readback->Map();
+            for (size_t batch = 0; batch < gpu.culling.batchCapacities.size(); ++batch)
+            {
+                uint32_t visible;
+                std::memcpy(&visible, bytes.data() + batch * 4, 4);
+                Require(visible <= gpu.culling.batchCapacities[batch], "Culling capacity overflow");
+                std::vector<uint32_t> indices(visible);
+                std::memcpy(indices.data(),
+                            bytes.data() + gpu.culling.visibleOffset +
+                                gpu.culling.batchOffsets[batch] * 4,
+                            visible * 4);
+                Require(std::ranges::is_sorted(indices),
+                        "GPU compaction lost stable instance order");
+                actual.insert(actual.end(), indices.begin(), indices.end());
+            }
+            std::ranges::sort(actual);
+            Require(actual == expected, "GPU visible list differs from the CPU six-plane test");
+            std::cout << "GPU culling " << count << " candidates, " << actual.size()
+                      << " visible\n";
+            if (count == 64 || count == 1024 || count == 4096)
+            {
+                const auto destination = output / ("scale-" + std::to_string(count));
+                std::filesystem::create_directories(destination);
+                std::filesystem::copy(project.parent_path() / "Assets", destination / "Assets",
+                                      std::filesystem::copy_options::recursive |
+                                          std::filesystem::copy_options::overwrite_existing);
+                document.Save(destination / "Assets/Pbr.scene");
+                std::filesystem::copy_file(project, destination / "Pbr.rlproject",
+                                           std::filesystem::copy_options::overwrite_existing);
+            }
+        }
+        // Bypass the independent 10000-object document limit to isolate expanded-instance capacity.
+        shader::CompileOptions shaderOptions;
+        shaderOptions.targets = {target};
+        shaderOptions.cacheDirectory = output / "capacity-shader-cache";
+        const auto compiled =
+            shader::CompileShader(shaders / "RenderLab/Lit.shader", shaderOptions);
+        if (!compiled)
+            throw std::runtime_error(compiled.diagnostics);
+        IndexedScene oversizedScene(runtime, target, shaders / "RenderLab",
+                                    compiled.package->interfaces.front());
+        std::vector<IndexedDrawInput> oversized(IndexedInstanceCapacity + 1);
+        rendergraph::Graph graph;
+        std::vector<DrawPacket> opaque, gbuffer;
+        bool rejected = false;
+        try
+        {
+            oversizedScene.Build(graph, oversized, {}, true, opaque, gbuffer, true);
+        }
+        catch (const std::invalid_argument& error)
+        {
+            rejected = std::string(error.what()).find("16384") != std::string::npos;
+        }
+        Require(rejected, "Oversized GPU candidate set was not deterministically rejected");
+    }
 }
 } // namespace
 int main(int argc, char** argv)

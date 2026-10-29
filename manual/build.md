@@ -137,6 +137,11 @@ Release 替换构建目录；测试要求支持多条间接、Count 与非零 fi
 场景专项为 `renderlab_indexed_scene_tests` / `gpu.dx12.indexed_scene` / `gpu.vulkan.indexed_scene`，
 支持范围、容量与内存边界见 [GPU Driven](../docs/gpu-driven.md#场景索引基线)。
 
+`--submission gpu-culled` 启用 Compute 视锥剔除与 GPU Count，保留上述 CPU 对照。
+规模性能套件先运行 `ctest --preset windows-release -R 'gpu.dx12.indexed_scene'` 生成固定场景，
+再执行 `python tools/benchmark/run.py sample/benchmark/gpu-driven.json --output out/benchmarks/gpu-driven`。
+该配置为短测；完整条件与局限见 [测量记录](../docs/performance/m6-gpu-driven.md)。
+
 ```powershell
 ./out/build/windows-debug/renderlab_shaderc.exe shaders/m2/surface.shader --cache out/shader-cache --schema out/surface-schema.json
 ./out/build/windows-debug/renderlab_shaderc.exe shaders/m2/surface.shader --target spirv --schema out/spirv-schema.json

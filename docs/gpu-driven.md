@@ -33,6 +33,8 @@ DX12 使用两个无 Root Signature 的固定 CommandSignature，分别调用 Ex
 
 `SceneRenderOptions::submission` 独立于 Forward/Deferred/RayTracing 管线。Direct 保留原有材质与每对象提交；IndexedDirect 以公共表和同一绑定快照逐条直接绘制，CpuIndirect 以 CPU 已知可见列表生成索引参数后执行多条间接绘制。CLI 分别为 `--submission direct|indexed-direct|cpu-indirect`，默认 Direct。
 
+GpuCulled（CLI `--submission gpu-culled`）在 Compute 中生成可见列表、索引参数与 Count，要求已启用 Count Buffer。正常帧不把本帧数量同步读回 CPU。
+
 IndexedScene 从提取快照建立对象、去重材质、纹理和可见实例表。对象记录为 256 字节（当前/法线/历史矩阵、世界 Bounds、网格范围和材质索引），材质为 128 字节；矩阵明确采用 row_major 存储和列向量乘法。纹理下标只在当前不可变快照内有效，不是资产身份或永久物理描述符。材质可合并相同值与纹理版本；CPU Material/Scene 继续拥有编辑权威。
 
 静态网格按导入身份打包为一个顶点和索引 Buffer，替换时创建新版本，命令保活旧版本。首次启用或几何集合变化会同步上传一次；相机、对象变换和普通连续帧不重传几何。索引路径与原始每网格 Buffer 当前同时保留，增加内存以便独立选择基线；光追表仍保持 M5 的独立格式/纹理 footprint 边界。
@@ -41,6 +43,18 @@ Frame/View、Lighting、Shadow 沿用生成参数 ABI，内置材质通过公共
 
 最大 16384 个索引实例、64 个图像/色彩空间版本；超限明确报错。表从独立的有界上传页（8 MiB × 最多 8 页）生成，成功提交后封存；结构化 stride 与偏移对齐由 RHI 验证。CPU 间接参数通过 Graph Copy 写入 Device Buffer，然后声明 Indirect Read，正常渲染不等待/读回 Count。原 `UploadStatistics()` 统计普通帧上传池，索引表页计入 Runtime 总内存账本。
 
+场景文档另有 10000 对象限制；模型展开后的 primitive 实例数可能大于对象数。索引容量按展开后的实例检查。材质输入/策略在每帧首次读取后冻结，同材质、Pass、绕序的索引准备复用一份模板；Pipeline 替换每帧按原 PSO 身份处理一次。CPU 提取用本次文档的对象索引，避免逐实例线性搜索；不引入持久可编辑缓存或另一份材质权威。
+
+## GPU 视锥剔除
+
+GPU 模式从 allInstances 提取表，跳过 CPU 相机剔除；CPU 索引基线复用 Extractor 已计算的可见身份，不重复执行同一包围盒测试。透明单独保留 CPU 可见性与排序，光栅阴影保持独立候选集。
+
+每个 Pipeline/Queue/Stencil 批次按全部候选数预留连续范围。`Indexed.ClearCounts` 写零，`Indexed.FrustumCulling` 读取该版本后写出压缩列表/Args/Count；Raster 显式读可见表为 ShaderRead、参数和 Count 为 Indirect。Graph 处理 Storage→Storage 和 Storage→Indirect/ShaderRead 的依赖。空场景不派发零尺寸 Dispatch；全剔除仍执行有界批次，GPU Count=0。
+
+视锥测试与 CPU 相同，判断世界 AABB 八角是否同时处于任一裁剪面外。一个 64 线程组负责一个批次，按 64 候选分块做稳定前缀压缩，保持原实例顺序；没有 CPU 动态 Count 循环、Hi-Z、LOD 或原子截断后的不确定子集。容量等于全部候选数，合法输入不会溢出；超过 16384 个展开实例在写 GPU 缓冲前明确拒绝。单组分块限制并行度，GPU 剔除不保证比 CPU 更快。
+
+GPU 模式的 Snapshot.cpuVisibilityKnown=false，instances/culledInstances 不提供 CPU 可见结果；allInstances 和阴影候选仍有效。报告 visible=null、visibilitySource=gpu，不能把来源数当成 GPU 可见数。显式 cullingDiagnostics 才增加 Count/可见索引读回，SceneReadback.culling 提供范围元数据；调用者等待真实提交完成后再映射，诊断不控制本帧绘制。
+
 ## 验证入口
 
 `gpu.dx12.indirect` / `gpu.vulkan.indirect` 使用同一真实 GPU Shader，比较直接、CPU 参数与 Compute 参数的完整 RGBA8 图像。覆盖索引/非索引、多条固定命令、Count 0/1/2/3/99 截断、非零 firstVertex/firstIndex/vertexOffset/firstInstance、跨命令实例身份和单命令多实例；同时检查偏移/容量/能力拒绝、未声明 Count、取消与提交退休后的资源引用。测试要求实际设备支持这组可选能力，不静默降级。
@@ -48,3 +62,5 @@ Frame/View、Lighting、Shadow 沿用生成参数 ABI，内置材质通过公共
 `gpu.dx12.descriptor_array` / `gpu.vulkan.descriptor_array` 在同一 64 线程组中打乱访问 64 个数组元素，检查跨 space 映射、完整表与两套在途不可变表的独立结果、旧纹理保活/退休、每个元素的 Graph 访问、缺项/重复/越界/空 View/布局重叠拒绝，以及描述符计数和销毁后资源账本。
 
 `gpu.dx12.indexed_scene` / `gpu.vulkan.indexed_scene` 对比原材质路径、索引直接与 CPU 间接结果，覆盖 PBR、Masked/透明、镜像、奇数尺寸、空场景/全剔除和两个在途版本。CPU 索引直接与间接要求逐字节一致；与原材质路径的比较另外检查最大误差及 MSE。验证状态以计划中的实际结果为准。
+
+该专项还覆盖 GPU Count/可见列表逐项对照，跨 64 线程边界的 1/64/65/1024/4096 候选、稳定顺序、16384 容量拒绝，以及禁用 CPU 相机剔除的契约。固定 ID/位置的规模场景输出到测试目录的 Pbr/scale-{64,1024,4096}，供共享 Benchmark 配置复用。实际数据与边界见 [GPU Driven 测量](performance/m6-gpu-driven.md)。
