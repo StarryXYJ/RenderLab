@@ -15,6 +15,10 @@ struct DxDescriptorRange;
 class DxRuntime final : public Runtime
 {
 public:
+    IndirectSupport GetIndirectSupport() const override
+    {
+        return indirectSupport_;
+    }
     DxRuntime(ID3D12Device* device, ID3D12CommandQueue* queue, IDXGIFactory6* factory,
               bool accelerationStructureEnabled, bool rayQueryEnabled,
               bool rayTracingPipelineEnabled);
@@ -72,7 +76,8 @@ private:
     ComPtr<ID3D12Fence> fence_;
     ComPtr<ID3D12Device5> rayDevice_;
     bool accelerationStructureEnabled_, rayQueryEnabled_, rayTracingPipelineEnabled_;
-    ComPtr<ID3D12CommandSignature> indirect_;
+    ComPtr<ID3D12CommandSignature> indirect_, indexedIndirect_;
+    IndirectSupport indirectSupport_{UINT32_MAX, true, true, false};
     HANDLE event_ = nullptr;
     uint64_t frequency_ = 0;
     std::vector<std::shared_ptr<Work>> contexts_;

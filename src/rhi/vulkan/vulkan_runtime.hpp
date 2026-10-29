@@ -16,6 +16,10 @@ struct VkDescriptorBlock;
 class VulkanRuntime final : public Runtime
 {
 public:
+    IndirectSupport GetIndirectSupport() const override
+    {
+        return indirect_;
+    }
     VulkanRuntime(VkInstance instance, VkPhysicalDevice physical, VkDevice device, VkQueue queue,
                   uint32_t family, bool debug, bool accelerationStructureEnabled,
                   bool rayQueryEnabled, bool rayTracingPipelineEnabled);
@@ -83,6 +87,7 @@ private:
     VkQueue queue_;
     uint32_t family_;
     bool debug_;
+    IndirectSupport indirect_;
     bool accelerationStructureEnabled_;
     bool rayQueryEnabled_, rayTracingPipelineEnabled_;
     VkPhysicalDeviceMemoryProperties memory_{};

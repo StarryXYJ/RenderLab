@@ -203,26 +203,43 @@ void CommandList::Geometry(std::shared_ptr<Buffer> vertex, std::shared_ptr<Buffe
     index_ = index;
     commands_.emplace_back(SetGeometry{std::move(vertex), std::move(index)});
 }
-void CommandList::DrawVertices(uint32_t count, uint32_t first)
+void CommandList::DrawVertices(uint32_t count, uint32_t first, uint32_t instances,
+                               uint32_t firstInstance)
 {
     DrawReady(false);
     Range(uint64_t(first) * pipeline_->desc.vertexStride,
           uint64_t(count) * pipeline_->desc.vertexStride, vertex_->desc.size);
-    commands_.emplace_back(Draw{count, first, false});
+    commands_.emplace_back(Draw{count, first, false, instances, firstInstance});
 }
-void CommandList::DrawIndexed(uint32_t count, uint32_t first)
+void CommandList::DrawIndexed(uint32_t count, uint32_t first, uint32_t instances,
+                              uint32_t firstInstance, int32_t vertexOffset)
 {
     DrawReady(true);
     Range(uint64_t(first) * 4, uint64_t(count) * 4, index_->desc.size);
-    commands_.emplace_back(Draw{count, first, true});
+    commands_.emplace_back(Draw{count, first, true, instances, firstInstance, vertexOffset});
 }
-void CommandList::DrawFrom(std::shared_ptr<Buffer> arguments, uint64_t offset)
+void CommandList::DrawFrom(std::shared_ptr<Buffer> arguments, uint64_t offset, uint32_t maxCount,
+                           bool indexed, std::shared_ptr<Buffer> countBuffer, uint64_t countOffset)
 {
     Check(arguments);
-    DrawReady(false);
+    DrawReady(indexed);
     Require(offset % 4 == 0, "Indirect offset must be 4-byte aligned");
-    Range(offset, sizeof(DrawArguments), arguments->desc.size);
-    commands_.emplace_back(DrawIndirect{std::move(arguments), offset});
+    Require(maxCount && maxCount <= indirect_.maxDrawCount,
+            "Indirect maximum exceeds enabled multi-draw limit");
+    Range(offset,
+          uint64_t(maxCount) * (indexed ? sizeof(DrawIndexedArguments) : sizeof(DrawArguments)),
+          arguments->desc.size);
+    if (countBuffer)
+    {
+        Check(countBuffer);
+        Require(indirect_.countBuffer, "Indirect count buffers are not enabled");
+        Require(countOffset % 4 == 0, "Indirect count offset must be 4-byte aligned");
+        Range(countOffset, 4, countBuffer->desc.size);
+    }
+    else
+        Require(countOffset == 0, "Count offset requires a count buffer");
+    commands_.emplace_back(DrawIndirect{std::move(arguments), offset, maxCount, indexed,
+                                        std::move(countBuffer), countOffset});
 }
 void CommandList::DrawReady(bool indexed) const
 {

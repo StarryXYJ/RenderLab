@@ -60,6 +60,11 @@ public:
     void WaitIdle();
     virtual uint64_t Completed() const = 0;
     virtual double TimestampPeriodNs() const = 0;
+    /// Enabled features/limits. Nonzero firstInstance in GPU arguments requires firstInstance.
+    virtual IndirectSupport GetIndirectSupport() const
+    {
+        return {};
+    }
     virtual bool SupportsAccelerationStructures() const
     {
         return false;

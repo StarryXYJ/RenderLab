@@ -47,9 +47,12 @@ class RasterContext final : public BindingContext
 public:
     void StencilReference(uint32_t reference);
     void Geometry(BufferHandle vertices, BufferHandle indices = {});
-    void Draw(uint32_t count, uint32_t first = 0);
-    void DrawIndexed(uint32_t count, uint32_t first = 0);
-    void DrawIndirect(BufferHandle arguments, uint64_t offset = 0);
+    void Draw(uint32_t count, uint32_t first = 0, uint32_t instances = 1,
+              uint32_t firstInstance = 0);
+    void DrawIndexed(uint32_t count, uint32_t first = 0, uint32_t instances = 1,
+                     uint32_t firstInstance = 0, int32_t vertexOffset = 0);
+    void DrawIndirect(BufferHandle arguments, uint64_t offset = 0, uint32_t maxCount = 1,
+                      bool indexed = false, BufferHandle count = {}, uint64_t countOffset = 0);
 
 private:
     friend class Graph;

@@ -123,6 +123,11 @@ Sandbox 从可执行文件同目录的 `shaders/dx12` 或 `shaders/vulkan` 读�
 
 ## Shader 与材质工具
 
+间接提交专项启用 `RENDERLAB_GPU_TESTS=ON` 后构建 `renderlab_indirect_tests`，执行
+`ctest --test-dir out/build/windows-debug -R 'gpu\.(dx12|vulkan)\.indirect' --output-on-failure`。
+Release 替换构建目录；测试要求支持多条间接、Count 与非零 firstInstance 的设备，始终使用 Validation On。
+公共 ABI、同步与覆盖范围见 [GPU Driven](../docs/gpu-driven.md)。
+
 ```powershell
 ./out/build/windows-debug/renderlab_shaderc.exe shaders/m2/surface.shader --cache out/shader-cache --schema out/surface-schema.json
 ./out/build/windows-debug/renderlab_shaderc.exe shaders/m2/surface.shader --target spirv --schema out/spirv-schema.json

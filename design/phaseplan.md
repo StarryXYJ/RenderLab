@@ -4,8 +4,8 @@
 
 ## 当前状态
 
-- 当前实施阶段：M0–M5、R1、B1–B3 DONE。
-- 当前工作项：光栅阴影质量修复 DONE，验证记录见 M4 后的修复摘要。M7.1d–g 已完成；跨屏 DPI/Docking 与完整编辑器工作流不展开，M6/M8 未启动。
+- 当前实施阶段：M6 IN_PROGRESS；M0–M5、R1、B1–B3 DONE。
+- 当前工作项：M6.1a 间接提交语义 DONE；继续 M6.1b 有界纹理数组与在途安全，随后接入场景资源索引和 GPU 剔除。M7 提前试验暂停在既有结果，M8 未启动。
 - 用户约定：每个子阶段验收完成即提交 Git，无阻塞时在当前授权范围内继续推进。此前 M7 修改已进入 Git，本轮开始时工作区干净。
 
 | 阶段 | 目标 | 前置依赖 | 状态 |
@@ -20,7 +20,7 @@
 | B2 | 双后端性能差异调查 | B1 | DONE |
 | B3 | 逐帧资源复用优化 | B2 | DONE |
 | M5 | Deferred 与光追基础 | M4 | DONE |
-| M6 | GPU Driven 与执行优化 | M4；光追调度测试另需 M5 | NOT_STARTED |
+| M6 | GPU Driven 与执行优化 | M4；光追调度测试另需 M5 | IN_PROGRESS |
 | M7 | C# 编辑器与完整项目工作流 | M4；默认在 M5、M6 的核心目标后开展 | IN_PROGRESS（提前试验 M7.1a/b 已完成） |
 | M8 | 一个深入的渲染专题与作品交付 | 所选专题依赖已满足 | NOT_STARTED |
 
@@ -265,15 +265,23 @@ R1 契约修订、B1 样例整理/Benchmark、B2 调查和 B3 资源复用已完
 
 ### M6.0 Forward+（可选组合）
 
+状态：DEFERRED。当前只有单方向光；先完成 GPU Driven 核心，不扩展局部光源与分类系统。
+
 - [ ] 在普通 Forward 与场景光源数据基础上增加 Tiled/Clustered 光源分类 Compute Feature，声明深度、光源 Buffer、索引表和容量。
 - [ ] Opaque/Transparent 显式读取分类结果，保留普通 Forward 基线；处理空光源、溢出、透明覆盖与不同分辨率。
 - [ ] 相同场景比较图像、显存和 GPU 成本，不预设一定更快。
 
 ### M6.1 可索引资源与间接提交
 
+状态：IN_PROGRESS。子阶段按下面顺序验收、提交。
+
+M6.1a DONE（2026 年 10 月 29 日）：双后端紧密排列的索引/非索引多条间接命令、可选 GPU Count 截断与 Graph 范围/用途验证。实例 helper 显式处理 DXIL SV_InstanceID 不含 firstInstance、SPIR-V 已包含的差异；DX12 索引 Shader 要求 SM 6.8，基础路径保持 SM 6.0。RTX 5060、MSVC NMake，Debug/Release 全目标构建成功；Debug 所选 Core/Graph、双后端 indirect/rhi/graph/render_state 10/10，追加 CPU 与双后端 PBR 3/3，Release 同组选测 10/10。GPU 验证错误 0，专项销毁后账本 0；直接/CPU 参数/Compute 参数逐像素一致，覆盖 Count 0/1/2/3/99、固定多条、实例乱序、多实例、正负 baseVertex、偏移/容量/能力拒绝、未声明 Count 以及取消/提交退休。全量构建同时修复旧 render_state/PBR 测试遗漏的颜色附件接口迁移。本轮未测其他 GPU，不将底层专项当作场景 GPU Driven 完成。入口：[契约与验证](../docs/gpu-driven.md)、[运行](../manual/build.md#shader-与材质工具)。
+
+M6.1b：有界 sampled-texture 描述符数组与不可变快照；M6.1c：场景对象/材质/纹理索引与 CPU 间接基线。后两项尚未验收。
+
 - [ ] 让已有 GPU Scene 的对象、材质和纹理通过明确索引消费。
 - [ ] 实现所需的描述符数组能力和在途安全，不建立无需求的全资源 Bindless 框架。
-- [ ] 用 CPU 生成已知 Indirect Args，验证 DrawID/InstanceID/firstInstance 和 Count 映射。
+- [x] 用 CPU 生成已知 Indirect Args，验证 InstanceID/firstInstance 和 Count；公共对象身份不依赖 DrawID。
 
 验收结果与直接绘制一致。先隔离间接提交语义，再接入 GPU 剔除。
 

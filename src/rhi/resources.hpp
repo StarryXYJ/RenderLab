@@ -313,10 +313,25 @@ struct ShaderTable : Object
     const uint64_t offset, stride;
 };
 
-/// Common D3D/Vulkan non-indexed indirect ABI; one command, no count buffer in M1.
+/// Tightly packed D3D/Vulkan indirect ABIs. Counts are bounded by the recorded maximum.
 struct DrawArguments
 {
     uint32_t vertexCount, instanceCount, firstVertex, firstInstance;
 };
 static_assert(sizeof(DrawArguments) == 16);
+struct DrawIndexedArguments
+{
+    uint32_t indexCount, instanceCount, firstIndex;
+    int32_t vertexOffset;
+    uint32_t firstInstance;
+};
+static_assert(sizeof(DrawIndexedArguments) == 20);
+struct IndirectSupport
+{
+    uint32_t maxDrawCount = 1;
+    bool countBuffer = false;
+    bool firstInstance = false;
+    /// Common shader object index: DXIL needs SV_StartInstanceLocation (SM 6.8).
+    bool shaderInstanceIndex = false;
+};
 } // namespace renderlab::rhi

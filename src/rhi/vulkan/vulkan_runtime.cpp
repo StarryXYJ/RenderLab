@@ -16,6 +16,15 @@ VulkanRuntime::VulkanRuntime(VkInstance instance, VkPhysicalDevice physical, VkD
     VkPhysicalDeviceProperties props{};
     vkGetPhysicalDeviceProperties(physical_, &props);
     timestampPeriod_ = props.limits.timestampPeriod;
+    VkPhysicalDeviceVulkan12Features features12{};
+    features12.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES;
+    VkPhysicalDeviceFeatures2 features{};
+    features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
+    features.pNext = &features12;
+    vkGetPhysicalDeviceFeatures2(physical_, &features);
+    indirect_ = {features.features.multiDrawIndirect ? props.limits.maxDrawIndirectCount : 1,
+                 features12.drawIndirectCount != 0,
+                 features.features.drawIndirectFirstInstance != 0, true};
     uint32_t count = 0;
     vkGetPhysicalDeviceQueueFamilyProperties(physical_, &count, nullptr);
     std::vector<VkQueueFamilyProperties> families(count);

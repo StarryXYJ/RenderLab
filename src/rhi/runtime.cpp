@@ -302,7 +302,7 @@ Runtime::CreateAccelerationStructure(const AccelerationStructureDesc& desc)
 }
 std::unique_ptr<CommandList> Runtime::CreateCommands()
 {
-    return std::make_unique<CommandList>(this);
+    return std::make_unique<CommandList>(this, GetIndirectSupport());
 }
 uint64_t Runtime::Submit(std::unique_ptr<CommandList> commands, Swapchain* presentation)
 {

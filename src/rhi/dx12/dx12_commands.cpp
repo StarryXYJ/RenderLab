@@ -216,14 +216,17 @@ std::shared_ptr<Runtime::Submission> DxRuntime::Execute(const CommandList& comma
                 else if constexpr (std::is_same_v<T, Draw>)
                 {
                     if (c.indexed)
-                        list->DrawIndexedInstanced(c.count, 1, c.first, 0, 0);
+                        list->DrawIndexedInstanced(c.count, c.instances, c.first, c.vertexOffset,
+                                                   c.firstInstance);
                     else
-                        list->DrawInstanced(c.count, 1, c.first, 0);
+                        list->DrawInstanced(c.count, c.instances, c.first, c.firstInstance);
                 }
                 else if constexpr (std::is_same_v<T, DrawIndirect>)
-                    list->ExecuteIndirect(indirect_.Get(), 1,
-                                          As<DxBuffer>(c.arguments).native.Get(), c.offset, nullptr,
-                                          0);
+                    list->ExecuteIndirect(
+                        c.indexed ? indexedIndirect_.Get() : indirect_.Get(), c.maxCount,
+                        As<DxBuffer>(c.arguments).native.Get(), c.offset,
+                        c.countBuffer ? As<DxBuffer>(c.countBuffer).native.Get() : nullptr,
+                        c.countOffset);
                 else if constexpr (std::is_same_v<T, Dispatch>)
                     list->Dispatch(c.x, c.y, c.z);
                 else if constexpr (std::is_same_v<T, TraceRays>)

@@ -214,13 +214,32 @@ std::shared_ptr<Runtime::Submission> VulkanRuntime::Execute(const CommandList& c
                 else if constexpr (std::is_same_v<T, Draw>)
                 {
                     if (c.indexed)
-                        vkCmdDrawIndexed(list, c.count, 1, c.first, 0, 0);
+                        vkCmdDrawIndexed(list, c.count, c.instances, c.first, c.vertexOffset,
+                                         c.firstInstance);
                     else
-                        vkCmdDraw(list, c.count, 1, c.first, 0);
+                        vkCmdDraw(list, c.count, c.instances, c.first, c.firstInstance);
                 }
                 else if constexpr (std::is_same_v<T, DrawIndirect>)
-                    vkCmdDrawIndirect(list, As<VkBufferObject>(c.arguments).native, c.offset, 1,
-                                      sizeof(DrawArguments));
+                {
+                    const auto arguments = As<VkBufferObject>(c.arguments).native;
+                    if (c.countBuffer)
+                    {
+                        const auto count = As<VkBufferObject>(c.countBuffer).native;
+                        if (c.indexed)
+                            vkCmdDrawIndexedIndirectCount(list, arguments, c.offset, count,
+                                                          c.countOffset, c.maxCount,
+                                                          sizeof(DrawIndexedArguments));
+                        else
+                            vkCmdDrawIndirectCount(list, arguments, c.offset, count, c.countOffset,
+                                                   c.maxCount, sizeof(DrawArguments));
+                    }
+                    else if (c.indexed)
+                        vkCmdDrawIndexedIndirect(list, arguments, c.offset, c.maxCount,
+                                                 sizeof(DrawIndexedArguments));
+                    else
+                        vkCmdDrawIndirect(list, arguments, c.offset, c.maxCount,
+                                          sizeof(DrawArguments));
+                }
                 else if constexpr (std::is_same_v<T, Dispatch>)
                     vkCmdDispatch(list, c.x, c.y, c.z);
                 else if constexpr (std::is_same_v<T, TraceRays>)

@@ -257,6 +257,10 @@ public:
         VkPhysicalDeviceVulkan12Features enabled12{};
         enabled12.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES;
         enabled12.timelineSemaphore = VK_TRUE;
+        enabled12.drawIndirectCount = report_.supported.indirectCount;
+        VkPhysicalDeviceFeatures enabledBase{};
+        enabledBase.multiDrawIndirect = report_.supported.multiDrawIndirect;
+        enabledBase.drawIndirectFirstInstance = report_.supported.indirectFirstInstance;
         enabled12.bufferDeviceAddress = report_.supported.accelerationStructure;
         VkPhysicalDeviceVulkan13Features enabled13{};
         enabled13.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES;
@@ -310,6 +314,7 @@ public:
         VkDeviceCreateInfo deviceInfo{};
         deviceInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
         deviceInfo.pNext = &enabled13;
+        deviceInfo.pEnabledFeatures = &enabledBase;
         deviceInfo.queueCreateInfoCount = 1;
         deviceInfo.pQueueCreateInfos = &queueInfo;
         deviceInfo.enabledExtensionCount = static_cast<uint32_t>(deviceExtensions.size());
@@ -331,6 +336,9 @@ public:
                                                                     : "") +
                 (report_.supported.rayQuery ? "; rayQuery" : "") +
                 (report_.supported.rayTracingPipeline ? "; rayTracingPipeline" : "") +
+                (report_.supported.multiDrawIndirect ? "; multiDrawIndirect" : "") +
+                (report_.supported.indirectCount ? "; drawIndirectCount" : "") +
+                (report_.supported.indirectFirstInstance ? "; drawIndirectFirstInstance" : "") +
                 "; one graphics queue");
     }
 
@@ -458,6 +466,8 @@ private:
         caps.multiDrawIndirect = features.features.multiDrawIndirect != VK_FALSE;
         caps.indirectCount = features12.drawIndirectCount != VK_FALSE;
         caps.indirectFirstInstance = features.features.drawIndirectFirstInstance != VK_FALSE;
+        report_.details.emplace_back("maxDrawIndirectCount",
+                                     std::to_string(props.limits.maxDrawIndirectCount));
         caps.descriptorIndexing = features12.descriptorIndexing &&
                                   features12.runtimeDescriptorArray &&
                                   features12.shaderSampledImageArrayNonUniformIndexing;

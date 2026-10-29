@@ -145,6 +145,8 @@ RenderPipeline 是组织渲染算法的上层对象，与 RHI 的 Pipeline State
 
 间接绘制提供两后端可映射的公共语义，不直接向上暴露 DX12 任意 ExecuteIndirect 命令签名。跨绘制变化的对象数据通过索引访问 GPU Scene，PSO 和资源布局按批次组织。
 
+公共间接 ABI 采用紧密排列的 16 字节非索引/20 字节索引命令，Count 在 GPU 按最大命令数截断；对象身份通过 firstInstance 和统一 Shader helper 显式传递，不依赖原生 DrawID。helper 处理 DXIL 的实例内 ID 与 SPIR-V 的绝对实例 ID 差异，DX12 索引路径单独要求 SM 6.8，基础路径保持 SM 6.0。参数与 Count 都是图内 Indirect 读取和命令保活对象，已启用能力与硬件支持区分；契约见 [GPU Driven](../docs/gpu-driven.md)。
+
 ### 绑定模型
 
 逻辑上区分 Frame/View、Material 和 Draw/Object 数据。引擎约定映射 HLSL register space、不同资源寄存器类别与 Vulkan set/binding，编译阶段检查冲突。

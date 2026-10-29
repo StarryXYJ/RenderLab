@@ -11,6 +11,11 @@ DxRuntime::DxRuntime(ID3D12Device* device, ID3D12CommandQueue* queue, IDXGIFacto
       accelerationStructureEnabled_(accelerationStructureEnabled),
       rayQueryEnabled_(rayQueryEnabled), rayTracingPipelineEnabled_(rayTracingPipelineEnabled)
 {
+    D3D12_FEATURE_DATA_SHADER_MODEL shaderModel{D3D_SHADER_MODEL_6_8};
+    indirectSupport_.shaderInstanceIndex =
+        SUCCEEDED(device_->CheckFeatureSupport(D3D12_FEATURE_SHADER_MODEL, &shaderModel,
+                                               sizeof(shaderModel))) &&
+        shaderModel.HighestShaderModel >= D3D_SHADER_MODEL_6_8;
     device_->QueryInterface(IID_PPV_ARGS(&rayDevice_));
     Check(device_->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&fence_)), "CreateFence");
     D3D12_INDIRECT_ARGUMENT_DESC argument{};
@@ -21,6 +26,10 @@ DxRuntime::DxRuntime(ID3D12Device* device, ID3D12CommandQueue* queue, IDXGIFacto
     signature.pArgumentDescs = &argument;
     Check(device_->CreateCommandSignature(&signature, nullptr, IID_PPV_ARGS(&indirect_)),
           "CreateCommandSignature");
+    argument.Type = D3D12_INDIRECT_ARGUMENT_TYPE_DRAW_INDEXED;
+    signature.ByteStride = sizeof(DrawIndexedArguments);
+    Check(device_->CreateCommandSignature(&signature, nullptr, IID_PPV_ARGS(&indexedIndirect_)),
+          "Create indexed command signature");
     Check(queue_->GetTimestampFrequency(&frequency_), "GetTimestampFrequency");
     event_ = CreateEventW(nullptr, FALSE, FALSE, nullptr);
     if (!event_)

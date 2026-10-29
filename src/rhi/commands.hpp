@@ -70,11 +70,17 @@ struct Draw
 {
     uint32_t count, first;
     bool indexed;
+    uint32_t instances = 1, firstInstance = 0;
+    int32_t vertexOffset = 0;
 };
 struct DrawIndirect
 {
     std::shared_ptr<Buffer> arguments;
     uint64_t offset;
+    uint32_t maxCount = 1;
+    bool indexed = false;
+    std::shared_ptr<Buffer> countBuffer;
+    uint64_t countOffset = 0;
 };
 struct Dispatch
 {
@@ -119,7 +125,10 @@ using Command =
 class CommandList final
 {
 public:
-    explicit CommandList(const void* owner) : owner_(owner) {}
+    explicit CommandList(const void* owner, IndirectSupport indirect = {})
+        : owner_(owner), indirect_(indirect)
+    {
+    }
     void Barrier(std::shared_ptr<Buffer> buffer, State before, State after);
     void Barrier(std::shared_ptr<Texture> texture, State before, State after);
     void Copy(std::shared_ptr<Buffer> source, std::shared_ptr<Buffer> destination, uint64_t size,
@@ -142,9 +151,14 @@ public:
     void Bind(std::shared_ptr<Pipeline> pipeline);
     void Bind(std::shared_ptr<BindingGroup> group);
     void Geometry(std::shared_ptr<Buffer> vertex, std::shared_ptr<Buffer> index = {});
-    void DrawVertices(uint32_t count, uint32_t first = 0);
-    void DrawIndexed(uint32_t count, uint32_t first = 0);
-    void DrawFrom(std::shared_ptr<Buffer> arguments, uint64_t offset = 0);
+    void DrawVertices(uint32_t count, uint32_t first = 0, uint32_t instances = 1,
+                      uint32_t firstInstance = 0);
+    void DrawIndexed(uint32_t count, uint32_t first = 0, uint32_t instances = 1,
+                     uint32_t firstInstance = 0, int32_t vertexOffset = 0);
+    /// Tightly packed arguments; GPU count is clamped to maxCount. No CPU count readback.
+    void DrawFrom(std::shared_ptr<Buffer> arguments, uint64_t offset = 0, uint32_t maxCount = 1,
+                  bool indexed = false, std::shared_ptr<Buffer> countBuffer = {},
+                  uint64_t countOffset = 0);
     void Compute(uint32_t x, uint32_t y, uint32_t z = 1);
     void Trace(std::shared_ptr<ShaderTable> table, uint32_t width, uint32_t height,
                uint32_t depth = 1);
@@ -165,6 +179,7 @@ private:
     void Recording() const;
     void DrawReady(bool indexed) const;
     const void* owner_;
+    IndirectSupport indirect_;
     std::vector<Command> commands_;
     bool consumed_ = false;
     bool rendering_ = false;

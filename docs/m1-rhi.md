@@ -54,7 +54,7 @@ Buffer 的内存类别为 Device、Upload、Readback。仅后两类允许映射�
 
 BindingLayout 显式列出 set/space 0 的逻辑 slot 和资源类型，Group 必须完全匹配且不可修改。DX12 为每项创建 descriptor table，并在 Group 中分配独立可见堆；Vulkan 使用 DescriptorSetLayout/DescriptorPool/DescriptorSet。Shader 通过 `vk::binding` 和相同编号的 HLSL register 明确映射，没有后端分支泄漏到样例命令中。首版绑定规模很小，未建立 Bindless、全局描述符索引或通用注册表。
 
-PSO 在样例准备阶段创建，录制只绑定。Direct Draw、Indexed Draw、Dispatch 均已实现；`DrawArguments` 是公共 16 字节非索引间接参数格式，样例用一次 DrawIndirect 验证。尚未启用 Indirect Count、非零 firstInstance、多绘制、GPU 剔除或光追；设备能力报告中的支持与已实现路径不同。
+PSO 在样例准备阶段创建，录制只绑定。Direct Draw、Indexed Draw、Dispatch 均已实现；M1 样例用一次 16 字节非索引 DrawIndirect 验证。后续增加的索引/多条/Count 与实例索引契约见 [GPU Driven](gpu-driven.md)，光追扩展见 [光追](raytracing.md)。设备硬件支持、已启用特性与具体 Renderer 路径分别检查。
 
 ## 坐标、颜色与诊断
 

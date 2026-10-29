@@ -84,7 +84,7 @@ float4 PSMain(P p) : SV_Target
         package_ = result.package;
         asset_ = material::Create(shader::MaterialTemplate(package_));
         base = SelectSwap(false);
-        base.color = Format::Rgba32Float;
+        base.colorFormats = {Format::Rgba32Float};
         base.depthStencilFormat = Format::D32S8;
         base.vertexStride = sizeof(Vertex);
         base.attributes = {{"POSITION", 0, VertexFormat::Float3, 0},
@@ -104,7 +104,7 @@ float4 PSMain(P p) : SV_Target
         Require(prepared_.constants.empty(), "Static-only material must allocate no uniform data");
         auto desc = prepared_.pipeline->desc;
         desc.depthStencilFormat = Format::D32S8;
-        desc.color = Format::Rgba32Float;
+        desc.colorFormats = {Format::Rgba32Float};
         desc.raster.cull = CullMode::None;
         return desc;
     }
