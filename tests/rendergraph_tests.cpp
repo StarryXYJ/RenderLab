@@ -6,6 +6,8 @@
 #include <functional>
 
 #include <algorithm>
+#include <array>
+#include <cstring>
 #include <iostream>
 #include <memory>
 #include <span>
@@ -66,13 +68,29 @@ PassHandle Read(Graph& graph, TextureHandle texture, bool root = true)
 struct FakeBuffer : rhi::Buffer
 {
     using Buffer::Buffer;
+    std::vector<std::byte> bytes;
     std::span<std::byte> Map() override
     {
-        return {};
+        bytes.resize(static_cast<size_t>(desc.size));
+        return bytes;
     }
 };
 struct FakeRuntime : rhi::Runtime
 {
+    std::vector<rhi::State> aliasBefore;
+    std::vector<const void*> aliasPrevious;
+    bool asyncAvailable = true, failBefore = false, failAfter = false, failDrain = false;
+    uint32_t drains = 0;
+    std::vector<rhi::RecordingRange> nativeRanges;
+    bool SupportsAsyncCompute() const override
+    {
+        return asyncAvailable;
+    }
+    void EnableAsyncCompute() override
+    {
+        if (!asyncAvailable)
+            rhi::Runtime::EnableAsyncCompute();
+    }
     uint64_t completed = 0;
     std::vector<uint32_t> drawnVertices;
     struct Work : Submission
@@ -85,6 +103,29 @@ struct FakeRuntime : rhi::Runtime
     std::shared_ptr<rhi::Texture> CreateTexture(const rhi::TextureDesc& d) override
     {
         return std::make_shared<rhi::Texture>(this, d);
+    }
+    uint64_t QueryAliasedTextureBytes(std::span<const rhi::TextureDesc> descs) override
+    {
+        ValidateAliasDescs(descs);
+        uint64_t bytes = 0;
+        for (const auto& desc : descs)
+            bytes =
+                std::max(bytes, uint64_t(desc.width) * desc.height * rhi::FormatBytes(desc.format));
+        return bytes;
+    }
+    std::vector<std::shared_ptr<rhi::Texture>>
+    CreateAliasedTextures(std::span<const rhi::TextureDesc> descs) override
+    {
+        QueryAliasedTextureBytes(descs);
+        auto backing = std::make_shared<int>(0);
+        std::vector<std::shared_ptr<rhi::Texture>> textures;
+        for (const auto& desc : descs)
+        {
+            auto texture = CreateTexture(desc);
+            texture->aliasBacking = backing;
+            textures.push_back(std::move(texture));
+        }
+        return textures;
     }
     using rhi::Runtime::CreateView;
     std::shared_ptr<rhi::TextureView> CreateView(std::shared_ptr<rhi::Texture> t,
@@ -122,10 +163,34 @@ struct FakeRuntime : rhi::Runtime
     std::shared_ptr<Submission> Execute(const rhi::CommandList& commands, uint64_t,
                                         rhi::Swapchain*) override
     {
+        if (failBefore)
+            throw std::runtime_error("Injected before enqueue");
+        auto work = std::make_shared<Work>();
+        if (failAfter)
+        {
+            RetainSubmitting(work);
+            throw std::runtime_error("Injected after enqueue");
+        }
+        nativeRanges = commands.RecordingRanges();
+        aliasBefore.clear();
+        aliasPrevious.clear();
         for (const auto& command : commands.GetCommands())
+        {
             if (const auto* draw = std::get_if<rhi::Draw>(&command))
                 drawnVertices.push_back(draw->first);
-        return std::make_shared<Work>();
+            if (const auto* alias = std::get_if<rhi::TextureAlias>(&command))
+            {
+                aliasBefore.push_back(alias->before);
+                aliasPrevious.push_back(alias->previous.get());
+            }
+        }
+        return work;
+    }
+    void DrainNative() override
+    {
+        if (failDrain)
+            throw std::runtime_error("Injected drain failure");
+        ++drains;
     }
     void WaitNative(uint64_t point) override
     {
@@ -148,6 +213,205 @@ std::shared_ptr<rhi::Pipeline> Compute(FakeRuntime& runtime, rhi::BindingKind ki
     desc.compute = std::make_shared<rhi::ShaderModule>(&runtime, rhi::ShaderStage::Compute,
                                                        std::vector<std::byte>{}, "CSMain");
     return std::make_shared<rhi::Pipeline>(&runtime, std::move(desc));
+}
+void AliasContracts()
+{
+    const std::array<rhi::TextureDesc, 2> descs = {
+        rhi::TextureDesc{8, 8, rhi::Format::Rgba8, false, true, "A"},
+        rhi::TextureDesc{4, 4, rhi::Format::Rgba8, false, true, "B"}};
+    const auto clear =
+        [](Graph& graph, TextureHandle& texture, rhi::LoadOp load = rhi::LoadOp::Clear)
+    {
+        auto pass = graph.AddRasterPass("Clear");
+        texture = pass.ColorTarget(texture, load);
+        pass.SideEffect();
+        return pass.Execute([](RasterContext&) {});
+    };
+    const auto build = [&](bool cancel = false)
+    {
+        auto graph = std::make_unique<Graph>();
+        for (const auto& desc : descs)
+        {
+            auto texture = graph->CreateTexture(desc.name, desc);
+            clear(*graph, texture);
+        }
+        if (cancel)
+        {
+            auto pass = graph->AddComputePass("Cancel");
+            pass.SideEffect();
+            pass.Execute([](ComputeContext&)
+                         { throw std::runtime_error("Alias recording cancelled"); });
+        }
+        graph->Compile({.memoryAlias = true});
+        return graph;
+    };
+    FakeRuntime runtime;
+    Pool pool(runtime, 4, 1024);
+    {
+        auto graph = build();
+        Require(graph->GetPlan().aliasGroups.size() == 1, "Disjoint graphics clears must alias");
+        graph->Execute(pool);
+        Require(runtime.aliasBefore == std::vector(2, rhi::State::Undefined) &&
+                    runtime.aliasPrevious[0] == nullptr && runtime.aliasPrevious[1],
+                "Initial alias activation is incomplete");
+        runtime.WaitIdle();
+    }
+    {
+        auto graph = build(true);
+        Fails([&] { graph->Execute(pool); }, "Alias recording cancelled");
+    }
+    {
+        auto graph = build();
+        graph->Execute(pool);
+        Require(runtime.aliasBefore == std::vector(2, rhi::State::ColorAttachment) &&
+                    runtime.aliasPrevious[0] && runtime.aliasPrevious[1],
+                "Alias cancellation lost previous native state/active member");
+        runtime.WaitIdle();
+    }
+    const auto allocationCount = pool.Stats().allocations;
+    {
+        auto graph = build();
+        runtime.failBefore = true;
+        Fails([&] { graph->Execute(pool); }, "Injected before");
+        runtime.failBefore = false;
+        auto next = build();
+        runtime.Wait(next->Execute(pool).completion);
+    }
+    Require(pool.Stats().allocations == allocationCount,
+            "Failed/cancelled alias lease was retained");
+    {
+        auto pin = pool.AcquireAliases(descs);
+        Require(pin->active == 1, "Successful submission did not publish final active alias");
+        auto view = runtime.CreateView(pin->members[0]->texture);
+        pin->members[0]->view = view;
+        pin.reset();
+        pool.Trim();
+        Require(pool.Stats().cached == 2, "An external view must pin its entire alias group");
+    }
+    pool.Trim();
+    Require(pool.Stats().cached == 0, "Retired alias groups did not trim");
+    {
+        // Group leases exist before physical resources/views are attached to graph resources.
+        Pool limited(runtime, 2, 256);
+        // Force failure after the group is reserved, in the ordinary resource preparation loop.
+        Graph failing;
+        auto extra = failing.CreateTexture("Extra", {8, 8, rhi::Format::R32Float, false, true});
+        clear(failing, extra);
+        for (const auto& desc : descs)
+        {
+            auto texture = failing.CreateTexture(desc.name, desc);
+            clear(failing, texture);
+        }
+        failing.Compile({.memoryAlias = true});
+        Fails([&] { failing.Execute(limited); }, "pool is full");
+        auto recovered = limited.AcquireAliases(descs);
+        Require(limited.Stats().allocations == 2 && recovered->active == UINT32_MAX,
+                "Failed preparation retained an alias lease or published active state");
+    }
+    {
+        Pool exact(runtime, 2, 256);
+        auto group = exact.AcquireAliases(descs);
+        Fails([&] { exact.Acquire(descs[1]); }, "pool is full");
+        group.reset();
+        auto ordinary = exact.Acquire(descs[1]);
+        Require(exact.Stats().cached == 1 && exact.Stats().estimatedBytes == 64,
+                "Budget eviction must remove an entire alias group");
+        Pool tooSmall(runtime, 1, 256);
+        Fails([&] { tooSmall.AcquireAliases(descs); }, "limit");
+    }
+    {
+        FakeRuntime failed;
+        Pool failedPool(failed, 2, 1024);
+        failed.failAfter = true;
+        {
+            auto graph = build();
+            Fails([&] { graph->Execute(failedPool); }, "Injected after");
+        }
+        failedPool.Trim();
+        Require(failedPool.Stats().cached == 2 && failed.PendingCount() == 1 &&
+                    failed.LastSubmitted() == 0,
+                "Partial alias submission must retain the entire group without publication");
+        failed.WaitIdle();
+        failedPool.Trim();
+        Require(failedPool.Stats().cached == 0, "Drained failed alias group did not retire");
+    }
+    // Simultaneous attachments, later reads, exports, imports and non-clear first uses exclude
+    // alias.
+    for (uint32_t mode = 0; mode < 6; ++mode)
+    {
+        Graph graph;
+        auto a = graph.CreateTexture("A", descs[0]);
+        auto b = graph.CreateTexture(
+            "B", mode == 5 ? rhi::TextureDesc{8, 8, rhi::Format::R32Float, false, true} : descs[1]);
+        if (mode == 3)
+            a = graph.ImportTexture("External", runtime.CreateTexture(descs[0]), {});
+        if (mode == 4)
+        {
+            Fails([&] { clear(graph, a, rhi::LoadOp::Discard); }, "Use Clear or Load");
+            continue;
+        }
+        if (mode == 0)
+        {
+            auto pass = graph.AddRasterPass("Simultaneous");
+            a = pass.ColorTarget(a);
+            // Same dimensions are required for simultaneous attachments.
+            b = graph.CreateTexture("SameSize", descs[0]);
+            b = pass.ColorTarget(b);
+            pass.SideEffect();
+            pass.Execute([](RasterContext&) {});
+        }
+        else
+        {
+            clear(graph, a);
+            clear(graph, b);
+            if (mode == 1)
+                Read(graph, a);
+            if (mode == 2)
+                graph.Export(a, rhi::State::Sampled);
+        }
+        Require(graph.Compile({.memoryAlias = true}).aliasGroups.empty(),
+                "Unsafe/incompatible alias candidate was grouped");
+    }
+    {
+        Graph graph;
+        auto a = graph.CreateTexture("A", descs[0]);
+        auto b = graph.CreateTexture("B", descs[1]);
+        clear(graph, a);
+        clear(graph, b);
+        Require(graph.Compile().aliasGroups.empty(), "Alias default must remain off");
+    }
+    {
+        Graph graph;
+        for (uint32_t i = 0; i < 18; ++i)
+        {
+            auto texture = graph.CreateTexture("Bounded." + std::to_string(i), descs[0]);
+            clear(graph, texture);
+        }
+        const auto& plan = graph.Compile({.memoryAlias = true});
+        Require(plan.aliasGroups.size() == 2 && plan.aliasGroups[0].size() == 16 &&
+                    plan.aliasGroups[1].size() == 2,
+                "Alias group member limit was not respected");
+    }
+    {
+        Graph graph;
+        std::array<TextureHandle, 2> depths;
+        for (uint32_t i = 0; i < 2; ++i)
+        {
+            auto color = graph.CreateTexture("Color." + std::to_string(i), descs[0]);
+            auto depth = graph.CreateTexture("Depth." + std::to_string(i),
+                                             {8, 8, rhi::Format::D32S8, false, true});
+            auto pass = graph.AddRasterPass("Stencil initialization");
+            pass.ColorTarget(color);
+            depths[i] = pass.DepthStencilTarget(depth, {}, {});
+            pass.SideEffect();
+            pass.Execute([](RasterContext&) {});
+        }
+        const auto& plan = graph.Compile({.memoryAlias = true});
+        Require(plan.resources[depths[0].resource].aliasGroup != UINT32_MAX &&
+                    plan.resources[depths[0].resource].aliasGroup ==
+                        plan.resources[depths[1].resource].aliasGroup,
+                "Full depth/stencil initialization should permit compatible aliases");
+    }
 }
 void Dependencies()
 {
@@ -347,7 +611,7 @@ void Lifecycle()
         t = pass.WriteTexture(t);
         pass.Execute([](ComputeContext&) { throw std::runtime_error("cancel recording"); });
         g.Export(t, rhi::State::Sampled);
-        g.Compile();
+        g.Compile({.recordingThreads = 4});
         Fails([&] { g.Execute(pool); }, "cancel recording");
         Require(runtime.LastSubmitted() == 0 && pool.Stats().allocations == 1,
                 "Cancelled packets never publish completion");
@@ -787,6 +1051,141 @@ void ProfilingContracts()
     profile.completion = 1;
     Fails([&] { profile.Read(runtime); }, "completed submission");
 }
+void QueueContracts()
+{
+    {
+        FakeRuntime runtime;
+        runtime.completed = 1;
+        Submission::GpuProfile profile;
+        profile.ticks = runtime.CreateBuffer({32, rhi::Memory::Readback, "LargeClock"});
+        profile.completion = 1;
+        profile.names = {"Compute", "Graphics"};
+        profile.clocks = {{0, 0, 1, rhi::QueueType::Compute}, {0, 0, 1, rhi::QueueType::Graphics}};
+        const uint64_t anchor = (uint64_t{1} << 62) + 1000;
+        const std::array<uint64_t, 4> ticks{anchor, anchor + 125, anchor - 25, anchor + 25};
+        std::memcpy(profile.ticks->Map().data(), ticks.data(), sizeof(ticks));
+        const auto times = profile.Read(runtime);
+        Require(times[0].startNanoseconds == 0 && times[0].endNanoseconds == 125 &&
+                    times[1].startNanoseconds == -25 && times[1].endNanoseconds == 25 &&
+                    times[1].nanoseconds == 50,
+                "Large shared GPU clock lost interval precision or cross-queue origin");
+    }
+    {
+        FakeRuntime runtime;
+        runtime.asyncAvailable = false;
+        Pool pool(runtime);
+        Graph graph;
+        auto pass = graph.AddComputePass("Unavailable");
+        pass.AllowAsyncCompute();
+        pass.SideEffect();
+        pass.Execute([](ComputeContext&) {});
+        graph.Compile({.asyncCompute = true});
+        Fails([&] { graph.Execute(pool); }, "unavailable");
+        Require(pool.Stats().cached == 0 && runtime.LastSubmitted() == 0,
+                "Unavailable async queue allocated or submitted work");
+    }
+    for (const bool enabled : {false, true})
+    {
+        FakeRuntime runtime;
+        Pool pool(runtime);
+        auto upload = runtime.CreateBuffer({16, rhi::Memory::Upload, "Upload"});
+        for (uint32_t frame = 0; frame < 2; ++frame)
+        {
+            Graph graph;
+            auto input = graph.ImportBuffer("Upload", upload, {rhi::State::HostWrite, true});
+            auto output = graph.CreateBuffer("Output", {16, rhi::Memory::Device, "", true});
+            auto produce = graph.AddComputePass("Produce");
+            produce.AllowAsyncCompute();
+            produce.ReadBuffer(input, Use::ShaderRead);
+            output = produce.WriteBuffer(output);
+            produce.Execute([](ComputeContext&) {});
+            auto independent = graph.AddComputePass("SharedUpload");
+            independent.ReadBuffer(input, Use::Uniform);
+            independent.SideEffect();
+            independent.Execute([](ComputeContext&) {});
+            auto consume = graph.AddCopyPass("Consume");
+            consume.ReadBuffer(output);
+            consume.SideEffect();
+            consume.Execute([](CopyContext&) {});
+            graph.Export(output, rhi::State::ShaderRead);
+            const auto& plan = graph.Compile({.recordingThreads = 1, .asyncCompute = enabled});
+            Require(plan.asyncCompute == enabled && !plan.schedule[1].waitCompute &&
+                        plan.schedule[2].waitCompute == enabled,
+                    "Queue plan serialized independent reads or missed a consumer wait");
+            graph.Execute(pool);
+            if (enabled)
+            {
+                Require(runtime.nativeRanges.size() == 4 &&
+                            runtime.nativeRanges[0].queue == rhi::QueueType::Graphics &&
+                            runtime.nativeRanges[1].queue == rhi::QueueType::Compute &&
+                            !runtime.nativeRanges[2].waitCompute &&
+                            runtime.nativeRanges[3].waitCompute,
+                        "Queue packet ranges lost prologue, independent work or consumer wait");
+                Require(frame == 0 || !plan.prologueBarriers.empty(),
+                        "Cached buffer state was not handed to the Compute queue");
+            }
+            runtime.WaitIdle();
+        }
+    }
+    for (const bool texture : {false, true})
+    {
+        FakeRuntime runtime;
+        Graph graph;
+        auto buffer = runtime.CreateBuffer({16, rhi::Memory::Device, "Device"});
+        auto imported = graph.ImportBuffer("Device", buffer, {rhi::State::ShaderRead, true});
+        auto image = Texture(graph);
+        auto pass = graph.AddComputePass("Unsupported");
+        pass.AllowAsyncCompute();
+        if (texture)
+            pass.WriteTexture(image);
+        else
+            pass.ReadBuffer(imported, Use::ShaderRead);
+        pass.SideEffect();
+        pass.Execute([](ComputeContext&) {});
+        Fails([&] { graph.Compile({.asyncCompute = true}); }, texture ? "textures" : "Upload");
+    }
+    {
+        Graph graph;
+        auto buffer = graph.CreateBuffer("Late", {16, rhi::Memory::Device, "", true});
+        auto graphics = graph.AddCopyPass("GraphicsProducer");
+        buffer = graphics.WriteBuffer(buffer);
+        graphics.Execute([](CopyContext&) {});
+        auto async = graph.AddComputePass("LateAsync");
+        async.AllowAsyncCompute();
+        buffer = async.ReadWriteBuffer(buffer);
+        async.Execute([](ComputeContext&) {});
+        graph.Export(buffer, rhi::State::ShaderRead);
+        Fails([&] { graph.Compile({.asyncCompute = true}); }, "depend on Graphics");
+    }
+    for (const bool started : {false, true})
+    {
+        FakeRuntime runtime;
+        runtime.failBefore = !started;
+        runtime.failAfter = started;
+        auto buffer = runtime.CreateBuffer({16, rhi::Memory::Upload, "Retained"});
+        std::weak_ptr<rhi::Buffer> weak = buffer;
+        auto commands = runtime.CreateCommands();
+        commands->Barrier(buffer, rhi::State::HostWrite, rhi::State::UniformRead);
+        buffer.reset();
+        Fails([&] { runtime.Submit(std::move(commands)); },
+              started ? "after enqueue" : "before enqueue");
+        Require(runtime.LastSubmitted() == 0 && runtime.Completed() == 0 &&
+                    runtime.PendingCount() == size_t(started) && weak.expired() != started,
+                "Failed submission lost native uses or invented a completion");
+        if (started)
+        {
+            runtime.Collect();
+            Fails([&] { runtime.Submit(runtime.CreateCommands()); }, "poisoned");
+            runtime.failDrain = true;
+            Fails([&] { runtime.WaitIdle(); }, "drain failure");
+            Require(!weak.expired(), "Failed drain released potentially in-flight resources");
+            runtime.failDrain = false;
+            runtime.WaitIdle();
+            Require(weak.expired() && runtime.drains == 1 && runtime.LastSubmitted() == 0,
+                    "Actual queue drain did not retire failed work safely");
+        }
+    }
+}
 void AccelerationStructureContracts()
 {
     FakeRuntime runtime;
@@ -883,6 +1282,7 @@ int main()
     try
     {
         Dependencies();
+        AliasContracts();
         NamesAndBuilders();
         AccessValidation();
         Lifecycle();
@@ -891,7 +1291,36 @@ int main()
         ForwardContracts();
         StencilContracts();
         ProfilingContracts();
+        {
+            FakeRuntime runtime;
+            Pool pool(runtime);
+            Graph graph;
+            Fails([&] { graph.Compile({.recordingThreads = 0}); }, "Recording threads");
+            Fails([&] { graph.Compile({.recordingThreads = 17}); }, "Recording threads");
+            const auto owner = std::this_thread::get_id();
+            uint32_t callbacks = 0;
+            for (uint32_t i = 0; i < 16; ++i)
+            {
+                auto pass = graph.AddComputePass("Parallel." + std::to_string(i));
+                pass.SideEffect();
+                pass.Execute(
+                    [&](ComputeContext&)
+                    {
+                        Require(std::this_thread::get_id() == owner,
+                                "Graph callbacks left the owner thread");
+                        ++callbacks;
+                    });
+            }
+            const auto& plan = graph.Compile({.recordingThreads = 4});
+            graph.Execute(pool);
+            Require(callbacks == 16 && plan.recordingChunks == 4,
+                    "Graph failed to freeze and partition all live passes");
+            Require(plan.ToJson().find("parallel-native") != std::string::npos,
+                    "Graph dump misreported parallel recording");
+            runtime.WaitIdle();
+        }
         AccelerationStructureContracts();
+        QueueContracts();
         ShaderTableContracts();
         std::cout << "Graph contracts passed: names, typed passes, versions, culling, hazards, "
                      "bindings and lifetime\n";

@@ -10,7 +10,9 @@ Extractor 保留所有继承启用的静态实例作为 shadowCasters，包括�
 
 阴影 Pass 使用 RGBA32F 颜色附件记录 `SV_Position.z`，同时用 D32 做最近片元可见性。颜色 R 是可采样深度，空白清零表示无阻挡；D32 不被采样。这样保持当前单颜色附件、单 mip/layer 和不可采样深度的 RHI 契约。512² 两个附件的逻辑大小合计 5 MiB，实际分配另含后端对齐。
 
-`Shadow.params` 生成 `MainLightShadowMatrix` 和 `MainLightShadowParameters`（texel 大小、深度偏移、法线偏移、启用）。Lit Forward Pass 通过 `[binding(MainLightShadow)]` 解析外部资源 handle，使用 deferredResources 在 Graph 录制时绑定真实纹理；无阴影时仍提供清零的 1×1 资源。Shader 做 3×3 手动 PCF，反转 UV 的 Y，与双后端的统一视口约定一致；每个 tap 用接收平面深度修正防止斜面自阴影，越界 tap 和投影外片元视为可见。阴影只乘主光直接 BRDF，IBL 与 emission 不受影响。
+`Shadow.params` 生成 `MainLightShadowMatrix` 和 `MainLightShadowParameters`（texel 大小、深度偏移、法线偏移、启用）。Lit Forward Pass 通过 `[binding(MainLightShadow)]` 解析外部资源 handle，使用 deferredResources 在 Graph 录制时绑定真实纹理；无阴影时仍提供清零的 1×1 资源。Forward 与 Deferred 共用 3×3 双线性比较 PCF：先比较深度，再按 texel 中心间的子像素位置插值可见度，将重复 tap 合并为 4×4 共 16 次 Load，权重和为 9。相比原有整格点 9 次 Load，采样成本增加，但边缘不再仅在跨 texel 时跳变；不能先插值深度再比较。反转 UV 的 Y，与双后端的统一视口约定一致；每个 tap 用接收平面深度修正防止斜面自阴影，越界 tap 和投影外片元视为可见。阴影只乘主光直接 BRDF，IBL 与 emission 不受影响。
+
+Editor 视口默认覆盖阴影分辨率为 1024²，移除早期原型的 128² 限制，不改写场景保存值；1024² 两个附件的逻辑大小合计 20 MiB。Sandbox/Player 仍按场景设置或显式质量档位选择。提高分辨率与连续 PCF 用于减轻单张阴影图的阶梯和跳变，不解决大范围场景的 texel 密度不足，也不能代替对具体几何的 bias 调整。
 
 ## 材质角色与导入
 
@@ -34,7 +36,7 @@ SceneRenderer 消费类型化 render 策略分类，按 role 选择 Forward/Shad
 
 - surface.contracts：竖直主光、投影边界、Reversed-Z 方向与退化包围盒。
 - content.contracts：alpha 模式/阈值导入缓存、非法值、相机剔除后仍保留投影候选。
-- gpu.{dx12,vulkan}.surface：阴影只降低直接光、光旋转、分辨率、视野外投影、Masked 不写入颜色/深度且完全裁剪时不投影、透明排序/零 alpha/遮挡，以及独立 CPU 线性混合→ACES→sRGB 数值参考（最多一个 8-bit code）。
+- gpu.{dx12,vulkan}.surface：合成半平面阴影边缘的 64 个子 texel 采样与解析线性过渡比较、斜面接收深度修正；阴影只降低直接光、光旋转、分辨率、视野外投影、Masked 不写入颜色/深度且完全裁剪时不投影、透明排序/零 alpha/遮挡，以及独立 CPU 线性混合→ACES→sRGB 数值参考（最多一个 8-bit code）。
 - gpu.{dx12,vulkan}.surface_window：完整 Shadow.rlproject 的启动、STA 保持、resize/minimize/restore 与退出。
 
 Vulkan 基础设备明确检查并启用 `shaderDemoteToHelperInvocation`，满足 DXC 对 HLSL clip 的 SPIR-V 要求。DX12 可能报告阴影清零值与原有附件优化 clear 值不匹配的性能提示；Vulkan 可能提示公共顶点布局中的 NORMAL 未被 Shadow/Unlit 消费。验收不允许 validation error，实际配置和结果统一记录于 [阶段计划](../design/phaseplan.md)。

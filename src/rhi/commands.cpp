@@ -2,10 +2,76 @@
 
 #include "rhi/detail/validation.hpp"
 
+#include <algorithm>
+
 namespace renderlab::rhi
 {
 using detail::Range;
 using detail::Require;
+
+void CommandList::SetRecordingThreads(uint32_t count)
+{
+    Recording();
+    Require(count >= 1 && count <= 16, "Recording threads must be in [1, 16]");
+    recordingThreads_ = count;
+}
+void CommandList::RecordingBoundary()
+{
+    Recording();
+    Require(!rendering_ && !markers_, "Recording boundary requires closed rendering and markers");
+    if (!commands_.empty() && (recordingEnds_.empty() || recordingEnds_.back() != commands_.size()))
+        recordingEnds_.push_back(commands_.size());
+    pipeline_.reset();
+    group_.reset();
+    vertex_.reset();
+    index_.reset();
+}
+void CommandList::SelectQueue(QueueType queue, bool waitCompute)
+{
+    RecordingBoundary();
+    const auto& previous = queueChanges_.back();
+    if (previous.queue == queue && previous.waitCompute == waitCompute)
+        return;
+    const QueueChange change{commands_.size(), queue, waitCompute};
+    if (previous.first == change.first)
+        queueChanges_.back() = change;
+    else
+        queueChanges_.push_back(change);
+}
+std::vector<RecordingRange> CommandList::RecordingRanges() const
+{
+    if (std::ranges::any_of(queueChanges_,
+                            [](const auto& c) { return c.queue == QueueType::Compute; }))
+    {
+        std::vector<RecordingRange> ranges;
+        for (size_t i = 0; i < queueChanges_.size(); ++i)
+        {
+            const auto& change = queueChanges_[i];
+            const auto last =
+                i + 1 < queueChanges_.size() ? queueChanges_[i + 1].first : commands_.size();
+            if (last > change.first)
+                ranges.push_back({change.first, last, change.queue, change.waitCompute});
+        }
+        return ranges;
+    }
+    auto ends = recordingEnds_;
+    if (ends.empty() || ends.back() != commands_.size())
+        ends.push_back(commands_.size());
+    std::vector<RecordingRange> ranges;
+    size_t begin = 0;
+    for (uint32_t i = 1; i < recordingThreads_; ++i)
+    {
+        const auto target = commands_.size() * i / recordingThreads_;
+        const auto end = *std::lower_bound(ends.begin(), ends.end(), target);
+        if (end > begin && end < commands_.size())
+        {
+            ranges.push_back({begin, end});
+            begin = end;
+        }
+    }
+    ranges.push_back({begin, commands_.size()});
+    return ranges;
+}
 
 void CommandList::Recording() const
 {
@@ -94,6 +160,21 @@ void CommandList::Copy(std::shared_ptr<Buffer> source, std::shared_ptr<Buffer> d
     Range(destinationOffset, size, destination->desc.size);
     commands_.emplace_back(BufferCopy{std::move(source), std::move(destination), sourceOffset,
                                       destinationOffset, size});
+}
+void CommandList::ActivateAlias(std::shared_ptr<Texture> previous, std::shared_ptr<Texture> texture,
+                                State before, State after)
+{
+    Check(texture);
+    if (previous)
+        Check(previous);
+    Require(!rendering_ && texture->aliasBacking &&
+                (!previous || previous->aliasBacking == texture->aliasBacking),
+            "Alias activation requires shared texture backing outside rendering");
+    Require(texture->desc.attachment &&
+                after == (IsDepthFormat(texture->desc.format) ? State::DepthWrite
+                                                              : State::ColorAttachment),
+            "Alias activation requires attachment initialization");
+    commands_.emplace_back(TextureAlias{std::move(previous), std::move(texture), before, after});
 }
 void CommandList::CopyTexture(std::shared_ptr<Buffer> buffer, std::shared_ptr<Texture> texture,
                               uint32_t rowPitch, bool upload, uint64_t offset)
@@ -203,26 +284,43 @@ void CommandList::Geometry(std::shared_ptr<Buffer> vertex, std::shared_ptr<Buffe
     index_ = index;
     commands_.emplace_back(SetGeometry{std::move(vertex), std::move(index)});
 }
-void CommandList::DrawVertices(uint32_t count, uint32_t first)
+void CommandList::DrawVertices(uint32_t count, uint32_t first, uint32_t instances,
+                               uint32_t firstInstance)
 {
     DrawReady(false);
     Range(uint64_t(first) * pipeline_->desc.vertexStride,
           uint64_t(count) * pipeline_->desc.vertexStride, vertex_->desc.size);
-    commands_.emplace_back(Draw{count, first, false});
+    commands_.emplace_back(Draw{count, first, false, instances, firstInstance});
 }
-void CommandList::DrawIndexed(uint32_t count, uint32_t first)
+void CommandList::DrawIndexed(uint32_t count, uint32_t first, uint32_t instances,
+                              uint32_t firstInstance, int32_t vertexOffset)
 {
     DrawReady(true);
     Range(uint64_t(first) * 4, uint64_t(count) * 4, index_->desc.size);
-    commands_.emplace_back(Draw{count, first, true});
+    commands_.emplace_back(Draw{count, first, true, instances, firstInstance, vertexOffset});
 }
-void CommandList::DrawFrom(std::shared_ptr<Buffer> arguments, uint64_t offset)
+void CommandList::DrawFrom(std::shared_ptr<Buffer> arguments, uint64_t offset, uint32_t maxCount,
+                           bool indexed, std::shared_ptr<Buffer> countBuffer, uint64_t countOffset)
 {
     Check(arguments);
-    DrawReady(false);
+    DrawReady(indexed);
     Require(offset % 4 == 0, "Indirect offset must be 4-byte aligned");
-    Range(offset, sizeof(DrawArguments), arguments->desc.size);
-    commands_.emplace_back(DrawIndirect{std::move(arguments), offset});
+    Require(maxCount && maxCount <= indirect_.maxDrawCount,
+            "Indirect maximum exceeds enabled multi-draw limit");
+    Range(offset,
+          uint64_t(maxCount) * (indexed ? sizeof(DrawIndexedArguments) : sizeof(DrawArguments)),
+          arguments->desc.size);
+    if (countBuffer)
+    {
+        Check(countBuffer);
+        Require(indirect_.countBuffer, "Indirect count buffers are not enabled");
+        Require(countOffset % 4 == 0, "Indirect count offset must be 4-byte aligned");
+        Range(countOffset, 4, countBuffer->desc.size);
+    }
+    else
+        Require(countOffset == 0, "Count offset requires a count buffer");
+    commands_.emplace_back(DrawIndirect{std::move(arguments), offset, maxCount, indexed,
+                                        std::move(countBuffer), countOffset});
 }
 void CommandList::DrawReady(bool indexed) const
 {

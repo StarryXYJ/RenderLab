@@ -145,6 +145,8 @@ RenderPipeline 是组织渲染算法的上层对象，与 RHI 的 Pipeline State
 
 间接绘制提供两后端可映射的公共语义，不直接向上暴露 DX12 任意 ExecuteIndirect 命令签名。跨绘制变化的对象数据通过索引访问 GPU Scene，PSO 和资源布局按批次组织。
 
+公共间接 ABI 采用紧密排列的 16 字节非索引/20 字节索引命令，Count 在 GPU 按最大命令数截断；对象身份通过 firstInstance 和统一 Shader helper 显式传递，不依赖原生 DrawID。helper 处理 DXIL 的实例内 ID 与 SPIR-V 的绝对实例 ID 差异，DX12 索引路径单独要求 SM 6.8，基础路径保持 SM 6.0。参数与 Count 都是图内 Indirect 读取和命令保活对象，已启用能力与硬件支持区分；契约见 [GPU Driven](../docs/gpu-driven.md)。
+
 ### 绑定模型
 
 逻辑上区分 Frame/View、Material 和 Draw/Object 数据。引擎约定映射 HLSL register space、不同资源寄存器类别与 Vulkan set/binding，编译阶段检查冲突。
@@ -152,6 +154,8 @@ RenderPipeline 是组织渲染算法的上层对象，与 RHI 的 Pipeline State
 基础路径使用显式 BindingGroup。高级路径可使用可索引资源表，TextureHandle 等引擎身份不等同于物理描述符索引。逻辑资源表与材质参数接口在早期确定，完整 Bindless 后期按能力启用。
 
 描述符、上传区和 GPU Scene 更新采用安全的帧版本或提交完成点回收。句柄回收包含代际检查；不能在旧帧仍访问时复用物理索引。
+
+M6 的有界 sampled-texture 数组按布局声明固定 count，组内每个元素显式绑定并保活。描述符为不可变快照；Graph 声明全部动态可达纹理，计数与原生页/块容量按数组元素统计。首版仅提供最多 64 项的非一致 sampled-image 索引，不引入全资源 Bindless、更新在途描述符或部分未绑定数组。
 
 ### 资源访问与生命周期
 
@@ -191,6 +195,8 @@ Scene Document 使用稳定对象 ID，运行时使用类型明确的 Handle。�
 
 CPU 和 GPU 剔除路径消费相同的场景身份与数据契约。首期只建立当前用到的表和字段，并上传必要数据；LOD、完整 Bindless 和增量更新在对应功能需要时再实现。GPU Scene 是渲染快照的投影，不单独维护第二套可编辑场景。
 
+索引光栅投影以固定布局的对象/材质/可见实例表和最多 64 项原分辨率 sampled-image 数组消费内置 Lit/Unlit；静态几何按导入身份打包，旧版本由命令保活。CPU 原始提交、索引直接和 CPU 间接各有独立选择，保持相同 Shader 与绑定建立间接基线。透明和光栅阴影继续使用既有 CPU 路径；光追的有限图集暂不与光栅采样 ABI 混合。资源边界见 [GPU Driven](../docs/gpu-driven.md)。
+
 GPU Driven 的第一条工作流为：
 
 ```text
@@ -205,6 +211,8 @@ GPU Scene 更新
 DX12 与 Vulkan 的 DrawID、InstanceID、firstInstance 和间接 Count 能力需要逐项映射验证，不能依赖某个后端的隐含行为。传统透明物体先保留 CPU 排序和独立提交路径；蒙皮和动态顶点更新另行声明依赖。
 
 Hi-Z 使用跨帧历史时，规定首帧、相机跳变和分辨率变化下的失效策略。GPU Scene 的更新、剔除结果和间接参数全部进入 Render Graph 访问声明。
+
+当前视锥 Compute 以每批次全部候选数预留容量，64 线程分块稳定压缩，再直接消费 GPU Count；清零、Storage 写后读及 Indirect 读取显式进入图。GPU 模式跳过 CPU 相机剔除，并标记 CPU 可见集不可用；Count/索引诊断是独立的可选读回，不影响本帧提交。每帧冻结和复用同材质准备，实例表仍由场景快照投影。
 
 M4 的首个场景闭环见 [项目、场景](../docs/m4-scene.md)，Forward PBR/HDR 见 [M4.3](../docs/m4-forward-pbr.md)。Scene 使用值类型组件和层级 Transform，不引入 ECS 管理器。DirectionalLight 可有多个，按稳定 UUID 选择一个启用对象，其世界旋转、颜色和强度提取到显式 Lighting 数据；View/Object/Shadow 分块，入口把数据传给 HLSL 库。点光源和面光源后置。
 
@@ -328,6 +336,8 @@ Imported 资源描述初始状态、外部完成点、所有权和最终需求�
 
 先实现资源池，再实现同一帧的物理内存 Alias。多队列下，拓扑排序中的先后位置不能证明两个资源不重叠；Alias 必须基于实际执行的 happens-before 关系。首个 Alias 实现只利用已有执行关系，不为节省内存额外串行化 Pass。后续若要联合优化内存和调度，必须先更新执行关系、重新验证生命周期，再重新生成同步计划。
 
+M6.5 默认关闭的 Alias 只覆盖同 Graphics Queue、不导入/导出、首次附件 Clear 的瞬态纹理，按相同格式/用途分组；同队列真实提交顺序证明生命周期不重叠。DX12 placed resources 共享 Heap，Vulkan ALIAS images 共享兼容 Memory；激活包含跨别名依赖和附件初始化转换，Vulkan 从 UNDEFINED 丢弃旧内容/元数据。池按组保活、计费与退休，提交成功后才发布成员状态/活动身份；取消不改变缓存状态。长期契约见 [内存 Alias](../docs/memory-alias.md)。
+
 ### 自动并行化的边界
 
 | 层级 | 图系统的职责 | 限制 |
@@ -338,7 +348,11 @@ Imported 资源描述初始状态、外部完成点、所有权和最终需求�
 
 没有资源依赖不等于可以无条件并行。只读共享也要满足兼容状态、布局和队列所有权要求；有副作用的工作需显式顺序约束。GPU 顺序有关联的 Pass 也可能在 CPU 上提前并行录制，只要资源和执行计划已确定。
 
-Pass 提供队列兼容性和 AsyncEligible 等提示，编译器决定合法调度。TraceRays 不预设只能在 Graphics Queue，按后端与设备支持的队列命令能力安排。首版全在 Graphics Queue 上执行，后续策略提供开关和性能测量。
+M6.3 先在 owner 线程完成 Graph 回调、资源/视图/不可变绑定准备与命令包生成，再冻结包并按闭合 Pass 边界分配给持久录制工作线程。各块有独立原生 Allocator/List 或 CommandPool/Buffer，不继承绑定状态；所有块完成后按原序提交同一 Graphics Queue，由一个真实完成点保活。工作线程不修改 Graph、Pool 或共享 CPU 计时器；失败先 join 再丢弃全部受影响上下文，不提交部分录制。串行/1..16 线程共用执行器，默认 1；契约与测量含义见 [并行录制](../docs/parallel-recording.md)。
+
+Pass 提供队列兼容性和 AsyncEligible 等提示，编译器决定合法调度。TraceRays 不预设永远只能在 Graphics Queue，后续按后端与设备支持的队列命令能力扩展；基础路径和当前光追仍在 Graphics Queue，M6.4 仅允许下述 feeder 范围异步执行。
+
+M6.4 首个可选异步范围为 Buffer feeder Compute：只读 Upload 输入与瞬态 Storage 输出，禁止纹理、AS、导入 Device Buffer 和 Graphics 前置依赖。Graphics prologue 准备初态，消费者显式等待；Graphics 尾部汇合所有 Compute 后才发布既有整帧完成点，跨帧 History/上传/池租约仍由真实整点保护。DX12 使用独立 COMPUTE 队列；Vulkan 仅使用同 Graphics family 的第二队列，无跨族转移。原生部分提交失败后保留整批引用、停止后续提交，实际排空后释放；不发布虚构完成点或图最终状态。默认关闭，范围、时钟校准、提交事件捕获及限制见 [异步 Compute](../docs/async-compute.md)。
 
 Execute 只读取声明的数据并录制命令，使用预先准备的 View、绑定和程序，不进行会改变执行计划的资源创建、同步等待或全局状态修改。录制用的临时命令内存由局部上下文提供。原生逃生接口首版不公开；接入外部 SDK 确实需要时，新增有边界的 ExternalPass，完整声明资源、前后状态和队列需求，并限制优化范围。仅把 Pass 标为 Unsafe 无法补回缺失依赖。
 

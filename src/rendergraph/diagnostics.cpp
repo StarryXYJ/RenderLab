@@ -63,7 +63,15 @@ const char* Name(PassKind kind)
 std::string Plan::ToJson() const
 {
     using Json = nlohmann::json;
-    Json output{{"queue", "graphics"}, {"recording", "serial"}, {"aliasing", false}};
+    Json output{{"queue", asyncCompute ? "graphics+compute" : "graphics"},
+                {"recording", recordingThreads == 1 ? "serial" : "parallel-native"},
+                {"recordingThreads", recordingThreads},
+                {"recordingChunks", recordingChunks},
+                {"aliasing", memoryAlias}};
+    output["aliasGroups"] = aliasGroups;
+    output["aliasBackingBytes"] = aliasBackingBytes;
+    output["asyncCompute"] = asyncCompute;
+    output["asyncResources"] = asyncResources;
     output["passes"] = Json::array();
     output["resources"] = Json::array();
     output["edges"] = Json::array();
@@ -88,6 +96,7 @@ std::string Plan::ToJson() const
         output["resources"].push_back(
             {{"name", r.name},
              {"imported", r.imported},
+             {"aliasGroup", r.aliasGroup == UINT32_MAX ? Json(nullptr) : Json(r.aliasGroup)},
              {"first", r.first == UINT32_MAX ? Json(nullptr) : Json(r.first)},
              {"last", r.last},
              {"estimatedBytes", r.estimatedBytes},
@@ -104,8 +113,22 @@ std::string Plan::ToJson() const
                 {{"resource", b.resource}, {"before", Name(b.before)}, {"after", Name(b.after)}});
         return result;
     };
-    for (const auto& p : schedule)
-        output["schedule"].push_back({{"pass", p.pass}, {"barriers", barriers(p.barriers)}});
+    for (uint32_t position = 0; position < schedule.size(); ++position)
+    {
+        const auto& p = schedule[position];
+        Json activations = Json::array();
+        for (const auto& barrier : p.barriers)
+            if (resources[barrier.resource].aliasGroup != UINT32_MAX &&
+                resources[barrier.resource].first == position)
+                activations.push_back(barrier.resource);
+        output["schedule"].push_back(
+            {{"pass", p.pass},
+             {"barriers", barriers(p.barriers)},
+             {"aliasActivations", std::move(activations)},
+             {"queue", p.queue == rhi::QueueType::Compute ? "compute" : "graphics"},
+             {"waitCompute", p.waitCompute}});
+    }
+    output["prologueBarriers"] = barriers(prologueBarriers);
     output["finalBarriers"] = barriers(finalBarriers);
     return output.dump(2) + "\n";
 }

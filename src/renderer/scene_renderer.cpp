@@ -28,6 +28,9 @@
 #include <map>
 #include <optional>
 #include <stdexcept>
+#include <string_view>
+#include <tuple>
+#include <unordered_set>
 #include <utility>
 
 namespace renderlab::renderer
@@ -80,8 +83,10 @@ struct SceneRenderer::Impl
     std::map<std::string, CachedMaterial> materialAssets;
     material::Runtime materials;
     rendergraph::Pool pool;
+    bool memoryAlias = false;
     rhi::UploadPool uploadPool;
     AccelerationScene accelerationScene;
+    std::unique_ptr<IndexedScene> indexedScene;
     std::shared_ptr<rhi::Pipeline> rayQueryShadow;
     std::shared_ptr<rhi::ShaderTable> reflectionTable, reflectionTableWithoutGuide;
     std::shared_ptr<rhi::Pipeline> reflectionHistory, reflectionStatistics, reflectionCombine,
@@ -889,15 +894,31 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
 {
     const auto preparationStart = std::chrono::steady_clock::now();
     auto& self = *impl_;
+    if (self.memoryAlias != options.memoryAlias)
+    {
+        self.pool.Trim();
+        self.memoryAlias = options.memoryAlias;
+    }
     const bool rayTracing = options.pipeline == PipelineType::RayTracing;
     if (options.pipeline != PipelineType::Forward && options.pipeline != PipelineType::Deferred &&
         !rayTracing)
         throw std::invalid_argument("Unknown or unavailable scene render pipeline");
     const bool deferred = options.pipeline != PipelineType::Forward;
+    const bool indexed = options.submission != GeometrySubmission::Direct;
+    if (indexed && options.submission != GeometrySubmission::IndexedDirect &&
+        options.submission != GeometrySubmission::CpuIndirect &&
+        options.submission != GeometrySubmission::GpuCulled)
+        throw std::invalid_argument("Unknown geometry submission mode");
+    if (indexed && !self.indexedScene)
+        self.indexedScene = std::make_unique<IndexedScene>(
+            self.runtime, self.shaderTarget,
+            self.engineShaders.at(std::string(builtin::Lit)).parent_path(),
+            self.package->interfaces.front());
     auto uploads = self.uploadPool.Begin();
     self.EnsureModels();
     self.snapshot = self.extractor.Extract(
-        self.document, float(target->desc.width) / float(target->desc.height), self.models);
+        self.document, float(target->desc.width) / float(target->desc.height), self.models,
+        options.submission != GeometrySubmission::GpuCulled);
     if (options.shadowResolution)
     {
         const auto size = options.shadowResolution;
@@ -907,6 +928,25 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
     }
     self.UpdateEnvironment();
     self.shadowMatrix = FitDirectionalShadow(self.snapshot);
+    std::map<std::string, Impl::MaterialInput> frameMaterials;
+    std::map<const Impl::MaterialInput*, material::RenderPolicy> framePolicies;
+    const auto materialForFrame = [&](const scene::Instance& instance,
+                                      const assets::Surface& surface) -> const Impl::MaterialInput&
+    {
+        const auto key =
+            instance.material.empty() ? instance.model + "/" + surface.id : instance.material;
+        if (!frameMaterials.contains(key))
+            frameMaterials.emplace(key, self.MaterialFor(instance, surface));
+        return frameMaterials.at(key);
+    };
+    const auto policyForFrame =
+        [&](const Impl::MaterialInput& material) -> const material::RenderPolicy&
+    {
+        if (!framePolicies.contains(&material))
+            framePolicies.emplace(
+                &material, material::ResolvePolicy(material.package->definition, material.asset));
+        return framePolicies.at(&material);
+    };
     const bool reflections =
         rayTracing && options.reflections &&
         (options.view == SceneView::Final || options.view == SceneView::Hdr ||
@@ -939,9 +979,8 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
             const auto mesh = std::ranges::find(model.meshes, instance.mesh, &assets::Mesh::id);
             if (mesh == model.meshes.end())
                 throw std::logic_error("Ray Tracing snapshot references a missing mesh");
-            const auto material = self.MaterialFor(instance, model.materials.at(mesh->material));
-            const auto policy =
-                material::ResolvePolicy(material.package->definition, material.asset);
+            const auto& material = materialForFrame(instance, model.materials.at(mesh->material));
+            const auto policy = policyForFrame(material);
             if (policy.surface == shader::SurfaceType::Transparent)
                 continue;
             if (policy.alphaClip)
@@ -1046,15 +1085,17 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
     const auto scan = [&](const std::vector<scene::Instance>& instances, shader::PassRole role,
                           rhi::Format& format)
     {
+        std::unordered_set<const Impl::MaterialInput*> scanned;
         for (const auto& instance : instances)
         {
             const auto& model = self.models.at(instance.model);
             const auto mesh = std::ranges::find(model.meshes, instance.mesh, &assets::Mesh::id);
             if (mesh == model.meshes.end())
                 throw std::logic_error("Snapshot references missing mesh");
-            const auto material = self.MaterialFor(instance, model.materials.at(mesh->material));
-            const auto policy =
-                material::ResolvePolicy(material.package->definition, material.asset);
+            const auto& material = materialForFrame(instance, model.materials.at(mesh->material));
+            if (!scanned.insert(&material).second)
+                continue;
+            const auto policy = policyForFrame(material);
             if (role == shader::PassRole::GBuffer &&
                 policy.surface == shader::SurfaceType::Transparent)
                 continue;
@@ -1073,10 +1114,12 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
                 format = rhi::Format::D32S8;
         }
     };
-    scan(self.snapshot.instances, deferred ? shader::PassRole::GBuffer : shader::PassRole::Forward,
+    const auto& cameraCandidates =
+        self.snapshot.cpuVisibilityKnown ? self.snapshot.instances : self.snapshot.allInstances;
+    scan(cameraCandidates, deferred ? shader::PassRole::GBuffer : shader::PassRole::Forward,
          cameraDepthFormat);
     if (deferred)
-        scan(self.snapshot.instances, shader::PassRole::Forward, cameraDepthFormat);
+        scan(cameraCandidates, shader::PassRole::Forward, cameraDepthFormat);
     scan(self.snapshot.shadowCasters, shader::PassRole::ShadowCaster, frame.shadowDepthFormat);
     graph.CreateTexture("CameraDepth",
                         {target->desc.width, target->desc.height, cameraDepthFormat, false, true});
@@ -1084,6 +1127,13 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
     frame.shadowResolution =
         self.snapshot.shadowCasters.empty() ? 1 : self.snapshot.light.shadowResolution;
     const auto frameConstants = self.Parameters(uploads);
+    std::vector<IndexedDrawInput> indexedInputs;
+    using IndexedKey = std::tuple<const Impl::MaterialInput*, shader::PassRole, bool>;
+    std::map<IndexedKey, IndexedDrawInput> indexedTemplates;
+    std::unordered_set<std::string_view> cpuVisible;
+    if (indexed && self.snapshot.cpuVisibilityKnown)
+        for (const auto& instance : self.snapshot.instances)
+            cpuVisible.insert(instance.id);
     std::map<std::string, rhi::UploadArena::Slice> objectConstants;
     std::map<const rhi::Object*, std::string> imported;
     const auto importBuffer =
@@ -1362,8 +1412,8 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
         if (mesh == model.meshes.end())
             throw std::logic_error("Snapshot references missing mesh");
         const auto& surface = model.materials.at(mesh->material);
-        const auto material = self.MaterialFor(instance, surface);
-        const auto policy = material::ResolvePolicy(material.package->definition, material.asset);
+        const auto& material = materialForFrame(instance, surface);
+        const auto policy = policyForFrame(material);
         auto role = requestedRole;
         if (role == shader::PassRole::GBuffer && policy.surface == shader::SurfaceType::Transparent)
             role = shader::PassRole::Forward;
@@ -1376,6 +1426,30 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
         if (!material::PassEnabled(material.package->definition, pass, material.asset))
             return;
         const bool transparent = policy.surface == shader::SurfaceType::Transparent;
+        if (indexed && requestedRole != shader::PassRole::ShadowCaster && transparent &&
+            !(self.snapshot.cpuVisibilityKnown
+                  ? cpuVisible.contains(instance.id)
+                  : math::Visible(self.snapshot.viewProjection, instance.bounds)))
+            return;
+        const bool indexedDraw = indexed && role != shader::PassRole::ShadowCaster && !transparent;
+        const auto& w = instance.world;
+        const math::Vec3 x{w.At(0, 0), w.At(1, 0), w.At(2, 0)},
+            y{w.At(0, 1), w.At(1, 1), w.At(2, 1)}, z{w.At(0, 2), w.At(1, 2), w.At(2, 2)};
+        const bool mirrored = math::Dot(math::Cross(x, y), z) < 0;
+        const IndexedKey indexedKey{&material, role, mirrored};
+        if (indexedDraw)
+            if (const auto found = indexedTemplates.find(indexedKey);
+                found != indexedTemplates.end())
+            {
+                auto input = found->second;
+                input.instance = instance;
+                input.cpuVisible =
+                    self.snapshot.cpuVisibilityKnown && cpuVisible.contains(instance.id);
+                input.mesh = &*mesh;
+                input.meshKey = model.id + "/" + mesh->id + "/" + model.key;
+                indexedInputs.push_back(std::move(input));
+                return;
+            }
         material::Preparation prepare;
         prepare.pass = role;
         prepare.colorFormats =
@@ -1385,10 +1459,7 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
                 : std::vector<rhi::Format>{rhi::Format::Rgba32Float};
         prepare.depthStencilFormat =
             role == shader::PassRole::ShadowCaster ? frame.shadowDepthFormat : cameraDepthFormat;
-        const auto& w = instance.world;
-        const math::Vec3 x{w.At(0, 0), w.At(1, 0), w.At(2, 0)},
-            y{w.At(0, 1), w.At(1, 1), w.At(2, 1)}, z{w.At(0, 2), w.At(1, 2), w.At(2, 2)};
-        prepare.mirrored = math::Dot(math::Cross(x, y), z) < 0;
+        prepare.mirrored = mirrored;
         prepare.vertexStride = sizeof(assets::Vertex);
         prepare.attributes = {{"POSITION", 0, rhi::VertexFormat::Float3, 0},
                               {"NORMAL", 1, rhi::VertexFormat::Float3, 12},
@@ -1405,15 +1476,16 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
         bind(bindings.shadow, frameConstants.shadow);
         if (bindings.object)
         {
-            if (!objectConstants.contains(instance.id))
+            const auto objectKey = indexedDraw ? "Indexed.SharedState" : instance.id;
+            if (!objectConstants.contains(objectKey))
             {
                 shader::generated::SceneObjectData object;
                 object.ObjectToWorld = instance.world.values;
                 object.NormalToWorld = instance.normal.values;
                 object.PreviousObjectToWorld = instance.previousWorld.values;
-                objectConstants.emplace(instance.id, self.ParameterBuffer(object, uploads));
+                objectConstants.emplace(objectKey, self.ParameterBuffer(object, uploads));
             }
-            bind(bindings.object, objectConstants.at(instance.id));
+            bind(bindings.object, objectConstants.at(objectKey));
         }
         if (bindings.environment)
             prepare.bindings[*bindings.environment] = {0, self.environmentAtlas};
@@ -1423,6 +1495,86 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
             prepare.deferredResources.insert(*bindings.shadowMap);
         auto prepared = self.materials.Prepare(material.package, material.asset, prepare, resolve);
         self.generations[material.package.get()] = prepared.generation;
+        if (indexedDraw)
+        {
+            const bool lit = material.package->definition.assetId == builtin::Lit;
+            if (!lit && material.package->definition.assetId != "9120dfaac72c5c1c88f3a41e3ac22447")
+                throw std::invalid_argument("Indexed raster supports built-in Lit/Unlit only");
+            IndexedDrawInput input;
+            input.instance = instance;
+            input.cpuVisible = self.snapshot.cpuVisibilityKnown && cpuVisible.contains(instance.id);
+            input.mesh = &*mesh;
+            input.meshKey = model.id + "/" + mesh->id + "/" + model.key;
+            input.reference = prepared.pipeline;
+            input.queue = policy.queue;
+            input.stencilReference = prepared.stencilReference;
+            input.gbuffer = role == shader::PassRole::GBuffer;
+            input.material.flags[1] = lit ? 0u : 1u;
+            input.material.flags[2] = policy.alphaClip ? 1u : 0u;
+            input.textures.fill(self.textures.at("white/Linear"));
+            input.textures[0] = self.textures.at("white/Srgb");
+            input.textures[2] = self.textures.at("normal/Linear");
+            const shader::MaterialTemplate definition(material.package);
+            for (const auto& property : definition.Properties())
+            {
+                using S = shader::MaterialSemantic;
+                if (property.type.resource)
+                {
+                    int texture = property.semantic == S::BaseMap                ? 0
+                                  : property.semantic == S::MetallicRoughnessMap ? 1
+                                  : property.semantic == S::NormalMap            ? 2
+                                  : property.semantic == S::OcclusionMap         ? 3
+                                  : property.semantic == S::EmissionMap          ? 4
+                                                                                 : -1;
+                    if (texture >= 0)
+                    {
+                        const auto found = material.asset.resources.find(property.id);
+                        const auto& reference = found == material.asset.resources.end()
+                                                    ? property.resourceDefault
+                                                    : found->second.reference;
+                        input.textures[texture] = resolve(property, reference).view;
+                    }
+                    continue;
+                }
+                const auto found = material.asset.values.find(property.id);
+                const auto& values = found == material.asset.values.end() ? property.defaults
+                                                                          : found->second.numbers;
+                const auto value = [&](size_t i) { return static_cast<float>(values.at(i)); };
+                switch (property.semantic)
+                {
+                case S::BaseColor:
+                    for (uint32_t i = 0; i < 4; ++i)
+                        input.material.baseColor[i] = value(i);
+                    break;
+                case S::Metallic:
+                    input.material.emissionMetallic[3] = value(0);
+                    break;
+                case S::Emission:
+                    for (uint32_t i = 0; i < 3; ++i)
+                        input.material.emissionMetallic[i] = value(i);
+                    break;
+                case S::Roughness:
+                    input.material.factors[0] = value(0);
+                    break;
+                case S::NormalScale:
+                    input.material.factors[1] = value(0);
+                    break;
+                case S::OcclusionStrength:
+                    input.material.factors[2] = value(0);
+                    break;
+                case S::AlphaCutoff:
+                    input.material.factors[3] = value(0);
+                    break;
+                default:
+                    break;
+                }
+            }
+            for (uint32_t i = 0; i < input.textures.size(); ++i)
+                input.textureNames[i] = importTexture(input.textures[i]);
+            indexedTemplates.emplace(indexedKey, input);
+            indexedInputs.push_back(std::move(input));
+            return;
+        }
         DrawPacket draw;
         draw.pipeline = prepared.pipeline;
         draw.stencilReference = prepared.stencilReference;
@@ -1481,8 +1633,34 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
     };
     for (const auto& instance : self.snapshot.shadowCasters)
         prepareDraw(instance, shader::PassRole::ShadowCaster);
-    for (const auto& instance : self.snapshot.instances)
+    for (const auto& instance : indexed ? self.snapshot.allInstances : self.snapshot.instances)
         prepareDraw(instance, deferred ? shader::PassRole::GBuffer : shader::PassRole::Forward);
+    if (indexed)
+    {
+        IndexedFrameBindings bindings;
+        bindings.view = {
+            0,
+            importBuffer(frameConstants.view.buffer, "Indexed.Frame", rhi::State::HostWrite),
+            rendergraph::Use::Uniform,
+            {frameConstants.view.offset, frameConstants.view.size}};
+        bindings.lighting = {
+            1,
+            importBuffer(frameConstants.lighting.buffer, "Indexed.Lighting", rhi::State::HostWrite),
+            rendergraph::Use::Uniform,
+            {frameConstants.lighting.offset, frameConstants.lighting.size}};
+        bindings.shadow = {
+            2,
+            importBuffer(frameConstants.shadow.buffer, "Indexed.Shadow", rhi::State::HostWrite),
+            rendergraph::Use::Uniform,
+            {frameConstants.shadow.offset, frameConstants.shadow.size}};
+        bindings.environment = importTexture(self.environmentAtlas);
+        bindings.brdf = importTexture(self.brdfLut);
+        bindings.viewProjection = self.snapshot.viewProjection;
+        self.indexedScene->Build(
+            graph, indexedInputs, bindings, options.submission != GeometrySubmission::IndexedDirect,
+            frame.opaque, frame.gbuffer, options.submission == GeometrySubmission::GpuCulled,
+            options.cullingDiagnostics);
+    }
     if (deferred)
     {
         material::Preparation prepare;
@@ -1700,8 +1878,17 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
         static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(
                                   std::chrono::steady_clock::now() - preparationStart)
                                   .count());
-    graph.Compile({.profile = options.profile});
+    graph.Compile({.profile = options.profile,
+                   .recordingThreads = options.recordingThreads,
+                   .asyncCompute = options.asyncCompute,
+                   .memoryAlias = options.memoryAlias});
     auto submitted = graph.Execute(self.pool, swapchain);
+    if (indexed)
+    {
+        self.indexedScene->Commit(submitted.completion);
+        result.indexedScene = self.indexedScene->Statistics();
+        result.culling = self.indexedScene->Diagnostics();
+    }
     if (reflectionHistory)
     {
         reflectionHistory->signature = std::move(reflectionSignature);

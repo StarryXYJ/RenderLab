@@ -70,9 +70,9 @@ cmake --build --preset windows-release --parallel 4
 ctest --preset windows-release
 ```
 
-输出分别在 `out/build/windows-debug` 和 `out/build/windows-release`。默认注册 13 项不需要创建设备的测试，包含实际 DXC 双目标编译的 `shader.contracts`、生成 C++ 契约的 `parameters.contracts` 和流式计时数据的 `benchmark.contracts`。预设与依赖版本纳入 Git，本机设置使用被忽略的 `CMakeUserPresets.json`。
+输出分别在 `out/build/windows-debug` 和 `out/build/windows-release`。默认注册 14 项不需要创建设备的测试，包含实际 DXC 双目标编译的 `shader.contracts`、生成 C++ 契约的 `parameters.contracts` 和流式计时数据的 `benchmark.contracts`。预设与依赖版本纳入 Git，本机设置使用被忽略的 `CMakeUserPresets.json`。
 
-完整验收启用 GPU 测试，当前共 41 项（13 项 CPU/CLI、28 项 GPU）。GPU 测试要求验证层和桌面会话，会短暂打开原生窗口：
+完整验收启用 GPU 测试，当前共 58 项（14 项 CPU/CLI、44 项 GPU）。GPU 测试要求验证层和桌面会话，会短暂打开原生窗口：
 
 ```powershell
 cmake --preset windows-debug -DRENDERLAB_GPU_TESTS=ON
@@ -122,6 +122,31 @@ Sandbox 从可执行文件同目录的 `shaders/dx12` 或 `shaders/vulkan` 读�
 日志默认写入当前工作目录的 `logs/renderlab.log`，可用 `--log PATH` 修改。JSON 报告通过 `--report PATH` 指定，父目录会自动创建。日志与报告均为 UTF-8 无 BOM、LF。返回码 0 表示成功，1 表示运行或验证错误，2 表示参数错误。
 
 ## Shader 与材质工具
+
+间接提交专项启用 `RENDERLAB_GPU_TESTS=ON` 后构建 `renderlab_indirect_tests`，执行
+`ctest --test-dir out/build/windows-debug -R 'gpu\.(dx12|vulkan)\.indirect' --output-on-failure`。
+Release 替换构建目录；测试要求支持多条间接、Count 与非零 firstInstance 的设备，始终使用 Validation On。
+公共 ABI、同步与覆盖范围见 [GPU Driven](../docs/gpu-driven.md)。
+
+有界非一致纹理数组的独立入口是 `renderlab_descriptor_array_tests`，CTest 使用
+`-R 'gpu\.(dx12|vulkan)\.descriptor_array'`；要求 64 个 sampled-texture 数组元素和对应非一致索引能力。
+
+实际场景可添加 `--submission indexed-direct` 或 `--submission cpu-indirect`，与
+`--pipeline forward|deferred|raytracing` 独立组合；默认 `--submission direct` 保留原始基线。
+例如 `renderlab_sandbox.exe --backend vulkan --headless --validation on --project sample/m4/Pbr.rlproject --submission cpu-indirect --output out/indexed`。
+场景专项为 `renderlab_indexed_scene_tests` / `gpu.dx12.indexed_scene` / `gpu.vulkan.indexed_scene`，
+支持范围、容量与内存边界见 [GPU Driven](../docs/gpu-driven.md#场景索引基线)。
+
+`--submission gpu-culled` 启用 Compute 视锥剔除与 GPU Count，保留上述 CPU 对照。
+
+场景可独立添加 `--recording-threads 4` 启用 CPU 并行原生命令录制，范围 1..16，默认 1；与几何提交/管线选择独立。资源准备和 Graph 回调仍在 owner 线程，单 Graphics Queue 按原序提交。使用 `--cpu-profile` 和 Benchmark 的 `recordingThreads` 配对测量；`rhiNativeRecordMs` 包含任务调度/等待，已经包含在 NativeSubmit 中。`ctest --test-dir out/build/m5-release -R 'recording.contracts|indexed_scene' --output-on-failure` 检查线程持久性、异常与双后端串并行图像/时间戳；契约见 [并行录制](../docs/parallel-recording.md)。
+
+场景 `--submission gpu-culled --async-compute` 可把清零/视锥剔除交给独立 Compute Queue，默认关闭；可与 `--recording-threads 1|4` 配对。DX12 使用 COMPUTE 队列，Vulkan 首版要求 Graphics family 的第二队列；不支持时明确报错。`ctest --test-dir out/build/m5-release -R 'rendergraph.contracts|indexed_scene' --output-on-failure` 验证依赖、失败保活、GPU 可见列表与连续帧 History。运行 `python tools/benchmark/run.py sample/benchmark/async-compute.json --output out/benchmarks/async-compute` 前先由 indexed_scene 测试生成规模场景；状态与交接见 [异步 Compute](../docs/async-compute.md)。
+
+`--memory-alias` 可选复用同 Graphics Queue 上不重叠的瞬态附件，默认关闭，可与上述队列/线程选项组合。`ctest --test-dir out/build/m5-release -R 'rendergraph.contracts|\.alias$|indexed_scene' --output-on-failure` 验证规划、原生共享分配、取消/连续帧和像素一致性；分配与限制见 [内存 Alias](../docs/memory-alias.md)。
+规模性能套件先运行 `ctest --preset windows-release -R 'gpu.dx12.indexed_scene'` 生成固定场景，
+再执行 `python tools/benchmark/run.py sample/benchmark/gpu-driven.json --output out/benchmarks/gpu-driven`。
+该配置为短测；完整条件与局限见 [测量记录](../docs/performance/m6-gpu-driven.md)。
 
 ```powershell
 ./out/build/windows-debug/renderlab_shaderc.exe shaders/m2/surface.shader --cache out/shader-cache --schema out/surface-schema.json

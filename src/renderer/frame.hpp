@@ -15,6 +15,7 @@ struct TextureBinding
     uint32_t slot;
     std::string texture;
     uint32_t space = 0;
+    uint32_t arrayElement = 0;
 };
 struct BufferBinding
 {
@@ -34,20 +35,27 @@ enum class DrawKind
 {
     Vertices,
     Indexed,
-    Indirect
+    Indirect,
+    IndexedIndirect,
+    IndexedSequence
 };
 /** @brief Prepared draw inputs. Resource names resolve in the current graph during Feature::Build.
  */
 struct DrawPacket
 {
     std::shared_ptr<rhi::Pipeline> pipeline;
-    std::string vertices, indices, indirect;
+    std::string vertices, indices, indirect, indirectCount;
     std::vector<TextureBinding> textures;
     std::vector<BufferBinding> buffers;
     std::vector<SamplerBinding> samplers;
+    /// CPU reference commands sharing one immutable binding snapshot.
+    std::vector<rhi::DrawIndexedArguments> indexedDraws;
     DrawKind kind = DrawKind::Vertices;
     uint32_t count = 0, first = 0;
     uint64_t indirectOffset = 0;
+    uint64_t indirectCountOffset = 0;
+    uint32_t indirectMaxCount = 1, instances = 1, firstInstance = 0;
+    int32_t vertexOffset = 0;
     uint32_t stencilReference = 0;
     float distance = 0;
     int32_t queue = 2000;

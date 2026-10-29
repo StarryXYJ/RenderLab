@@ -15,6 +15,11 @@ void Graph::Prepare(Pool& pool)
     g.phase = detail::Phase::Preparing;
     try
     {
+        if (g.plan.asyncCompute)
+        {
+            Require(pool.Device().SupportsAsyncCompute(), "Async compute queue is unavailable");
+            pool.Device().EnableAsyncCompute();
+        }
         if (g.profiling && !g.plan.schedule.empty())
         {
             Require(g.plan.schedule.size() <= rhi::MaxTimestampSlots / 2,
@@ -22,6 +27,17 @@ void Graph::Prepare(Pool& pool)
             g.timestampLease = pool.Acquire(rhi::BufferDesc{
                 rhi::MaxTimestampSlots * 8, rhi::Memory::Readback, "Graph.Timestamps"});
             g.timestamps = g.timestampLease->buffer;
+        }
+        for (const auto& members : g.plan.aliasGroups)
+        {
+            std::vector<rhi::TextureDesc> descs;
+            for (const auto member : members)
+                descs.push_back(g.resources[member].textureDesc);
+            auto group = pool.AcquireAliases(descs);
+            g.plan.aliasBackingBytes += group->bytes;
+            for (size_t i = 0; i < members.size(); ++i)
+                g.resources[members[i]].lease = group->members[i];
+            g.aliasLeases.push_back(std::move(group));
         }
         for (uint32_t i = 0; i < g.resources.size(); ++i)
         {
@@ -38,7 +54,9 @@ void Graph::Prepare(Pool& pool)
             }
             else
             {
-                r.lease = r.isTexture ? pool.Acquire(r.textureDesc) : pool.Acquire(r.bufferDesc);
+                if (!r.lease)
+                    r.lease =
+                        r.isTexture ? pool.Acquire(r.textureDesc) : pool.Acquire(r.bufferDesc);
                 r.texture = r.lease->texture;
                 r.buffer = r.lease->buffer;
                 r.start = r.lease->state;
@@ -69,20 +87,42 @@ void Graph::Record()
     auto& g = *impl_;
     Require(g.phase == detail::Phase::Prepared, "Record requires prepared graph");
     g.commands = g.pool->Device().CreateCommands();
+    g.commands->SetRecordingThreads(g.recordingThreads);
     g.phase = detail::Phase::Recording;
+    uint32_t position = 0;
+    std::vector<std::shared_ptr<rhi::Texture>> activeAliases;
+    for (const auto& group : g.aliasLeases)
+        activeAliases.push_back(
+            group->active == UINT32_MAX ? nullptr : group->members[group->active]->texture);
     const auto barrier = [&](const Barrier& b)
     {
         const auto& r = g.resources[b.resource];
-        if (r.isTexture)
+        const auto& info = g.plan.resources[b.resource];
+        if (info.aliasGroup != UINT32_MAX && info.first == position)
+        {
+            auto& previous = activeAliases[info.aliasGroup];
+            g.commands->ActivateAlias(previous, r.texture, b.before, b.after);
+            previous = r.texture;
+        }
+        else if (r.isTexture)
             g.commands->Barrier(r.texture, b.before, b.after);
         else
             g.commands->Barrier(r.buffer, b.before, b.after);
     };
     try
     {
+        if (g.plan.asyncCompute)
+        {
+            g.commands->BeginMarker("Graph.AsyncPrologue");
+            for (const auto& b : g.plan.prologueBarriers)
+                barrier(b);
+            g.commands->EndMarker();
+            g.commands->RecordingBoundary();
+        }
         uint32_t timestamp = 0;
         for (const auto& scheduled : g.plan.schedule)
         {
+            g.commands->SelectQueue(scheduled.queue, scheduled.waitCompute);
             for (const auto& b : scheduled.barriers)
                 barrier(b);
             auto& pass = g.passes[scheduled.pass];
@@ -128,7 +168,10 @@ void Graph::Record()
             if (g.timestamps)
                 g.commands->WriteTimestamp(timestamp++);
             g.commands->EndMarker();
+            g.commands->RecordingBoundary();
+            ++position;
         }
+        g.commands->SelectQueue(rhi::QueueType::Graphics, g.plan.asyncCompute);
         for (const auto& b : g.plan.finalBarriers)
             barrier(b);
         if (g.timestamps)
@@ -139,6 +182,7 @@ void Graph::Record()
         }
         g.active = UINT32_MAX;
         g.phase = detail::Phase::Recorded;
+        g.plan.recordingChunks = static_cast<uint32_t>(g.commands->RecordingRanges().size());
         g.plan.recordNs = std::chrono::duration_cast<std::chrono::nanoseconds>(
                               std::chrono::steady_clock::now() - started)
                               .count();
@@ -161,8 +205,16 @@ Submission Graph::Submit(rhi::Swapchain* presentation)
     {
         result.profile.ticks = g.timestamps;
         result.profile.periodNs = g.pool->Device().TimestampPeriodNs();
+        const auto graphicsClock = g.pool->Device().TimestampClock(rhi::QueueType::Graphics);
+        const auto computeClock = g.plan.asyncCompute
+                                      ? g.pool->Device().TimestampClock(rhi::QueueType::Compute)
+                                      : graphicsClock;
         for (const auto& scheduled : g.plan.schedule)
+        {
             result.profile.names.push_back(g.passes[scheduled.pass].name);
+            result.profile.clocks.push_back(
+                scheduled.queue == rhi::QueueType::Compute ? computeClock : graphicsClock);
+        }
     }
     for (uint32_t i = 0; i < g.resources.size(); ++i)
         if (g.resources[i].exported)
@@ -188,6 +240,8 @@ Submission Graph::Submit(rhi::Swapchain* presentation)
             r.lease->completion = result.completion;
         }
     g.phase = detail::Phase::Submitted;
+    for (auto& group : g.aliasLeases)
+        group->active = static_cast<uint32_t>(group->members.size() - 1);
     if (g.timestampLease)
     {
         g.timestampLease->state = rhi::State::HostRead;
@@ -220,13 +274,29 @@ Submission::GpuProfile::Read(const rhi::Runtime& runtime) const
     const auto bytes = ticks->Map();
     Require(names.size() <= rhi::MaxTimestampSlots / 2 && bytes.size() >= names.size() * 16,
             "GPU profile readback is truncated or exceeds capacity");
+    Require(clocks.empty() || clocks.size() == names.size(), "GPU profile clock metadata mismatch");
     std::vector<Timing> timings;
+    uint64_t referenceTick = 0;
+    if (!names.empty())
+        std::memcpy(&referenceTick, bytes.data(), 8);
     for (size_t i = 0; i < names.size(); ++i)
     {
         uint64_t begin, end;
         std::memcpy(&begin, bytes.data() + i * 16, 8);
         std::memcpy(&end, bytes.data() + i * 16 + 8, 8);
-        timings.push_back({names[i], double(end - begin) * periodNs});
+        const auto clock = clocks.empty() ? rhi::QueueClock{0, 0, periodNs} : clocks[i];
+        const auto position = [&](uint64_t tick)
+        {
+            // Subtract shared device ticks before conversion to preserve small intervals.
+            const auto origin =
+                clock.gpuTick == 0 && clock.originNs == 0 ? referenceTick : clock.gpuTick;
+            const double difference =
+                tick >= origin ? double(tick - origin) : -double(origin - tick);
+            return clock.originNs + difference * clock.periodNs;
+        };
+        Require(end >= begin, "GPU timestamp pair is reversed");
+        timings.push_back({names[i], double(end - begin) * clock.periodNs, position(begin),
+                           position(end), clock.queue});
     }
     return timings;
 }

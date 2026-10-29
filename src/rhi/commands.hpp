@@ -3,14 +3,26 @@
 #include "rhi/resources.hpp"
 
 #include <array>
+#include <cstddef>
 #include <cstdint>
 #include <memory>
 #include <string>
+#include <utility>
 #include <variant>
 #include <vector>
 
+namespace renderlab::rendergraph
+{
+class Graph;
+}
 namespace renderlab::rhi
 {
+struct RecordingRange
+{
+    size_t first = 0, last = 0;
+    QueueType queue = QueueType::Graphics;
+    bool waitCompute = false;
+};
 inline constexpr uint32_t MaxTimestampSlots = 64;
 struct BufferBarrier
 {
@@ -20,6 +32,11 @@ struct BufferBarrier
 struct TextureBarrier
 {
     std::shared_ptr<Texture> texture;
+    State before, after;
+};
+struct TextureAlias
+{
+    std::shared_ptr<Texture> previous, texture;
     State before, after;
 };
 struct BufferCopy
@@ -70,11 +87,17 @@ struct Draw
 {
     uint32_t count, first;
     bool indexed;
+    uint32_t instances = 1, firstInstance = 0;
+    int32_t vertexOffset = 0;
 };
 struct DrawIndirect
 {
     std::shared_ptr<Buffer> arguments;
     uint64_t offset;
+    uint32_t maxCount = 1;
+    bool indexed = false;
+    std::shared_ptr<Buffer> countBuffer;
+    uint64_t countOffset = 0;
 };
 struct Dispatch
 {
@@ -106,10 +129,10 @@ struct ResolveTimestamps
     uint32_t count;
 };
 using Command =
-    std::variant<BufferBarrier, TextureBarrier, BufferCopy, TextureCopy, TextureToTextureCopy,
-                 BeginRendering, EndRendering, SetPipeline, SetStencilReference, SetBindings,
-                 SetGeometry, Draw, DrawIndirect, Dispatch, TraceRays, BuildAccelerationStructure,
-                 Marker, Timestamp, ResolveTimestamps>;
+    std::variant<BufferBarrier, TextureBarrier, TextureAlias, BufferCopy, TextureCopy,
+                 TextureToTextureCopy, BeginRendering, EndRendering, SetPipeline,
+                 SetStencilReference, SetBindings, SetGeometry, Draw, DrawIndirect, Dispatch,
+                 TraceRays, BuildAccelerationStructure, Marker, Timestamp, ResolveTimestamps>;
 
 /**
  * @brief Single-threaded, one-shot command recording. Packets own every referenced object.
@@ -119,9 +142,15 @@ using Command =
 class CommandList final
 {
 public:
-    explicit CommandList(const void* owner) : owner_(owner) {}
+    explicit CommandList(const void* owner, IndirectSupport indirect = {})
+        : owner_(owner), indirect_(indirect)
+    {
+    }
     void Barrier(std::shared_ptr<Buffer> buffer, State before, State after);
     void Barrier(std::shared_ptr<Texture> texture, State before, State after);
+    /// Activates an alias, discarding content; next use must clear the whole attachment.
+    void ActivateAlias(std::shared_ptr<Texture> previous, std::shared_ptr<Texture> texture,
+                       State before, State after);
     void Copy(std::shared_ptr<Buffer> source, std::shared_ptr<Buffer> destination, uint64_t size,
               uint64_t sourceOffset = 0, uint64_t destinationOffset = 0);
     /// Color formats only; rowPitch multiple of 256, offset multiple of 512 on both backends.
@@ -142,9 +171,14 @@ public:
     void Bind(std::shared_ptr<Pipeline> pipeline);
     void Bind(std::shared_ptr<BindingGroup> group);
     void Geometry(std::shared_ptr<Buffer> vertex, std::shared_ptr<Buffer> index = {});
-    void DrawVertices(uint32_t count, uint32_t first = 0);
-    void DrawIndexed(uint32_t count, uint32_t first = 0);
-    void DrawFrom(std::shared_ptr<Buffer> arguments, uint64_t offset = 0);
+    void DrawVertices(uint32_t count, uint32_t first = 0, uint32_t instances = 1,
+                      uint32_t firstInstance = 0);
+    void DrawIndexed(uint32_t count, uint32_t first = 0, uint32_t instances = 1,
+                     uint32_t firstInstance = 0, int32_t vertexOffset = 0);
+    /// Tightly packed arguments; GPU count is clamped to maxCount. No CPU count readback.
+    void DrawFrom(std::shared_ptr<Buffer> arguments, uint64_t offset = 0, uint32_t maxCount = 1,
+                  bool indexed = false, std::shared_ptr<Buffer> countBuffer = {},
+                  uint64_t countOffset = 0);
     void Compute(uint32_t x, uint32_t y, uint32_t z = 1);
     void Trace(std::shared_ptr<ShaderTable> table, uint32_t width, uint32_t height,
                uint32_t depth = 1);
@@ -154,6 +188,15 @@ public:
     void WriteTimestamp(uint32_t index);
     void ReadTimestamps(std::shared_ptr<Buffer> destination, uint32_t count = 2);
     void Cancel();
+    /// Closed, self-contained pass boundary; subsequent draws must rebind their state.
+    void RecordingBoundary();
+    void SetRecordingThreads(uint32_t count);
+    /// Immutable packet ranges, split only at explicit closed boundaries, in submission order.
+    std::vector<RecordingRange> RecordingRanges() const;
+    uint32_t RecordingThreads() const
+    {
+        return recordingThreads_;
+    }
     const std::vector<Command>& GetCommands() const
     {
         return commands_;
@@ -161,11 +204,23 @@ public:
 
 private:
     friend class Runtime;
+    friend class rendergraph::Graph;
+    void SelectQueue(QueueType queue, bool waitCompute = false);
+    struct QueueChange
+    {
+        size_t first;
+        QueueType queue;
+        bool waitCompute;
+    };
+    std::vector<QueueChange> queueChanges_{{0, QueueType::Graphics, false}};
     void Check(const std::shared_ptr<Object>& object) const;
     void Recording() const;
     void DrawReady(bool indexed) const;
     const void* owner_;
+    IndirectSupport indirect_;
     std::vector<Command> commands_;
+    std::vector<size_t> recordingEnds_;
+    uint32_t recordingThreads_ = 1;
     bool consumed_ = false;
     bool rendering_ = false;
     bool compute_ = false;

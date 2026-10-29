@@ -38,16 +38,27 @@ void BindingContext::Bind(std::shared_ptr<rhi::Pipeline> pipeline)
 }
 void BindingContext::SetBinding(rhi::Binding binding)
 {
-    auto found =
-        std::ranges::find_if(bindings_, [&](const auto& b)
-                             { return b.slot == binding.slot && b.space == binding.space; });
+    Require(bool(pipeline_), "Bind a pipeline before resources");
+    const auto entry =
+        std::ranges::find_if(pipeline_->desc.layout->entries, [&](const auto& e)
+                             { return e.slot == binding.slot && e.space == binding.space; });
+    Require(entry != pipeline_->desc.layout->entries.end() && binding.arrayElement < entry->count,
+            "Binding array element outside pipeline layout");
+    auto found = std::ranges::find_if(bindings_,
+                                      [&](const auto& b)
+                                      {
+                                          return b.slot == binding.slot &&
+                                                 b.space == binding.space &&
+                                                 b.arrayElement == binding.arrayElement;
+                                      });
     if (found == bindings_.end())
         bindings_.push_back(std::move(binding));
     else
         *found = std::move(binding);
     dirty_ = true;
 }
-void BindingContext::BindTexture(uint32_t slot, TextureHandle h, uint32_t space)
+void BindingContext::BindTexture(uint32_t slot, TextureHandle h, uint32_t space,
+                                 uint32_t arrayElement)
 {
     auto& g = *graph_.impl_;
     g.Scope(pass_);
@@ -59,6 +70,7 @@ void BindingContext::BindTexture(uint32_t slot, TextureHandle h, uint32_t space)
     rhi::Binding b{slot};
     b.view = g.pool->Device().CreateView(r.texture, rhi::TextureViewUsage::Sampled);
     b.space = space;
+    b.arrayElement = arrayElement;
     SetBinding(std::move(b));
 }
 void BindingContext::BindBuffer(uint32_t slot, BufferHandle h, uint64_t offset, uint64_t size,
@@ -147,26 +159,39 @@ void RasterContext::Geometry(BufferHandle vertices, BufferHandle indices)
                 .buffer;
     commands_.Geometry(std::move(vertex), std::move(index));
 }
-void RasterContext::Draw(uint32_t count, uint32_t first)
+void RasterContext::Draw(uint32_t count, uint32_t first, uint32_t instances, uint32_t firstInstance)
 {
     FlushBindings();
-    commands_.DrawVertices(count, first);
+    commands_.DrawVertices(count, first, instances, firstInstance);
 }
-void RasterContext::DrawIndexed(uint32_t count, uint32_t first)
+void RasterContext::DrawIndexed(uint32_t count, uint32_t first, uint32_t instances,
+                                uint32_t firstInstance, int32_t vertexOffset)
 {
     FlushBindings();
-    commands_.DrawIndexed(count, first);
+    commands_.DrawIndexed(count, first, instances, firstInstance, vertexOffset);
 }
-void RasterContext::DrawIndirect(BufferHandle arguments, uint64_t offset)
+void RasterContext::DrawIndirect(BufferHandle arguments, uint64_t offset, uint32_t maxCount,
+                                 bool indexed, BufferHandle count, uint64_t countOffset)
 {
     auto& g = *graph_.impl_;
     g.Scope(pass_);
-    g.CheckBufferRange(pass_, arguments, offset, sizeof(rhi::DrawArguments));
+    g.CheckBufferRange(pass_, arguments, offset,
+                       uint64_t(maxCount) * (indexed ? sizeof(rhi::DrawIndexedArguments)
+                                                     : sizeof(rhi::DrawArguments)));
     auto buffer = g.Resolve(pass_, arguments.graph, arguments.resource, arguments.version, false,
                             Use::Indirect)
                       .buffer;
     FlushBindings();
-    commands_.DrawFrom(std::move(buffer), offset);
+    std::shared_ptr<rhi::Buffer> countBuffer;
+    if (count)
+    {
+        g.CheckBufferRange(pass_, count, countOffset, 4);
+        countBuffer =
+            g.Resolve(pass_, count.graph, count.resource, count.version, false, Use::Indirect)
+                .buffer;
+    }
+    commands_.DrawFrom(std::move(buffer), offset, maxCount, indexed, std::move(countBuffer),
+                       countOffset);
 }
 void ComputeContext::Dispatch(uint32_t x, uint32_t y, uint32_t z)
 {

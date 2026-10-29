@@ -32,6 +32,7 @@ class BenchmarkTests(unittest.TestCase):
         raw.write_text("".join(json.dumps(row) + "\n" for row in rows), encoding="utf-8")
         report = {"schemaVersion": 2, "project": str(self.root / "Pbr.rlproject"), "backend": backend,
                   "width": 1280, "height": 720, "quality": "medium", "view": "final", "validation": False,
+                  "pipeline": "forward", "submission": "direct",
                   "buildConfiguration": "Release", "adapter": "Fixture GPU", "fixedCamera": True,
                   "driver": "fixture",
                   "configurationMayChange": False, "adapterIdentity": {"vendorId": 1, "deviceId": 2, "software": False},
@@ -135,6 +136,39 @@ class BenchmarkTests(unittest.TestCase):
                                      "runs": [{"id": "failed", "status": "failed", "exitCode": 1}]})
         with self.assertRaisesRegex(ValueError, "Failed suite"):
             analyze.collect_inputs([manifest])
+
+    def test_geometry_submission_and_pipeline_must_match(self):
+        a, _, _, _ = self.recording()
+        b, _, _, _ = self.recording("second", "vulkan")
+        for key, value in (("submission", "gpu-culled"), ("pipeline", "deferred"), ("recordingThreads", 4), ("asyncCompute", True), ("memoryAlias", True)):
+            report = analyze.read_json(b)
+            report.pop("submission", None)
+            report.pop("pipeline", None)
+            report.pop("recordingThreads", None)
+            report.pop("asyncCompute", None)
+            report.pop("memoryAlias", None)
+            report[key] = value
+            analyze.write_json(b, report)
+            with self.assertRaisesRegex(ValueError, "Incomparable"):
+                analyze.analyze([a, b], self.root / f"analysis-{key}")
+
+    def test_runner_preserves_geometry_submission(self):
+        config, data, args = self.suite()
+        data["defaults"] = {"pipeline": "deferred", "submission": "gpu-culled", "recordingThreads": 4, "asyncCompute": True, "memoryAlias": True}
+        analyze.write_json(config, data)
+        _, _, _, cases = run.load_suite(config, args)
+        self.assertEqual(cases[0]["submission"], "gpu-culled")
+        with patch("run.execute", return_value=7), self.assertRaises(ValueError):
+            run.run_suite(config, self.root / "output", args)
+        command = analyze.read_json(self.root / "output/manifest.json")["runs"][0]["command"]
+        self.assertEqual(command[command.index("--submission") + 1], "gpu-culled")
+        self.assertEqual(command[command.index("--recording-threads") + 1], "4")
+        self.assertIn("--async-compute", command)
+        self.assertIn("--memory-alias", command)
+        data["defaults"]["submission"] = "invalid"
+        analyze.write_json(config, data)
+        with self.assertRaisesRegex(ValueError, "pipeline/submission"):
+            run.load_suite(config, args)
 
     def test_suite_provenance_must_match(self):
         a, _, _, _ = self.recording()

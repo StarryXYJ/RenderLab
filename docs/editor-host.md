@@ -29,6 +29,8 @@
 
 整个编辑器窗口、布局和普通面板由 Avalonia 管理。中央 `RenderViewportHost : NativeControlHost` 向 C++ 请求一个子 HWND，C++ 在这个窗口上创建 Swapchain；图形 API 不经过 C#。原型布局包含管线选择、曝光、暂停、重置相机、重建视口、可拖分隔条和焦点测试文本框。
 
+视口的光栅阴影默认使用 1024² 分辨率，不改写场景保存值；过滤与单张方向光阴影的限制见 [阴影说明](m4-shadows-alpha.md)。
+
 ```mermaid
 flowchart TD
     Window["Avalonia Window / UI STA"] --> Panels["布局、控件与状态栏"]

@@ -40,6 +40,8 @@ Graph profiling 从同一个有界 Graph Pool 取得 512 字节 Readback Buffer�
 
 默认 TextureView 为不可变对象，`CreateView(texture)` 可以返回同一存活实例。Texture 内只保存 weak_ptr，View 强持有 Texture，因此没有循环引用。Graph Pool 的物理 Allocation 强持有默认 View；Available 同时检查分配租约、完成点、View 外部引用以及 Texture 的已知内部引用数（Allocation 加默认 View）。保留 View 的 CPU/命令引用也会阻止 Trim。
 
+可选的瞬态纹理 Alias 另按完整 Group 租用与退休，任意成员的 View 都保护整组；共享 backing 只计费一次，普通 Acquire 不取得 Alias 成员，见 [内存 Alias](memory-alias.md)。
+
 静态资源使用其已有的 View；SceneRenderer 只额外持有一个 offscreen Display View。窗口交换链持有每张图像的 View，并在等待展示完成后的 resize 路径先清 View、再释放图像和重建。Renderer 不缓存交换链目标，避免 ResizeBuffers 被隐式引用阻挡；Vulkan 在销毁旧 swapchain 前同样清理 View。
 
 `rhiViewCreateMs` 从 B3.4 起只覆盖默认 View 缓存未命中时的实际对象构造，缓存查询不计为创建。B2/B3.3 之前未缓存，每次调用都构造对象。双后端图验收保留一个已完成的 GpuProfile，再运行八个图并重复读旧结果；需保持 tick 字节不变、只用两份读回分配，最后释放结果后 Trim 清空。CPU 测试另验证保留 View 阻止复用、内部 View 不阻止合法复用、无引用环。

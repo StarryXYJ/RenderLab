@@ -58,6 +58,14 @@ CPU 区间不覆盖所有对象析构，例如被 Graph 剔除的资源可能在
 
 正式工具位于 tools/benchmark，示例配置为 sample/benchmark/pbr.json。配置 schemaVersion=1，以 defaults 加 cases 的局部覆盖描述场景；executable/project 相对配置文件解析，CLI 覆盖路径相对当前目录解析。可增加场景、后端子集、重复次数、时长/预热、尺寸、质量、显示视图与显式 validation。
 
+M6 增加 pipeline（默认 forward）与 submission（默认 direct）设置。Runner 将选择传入 CLI 并核对报告；分析器拒绝把同一 case 下不同管线/提交方式混为可比较配置。GPU Driven 配置与生成规模场景见 sample/benchmark/gpu-driven.json 和 [测量记录](performance/m6-gpu-driven.md)。
+
+M6.3 增加 `recordingThreads`（整数 1..16，默认 1），映射到场景 CLI 的 `--recording-threads`。它只控制原生命令包翻译的并行度，Graph 回调/准备仍在 owner 线程。Runner 核对报告中的线程数，分析器也将其纳入可比配置键。开启 CPU 探针时，`rhiNativeRecordMs` 记录并行录制的墙钟时间，已包含于 `rhiNativeSubmitMs`；HeapBind 时间是所有线程之和，不能与墙钟相加。分块与生命周期见 [并行录制](parallel-recording.md)。
+
+M6.4 增加 `asyncCompute`（布尔值，默认 false），映射到 `--async-compute`，同样纳入报告核对与可比配置键。示例 [async-compute.json](../sample/benchmark/async-compute.json) 使用 GPU 剔除，比较 1/4 CPU 线程与单/双队列。`gpuQueueSpanMs` 是已计时 Pass 的总跨度，`gpuQueueOverlapMs` 是不同队列已计时区间的交集和；不把 GPU Pass 耗时相加当作有重叠时的 GPU 总时长。最后完成测量帧的 `queueTimeline` 与实际入队的 `queueSubmissions` 保存队列、时间域及等待/信号值，见 [异步 Compute](async-compute.md)。
+
+M6.5 的 `memoryAlias`（布尔值，默认 false）映射到 `--memory-alias`，纳入报告核对与可比配置键。示例 [memory-alias.json](../sample/benchmark/memory-alias.json) 比较没有复用机会的 PBR64、257×193 与 1280×720 Shadow，分别对 1 线程/单队列和 4 线程/异步组合开关 Alias。PBR64 输入先由 indexed_scene 测试生成。显存比较使用原生账本的 used/highWater，池的普通资源估算与共享 backing 字节不能混作原生用量；图 dump 的 aliasGroups 给出实际组和生命周期，见 [内存 Alias](memory-alias.md)。
+
 Runner 顺序执行子进程，不并发占用 GPU；每次重复反转后端顺序。每次运行保存命令数组、cwd、退出码、console/player 日志、最终设备报告、计时报告、逐帧数据及测量外截图。manifest 保存工作区 revision/脏状态、真实 exe SHA-256、部署 Shader 与项目源资产 hash；工作区 revision 不冒充编译时 revision。整组结束再次核对内容，变化则拒绝将整组标记 complete。失败/超时/中断记录到清单并退出，不用成功样本掩盖失败。
 
 分析器可接受一个或多个完成清单/单次 v2 报告。它检查样本 schema、连续帧号、有限值、单调时间、完整样本数、预热/测量预算和 GPU Pass 合计与 C++ 汇总的一致性；相同 case 必须具有相同项目、尺寸/质量/视图、设备、构建、validation 和测量预算。清单聚合还核对 exe/Shader/项目输入 hash，同后端驱动版本必须一致。独立 report 没有整组来源 hash，不与带来源的清单混合；需要跨版本比较时应明确使用不同 case 标签。缺失/失败/混合配置拒绝比较。输入文件必须保留引用结构；移动结果时整体移动每次运行目录/清单。

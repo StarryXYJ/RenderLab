@@ -67,6 +67,7 @@ TextureHandle Graph::ImportTexture(std::string name, std::shared_ptr<rhi::Textur
 {
     impl_->Building();
     Require(bool(texture), "Null imported texture");
+    Require(!texture->aliasBacking, "External alias textures cannot be imported");
     Require(std::ranges::none_of(impl_->resources, [&](auto& r) { return r.texture == texture; }),
             "Duplicate physical texture import");
     Require(!info.initialized || info.state != rhi::State::Undefined,
@@ -223,6 +224,14 @@ PassHandle Graph::GetPass(uint32_t index) const
 void Graph::Poison()
 {
     impl_->commands.reset();
+    impl_->aliasLeases.clear();
+    for (auto& resource : impl_->resources)
+        if (resource.lease && resource.lease->texture && resource.lease->texture->aliasBacking)
+        {
+            resource.view.reset();
+            resource.texture.reset();
+            resource.lease.reset();
+        }
     impl_->phase = detail::Phase::Failed;
     impl_->active = UINT32_MAX;
 }

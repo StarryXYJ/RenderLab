@@ -15,11 +15,15 @@ const Plan& Graph::Compile(CompileOptions options)
     auto& g = *impl_;
     g.Building();
     g.profiling = options.profile;
+    Require(options.recordingThreads >= 1 && options.recordingThreads <= 16,
+            "Recording threads must be in [1, 16]");
+    g.recordingThreads = options.recordingThreads;
     Require(g.active == UINT32_MAX, "Seal the active pass with Execute before Compile");
     try
     {
         auto& plan = g.plan;
         plan = {};
+        plan.recordingThreads = g.recordingThreads;
         for (auto& pass : g.passes)
         {
             Require(pass.kind != PassKind::Raster || !pass.colors.empty(),
@@ -132,6 +136,7 @@ const Plan& Graph::Compile(CompileOptions options)
             if (plan.passes[p].live && degrees[p])
                 cycle += " " + g.passes[p].name + " (" + g.passes[p].source + ")";
         Require(cycle.empty(), "Dependency/order cycle:" + cycle);
+        g.ScheduleQueues(options.asyncCompute);
         for (uint32_t i = 0; i < plan.schedule.size(); ++i)
             for (auto& a : g.passes[plan.schedule[i].pass].accesses)
             {
@@ -147,6 +152,7 @@ const Plan& Graph::Compile(CompileOptions options)
                     info.first = 0;
                 info.last = static_cast<uint32_t>(plan.schedule.size());
             }
+        g.PlanAliases(options.memoryAlias);
         g.Barriers();
         g.phase = detail::Phase::Compiled;
         plan.compileNs = std::chrono::duration_cast<std::chrono::nanoseconds>(
@@ -166,6 +172,12 @@ void Graph::Impl::Barriers()
     std::vector<bool> written(resources.size());
     for (auto& r : resources)
         states.push_back(r.start);
+    plan.prologueBarriers.clear();
+    for (const auto resource : plan.asyncResources)
+    {
+        plan.prologueBarriers.push_back({resource, states[resource], rhi::State::Storage});
+        states[resource] = rhi::State::Storage;
+    }
     for (auto& scheduled : plan.schedule)
     {
         scheduled.barriers.clear();

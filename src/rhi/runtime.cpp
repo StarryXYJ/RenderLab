@@ -2,6 +2,7 @@
 
 #include "rhi/commands.hpp"
 #include "rhi/detail/validation.hpp"
+#include "rhi/recording_workers.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -14,6 +15,67 @@ using detail::Require;
 
 Runtime::Runtime() = default;
 Runtime::~Runtime() = default;
+
+void Runtime::ValidateAliasDescs(std::span<const TextureDesc> descs) const
+{
+    Require(descs.size() >= 2 && descs.size() <= 16, "Alias group requires 2..16 textures");
+    for (const auto& desc : descs)
+    {
+        Validate(desc);
+        Require(desc.attachment && desc.format == descs.front().format &&
+                    desc.storage == descs.front().storage &&
+                    desc.attachment == descs.front().attachment,
+                "Alias textures require matching format and attachment/storage usage");
+    }
+}
+uint64_t Runtime::QueryAliasedTextureBytes(std::span<const TextureDesc>)
+{
+    throw std::invalid_argument("Texture alias allocation is unavailable");
+}
+std::vector<std::shared_ptr<Texture>> Runtime::CreateAliasedTextures(std::span<const TextureDesc>)
+{
+    throw std::invalid_argument("Texture alias allocation is unavailable");
+}
+
+void Runtime::EnableAsyncCompute()
+{
+    throw std::invalid_argument("Async compute queue is unavailable");
+}
+void Runtime::DrainNative()
+{
+    if (lastSubmitted_)
+        WaitNative(lastSubmitted_);
+}
+void Runtime::RetainSubmitting(std::shared_ptr<Submission> native)
+{
+    Require(!pending_.empty() && native, "Native submission requires reserved ownership");
+    pending_.back().native = std::move(native);
+    pending_.back().started = true;
+}
+void Runtime::RecordNative(size_t count, const std::function<void(size_t)>& job, uint32_t threads)
+{
+    auto timer = ProfileCpu(CpuOperation::NativeRecord);
+    const auto workers = std::min<size_t>(count, threads);
+    const auto record = [&](size_t worker)
+    {
+        for (size_t i = worker; i < count; i += workers)
+            job(i);
+    };
+    if (workers == 1)
+        record(0);
+    else
+    {
+        if (!recordingWorkers_)
+            recordingWorkers_ = std::make_unique<RecordingWorkers>();
+        recordingWorkers_->Run(workers, record);
+    }
+}
+void Runtime::AddCpuMeasurement(CpuOperation operation, CpuMeasurement measurement)
+{
+    auto& destination = cpuProfile_.at(size_t(operation));
+    destination.calls += measurement.calls;
+    destination.nanoseconds += measurement.nanoseconds;
+}
 
 void Runtime::SetAllocationBudget(uint64_t bytes)
 {
@@ -202,66 +264,103 @@ void Runtime::Validate(const PipelineDesc& desc) const
         }
     }
 }
+void Runtime::ValidateLayout(const std::vector<BindingDesc>& entries) const
+{
+    Require(entries.size() <= 64, "Too many binding layout entries");
+    for (const auto& entry : entries)
+    {
+        Require(entry.space < 4 && entry.count && entry.count <= 64,
+                "Invalid binding space or descriptor count");
+        Require(static_cast<uint32_t>(entry.kind) <=
+                    static_cast<uint32_t>(BindingKind::AccelerationStructure),
+                "Invalid binding kind");
+        Require(entry.count == 1 || (entry.kind == BindingKind::SampledTexture &&
+                                     entry.count <= SampledTextureArrayLimit()),
+                "Only supported bounded sampled-texture arrays may contain multiple elements");
+        Require(std::ranges::count_if(entries,
+                                      [&](const auto& other)
+                                      {
+                                          return entry.space == other.space &&
+                                                 uint64_t(entry.slot) <
+                                                     uint64_t(other.slot) + other.count &&
+                                                 uint64_t(other.slot) <
+                                                     uint64_t(entry.slot) + entry.count;
+                                      }) == 1,
+                "Overlapping descriptor register ranges");
+    }
+}
 void Runtime::Validate(const std::shared_ptr<BindingLayout>& layout,
                        const std::vector<Binding>& bindings) const
 {
     CheckOwner(layout);
-    Require(bindings.size() == layout->entries.size(), "Binding count mismatch");
+    ValidateLayout(layout->entries);
+    Require(bindings.size() == layout->DescriptorCount(), "Binding count mismatch");
     for (const auto& entry : layout->entries)
     {
-        Require(entry.space < 4, "Binding space must be in [0,3]");
-        Require(std::ranges::count_if(bindings, [&](const Binding& b)
-                                      { return b.slot == entry.slot && b.space == entry.space; }) ==
-                    1,
-                "Missing or duplicate binding slot");
-        const auto& b =
-            *std::ranges::find_if(bindings, [&](const Binding& b)
-                                  { return b.slot == entry.slot && b.space == entry.space; });
-        if (entry.kind == BindingKind::ConstantBuffer ||
-            entry.kind == BindingKind::ReadOnlyBuffer || entry.kind == BindingKind::StorageBuffer)
+        for (uint32_t element = 0; element < entry.count; ++element)
         {
-            CheckOwner(b.buffer);
-            Require(!b.view && !b.sampler && b.size && b.offset <= b.buffer->desc.size &&
-                        b.size <= b.buffer->desc.size - b.offset,
-                    "Invalid buffer binding range");
-            Require(b.buffer->desc.memory != Memory::Readback,
-                    "Cannot bind a readback buffer to a shader");
-            if (entry.kind == BindingKind::ConstantBuffer)
-                Require(b.offset % 256 == 0 && b.size % 256 == 0 && b.size <= 65536,
-                        "Constant buffer range must be 256-byte aligned and <=64KiB");
+            Require(std::ranges::count_if(bindings,
+                                          [&](const Binding& b)
+                                          {
+                                              return b.slot == entry.slot &&
+                                                     b.space == entry.space &&
+                                                     b.arrayElement == element;
+                                          }) == 1,
+                    "Missing or duplicate binding slot");
+            const auto& b = *std::ranges::find_if(bindings,
+                                                  [&](const Binding& b)
+                                                  {
+                                                      return b.slot == entry.slot &&
+                                                             b.space == entry.space &&
+                                                             b.arrayElement == element;
+                                                  });
+            if (entry.kind == BindingKind::ConstantBuffer ||
+                entry.kind == BindingKind::ReadOnlyBuffer ||
+                entry.kind == BindingKind::StorageBuffer)
+            {
+                CheckOwner(b.buffer);
+                Require(!b.view && !b.sampler && b.size && b.offset <= b.buffer->desc.size &&
+                            b.size <= b.buffer->desc.size - b.offset,
+                        "Invalid buffer binding range");
+                Require(b.buffer->desc.memory != Memory::Readback,
+                        "Cannot bind a readback buffer to a shader");
+                if (entry.kind == BindingKind::ConstantBuffer)
+                    Require(b.offset % 256 == 0 && b.size % 256 == 0 && b.size <= 65536,
+                            "Constant buffer range must be 256-byte aligned and <=64KiB");
+                else
+                    Require(b.stride && b.stride % 4 == 0 && b.offset % b.stride == 0 &&
+                                b.offset % 256 == 0 && b.size % b.stride == 0,
+                            "Structured buffer requires aligned offset and whole elements");
+                Require(entry.kind != BindingKind::StorageBuffer || b.buffer->desc.storage,
+                        "Storage binding requires storage buffer usage");
+                continue;
+            }
+            if (entry.kind == BindingKind::AccelerationStructure)
+            {
+                CheckOwner(b.accelerationStructure);
+                Require(b.accelerationStructure->desc.topLevel,
+                        "Shader acceleration structure bindings require a TLAS");
+                Require(!b.view && !b.sampler && !b.buffer,
+                        "Acceleration structure slot contains another resource type");
+                continue;
+            }
+            Require(!b.buffer && !b.accelerationStructure,
+                    "Texture/sampler slot contains a non-texture resource");
+            if (entry.kind == BindingKind::Sampler)
+            {
+                CheckOwner(b.sampler);
+                Require(!b.view, "Sampler slot contains texture");
+            }
             else
-                Require(b.stride && b.stride % 4 == 0 && b.offset % b.stride == 0 &&
-                            b.offset % 256 == 0 && b.size % b.stride == 0,
-                        "Structured buffer requires aligned offset and whole elements");
-            Require(entry.kind != BindingKind::StorageBuffer || b.buffer->desc.storage,
-                    "Storage binding requires storage buffer usage");
-            continue;
-        }
-        if (entry.kind == BindingKind::AccelerationStructure)
-        {
-            CheckOwner(b.accelerationStructure);
-            Require(b.accelerationStructure->desc.topLevel,
-                    "Shader acceleration structure bindings require a TLAS");
-            Require(!b.view && !b.sampler && !b.buffer,
-                    "Acceleration structure slot contains another resource type");
-            continue;
-        }
-        Require(!b.buffer && !b.accelerationStructure,
-                "Texture/sampler slot contains a non-texture resource");
-        if (entry.kind == BindingKind::Sampler)
-        {
-            CheckOwner(b.sampler);
-            Require(!b.view, "Sampler slot contains texture");
-        }
-        else
-        {
-            CheckOwner(b.view);
-            Require(!b.sampler, "Texture slot contains sampler");
-            Require(entry.kind != BindingKind::StorageTexture || b.view->texture->desc.storage,
-                    "Storage binding requires storage texture");
-            Require(!IsDepthFormat(b.view->texture->desc.format) ||
-                        b.view->usage == TextureViewUsage::Sampled,
-                    "Sampled depth textures require a sampled view");
+            {
+                CheckOwner(b.view);
+                Require(!b.sampler, "Texture slot contains sampler");
+                Require(entry.kind != BindingKind::StorageTexture || b.view->texture->desc.storage,
+                        "Storage binding requires storage texture");
+                Require(!IsDepthFormat(b.view->texture->desc.format) ||
+                            b.view->usage == TextureViewUsage::Sampled,
+                        "Sampled depth textures require a sampled view");
+            }
         }
     }
 }
@@ -302,10 +401,12 @@ Runtime::CreateAccelerationStructure(const AccelerationStructureDesc& desc)
 }
 std::unique_ptr<CommandList> Runtime::CreateCommands()
 {
-    return std::make_unique<CommandList>(this);
+    return std::make_unique<CommandList>(this, GetIndirectSupport());
 }
 uint64_t Runtime::Submit(std::unique_ptr<CommandList> commands, Swapchain* presentation)
 {
+    Require(std::this_thread::get_id() == ownerThread_, "Submission requires runtime owner thread");
+    Require(!poisoned_, "Runtime poisoned by a partial native submission; shut it down");
     Collect();
     Require(pending_.size() < 8,
             "At most eight submissions may remain in flight; wait or collect first");
@@ -320,10 +421,17 @@ uint64_t Runtime::Submit(std::unique_ptr<CommandList> commands, Swapchain* prese
     {
         auto cpuTimer = ProfileCpu(CpuOperation::NativeSubmit);
         pending.native = Execute(*pending.commands, pending.point, presentation);
+        lastTrace_.swap(pending.native->trace);
     }
     catch (...)
     {
-        pending_.pop_back();
+        if (pending.started)
+        {
+            poisoned_ = true;
+            pending.point = UINT64_MAX;
+        }
+        else
+            pending_.pop_back();
         throw;
     }
     pending.commands->consumed_ = true;
@@ -350,6 +458,12 @@ void Runtime::Wait(uint64_t point)
 }
 void Runtime::WaitIdle()
 {
+    if (poisoned_)
+    {
+        DrainNative();
+        pending_.clear();
+        return;
+    }
     Wait(lastSubmitted_);
 }
 } // namespace renderlab::rhi

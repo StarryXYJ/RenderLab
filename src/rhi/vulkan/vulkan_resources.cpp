@@ -170,13 +170,14 @@ VulkanRuntime::CreateAccelerationStructureNative(AccelerationStructureDesc desc,
     return accelerationStructure;
 }
 
-std::shared_ptr<Texture> VulkanRuntime::CreateTexture(const TextureDesc& desc)
+std::shared_ptr<VkTexture> VulkanRuntime::CreateImage(const TextureDesc& desc, bool alias)
 {
     Validate(desc);
     auto texture = std::make_shared<VkTexture>(this, desc);
     texture->allocation.device = device_;
     VkImageCreateInfo info{};
     info.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+    info.flags = alias ? VK_IMAGE_CREATE_ALIAS_BIT : 0;
     info.imageType = VK_IMAGE_TYPE_2D;
     info.format = NativeFormat(desc.format);
     info.extent = {desc.width, desc.height, 1};
@@ -202,13 +203,76 @@ std::shared_ptr<Texture> VulkanRuntime::CreateTexture(const TextureDesc& desc)
     if ((props.optimalTilingFeatures & required) != required)
         throw std::runtime_error("Texture format lacks requested usage");
     Check(vkCreateImage(device_, &info, nullptr, &texture->native), "vkCreateImage");
+    Name(VK_OBJECT_TYPE_IMAGE, reinterpret_cast<uint64_t>(texture->native), desc.name);
+    return texture;
+}
+
+std::shared_ptr<Texture> VulkanRuntime::CreateTexture(const TextureDesc& desc)
+{
+    auto texture = CreateImage(desc, false);
     VkMemoryRequirements requirements{};
     vkGetImageMemoryRequirements(device_, texture->native, &requirements);
     Allocate(texture->allocation, requirements, Memory::Device);
     Check(vkBindImageMemory(device_, texture->native, texture->allocation.memory, 0),
           "vkBindImageMemory");
-    Name(VK_OBJECT_TYPE_IMAGE, reinterpret_cast<uint64_t>(texture->native), desc.name);
     return texture;
+}
+
+VkMemoryRequirements
+VulkanRuntime::AliasRequirements(const std::vector<std::shared_ptr<VkTexture>>& images)
+{
+    VkMemoryRequirements combined{0, 1, UINT32_MAX};
+    for (const auto& texture : images)
+    {
+        VkMemoryDedicatedRequirements dedicated{};
+        dedicated.sType = VK_STRUCTURE_TYPE_MEMORY_DEDICATED_REQUIREMENTS;
+        VkMemoryRequirements2 requirements{};
+        requirements.sType = VK_STRUCTURE_TYPE_MEMORY_REQUIREMENTS_2;
+        requirements.pNext = &dedicated;
+        VkImageMemoryRequirementsInfo2 info{};
+        info.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_REQUIREMENTS_INFO_2;
+        info.image = texture->native;
+        vkGetImageMemoryRequirements2(device_, &info, &requirements);
+        if (dedicated.requiresDedicatedAllocation)
+            throw std::runtime_error("Alias image requires dedicated allocation");
+        const auto& r = requirements.memoryRequirements;
+        combined.size = std::max(combined.size, r.size);
+        combined.alignment = std::max(combined.alignment, r.alignment);
+        combined.memoryTypeBits &= r.memoryTypeBits;
+    }
+    if (!combined.memoryTypeBits)
+        throw std::runtime_error("Alias images have no common memory type");
+    return combined;
+}
+uint64_t VulkanRuntime::QueryAliasedTextureBytes(std::span<const TextureDesc> descs)
+{
+    ValidateAliasDescs(descs);
+    std::vector<std::shared_ptr<VkTexture>> images;
+    for (const auto& desc : descs)
+        images.push_back(CreateImage(desc, true));
+    return AliasRequirements(images).size;
+}
+std::vector<std::shared_ptr<Texture>>
+VulkanRuntime::CreateAliasedTextures(std::span<const TextureDesc> descs)
+{
+    ValidateAliasDescs(descs);
+    std::vector<std::shared_ptr<VkTexture>> images;
+    for (const auto& desc : descs)
+        images.push_back(CreateImage(desc, true));
+    const auto requirements = AliasRequirements(images);
+    auto backing = std::make_shared<Allocation>();
+    backing->device = device_;
+    Allocate(*backing, requirements, Memory::Device);
+    std::vector<std::shared_ptr<Texture>> textures;
+    textures.reserve(images.size());
+    for (auto& texture : images)
+    {
+        texture->aliasBacking = backing;
+        Check(vkBindImageMemory(device_, texture->native, backing->memory, 0),
+              "vkBindImageMemory alias");
+        textures.push_back(std::move(texture));
+    }
+    return textures;
 }
 
 std::shared_ptr<TextureView> VulkanRuntime::CreateView(std::shared_ptr<Texture> texture,

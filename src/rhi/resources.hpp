@@ -14,6 +14,36 @@
 
 namespace renderlab::rhi
 {
+enum class QueueType
+{
+    Graphics,
+    Compute
+};
+struct QueueClock
+{
+    uint64_t gpuTick = 0;
+    double originNs = 0, periodNs = 1;
+    QueueType queue = QueueType::Graphics;
+};
+enum class QueueAction
+{
+    Execute,
+    WaitGraphics,
+    WaitCompute,
+    WaitFrame,
+    SignalGraphics,
+    SignalCompute,
+    SignalFrame,
+    WaitAcquire,
+    SignalPresent
+};
+struct QueueEvent
+{
+    QueueType queue;
+    QueueAction action;
+    uint64_t value = 0;
+    uint32_t range = UINT32_MAX;
+};
 enum class Memory
 {
     Device,
@@ -164,6 +194,8 @@ struct Texture : Object
 {
     Texture(const void* owner, TextureDesc desc) : Object(owner), desc(std::move(desc)) {}
     const TextureDesc desc;
+    /// Shared native heap/memory; derived image destruction precedes release of this backing.
+    std::shared_ptr<void> aliasBacking;
     /// Owner-thread cache of the immutable default view; weak to avoid a Texture/View cycle.
     std::weak_ptr<TextureView> defaultView;
     /// Depth sampling needs a distinct native view from the attachment view.
@@ -192,6 +224,7 @@ struct BindingDesc
     uint32_t slot;
     BindingKind kind;
     uint32_t space = 0;
+    uint32_t count = 1;
 };
 struct BindingLayout : Object
 {
@@ -200,6 +233,13 @@ struct BindingLayout : Object
     {
     }
     const std::vector<BindingDesc> entries;
+    uint32_t DescriptorCount() const
+    {
+        uint32_t count = 0;
+        for (const auto& entry : entries)
+            count += entry.count;
+        return count;
+    }
 };
 struct AccelerationStructure;
 struct Binding
@@ -213,6 +253,7 @@ struct Binding
     uint32_t stride = 0;
     uint32_t space = 0;
     std::shared_ptr<AccelerationStructure> accelerationStructure;
+    uint32_t arrayElement = 0;
 };
 struct AccelerationStructureGeometry
 {
@@ -313,10 +354,25 @@ struct ShaderTable : Object
     const uint64_t offset, stride;
 };
 
-/// Common D3D/Vulkan non-indexed indirect ABI; one command, no count buffer in M1.
+/// Tightly packed D3D/Vulkan indirect ABIs. Counts are bounded by the recorded maximum.
 struct DrawArguments
 {
     uint32_t vertexCount, instanceCount, firstVertex, firstInstance;
 };
 static_assert(sizeof(DrawArguments) == 16);
+struct DrawIndexedArguments
+{
+    uint32_t indexCount, instanceCount, firstIndex;
+    int32_t vertexOffset;
+    uint32_t firstInstance;
+};
+static_assert(sizeof(DrawIndexedArguments) == 20);
+struct IndirectSupport
+{
+    uint32_t maxDrawCount = 1;
+    bool countBuffer = false;
+    bool firstInstance = false;
+    /// Common shader object index: DXIL needs SV_StartInstanceLocation (SM 6.8).
+    bool shaderInstanceIndex = false;
+};
 } // namespace renderlab::rhi

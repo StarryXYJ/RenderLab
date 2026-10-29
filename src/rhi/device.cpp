@@ -123,6 +123,8 @@ std::string ReportToJson(const DeviceReport& report, uint32_t validationErrors)
         << ",\n    \"indirectCount\": " << caps.indirectCount
         << ",\n    \"indirectFirstInstance\": " << caps.indirectFirstInstance
         << ",\n    \"descriptorIndexing\": " << caps.descriptorIndexing
+        << ",\n    \"sampledTextureArrayNonUniformIndexing\": "
+        << caps.sampledTextureArrayNonUniformIndexing
         << ",\n    \"accelerationStructure\": " << caps.accelerationStructure
         << ",\n    \"rayQuery\": " << caps.rayQuery
         << ",\n    \"rayTracingPipeline\": " << caps.rayTracingPipeline

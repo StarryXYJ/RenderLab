@@ -22,6 +22,12 @@
 | 只保护已提交 GPU 引用 | 已录制未提交的命令仍可能引用被释放对象 | 录制上下文保活资源，提交转移给完成点回收，取消释放 | M1.1 |
 | 高级阶段过大 | 光追、间接提交、多线程和多队列同时出错难定位 | 拆成独立子阶段、开关、基线和退出条件 | M5、M6 |
 
+## 间接实例索引的实测边界
+
+2026 年 10 月 29 日，M6 的索引隔离测试发现：D3D12 SV_InstanceID 从每条 Draw 的 0 开始，DXC 默认 SPIR-V SV_InstanceID 映射为含 firstInstance 的 InstanceIndex。仅比较每个后端的直接/间接画面会同时接受两种不同对象身份，因而必须另以固定对象颜色检查预期实例集合。
+
+公共命令保持原生 16/20 字节 ABI，不为注入 Root Constant 扩大参数格式，也不依赖不可统一的 DrawID。Shader helper 在 DXIL 加上 SM 6.8 SV_StartInstanceLocation，在 SPIR-V 消费默认绝对实例 ID。DX12 索引 Shader 路径显式要求 SM 6.8，普通基础 Shader 继续使用 SM 6.0；能力不足时报错，不把本帧参数读回 CPU 补齐。两后端 RGBA8 常量插值出现 1 LSB 的舍入差异，验证以同后端逐字节一致和独立实例 ID 检查为准。
+
 ## 实时引擎的参考依据
 
 ### Unreal RDG

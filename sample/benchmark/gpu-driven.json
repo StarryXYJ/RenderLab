@@ -1,0 +1,68 @@
+{
+  "repeats": 2,
+  "defaults": {
+    "width": 257,
+    "view": "final",
+    "cpuProfiling": false,
+    "quality": "scene",
+    "validation": "off",
+    "warmupFrames": 4,
+    "pipeline": "deferred",
+    "warmupSeconds": 0.25,
+    "height": 193,
+    "seconds": 1
+  },
+  "backends": [
+    "dx12",
+    "vulkan"
+  ],
+  "executable": "../../out/build/windows-release/renderlab_player.exe",
+  "cases": [
+    {
+      "project": "../../out/build/windows-release/indexed-scene/dx12/Pbr/scale-64/Pbr.rlproject",
+      "submission": "indexed-direct",
+      "name": "n64-indexed-direct"
+    },
+    {
+      "project": "../../out/build/windows-release/indexed-scene/dx12/Pbr/scale-64/Pbr.rlproject",
+      "submission": "cpu-indirect",
+      "name": "n64-cpu-indirect"
+    },
+    {
+      "project": "../../out/build/windows-release/indexed-scene/dx12/Pbr/scale-64/Pbr.rlproject",
+      "submission": "gpu-culled",
+      "name": "n64-gpu-culled"
+    },
+    {
+      "project": "../../out/build/windows-release/indexed-scene/dx12/Pbr/scale-1024/Pbr.rlproject",
+      "submission": "indexed-direct",
+      "name": "n1024-indexed-direct"
+    },
+    {
+      "project": "../../out/build/windows-release/indexed-scene/dx12/Pbr/scale-1024/Pbr.rlproject",
+      "submission": "cpu-indirect",
+      "name": "n1024-cpu-indirect"
+    },
+    {
+      "project": "../../out/build/windows-release/indexed-scene/dx12/Pbr/scale-1024/Pbr.rlproject",
+      "submission": "gpu-culled",
+      "name": "n1024-gpu-culled"
+    },
+    {
+      "project": "../../out/build/windows-release/indexed-scene/dx12/Pbr/scale-4096/Pbr.rlproject",
+      "submission": "indexed-direct",
+      "name": "n4096-indexed-direct"
+    },
+    {
+      "project": "../../out/build/windows-release/indexed-scene/dx12/Pbr/scale-4096/Pbr.rlproject",
+      "submission": "cpu-indirect",
+      "name": "n4096-cpu-indirect"
+    },
+    {
+      "project": "../../out/build/windows-release/indexed-scene/dx12/Pbr/scale-4096/Pbr.rlproject",
+      "submission": "gpu-culled",
+      "name": "n4096-gpu-culled"
+    }
+  ],
+  "schemaVersion": 1
+}

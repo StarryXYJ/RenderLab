@@ -19,7 +19,8 @@ public:
     BindingContext(const BindingContext&) = delete;
     BindingContext& operator=(const BindingContext&) = delete;
     void Bind(std::shared_ptr<rhi::Pipeline> pipeline);
-    void BindTexture(uint32_t slot, TextureHandle handle, uint32_t space = 0);
+    void BindTexture(uint32_t slot, TextureHandle handle, uint32_t space = 0,
+                     uint32_t arrayElement = 0);
     void BindBuffer(uint32_t slot, BufferHandle handle, uint64_t offset = 0, uint64_t size = 0,
                     uint32_t stride = 0, uint32_t space = 0);
     void BindSampler(uint32_t slot, std::shared_ptr<rhi::Sampler> sampler, uint32_t space = 0);
@@ -47,9 +48,12 @@ class RasterContext final : public BindingContext
 public:
     void StencilReference(uint32_t reference);
     void Geometry(BufferHandle vertices, BufferHandle indices = {});
-    void Draw(uint32_t count, uint32_t first = 0);
-    void DrawIndexed(uint32_t count, uint32_t first = 0);
-    void DrawIndirect(BufferHandle arguments, uint64_t offset = 0);
+    void Draw(uint32_t count, uint32_t first = 0, uint32_t instances = 1,
+              uint32_t firstInstance = 0);
+    void DrawIndexed(uint32_t count, uint32_t first = 0, uint32_t instances = 1,
+                     uint32_t firstInstance = 0, int32_t vertexOffset = 0);
+    void DrawIndirect(BufferHandle arguments, uint64_t offset = 0, uint32_t maxCount = 1,
+                      bool indexed = false, BufferHandle count = {}, uint64_t countOffset = 0);
 
 private:
     friend class Graph;

@@ -55,6 +55,8 @@ Extractor 从 CPU 文档提取相机、主光和实例值快照，延迟回调�
 
 M5 增加独立于相机和灯光开关的 `allInstances` 表供 AS 构建与射线实例索引使用；`instances` 保持相机可见集，`shadowCasters` 保持启用光栅阴影时的候选集。两种候选集都从同一实例身份和值数据派生。
 
+M6 GPU 剔除模式以 cpuCulling=false 提取，cpuVisibilityKnown=false，此时 instances/culledInstances 不提供 CPU 可见结果；allInstances 与 shadowCasters 仍完整。默认 CPU 路径保留原契约。材质输入在每帧首次读取时冻结；对象提取使用临时 ID 索引，GPU/CPU 剔除与诊断契约见 [GPU Driven](gpu-driven.md)。
+
 MeshRenderer.model 为模型 UUID，mesh 可指定 primitive 子资源 UUID；materials 将导入材质子资源 UUID 映射到用户 .material UUID。GPU Mesh/图像为可重建投影；静态资源准备时上传，常量按帧创建，命令引用/完成点保护在途资源。普通帧不调用 WaitIdle。
 
 View/Lighting/Shadow 常量每帧创建并共享，分别包含相机、主光/环境与阴影数据；Object 保存模型、法线、上一帧模型矩阵，同实例多 Pass 复用。Material 返回 PSO 与绑定值，适配成 Graph 名称/声明，由 Graph 建立绑定组；保留 generation 以复用 ShaderModule/Layout/PSO，不重复准备两份 BindingGroup。

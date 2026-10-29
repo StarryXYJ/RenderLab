@@ -112,15 +112,17 @@ struct Snapshot
     /// Enabled caster candidates when raster shadows are requested. Material roles filter later.
     std::vector<Instance> shadowCasters;
     size_t totalInstances = 0, culledInstances = 0;
+    /// When false, instances/culledInstances are unavailable; allInstances remains authoritative.
+    bool cpuVisibilityKnown = true;
 };
 /** @brief Stable identity/history and CPU culling; GPU resources remain the renderer's projection.
  */
 class Extractor
 {
 public:
-    /// @brief Selects the first enabled light by UUID, culls bounds and advances instance history.
-    Snapshot Extract(const Scene&, float aspect,
-                     const std::map<std::string, assets::Model>& models);
+    /// @brief Selects the light by UUID, optionally culls bounds and advances extraction history.
+    Snapshot Extract(const Scene&, float aspect, const std::map<std::string, assets::Model>& models,
+                     bool cpuCulling = true);
 
 private:
     std::map<std::string, math::Mat4> previous_;

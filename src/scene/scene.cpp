@@ -235,14 +235,18 @@ void Scene::MoveCamera(math::Vec3 motion, math::Vec3 rotation)
         math::Direction(math::Compose({}, object.transform.rotation, {1, 1, 1}), motion);
 }
 Snapshot Extractor::Extract(const Scene& scene, float aspect,
-                            const std::map<std::string, assets::Model>& models)
+                            const std::map<std::string, assets::Model>& models, bool cpuCulling)
 {
     const auto transforms = scene.WorldTransforms();
+    std::map<std::string, const Object*> objects;
+    for (const auto& object : scene.objects)
+        objects.emplace(object.id, &object);
     const auto& camera = scene.Get(scene.activeCamera);
     Require(camera.camera.has_value() && transforms.at(camera.id).enabled,
             "Active camera is disabled/missing");
     const auto& pose = transforms.at(camera.id);
     Snapshot snapshot;
+    snapshot.cpuVisibilityKnown = cpuCulling;
     snapshot.cameraPosition = math::Point(pose.matrix, {});
     snapshot.ambient = scene.ambient;
     snapshot.environment = scene.environment;
@@ -256,7 +260,7 @@ Snapshot Extractor::Extract(const Scene& scene, float aspect,
     // UUID order, independent of document storage order, chooses one active directional light.
     for (const auto& [id, world] : transforms)
     {
-        const auto& object = scene.Get(id);
+        const auto& object = *objects.at(id);
         if (world.enabled && object.light && object.light->enabled)
         {
             snapshot.light = {id,
@@ -274,7 +278,7 @@ Snapshot Extractor::Extract(const Scene& scene, float aspect,
     std::map<std::string, math::Mat4> next;
     for (const auto& [id, world] : transforms)
     {
-        const auto& object = scene.Get(id);
+        const auto& object = *objects.at(id);
         if (!world.enabled || !object.mesh)
             continue;
         const auto& renderer = *object.mesh;
@@ -307,6 +311,8 @@ Snapshot Extractor::Extract(const Scene& scene, float aspect,
             snapshot.allInstances.push_back(instance);
             if (snapshot.light.shadows && snapshot.light.intensity > 0)
                 snapshot.shadowCasters.push_back(instance);
+            if (!cpuCulling)
+                return;
             if (!math::Visible(snapshot.viewProjection, instance.bounds))
             {
                 ++snapshot.culledInstances;

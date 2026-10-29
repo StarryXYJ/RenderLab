@@ -57,7 +57,8 @@ def load_suite(config_path, args):
     if not backends or len(set(backends)) != len(backends) or set(backends) - {"dx12", "vulkan"}:
         raise ValueError("Backends must be distinct dx12/vulkan values")
     defaults = {"seconds": 10, "warmupSeconds": 2, "warmupFrames": 5, "width": 1280, "height": 720,
-                "quality": "medium", "view": "final", "validation": "off", "cpuProfiling": False}
+                "quality": "medium", "view": "final", "validation": "off", "cpuProfiling": False,
+                "pipeline": "forward", "submission": "direct", "recordingThreads": 1, "asyncCompute": False, "memoryAlias": False}
     if set(config.get("defaults", {})) - set(defaults):
         raise ValueError("Unknown benchmark defaults")
     defaults.update(config.get("defaults", {}))
@@ -80,9 +81,16 @@ def load_suite(config_path, args):
             case["cpuProfiling"] = args.cpu_profile
         if not isinstance(case["cpuProfiling"], bool):
             raise ValueError("cpuProfiling requires a boolean")
+        if not isinstance(case["memoryAlias"], bool):
+            raise ValueError("memoryAlias requires a boolean")
+        if not isinstance(case["asyncCompute"], bool):
+            raise ValueError("asyncCompute requires a boolean")
+        if case["pipeline"] not in ("forward", "deferred", "raytracing") or case["submission"] not in ("direct", "indexed-direct", "cpu-indirect", "gpu-culled"):
+            raise ValueError("Invalid pipeline/submission")
         bounded(case["seconds"], .001, 3600, "seconds")
         bounded(case["warmupSeconds"], 0, 3600, "warmupSeconds")
         bounded(case["warmupFrames"], 0, 10000, "warmupFrames", True)
+        bounded(case["recordingThreads"], 1, 16, "recordingThreads", True)
         for key in ("width", "height"):
             bounded(case[key], 1, 16384, key, True)
         if case["quality"] not in ("scene", "low", "medium", "high") or case["view"] not in ("final", "hdr", "shadow", "environment", "brdf") or case["validation"] not in ("on", "off"):
@@ -120,8 +128,14 @@ def execute(command, cwd, console, timeout):
 
 
 def validate_case(report, case, backend):
-    expected = {key: case[key] for key in ("width", "height", "quality", "view")}
+    expected = {key: case[key] for key in ("width", "height", "quality", "view", "pipeline", "submission")}
     expected.update(backend=backend, validation=case["validation"] == "on")
+    if report.get("recordingThreads", 1) != case.get("recordingThreads", 1):
+        raise ValueError("Recorded settings disagree with requested recordingThreads")
+    if report.get("memoryAlias", False) != case.get("memoryAlias", False):
+        raise ValueError("Recorded settings disagree with requested memoryAlias")
+    if report.get("asyncCompute", False) != case.get("asyncCompute", False):
+        raise ValueError("Recorded settings disagree with requested asyncCompute")
     budgets = {"requestedFrames": 0, "requestedSeconds": case["seconds"],
                "requestedWarmupFrames": case["warmupFrames"], "requestedWarmupSeconds": case["warmupSeconds"]}
     if (any(report[key] != value for key, value in expected.items()) or
@@ -158,10 +172,16 @@ def run_suite(config_path, output, args):
                            "--warmup-seconds", str(case["warmupSeconds"]), "--warmup-frames", str(case["warmupFrames"]),
                            "--width", str(case["width"]), "--height", str(case["height"]),
                            "--quality", case["quality"], "--view", case["view"],
+                           "--pipeline", case["pipeline"], "--submission", case["submission"],
+                           "--recording-threads", str(case["recordingThreads"]),
                            "--profile", str(report), "--samples", str(directory / "frames.jsonl"),
                            "--output", str(directory / "capture"), "--report", str(capability), "--log", str(directory / "player.log")]
                 if case["cpuProfiling"]:
                     command.append("--cpu-profile")
+                if case["memoryAlias"]:
+                    command.append("--memory-alias")
+                if case["asyncCompute"]:
+                    command.append("--async-compute")
                 item = {"id": run_id, "case": case["name"], "repeat": repeat, "backend": backend,
                         "sequence": len(manifest["runs"]), "command": command, "cwd": str(executable.parent),
                         "report": report.relative_to(output).as_posix(), "status": "running"}

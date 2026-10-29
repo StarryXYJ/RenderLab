@@ -186,7 +186,7 @@ void Gpu(rhi::Runtime& runtime, shader::Target target, const std::filesystem::pa
         for (const auto& block : unlit.package->Layout(unlit.package->GetPass(pass).name).blocks)
             if (!block.schemaId.empty())
                 preparation.constants[unlit.package->BlockBinding(pass, block.name)] = {};
-        preparation.color = rhi::Format::Rgba32Float;
+        preparation.colorFormats = {rhi::Format::Rgba32Float};
         preparation.vertexStride = sizeof(assets::Vertex);
         preparation.attributes = {{"POSITION", 0, rhi::VertexFormat::Float3, 0},
                                   {"NORMAL", 1, rhi::VertexFormat::Float3, 12},

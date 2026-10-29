@@ -8,7 +8,9 @@
 #include <cstddef>
 #include <cstdint>
 #include <deque>
+#include <functional>
 #include <memory>
+#include <span>
 #include <string>
 #include <thread>
 #include <vector>
@@ -16,6 +18,7 @@
 namespace renderlab::rhi
 {
 class CommandList;
+class RecordingWorkers;
 
 /** @brief One graphics queue. Monotonic completion points represent actual successful submissions.
  */
@@ -25,6 +28,10 @@ public:
     virtual ~Runtime();
     virtual std::shared_ptr<Buffer> CreateBuffer(const BufferDesc& desc) = 0;
     virtual std::shared_ptr<Texture> CreateTexture(const TextureDesc& desc) = 0;
+    /// Native bytes for 2..16 compatible attachment textures sharing offset zero.
+    virtual uint64_t QueryAliasedTextureBytes(std::span<const TextureDesc> descs);
+    virtual std::vector<std::shared_ptr<Texture>>
+    CreateAliasedTextures(std::span<const TextureDesc> descs);
     /// Immutable default or sampled view; repeated calls may share a still-live view.
     virtual std::shared_ptr<TextureView> CreateView(std::shared_ptr<Texture> texture,
                                                     TextureViewUsage usage) = 0;
@@ -60,6 +67,26 @@ public:
     void WaitIdle();
     virtual uint64_t Completed() const = 0;
     virtual double TimestampPeriodNs() const = 0;
+    virtual bool SupportsAsyncCompute() const
+    {
+        return false;
+    }
+    virtual void EnableAsyncCompute();
+    /// Same-backend common clock domain: QPC for DX12, device timestamp clock for Vulkan.
+    virtual QueueClock TimestampClock(QueueType queue) const
+    {
+        return {0, 0, TimestampPeriodNs(), queue};
+    }
+    /// Enabled features/limits. Nonzero firstInstance in GPU arguments requires firstInstance.
+    virtual IndirectSupport GetIndirectSupport() const
+    {
+        return {};
+    }
+    /// Bounded, immutable sampled-image arrays with nonuniform indexing; zero if unsupported.
+    virtual uint32_t SampledTextureArrayLimit() const
+    {
+        return 0;
+    }
     virtual bool SupportsAccelerationStructures() const
     {
         return false;
@@ -91,6 +118,11 @@ public:
     {
         return lastSubmitted_;
     }
+    /// Owner-thread capture of actual native calls from the last successful aggregate submission.
+    const std::vector<QueueEvent>& LastQueueTrace() const
+    {
+        return lastTrace_;
+    }
     /// Owner-thread diagnostic scopes; enable between calls. Cumulative counters never reset.
     void SetCpuProfiling(bool enabled)
     {
@@ -102,7 +134,16 @@ public:
     }
 
 protected:
+    struct Submission;
     Runtime();
+    void RecordNative(size_t count, const std::function<void(size_t)>& job, uint32_t threads = 16);
+    /// Transfer native ownership before the first queue operation that can enqueue work.
+    void RetainSubmitting(std::shared_ptr<Submission> native);
+    bool CpuProfiling() const
+    {
+        return cpuProfiling_;
+    }
+    void AddCpuMeasurement(CpuOperation operation, CpuMeasurement measurement);
     CpuTimer ProfileCpu(CpuOperation operation)
     {
         return CpuTimer(cpuProfiling_ ? &cpuProfile_.at(size_t(operation)) : nullptr);
@@ -117,12 +158,17 @@ protected:
     struct Submission
     {
         virtual ~Submission() = default;
+        std::vector<QueueEvent> trace;
     };
     virtual std::shared_ptr<Submission> Execute(const CommandList& commands, uint64_t point,
                                                 Swapchain* presentation) = 0;
     virtual void WaitNative(uint64_t point) = 0;
+    /// Drain all actual queued work after a partial submission; must not invent completion points.
+    virtual void DrainNative();
     void Validate(const BufferDesc& desc) const;
+    void ValidateLayout(const std::vector<BindingDesc>& entries) const;
     void Validate(const TextureDesc& desc) const;
+    void ValidateAliasDescs(std::span<const TextureDesc> descs) const;
     void Validate(const AccelerationStructureDesc& desc) const;
     void Validate(const PipelineDesc& desc) const;
     void Validate(const std::shared_ptr<BindingLayout>& layout,
@@ -132,6 +178,7 @@ protected:
     std::shared_ptr<DescriptorStats> descriptorStats_ = std::make_shared<DescriptorStats>();
 
 private:
+    std::unique_ptr<RecordingWorkers> recordingWorkers_;
     bool cpuProfiling_ = false;
     CpuProfileSnapshot cpuProfile_{};
     struct Pending
@@ -139,9 +186,12 @@ private:
         uint64_t point;
         std::unique_ptr<CommandList> commands;
         std::shared_ptr<Submission> native;
+        bool started = false;
     };
     std::deque<Pending> pending_;
     uint64_t lastSubmitted_ = 0;
+    bool poisoned_ = false;
+    std::vector<QueueEvent> lastTrace_;
     std::thread::id ownerThread_ = std::this_thread::get_id();
     std::vector<std::weak_ptr<Pipeline>> pipelines_;
 };

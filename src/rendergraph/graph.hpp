@@ -97,6 +97,8 @@ private:
 class ComputePassBuilder final : public PassBuilder
 {
 public:
+    /// Opt-in feeder work: Upload reads and transient Storage buffers only. Validated at Compile.
+    void AllowAsyncCompute();
     PassHandle Execute(std::function<void(ComputeContext&)> callback);
 
 private:
@@ -167,6 +169,7 @@ public:
 private:
     friend class PassBuilder;
     friend class RasterPassBuilder;
+    friend class ComputePassBuilder;
     friend class BindingContext;
     friend class RasterContext;
     friend class ComputeContext;

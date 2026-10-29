@@ -8,6 +8,20 @@
 
 namespace renderlab::rhi::dx12
 {
+namespace
+{
+D3D12_CLEAR_VALUE TextureClearValue(const TextureDesc& desc)
+{
+    D3D12_CLEAR_VALUE clear{};
+    clear.Format = NativeFormat(desc.format);
+    if (!IsDepthFormat(desc.format))
+    {
+        clear.Color[0] = clear.Color[1] = clear.Color[2] = .02f;
+        clear.Color[3] = 1;
+    }
+    return clear;
+}
+} // namespace
 std::shared_ptr<Buffer> DxRuntime::CreateBuffer(const BufferDesc& desc)
 {
     auto cpuTimer = ProfileCpu(CpuOperation::BufferCreate);
@@ -129,10 +143,9 @@ DxRuntime::CreateAccelerationStructureNative(AccelerationStructureDesc desc,
                                                      instances);
 }
 
-std::shared_ptr<Texture> DxRuntime::CreateTexture(const TextureDesc& desc)
+D3D12_RESOURCE_DESC DxRuntime::TextureDescription(const TextureDesc& desc) const
 {
     Validate(desc);
-    auto texture = std::make_shared<DxTexture>(this, desc);
     D3D12_RESOURCE_DESC resource{};
     resource.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
     resource.Width = desc.width;
@@ -173,23 +186,72 @@ std::shared_ptr<Texture> DxRuntime::CreateTexture(const TextureDesc& desc)
     if (desc.attachment)
         resource.Flags |= IsDepthFormat(desc.format) ? D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL
                                                      : D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
+    return resource;
+}
+
+std::shared_ptr<Texture> DxRuntime::CreateTexture(const TextureDesc& desc)
+{
+    const auto resource = TextureDescription(desc);
+    auto texture = std::make_shared<DxTexture>(this, desc);
     D3D12_HEAP_PROPERTIES heap{};
     heap.Type = D3D12_HEAP_TYPE_DEFAULT;
     texture->allocation.Set(ledger_,
                             device_->GetResourceAllocationInfo(0, 1, &resource).SizeInBytes);
-    D3D12_CLEAR_VALUE clear{};
-    clear.Format = NativeFormat(desc.format);
-    if (!IsDepthFormat(desc.format))
-    {
-        clear.Color[0] = clear.Color[1] = clear.Color[2] = .02f;
-        clear.Color[3] = 1;
-    }
+    const auto clear = TextureClearValue(desc);
     Check(device_->CreateCommittedResource(
               &heap, D3D12_HEAP_FLAG_NONE, &resource, D3D12_RESOURCE_STATE_COMMON,
               desc.attachment ? &clear : nullptr, IID_PPV_ARGS(&texture->native)),
           "CreateTexture");
     Check(texture->native->SetName(platform::Utf8ToWide(desc.name).c_str()), "Texture SetName");
     return texture;
+}
+
+uint64_t DxRuntime::QueryAliasedTextureBytes(std::span<const TextureDesc> descs)
+{
+    ValidateAliasDescs(descs);
+    uint64_t bytes = 0;
+    for (const auto& desc : descs)
+    {
+        const auto resource = TextureDescription(desc);
+        const auto requirements = device_->GetResourceAllocationInfo(0, 1, &resource);
+        if (requirements.SizeInBytes == UINT64_MAX)
+            throw std::runtime_error("Invalid placed texture requirements");
+        bytes = std::max(bytes, requirements.SizeInBytes);
+    }
+    return bytes;
+}
+std::vector<std::shared_ptr<Texture>>
+DxRuntime::CreateAliasedTextures(std::span<const TextureDesc> descs)
+{
+    const auto bytes = QueryAliasedTextureBytes(descs);
+    struct Backing
+    {
+        Allocation allocation;
+        ComPtr<ID3D12Heap> heap;
+    };
+    auto backing = std::make_shared<Backing>();
+    backing->allocation.Set(ledger_, bytes);
+    D3D12_HEAP_DESC heap{};
+    heap.SizeInBytes = bytes;
+    heap.Properties.Type = D3D12_HEAP_TYPE_DEFAULT;
+    heap.Flags = D3D12_HEAP_FLAG_ALLOW_ONLY_RT_DS_TEXTURES;
+    Check(device_->CreateHeap(&heap, IID_PPV_ARGS(&backing->heap)), "Create alias heap");
+    std::vector<std::shared_ptr<Texture>> textures;
+    textures.reserve(descs.size());
+    for (const auto& desc : descs)
+    {
+        const auto resource = TextureDescription(desc);
+        auto texture = std::make_shared<DxTexture>(this, desc);
+        texture->aliasBacking = backing;
+        const auto clear = TextureClearValue(desc);
+        Check(device_->CreatePlacedResource(backing->heap.Get(), 0, &resource,
+                                            D3D12_RESOURCE_STATE_COMMON, &clear,
+                                            IID_PPV_ARGS(&texture->native)),
+              "CreatePlacedResource alias texture");
+        Check(texture->native->SetName(platform::Utf8ToWide(desc.name).c_str()), "Alias SetName");
+        textures.push_back(std::move(texture));
+    }
+    return textures;
 }
 
 std::shared_ptr<TextureView> DxRuntime::CreateView(std::shared_ptr<Texture> texture,

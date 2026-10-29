@@ -5,20 +5,37 @@
 
 #include <cstdint>
 #include <memory>
+#include <span>
 #include <vector>
 
 namespace renderlab::rhi::vulkan
 {
 struct Allocation;
 struct VkDescriptorBlock;
+struct VkTexture;
 
 /** @brief Backend device services; owns queue completion and native command contexts. */
 class VulkanRuntime final : public Runtime
 {
 public:
+    bool SupportsAsyncCompute() const override
+    {
+        return computeQueue_ != VK_NULL_HANDLE;
+    }
+    void EnableAsyncCompute() override;
+    QueueClock TimestampClock(QueueType queue) const override;
+    uint32_t SampledTextureArrayLimit() const override
+    {
+        return sampledTextureArrayLimit_;
+    }
+    IndirectSupport GetIndirectSupport() const override
+    {
+        return indirect_;
+    }
     VulkanRuntime(VkInstance instance, VkPhysicalDevice physical, VkDevice device, VkQueue queue,
-                  uint32_t family, bool debug, bool accelerationStructureEnabled,
-                  bool rayQueryEnabled, bool rayTracingPipelineEnabled);
+                  VkQueue computeQueue, uint32_t family, bool debug,
+                  bool accelerationStructureEnabled, bool rayQueryEnabled,
+                  bool rayTracingPipelineEnabled, bool calibratedTimestamps);
     ~VulkanRuntime() override;
     uint64_t Completed() const override;
     double TimestampPeriodNs() const override;
@@ -36,6 +53,9 @@ public:
     }
     std::shared_ptr<Buffer> CreateBuffer(const BufferDesc& desc) override;
     std::shared_ptr<Texture> CreateTexture(const TextureDesc& desc) override;
+    uint64_t QueryAliasedTextureBytes(std::span<const TextureDesc> descs) override;
+    std::vector<std::shared_ptr<Texture>>
+    CreateAliasedTextures(std::span<const TextureDesc> descs) override;
     std::shared_ptr<TextureView> CreateView(std::shared_ptr<Texture> texture,
                                             TextureViewUsage usage) override;
     std::shared_ptr<Sampler> CreateSampler() override;
@@ -54,6 +74,7 @@ protected:
     CreateAccelerationStructureNative(AccelerationStructureDesc desc,
                                       AccelerationStructureSizes sizes) override;
     void WaitNative(uint64_t point) override;
+    void DrainNative() override;
     struct Work : Submission
     {
         VkDevice device = VK_NULL_HANDLE;
@@ -72,6 +93,8 @@ protected:
                                         Swapchain* presentation) override;
 
 private:
+    std::shared_ptr<VkTexture> CreateImage(const TextureDesc& desc, bool alias);
+    VkMemoryRequirements AliasRequirements(const std::vector<std::shared_ptr<VkTexture>>& images);
     std::shared_ptr<VkDescriptorBlock> AcquireDescriptors(std::shared_ptr<BindingLayout> layout);
     std::vector<std::shared_ptr<VkDescriptorBlock>> descriptorBlocks_;
     void Allocate(Allocation& allocation, const VkMemoryRequirements& requirements, Memory kind,
@@ -81,12 +104,18 @@ private:
     VkPhysicalDevice physical_;
     VkDevice device_;
     VkQueue queue_;
+    VkQueue computeQueue_;
     uint32_t family_;
     bool debug_;
+    IndirectSupport indirect_;
+    uint32_t sampledTextureArrayLimit_ = 0;
     bool accelerationStructureEnabled_;
     bool rayQueryEnabled_, rayTracingPipelineEnabled_;
+    bool calibratedTimestamps_;
     VkPhysicalDeviceMemoryProperties memory_{};
     VkSemaphore timeline_ = VK_NULL_HANDLE;
+    VkSemaphore graphicsTimeline_ = VK_NULL_HANDLE, computeTimeline_ = VK_NULL_HANDLE;
+    uint64_t nativeSequence_ = 0;
     double timestampPeriod_ = 0;
     std::vector<std::shared_ptr<Work>> contexts_;
 };
@@ -95,5 +124,5 @@ private:
 namespace renderlab::rhi
 {
 std::unique_ptr<Runtime> CreateVulkanRuntime(VkInstance, VkPhysicalDevice, VkDevice, VkQueue,
-                                             uint32_t, bool, bool, bool, bool);
+                                             VkQueue, uint32_t, bool, bool, bool, bool, bool);
 } // namespace renderlab::rhi

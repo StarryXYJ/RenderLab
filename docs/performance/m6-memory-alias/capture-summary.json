@@ -1,0 +1,230 @@
+{
+  "schemaVersion": 1,
+  "kind": "renderlab.native-memory-alias-capture",
+  "tool": "RenderDoc v1.46 portable x64",
+  "toolArchiveSha256": "9ca4d09ecaba2cc791168660d6fc2a7e3d70fe67146e87ec05c5f8dea70772f7",
+  "executableSha256": "f856ba125dda3d584e05c941b8bc7dcd0d0aa46caece25097df52a7eb9541222",
+  "temporaryWrapperSourceSha256": "100f839ab3a9c10c67a8b288022fc57b6abe17bec9078fe0370517a94c512f85",
+  "validation": false,
+  "replayVerified": false,
+  "notes": "Temporary wrapper links production Release libraries; captured output equals the ordinary single-queue baseline. Capture timing is excluded from performance measurements.",
+  "captures": [
+    {
+      "backend": "dx12",
+      "path": "out/m65-capture/dx12/Shadow/memory-alias_capture.rdc",
+      "captureSha256": "d3705c4d0ddc9f4c980d1573585179b0888a94a0f341c27246f153e578b911e0",
+      "xmlSha256": "36889a56464859a99ea208aa09dad0f8666cee3c89d89fac6a0e9a6bef7e21f3",
+      "consoleSha256": "bdcf66d1ed490b0777a34b5d74f1d8b2905a232e0fb6e658937fefaa2911d1e8",
+      "planSha256": "13c587f40884b069328ebd1baf294fbfa5f53c475342fcf8388477935910cfc2",
+      "aliasBackingBytes": 1048576,
+      "members": [
+        {
+          "aliasGroup": 0,
+          "estimatedBytes": 1048576,
+          "final": "DepthWrite",
+          "first": 2,
+          "imported": false,
+          "initial": "Undefined",
+          "last": 2,
+          "name": "MainLightShadowDepth",
+          "versions": 2
+        },
+        {
+          "aliasGroup": 0,
+          "estimatedBytes": 198404,
+          "final": "DepthWrite",
+          "first": 3,
+          "imported": false,
+          "initial": "Undefined",
+          "last": 5,
+          "name": "CameraDepth",
+          "versions": 2
+        }
+      ],
+      "recordingHostThreadIds": [
+        "21636",
+        "28652",
+        "48672",
+        "51432"
+      ],
+      "heaps": [
+        {
+          "chunkIndex": 109,
+          "heap": "413",
+          "bytes": 1048576,
+          "flags": "D3D12_HEAP_FLAG_ALLOW_ONLY_RT_DS_TEXTURES"
+        }
+      ],
+      "placedResources": [
+        {
+          "chunkIndex": 110,
+          "resource": "414",
+          "heap": "413",
+          "offset": 0,
+          "width": 512,
+          "height": 512,
+          "format": "DXGI_FORMAT_R32_TYPELESS"
+        },
+        {
+          "chunkIndex": 112,
+          "resource": "415",
+          "heap": "413",
+          "offset": 0,
+          "width": 257,
+          "height": 193,
+          "format": "DXGI_FORMAT_R32_TYPELESS"
+        }
+      ],
+      "aliasBarriers": [
+        {
+          "chunkIndex": 410,
+          "previous": "0",
+          "resource": "414"
+        },
+        {
+          "chunkIndex": 413,
+          "previous": "414",
+          "resource": "415"
+        }
+      ],
+      "fullDepthClears": [
+        {
+          "chunkIndex": 437,
+          "rectangles": 0
+        },
+        {
+          "chunkIndex": 439,
+          "rectangles": 0
+        }
+      ]
+    },
+    {
+      "backend": "vulkan",
+      "path": "out/m65-capture/vulkan/Shadow/memory-alias_capture.rdc",
+      "captureSha256": "b86eff58c9aea0acaf22b19fa426792daca6d6cbaee49bdcab3c45860594f072",
+      "xmlSha256": "8db5c8034c50809131c13a41f8f10a6ba8b8963cbc6322bf6d32ac3f05b6b15a",
+      "consoleSha256": "0514a1c13a8b1267d407d0e1ff06c5421942f68b66c03b8e2f34c15f3c09adec",
+      "planSha256": "8360518c7c5285e12f464c2fee829edcb4567928269ce97b85eff5e30b82bf91",
+      "aliasBackingBytes": 1048576,
+      "members": [
+        {
+          "aliasGroup": 0,
+          "estimatedBytes": 1048576,
+          "final": "DepthWrite",
+          "first": 2,
+          "imported": false,
+          "initial": "Undefined",
+          "last": 2,
+          "name": "MainLightShadowDepth",
+          "versions": 2
+        },
+        {
+          "aliasGroup": 0,
+          "estimatedBytes": 198404,
+          "final": "DepthWrite",
+          "first": 3,
+          "imported": false,
+          "initial": "Undefined",
+          "last": 5,
+          "name": "CameraDepth",
+          "versions": 2
+        }
+      ],
+      "recordingHostThreadIds": [
+        "29876",
+        "46376",
+        "59316",
+        "71832"
+      ],
+      "images": [
+        {
+          "chunkIndex": 200,
+          "image": "426",
+          "flags": "VK_IMAGE_CREATE_ALIAS_BIT",
+          "width": 512,
+          "height": 512,
+          "requiredBytes": 1048576,
+          "alignment": 1024,
+          "memoryTypeBits": 3
+        },
+        {
+          "chunkIndex": 201,
+          "image": "427",
+          "flags": "VK_IMAGE_CREATE_ALIAS_BIT",
+          "width": 257,
+          "height": 193,
+          "requiredBytes": 278528,
+          "alignment": 1024,
+          "memoryTypeBits": 3
+        }
+      ],
+      "binds": [
+        {
+          "chunkIndex": 203,
+          "image": "426",
+          "memory": "428",
+          "offset": 0
+        },
+        {
+          "chunkIndex": 204,
+          "image": "427",
+          "memory": "428",
+          "offset": 0
+        }
+      ],
+      "sharedMemory": {
+        "memory": "428",
+        "bytes": 1048576
+      },
+      "globalMemoryBarriers": [
+        {
+          "chunkIndex": 542,
+          "srcStage": "VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT",
+          "srcAccess": "VK_ACCESS_2_MEMORY_READ_BIT | VK_ACCESS_2_MEMORY_WRITE_BIT",
+          "dstStage": "VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT",
+          "dstAccess": "VK_ACCESS_2_MEMORY_READ_BIT | VK_ACCESS_2_MEMORY_WRITE_BIT"
+        },
+        {
+          "chunkIndex": 550,
+          "srcStage": "VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT",
+          "srcAccess": "VK_ACCESS_2_MEMORY_READ_BIT | VK_ACCESS_2_MEMORY_WRITE_BIT",
+          "dstStage": "VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT",
+          "dstAccess": "VK_ACCESS_2_MEMORY_READ_BIT | VK_ACCESS_2_MEMORY_WRITE_BIT"
+        }
+      ],
+      "discardTransitions": [
+        {
+          "chunkIndex": 544,
+          "image": "426",
+          "oldLayout": "VK_IMAGE_LAYOUT_UNDEFINED",
+          "newLayout": "VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL"
+        },
+        {
+          "chunkIndex": 553,
+          "image": "427",
+          "oldLayout": "VK_IMAGE_LAYOUT_UNDEFINED",
+          "newLayout": "VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL"
+        }
+      ],
+      "attachmentClears": [
+        {
+          "chunkIndex": 565,
+          "imageView": "434",
+          "image": "427",
+          "loadOp": "VK_ATTACHMENT_LOAD_OP_CLEAR"
+        },
+        {
+          "chunkIndex": 566,
+          "imageView": "448",
+          "image": "426",
+          "loadOp": "VK_ATTACHMENT_LOAD_OP_CLEAR"
+        }
+      ],
+      "captureEnvironment": {
+        "VK_LAYER_PATH": "portable RenderDoc directory",
+        "VK_INSTANCE_LAYERS": "VK_LAYER_RENDERDOC_Capture",
+        "ENABLE_VULKAN_RENDERDOC_CAPTURE": "1"
+      }
+    }
+  ]
+}

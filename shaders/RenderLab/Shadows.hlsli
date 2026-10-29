@@ -32,18 +32,29 @@ float MainLightVisibility(SceneShadowData shadow, Texture2D<float4> shadowMap,
         return 1;
     uint width, height;
     shadowMap.GetDimensions(width, height);
-    int2 pixel = int2(uv * float2(width, height));
-    float visibility = 0;
-    [unroll] for (int y = -1; y <= 1; ++y)
-        [unroll] for (int x = -1; x <= 1; ++x)
+    float2 position = uv * float2(width, height) - 0.5;
+    int2 pixel = int2(floor(position));
+    float2 fraction = frac(position);
+    float2 visibilityWeights = 0;
+    // Merge the overlapping taps of a 3x3 bilinear comparison filter into 4x4 loads.
+    // Interpolate visibility after depth comparison, never the stored depths.
+    [unroll] for (int y = -1; y <= 2; ++y)
+        [unroll] for (int x = -1; x <= 2; ++x)
         {
+            float2 weight = float2(x == -1 ? 1 - fraction.x : (x == 2 ? fraction.x : 1),
+                y == -1 ? 1 - fraction.y : (y == 2 ? fraction.y : 1));
             int2 tap = pixel + int2(x, y);
             bool outside = any(tap < 0) || any(tap >= int2(width, height));
             float closest = shadowMap.Load(int3(clamp(tap, 0, int2(width, height) - 1), 0)).r;
             float receiver = context.coordinate.z + dot(depthGradient,
                 (float2(tap) + 0.5) / float2(width, height) - uv);
-            visibility += outside || receiver + shadow.MainLightShadowParameters.y >= closest ? 1 : 0;
+            bool lit = outside || receiver + shadow.MainLightShadowParameters.y >= closest;
+            float tapWeight = weight.x * weight.y;
+            visibilityWeights += lit ? float2(tapWeight, 0) : float2(0, tapWeight);
         }
-    return visibility / 9;
+    // Normalize the measured weights to preserve exactly lit/shadowed endpoints after rounding.
+    if (visibilityWeights.y == 0) return 1;
+    if (visibilityWeights.x == 0) return 0;
+    return visibilityWeights.x / (visibilityWeights.x + visibilityWeights.y);
 }
 #endif

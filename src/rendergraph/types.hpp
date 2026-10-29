@@ -108,6 +108,10 @@ struct CompileOptions
     bool cull = true;
     /// Adds two timestamp slots per live pass; maximum 32 passes per graph submission.
     bool profile = false;
+    /// Native recording workers, including the caller. Callbacks/preparation stay on owner.
+    uint32_t recordingThreads = 1;
+    bool asyncCompute = false;
+    bool memoryAlias = false;
 };
 struct Edge
 {
@@ -123,6 +127,8 @@ struct ScheduledPass
 {
     uint32_t pass;
     std::vector<Barrier> barriers;
+    rhi::QueueType queue = rhi::QueueType::Graphics;
+    bool waitCompute = false;
 };
 struct AccessInfo
 {
@@ -146,15 +152,23 @@ struct ResourceInfo
     uint64_t estimatedBytes = 0;
     uint32_t versions = 0;
     rhi::State initial = rhi::State::Undefined, final = rhi::State::Undefined;
+    uint32_t aliasGroup = UINT32_MAX;
 };
 struct Plan
 {
     uint64_t compileNs = 0, prepareNs = 0, recordNs = 0;
+    uint32_t recordingThreads = 1, recordingChunks = 0;
+    bool asyncCompute = false;
+    std::vector<uint32_t> asyncResources;
+    std::vector<Barrier> prologueBarriers;
     std::vector<PassInfo> passes;
     std::vector<ResourceInfo> resources;
     std::vector<Edge> edges;
     std::vector<ScheduledPass> schedule;
     std::vector<Barrier> finalBarriers;
+    bool memoryAlias = false;
+    std::vector<std::vector<uint32_t>> aliasGroups;
+    uint64_t aliasBackingBytes = 0;
     std::string ToJson() const;
 };
 struct ExportedResource
@@ -174,11 +188,14 @@ struct Submission
         {
             std::string name;
             double nanoseconds;
+            double startNanoseconds = 0, endNanoseconds = 0;
+            rhi::QueueType queue = rhi::QueueType::Graphics;
         };
         std::shared_ptr<rhi::Buffer> ticks;
         std::vector<std::string> names;
         uint64_t completion = 0;
         double periodNs = 0;
+        std::vector<rhi::QueueClock> clocks;
         /// Requires the same runtime and completed submission; never waits or maps early.
         std::vector<Timing> Read(const rhi::Runtime& runtime) const;
     } profile;

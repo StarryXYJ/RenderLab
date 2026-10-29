@@ -1,0 +1,132 @@
+{
+  "schemaVersion": 1,
+  "executable": "../../out/build/windows-release/renderlab_player.exe",
+  "backends": [
+    "dx12",
+    "vulkan"
+  ],
+  "repeats": 2,
+  "defaults": {
+    "width": 257,
+    "height": 193,
+    "pipeline": "deferred",
+    "submission": "gpu-culled",
+    "quality": "scene",
+    "view": "final",
+    "validation": "off",
+    "cpuProfiling": false,
+    "warmupFrames": 4,
+    "warmupSeconds": 0.25,
+    "seconds": 2
+  },
+  "cases": [
+    {
+      "name": "pbr64-t1-a0",
+      "project": "../../out/build/windows-release/indexed-scene/dx12/Pbr/scale-64/Pbr.rlproject",
+      "width": 257,
+      "height": 193,
+      "recordingThreads": 1,
+      "asyncCompute": false,
+      "memoryAlias": false
+    },
+    {
+      "name": "pbr64-t1-a1",
+      "project": "../../out/build/windows-release/indexed-scene/dx12/Pbr/scale-64/Pbr.rlproject",
+      "width": 257,
+      "height": 193,
+      "recordingThreads": 1,
+      "asyncCompute": false,
+      "memoryAlias": true
+    },
+    {
+      "name": "pbr64-t4-a0",
+      "project": "../../out/build/windows-release/indexed-scene/dx12/Pbr/scale-64/Pbr.rlproject",
+      "width": 257,
+      "height": 193,
+      "recordingThreads": 4,
+      "asyncCompute": true,
+      "memoryAlias": false
+    },
+    {
+      "name": "pbr64-t4-a1",
+      "project": "../../out/build/windows-release/indexed-scene/dx12/Pbr/scale-64/Pbr.rlproject",
+      "width": 257,
+      "height": 193,
+      "recordingThreads": 4,
+      "asyncCompute": true,
+      "memoryAlias": true
+    },
+    {
+      "name": "shadow257-t1-a0",
+      "project": "../m4/Shadow.rlproject",
+      "width": 257,
+      "height": 193,
+      "recordingThreads": 1,
+      "asyncCompute": false,
+      "memoryAlias": false
+    },
+    {
+      "name": "shadow257-t1-a1",
+      "project": "../m4/Shadow.rlproject",
+      "width": 257,
+      "height": 193,
+      "recordingThreads": 1,
+      "asyncCompute": false,
+      "memoryAlias": true
+    },
+    {
+      "name": "shadow257-t4-a0",
+      "project": "../m4/Shadow.rlproject",
+      "width": 257,
+      "height": 193,
+      "recordingThreads": 4,
+      "asyncCompute": true,
+      "memoryAlias": false
+    },
+    {
+      "name": "shadow257-t4-a1",
+      "project": "../m4/Shadow.rlproject",
+      "width": 257,
+      "height": 193,
+      "recordingThreads": 4,
+      "asyncCompute": true,
+      "memoryAlias": true
+    },
+    {
+      "name": "shadow720-t1-a0",
+      "project": "../m4/Shadow.rlproject",
+      "width": 1280,
+      "height": 720,
+      "recordingThreads": 1,
+      "asyncCompute": false,
+      "memoryAlias": false
+    },
+    {
+      "name": "shadow720-t1-a1",
+      "project": "../m4/Shadow.rlproject",
+      "width": 1280,
+      "height": 720,
+      "recordingThreads": 1,
+      "asyncCompute": false,
+      "memoryAlias": true
+    },
+    {
+      "name": "shadow720-t4-a0",
+      "project": "../m4/Shadow.rlproject",
+      "width": 1280,
+      "height": 720,
+      "recordingThreads": 4,
+      "asyncCompute": true,
+      "memoryAlias": false
+    },
+    {
+      "name": "shadow720-t4-a1",
+      "project": "../m4/Shadow.rlproject",
+      "width": 1280,
+      "height": 720,
+      "recordingThreads": 4,
+      "asyncCompute": true,
+      "memoryAlias": true
+    }
+  ]
+}

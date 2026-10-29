@@ -71,6 +71,26 @@ int main()
         RequireInvalid([] { ParseOptions(std::array{"--view"sv, "missing"sv}); });
         RequireInvalid([] { ParseOptions(std::array{"--denoise"sv, "maybe"sv}); });
         RequireInvalid([] { ParseOptions(std::array{"--temporal-denoise"sv, "maybe"sv}); });
+        RequireInvalid([] { ParseOptions(std::array{"--submission"sv, "missing"sv}); });
+        RequireInvalid([] { ParseOptions(std::array{"--async-compute"sv}); });
+        RequireInvalid([] { ParseOptions(std::array{"--memory-alias"sv}); });
+        Require(ParseOptions(std::array{"--project"sv, "scene.rlproject"sv, "--memory-alias"sv})
+                    .memoryAlias,
+                "Memory alias switch was not parsed");
+        Require(ParseOptions(std::array{"--project"sv, "scene.rlproject"sv, "--async-compute"sv})
+                    .asyncCompute,
+                "Async compute switch was not parsed");
+        RequireInvalid([] { ParseOptions(std::array{"--recording-threads"sv, "0"sv}); });
+        RequireInvalid([] { ParseOptions(std::array{"--recording-threads"sv, "17"sv}); });
+        Require(ParseOptions(
+                    std::array{"--project"sv, "scene.rlproject"sv, "--recording-threads"sv, "4"sv})
+                        .recordingThreads == 4,
+                "Recording thread switch was not parsed");
+        RequireInvalid([] { ParseOptions(std::array{"--submission"sv, "cpu-indirect"sv}); });
+        Require(ParseOptions(std::array{"--project"sv, "scene.rlproject"sv, "--submission"sv,
+                                        "cpu-indirect"sv})
+                        .submission == "cpu-indirect",
+                "Geometry submission switch was not parsed");
         Require(!ParseOptions(std::array{"--temporal-denoise"sv, "off"sv}).reflectionTemporal,
                 "Temporal denoise switch was not parsed");
         RequireInvalid([] { ParseOptions(std::array{"--gpu-budget-mib"sv, "0"sv}); });
