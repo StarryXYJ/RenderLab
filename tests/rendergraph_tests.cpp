@@ -77,6 +77,8 @@ struct FakeBuffer : rhi::Buffer
 };
 struct FakeRuntime : rhi::Runtime
 {
+    std::vector<rhi::State> aliasBefore;
+    std::vector<const void*> aliasPrevious;
     bool asyncAvailable = true, failBefore = false, failAfter = false, failDrain = false;
     uint32_t drains = 0;
     std::vector<rhi::RecordingRange> nativeRanges;
@@ -101,6 +103,29 @@ struct FakeRuntime : rhi::Runtime
     std::shared_ptr<rhi::Texture> CreateTexture(const rhi::TextureDesc& d) override
     {
         return std::make_shared<rhi::Texture>(this, d);
+    }
+    uint64_t QueryAliasedTextureBytes(std::span<const rhi::TextureDesc> descs) override
+    {
+        ValidateAliasDescs(descs);
+        uint64_t bytes = 0;
+        for (const auto& desc : descs)
+            bytes =
+                std::max(bytes, uint64_t(desc.width) * desc.height * rhi::FormatBytes(desc.format));
+        return bytes;
+    }
+    std::vector<std::shared_ptr<rhi::Texture>>
+    CreateAliasedTextures(std::span<const rhi::TextureDesc> descs) override
+    {
+        QueryAliasedTextureBytes(descs);
+        auto backing = std::make_shared<int>(0);
+        std::vector<std::shared_ptr<rhi::Texture>> textures;
+        for (const auto& desc : descs)
+        {
+            auto texture = CreateTexture(desc);
+            texture->aliasBacking = backing;
+            textures.push_back(std::move(texture));
+        }
+        return textures;
     }
     using rhi::Runtime::CreateView;
     std::shared_ptr<rhi::TextureView> CreateView(std::shared_ptr<rhi::Texture> t,
@@ -147,9 +172,18 @@ struct FakeRuntime : rhi::Runtime
             throw std::runtime_error("Injected after enqueue");
         }
         nativeRanges = commands.RecordingRanges();
+        aliasBefore.clear();
+        aliasPrevious.clear();
         for (const auto& command : commands.GetCommands())
+        {
             if (const auto* draw = std::get_if<rhi::Draw>(&command))
                 drawnVertices.push_back(draw->first);
+            if (const auto* alias = std::get_if<rhi::TextureAlias>(&command))
+            {
+                aliasBefore.push_back(alias->before);
+                aliasPrevious.push_back(alias->previous.get());
+            }
+        }
         return work;
     }
     void DrainNative() override
@@ -179,6 +213,205 @@ std::shared_ptr<rhi::Pipeline> Compute(FakeRuntime& runtime, rhi::BindingKind ki
     desc.compute = std::make_shared<rhi::ShaderModule>(&runtime, rhi::ShaderStage::Compute,
                                                        std::vector<std::byte>{}, "CSMain");
     return std::make_shared<rhi::Pipeline>(&runtime, std::move(desc));
+}
+void AliasContracts()
+{
+    const std::array<rhi::TextureDesc, 2> descs = {
+        rhi::TextureDesc{8, 8, rhi::Format::Rgba8, false, true, "A"},
+        rhi::TextureDesc{4, 4, rhi::Format::Rgba8, false, true, "B"}};
+    const auto clear =
+        [](Graph& graph, TextureHandle& texture, rhi::LoadOp load = rhi::LoadOp::Clear)
+    {
+        auto pass = graph.AddRasterPass("Clear");
+        texture = pass.ColorTarget(texture, load);
+        pass.SideEffect();
+        return pass.Execute([](RasterContext&) {});
+    };
+    const auto build = [&](bool cancel = false)
+    {
+        auto graph = std::make_unique<Graph>();
+        for (const auto& desc : descs)
+        {
+            auto texture = graph->CreateTexture(desc.name, desc);
+            clear(*graph, texture);
+        }
+        if (cancel)
+        {
+            auto pass = graph->AddComputePass("Cancel");
+            pass.SideEffect();
+            pass.Execute([](ComputeContext&)
+                         { throw std::runtime_error("Alias recording cancelled"); });
+        }
+        graph->Compile({.memoryAlias = true});
+        return graph;
+    };
+    FakeRuntime runtime;
+    Pool pool(runtime, 4, 1024);
+    {
+        auto graph = build();
+        Require(graph->GetPlan().aliasGroups.size() == 1, "Disjoint graphics clears must alias");
+        graph->Execute(pool);
+        Require(runtime.aliasBefore == std::vector(2, rhi::State::Undefined) &&
+                    runtime.aliasPrevious[0] == nullptr && runtime.aliasPrevious[1],
+                "Initial alias activation is incomplete");
+        runtime.WaitIdle();
+    }
+    {
+        auto graph = build(true);
+        Fails([&] { graph->Execute(pool); }, "Alias recording cancelled");
+    }
+    {
+        auto graph = build();
+        graph->Execute(pool);
+        Require(runtime.aliasBefore == std::vector(2, rhi::State::ColorAttachment) &&
+                    runtime.aliasPrevious[0] && runtime.aliasPrevious[1],
+                "Alias cancellation lost previous native state/active member");
+        runtime.WaitIdle();
+    }
+    const auto allocationCount = pool.Stats().allocations;
+    {
+        auto graph = build();
+        runtime.failBefore = true;
+        Fails([&] { graph->Execute(pool); }, "Injected before");
+        runtime.failBefore = false;
+        auto next = build();
+        runtime.Wait(next->Execute(pool).completion);
+    }
+    Require(pool.Stats().allocations == allocationCount,
+            "Failed/cancelled alias lease was retained");
+    {
+        auto pin = pool.AcquireAliases(descs);
+        Require(pin->active == 1, "Successful submission did not publish final active alias");
+        auto view = runtime.CreateView(pin->members[0]->texture);
+        pin->members[0]->view = view;
+        pin.reset();
+        pool.Trim();
+        Require(pool.Stats().cached == 2, "An external view must pin its entire alias group");
+    }
+    pool.Trim();
+    Require(pool.Stats().cached == 0, "Retired alias groups did not trim");
+    {
+        // Group leases exist before physical resources/views are attached to graph resources.
+        Pool limited(runtime, 2, 256);
+        // Force failure after the group is reserved, in the ordinary resource preparation loop.
+        Graph failing;
+        auto extra = failing.CreateTexture("Extra", {8, 8, rhi::Format::R32Float, false, true});
+        clear(failing, extra);
+        for (const auto& desc : descs)
+        {
+            auto texture = failing.CreateTexture(desc.name, desc);
+            clear(failing, texture);
+        }
+        failing.Compile({.memoryAlias = true});
+        Fails([&] { failing.Execute(limited); }, "pool is full");
+        auto recovered = limited.AcquireAliases(descs);
+        Require(limited.Stats().allocations == 2 && recovered->active == UINT32_MAX,
+                "Failed preparation retained an alias lease or published active state");
+    }
+    {
+        Pool exact(runtime, 2, 256);
+        auto group = exact.AcquireAliases(descs);
+        Fails([&] { exact.Acquire(descs[1]); }, "pool is full");
+        group.reset();
+        auto ordinary = exact.Acquire(descs[1]);
+        Require(exact.Stats().cached == 1 && exact.Stats().estimatedBytes == 64,
+                "Budget eviction must remove an entire alias group");
+        Pool tooSmall(runtime, 1, 256);
+        Fails([&] { tooSmall.AcquireAliases(descs); }, "limit");
+    }
+    {
+        FakeRuntime failed;
+        Pool failedPool(failed, 2, 1024);
+        failed.failAfter = true;
+        {
+            auto graph = build();
+            Fails([&] { graph->Execute(failedPool); }, "Injected after");
+        }
+        failedPool.Trim();
+        Require(failedPool.Stats().cached == 2 && failed.PendingCount() == 1 &&
+                    failed.LastSubmitted() == 0,
+                "Partial alias submission must retain the entire group without publication");
+        failed.WaitIdle();
+        failedPool.Trim();
+        Require(failedPool.Stats().cached == 0, "Drained failed alias group did not retire");
+    }
+    // Simultaneous attachments, later reads, exports, imports and non-clear first uses exclude
+    // alias.
+    for (uint32_t mode = 0; mode < 6; ++mode)
+    {
+        Graph graph;
+        auto a = graph.CreateTexture("A", descs[0]);
+        auto b = graph.CreateTexture(
+            "B", mode == 5 ? rhi::TextureDesc{8, 8, rhi::Format::R32Float, false, true} : descs[1]);
+        if (mode == 3)
+            a = graph.ImportTexture("External", runtime.CreateTexture(descs[0]), {});
+        if (mode == 4)
+        {
+            Fails([&] { clear(graph, a, rhi::LoadOp::Discard); }, "Use Clear or Load");
+            continue;
+        }
+        if (mode == 0)
+        {
+            auto pass = graph.AddRasterPass("Simultaneous");
+            a = pass.ColorTarget(a);
+            // Same dimensions are required for simultaneous attachments.
+            b = graph.CreateTexture("SameSize", descs[0]);
+            b = pass.ColorTarget(b);
+            pass.SideEffect();
+            pass.Execute([](RasterContext&) {});
+        }
+        else
+        {
+            clear(graph, a);
+            clear(graph, b);
+            if (mode == 1)
+                Read(graph, a);
+            if (mode == 2)
+                graph.Export(a, rhi::State::Sampled);
+        }
+        Require(graph.Compile({.memoryAlias = true}).aliasGroups.empty(),
+                "Unsafe/incompatible alias candidate was grouped");
+    }
+    {
+        Graph graph;
+        auto a = graph.CreateTexture("A", descs[0]);
+        auto b = graph.CreateTexture("B", descs[1]);
+        clear(graph, a);
+        clear(graph, b);
+        Require(graph.Compile().aliasGroups.empty(), "Alias default must remain off");
+    }
+    {
+        Graph graph;
+        for (uint32_t i = 0; i < 18; ++i)
+        {
+            auto texture = graph.CreateTexture("Bounded." + std::to_string(i), descs[0]);
+            clear(graph, texture);
+        }
+        const auto& plan = graph.Compile({.memoryAlias = true});
+        Require(plan.aliasGroups.size() == 2 && plan.aliasGroups[0].size() == 16 &&
+                    plan.aliasGroups[1].size() == 2,
+                "Alias group member limit was not respected");
+    }
+    {
+        Graph graph;
+        std::array<TextureHandle, 2> depths;
+        for (uint32_t i = 0; i < 2; ++i)
+        {
+            auto color = graph.CreateTexture("Color." + std::to_string(i), descs[0]);
+            auto depth = graph.CreateTexture("Depth." + std::to_string(i),
+                                             {8, 8, rhi::Format::D32S8, false, true});
+            auto pass = graph.AddRasterPass("Stencil initialization");
+            pass.ColorTarget(color);
+            depths[i] = pass.DepthStencilTarget(depth, {}, {});
+            pass.SideEffect();
+            pass.Execute([](RasterContext&) {});
+        }
+        const auto& plan = graph.Compile({.memoryAlias = true});
+        Require(plan.resources[depths[0].resource].aliasGroup != UINT32_MAX &&
+                    plan.resources[depths[0].resource].aliasGroup ==
+                        plan.resources[depths[1].resource].aliasGroup,
+                "Full depth/stencil initialization should permit compatible aliases");
+    }
 }
 void Dependencies()
 {
@@ -1049,6 +1282,7 @@ int main()
     try
     {
         Dependencies();
+        AliasContracts();
         NamesAndBuilders();
         AccessValidation();
         Lifecycle();

@@ -101,6 +101,7 @@ struct Graph::Impl
     uint32_t recordingThreads = 1;
     std::shared_ptr<rhi::Buffer> timestamps;
     std::shared_ptr<detail::Allocation> timestampLease;
+    std::vector<std::shared_ptr<detail::AliasGroup>> aliasLeases;
     void Building() const;
     void Builder(uint32_t pass) const;
     detail::Resource& Validate(uint64_t graph, uint32_t resource, uint32_t version, bool texture);
@@ -112,6 +113,7 @@ struct Graph::Impl
                               bool texture, std::optional<Use> use = {});
     void Barriers();
     void ScheduleQueues(bool enabled);
+    void PlanAliases(bool enabled);
     void ValidateBindings(uint32_t pass, const rhi::BindingGroup& group);
     void CheckBufferRange(uint32_t pass, BufferHandle handle, uint64_t offset, uint64_t size);
 };

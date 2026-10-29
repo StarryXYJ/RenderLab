@@ -101,6 +101,46 @@ std::shared_ptr<Runtime::Submission> VulkanRuntime::Execute(const CommandList& c
                                 dependency.pBufferMemoryBarriers = &b;
                                 vkCmdPipelineBarrier2(list, &dependency);
                             }
+                            else if constexpr (std::is_same_v<T, TextureAlias>)
+                            {
+                                // Aliased optimal images lose contents and metadata on activation.
+                                VkMemoryBarrier2 memory{};
+                                memory.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2;
+                                memory.srcStageMask = memory.dstStageMask =
+                                    VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT;
+                                memory.srcAccessMask = memory.dstAccessMask =
+                                    VK_ACCESS_2_MEMORY_READ_BIT | VK_ACCESS_2_MEMORY_WRITE_BIT;
+                                VkDependencyInfo dependency{};
+                                dependency.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
+                                dependency.memoryBarrierCount = 1;
+                                dependency.pMemoryBarriers = &memory;
+                                vkCmdPipelineBarrier2(list, &dependency);
+                                const auto after = NativeState(c.after);
+                                VkImageMemoryBarrier2 image{};
+                                image.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
+                                image.srcStageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT;
+                                image.srcAccessMask = memory.srcAccessMask;
+                                image.dstStageMask = after.stage;
+                                image.dstAccessMask = after.access;
+                                image.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+                                image.newLayout = after.layout;
+                                image.srcQueueFamilyIndex = image.dstQueueFamilyIndex =
+                                    VK_QUEUE_FAMILY_IGNORED;
+                                image.image = As<VkTexture>(c.texture).native;
+                                image.subresourceRange = {
+                                    VkImageAspectFlags(IsDepthFormat(c.texture->desc.format)
+                                                           ? VK_IMAGE_ASPECT_DEPTH_BIT |
+                                                                 (HasStencil(c.texture->desc.format)
+                                                                      ? VK_IMAGE_ASPECT_STENCIL_BIT
+                                                                      : 0)
+                                                           : VK_IMAGE_ASPECT_COLOR_BIT),
+                                    0, 1, 0, 1};
+                                dependency.memoryBarrierCount = 0;
+                                dependency.pMemoryBarriers = nullptr;
+                                dependency.imageMemoryBarrierCount = 1;
+                                dependency.pImageMemoryBarriers = &image;
+                                vkCmdPipelineBarrier2(list, &dependency);
+                            }
                             else if constexpr (std::is_same_v<T, TextureBarrier>)
                             {
                                 auto before = NativeState(c.before), after = NativeState(c.after);

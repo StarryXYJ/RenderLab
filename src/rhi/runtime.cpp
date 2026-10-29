@@ -16,6 +16,27 @@ using detail::Require;
 Runtime::Runtime() = default;
 Runtime::~Runtime() = default;
 
+void Runtime::ValidateAliasDescs(std::span<const TextureDesc> descs) const
+{
+    Require(descs.size() >= 2 && descs.size() <= 16, "Alias group requires 2..16 textures");
+    for (const auto& desc : descs)
+    {
+        Validate(desc);
+        Require(desc.attachment && desc.format == descs.front().format &&
+                    desc.storage == descs.front().storage &&
+                    desc.attachment == descs.front().attachment,
+                "Alias textures require matching format and attachment/storage usage");
+    }
+}
+uint64_t Runtime::QueryAliasedTextureBytes(std::span<const TextureDesc>)
+{
+    throw std::invalid_argument("Texture alias allocation is unavailable");
+}
+std::vector<std::shared_ptr<Texture>> Runtime::CreateAliasedTextures(std::span<const TextureDesc>)
+{
+    throw std::invalid_argument("Texture alias allocation is unavailable");
+}
+
 void Runtime::EnableAsyncCompute()
 {
     throw std::invalid_argument("Async compute queue is unavailable");

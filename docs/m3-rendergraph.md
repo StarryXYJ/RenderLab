@@ -98,7 +98,7 @@ Pool 在 Runtime 所有线程创建和使用，Runtime 和 Pool 都必须比使�
 
 仅在没有图租约、没有额外资源引用且提交已完成时复用。执行中的 Graph 仍持有租约；取消或销毁它不会发布虚假的最终状态。Submit 成功后才更新池中的状态和完成点，命令包继续保活 GPU 使用。
 
-容量不足时淘汰已完成且空闲的缓存资源；全部在用时明确失败，由帧管理层释放引用并等待所需完成点。Trim 只释放已完成空闲项，不执行 DeviceIdle。M3 不在同一图中复用不同资源的存储，不做 Alias 或资源重命名。
+容量不足时淘汰已完成且空闲的缓存资源；全部在用时明确失败，由帧管理层释放引用并等待所需完成点。Trim 只释放已完成空闲项，不执行 DeviceIdle。M6.5 在普通池旁增加默认关闭的瞬态附件 Alias Group；同 Graphics Queue 的不重叠成员共享原生 backing，整组保护/退休，规则见 [内存 Alias](memory-alias.md)。
 
 ## 诊断与验证
 
@@ -123,7 +123,7 @@ GPU `gpu.{dx12,vulkan}.graph` 将六张图的输出与直接 RHI 基线及 CPU �
 | samples/graph/graph_features、graph_demo | Demo Feature 实例与 Custom 组合 |
 | samples/graph/graph_acceptance、graph_buffer_checks、forward_acceptance | GPU 行为验收 |
 
-当前仍是单视图、单 mip/layer、保守整 Buffer 依赖和固定 Store；M5 已扩展至最多八个颜色附件。名称表仅属于单张图，阶段枚举由 Renderer 提供。没有全局资源黑板、Alias、执行计划缓存或跨设备同步。M6.3 的独立录制上下文不改变 GPU 依赖；M6.4 的多队列首版仅覆盖只读 Upload → 瞬态 Storage → Graphics 消费的 feeder 子图，整帧完成点覆盖两条队列。
+当前仍是单视图、单 mip/layer、保守整 Buffer 依赖和固定 Store；M5 已扩展至最多八个颜色附件。名称表仅属于单张图，阶段枚举由 Renderer 提供。没有全局资源黑板、执行计划缓存或跨设备同步。M6.3 的独立录制上下文不改变 GPU 依赖；M6.4 的多队列首版仅覆盖只读 Upload → 瞬态 Storage → Graphics 消费的 feeder 子图，整帧完成点覆盖两条队列。M6.5 仅对同 Graphics Queue 的瞬态附件提供可选 Alias，不复用跨队列、导入/导出或 History 内存。
 
 普通 Forward 验收另检查透明稳定排序、阶段顺序与剔除、回调输入所有权、双后端图像和独立阶段快照。实际配置见 [阶段计划](../design/phaseplan.md)。
 

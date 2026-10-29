@@ -155,6 +155,20 @@ void Scene(rhi::Runtime& runtime, shader::Target target, const std::filesystem::
                         (!gpuFrame.indexedScene.instances || (submittedCompute && consumerWait)),
                     "Async backend did not capture real producer/wait/aggregate operations");
         }
+        for (const uint32_t threads : {1u, 4u})
+            for (const bool async : {false, true})
+            {
+                options.submission = GeometrySubmission::GpuCulled;
+                options.asyncCompute = async;
+                options.memoryAlias = true;
+                options.recordingThreads = threads;
+                const auto aliased = renderer.Render(
+                    color, rhi::State::CopySource, nullptr, true,
+                    output / ("alias-" + std::to_string(sequence++) + ".json"), options);
+                Require(Pixels(runtime, aliased, width, height) == indexed,
+                        "Alias/queue/thread combination differs from baseline");
+                Require(!aliased.profile.Read(runtime).empty(), "Aliasing lost GPU profile");
+            }
         Compare(direct, indexed);
         Require(indirectFrame.indexedScene.visible <= indirectFrame.indexedScene.instances &&
                     indirectFrame.indexedScene.textures <= IndexedTextureCapacity,
@@ -178,6 +192,7 @@ void Scene(rhi::Runtime& runtime, shader::Target target, const std::filesystem::
         rayOptions.reflectionTemporal = false;
         rayOptions.recordingThreads = 4;
         rayOptions.asyncCompute = true;
+        rayOptions.memoryAlias = true;
         rayOptions.profile = true;
         auto colorA =
             runtime.CreateTexture({97, 73, rhi::Format::Rgba8Srgb, false, true, "Parallel.Rays.A"});
@@ -187,6 +202,7 @@ void Scene(rhi::Runtime& runtime, shader::Target target, const std::filesystem::
                                                  output / "parallel-raytracing.json", rayOptions);
         rayOptions.recordingThreads = 1;
         rayOptions.asyncCompute = false;
+        rayOptions.memoryAlias = false;
         const auto serial =
             rayRenderer.Render(colorB, rhi::State::Undefined, nullptr, true, {}, rayOptions);
         Require(Pixels(runtime, parallel, 97, 73) == Pixels(runtime, serial, 97, 73),
@@ -202,6 +218,7 @@ void Scene(rhi::Runtime& runtime, shader::Target target, const std::filesystem::
         Require(traced && built, "Parallel ray tracing test did not record trace and AS build");
         rayOptions.reflectionHistory = true;
         rayOptions.asyncCompute = true;
+        rayOptions.memoryAlias = true;
         rayOptions.recordingThreads = 4;
         const auto historyA =
             rayRenderer.Render(colorA, rhi::State::CopySource, nullptr, true, {}, rayOptions);
@@ -213,6 +230,7 @@ void Scene(rhi::Runtime& runtime, shader::Target target, const std::filesystem::
         SceneRenderer serialHistory(runtime, target, project, shaders);
         rayOptions.asyncCompute = false;
         rayOptions.recordingThreads = 1;
+        rayOptions.memoryAlias = false;
         auto referenceTarget = runtime.CreateTexture(
             {97, 73, rhi::Format::Rgba8Srgb, false, true, "History.Reference"});
         auto referenceState = rhi::State::Undefined;
@@ -257,6 +275,7 @@ void Scene(rhi::Runtime& runtime, shader::Target target, const std::filesystem::
     document = original;
     options.submission = GeometrySubmission::GpuCulled;
     options.asyncCompute = true;
+    options.memoryAlias = true;
     const auto pendingA =
         renderer.Render(colorA, rhi::State::CopySource, nullptr, true, {}, options);
     document.MoveCamera({.3f, 0, 0}, {0, 3, 0});

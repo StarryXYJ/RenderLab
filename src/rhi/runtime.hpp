@@ -10,6 +10,7 @@
 #include <deque>
 #include <functional>
 #include <memory>
+#include <span>
 #include <string>
 #include <thread>
 #include <vector>
@@ -27,6 +28,10 @@ public:
     virtual ~Runtime();
     virtual std::shared_ptr<Buffer> CreateBuffer(const BufferDesc& desc) = 0;
     virtual std::shared_ptr<Texture> CreateTexture(const TextureDesc& desc) = 0;
+    /// Native bytes for 2..16 compatible attachment textures sharing offset zero.
+    virtual uint64_t QueryAliasedTextureBytes(std::span<const TextureDesc> descs);
+    virtual std::vector<std::shared_ptr<Texture>>
+    CreateAliasedTextures(std::span<const TextureDesc> descs);
     /// Immutable default or sampled view; repeated calls may share a still-live view.
     virtual std::shared_ptr<TextureView> CreateView(std::shared_ptr<Texture> texture,
                                                     TextureViewUsage usage) = 0;
@@ -163,6 +168,7 @@ protected:
     void Validate(const BufferDesc& desc) const;
     void ValidateLayout(const std::vector<BindingDesc>& entries) const;
     void Validate(const TextureDesc& desc) const;
+    void ValidateAliasDescs(std::span<const TextureDesc> descs) const;
     void Validate(const AccelerationStructureDesc& desc) const;
     void Validate(const PipelineDesc& desc) const;
     void Validate(const std::shared_ptr<BindingLayout>& layout,

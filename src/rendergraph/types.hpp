@@ -111,6 +111,7 @@ struct CompileOptions
     /// Native recording workers, including the caller. Callbacks/preparation stay on owner.
     uint32_t recordingThreads = 1;
     bool asyncCompute = false;
+    bool memoryAlias = false;
 };
 struct Edge
 {
@@ -151,6 +152,7 @@ struct ResourceInfo
     uint64_t estimatedBytes = 0;
     uint32_t versions = 0;
     rhi::State initial = rhi::State::Undefined, final = rhi::State::Undefined;
+    uint32_t aliasGroup = UINT32_MAX;
 };
 struct Plan
 {
@@ -164,6 +166,9 @@ struct Plan
     std::vector<Edge> edges;
     std::vector<ScheduledPass> schedule;
     std::vector<Barrier> finalBarriers;
+    bool memoryAlias = false;
+    std::vector<std::vector<uint32_t>> aliasGroups;
+    uint64_t aliasBackingBytes = 0;
     std::string ToJson() const;
 };
 struct ExportedResource

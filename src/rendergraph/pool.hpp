@@ -4,6 +4,7 @@
 
 #include <cstddef>
 #include <memory>
+#include <span>
 #include <thread>
 #include <vector>
 
@@ -18,6 +19,12 @@ struct Allocation
     std::shared_ptr<rhi::Buffer> buffer;
     rhi::State state = rhi::State::Undefined;
     uint64_t completion = 0, estimatedBytes = 0;
+};
+struct AliasGroup
+{
+    std::vector<std::shared_ptr<Allocation>> members;
+    uint64_t bytes = 0;
+    uint32_t active = UINT32_MAX;
 };
 } // namespace detail
 struct PoolStats
@@ -34,6 +41,7 @@ public:
                   uint64_t maxEstimatedBytes = 64ull * 1024 * 1024);
     std::shared_ptr<detail::Allocation> Acquire(const rhi::TextureDesc& desc);
     std::shared_ptr<detail::Allocation> Acquire(const rhi::BufferDesc& desc);
+    std::shared_ptr<detail::AliasGroup> AcquireAliases(std::span<const rhi::TextureDesc> descs);
     void Trim();
     PoolStats Stats() const;
     rhi::Runtime& Device() const
@@ -44,13 +52,15 @@ public:
 
 private:
     bool Available(const std::shared_ptr<detail::Allocation>& entry) const;
+    bool Available(const std::shared_ptr<detail::AliasGroup>& group) const;
     void CheckOwner() const;
-    void MakeRoom(uint64_t bytes);
+    void MakeRoom(uint64_t bytes, size_t resources = 1);
     rhi::Runtime& runtime_;
     size_t maxResources_;
     uint64_t maxBytes_;
     PoolStats stats_;
     std::vector<std::shared_ptr<detail::Allocation>> entries_;
+    std::vector<std::shared_ptr<detail::AliasGroup>> aliasGroups_;
     std::thread::id owner_ = std::this_thread::get_id();
 };
 } // namespace renderlab::rendergraph

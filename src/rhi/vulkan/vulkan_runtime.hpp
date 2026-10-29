@@ -5,12 +5,14 @@
 
 #include <cstdint>
 #include <memory>
+#include <span>
 #include <vector>
 
 namespace renderlab::rhi::vulkan
 {
 struct Allocation;
 struct VkDescriptorBlock;
+struct VkTexture;
 
 /** @brief Backend device services; owns queue completion and native command contexts. */
 class VulkanRuntime final : public Runtime
@@ -51,6 +53,9 @@ public:
     }
     std::shared_ptr<Buffer> CreateBuffer(const BufferDesc& desc) override;
     std::shared_ptr<Texture> CreateTexture(const TextureDesc& desc) override;
+    uint64_t QueryAliasedTextureBytes(std::span<const TextureDesc> descs) override;
+    std::vector<std::shared_ptr<Texture>>
+    CreateAliasedTextures(std::span<const TextureDesc> descs) override;
     std::shared_ptr<TextureView> CreateView(std::shared_ptr<Texture> texture,
                                             TextureViewUsage usage) override;
     std::shared_ptr<Sampler> CreateSampler() override;
@@ -88,6 +93,8 @@ protected:
                                         Swapchain* presentation) override;
 
 private:
+    std::shared_ptr<VkTexture> CreateImage(const TextureDesc& desc, bool alias);
+    VkMemoryRequirements AliasRequirements(const std::vector<std::shared_ptr<VkTexture>>& images);
     std::shared_ptr<VkDescriptorBlock> AcquireDescriptors(std::shared_ptr<BindingLayout> layout);
     std::vector<std::shared_ptr<VkDescriptorBlock>> descriptorBlocks_;
     void Allocate(Allocation& allocation, const VkMemoryRequirements& requirements, Memory kind,

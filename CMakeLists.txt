@@ -69,7 +69,7 @@ target_compile_definitions(renderlab_rhi PRIVATE USE_PIX)
 
 add_library(renderlab_rendergraph STATIC
     src/rendergraph/graph.cpp src/rendergraph/builder.cpp src/rendergraph/validation.cpp
-    src/rendergraph/compiler.cpp src/rendergraph/queue_plan.cpp src/rendergraph/pool.cpp src/rendergraph/context.cpp
+    src/rendergraph/compiler.cpp src/rendergraph/queue_plan.cpp src/rendergraph/alias_plan.cpp src/rendergraph/pool.cpp src/rendergraph/context.cpp
     src/rendergraph/executor.cpp src/rendergraph/diagnostics.cpp)
 target_include_directories(renderlab_rendergraph PUBLIC src)
 target_link_libraries(renderlab_rendergraph PRIVATE renderlab_options renderlab_rhi
@@ -309,6 +309,12 @@ if(BUILD_TESTING)
     add_executable(renderlab_rendergraph_tests tests/rendergraph_tests.cpp)
     target_link_libraries(renderlab_rendergraph_tests PRIVATE renderlab_options renderlab_rendergraph renderlab_rhi renderlab_renderer)
     add_test(NAME rendergraph.contracts COMMAND renderlab_rendergraph_tests)
+    add_executable(renderlab_alias_tests tests/alias_tests.cpp)
+    target_link_libraries(renderlab_alias_tests PRIVATE renderlab_options renderlab_rendergraph
+        renderlab_rhi)
+    add_custom_command(TARGET renderlab_alias_tests POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_FILE:renderlab_pix>
+            $<TARGET_FILE_DIR:renderlab_alias_tests> VERBATIM)
     add_executable(renderlab_shader_tests tests/shader_tests.cpp)
     target_link_libraries(renderlab_shader_tests PRIVATE renderlab_options renderlab_material
         renderlab_shader renderlab_rhi)
@@ -335,6 +341,9 @@ if(BUILD_TESTING)
         PROPERTIES WILL_FAIL TRUE)
     if(RENDERLAB_GPU_TESTS)
         foreach(backend IN ITEMS dx12 vulkan)
+            add_test(NAME gpu.${backend}.alias COMMAND renderlab_alias_tests ${backend}
+                ${CMAKE_BINARY_DIR}/alias/${backend})
+            set_tests_properties(gpu.${backend}.alias PROPERTIES LABELS gpu RUN_SERIAL TRUE TIMEOUT 90)
             add_test(NAME gpu.${backend}.indexed_scene COMMAND renderlab_indexed_scene_tests ${backend}
                 ${CMAKE_SOURCE_DIR}/sample/m4/Pbr.rlproject ${CMAKE_SOURCE_DIR}/sample/m4/Shadow.rlproject
                 ${CMAKE_SOURCE_DIR}/shaders ${CMAKE_BINARY_DIR}/indexed-scene/${backend})

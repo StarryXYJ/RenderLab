@@ -73,6 +73,10 @@ int main()
         RequireInvalid([] { ParseOptions(std::array{"--temporal-denoise"sv, "maybe"sv}); });
         RequireInvalid([] { ParseOptions(std::array{"--submission"sv, "missing"sv}); });
         RequireInvalid([] { ParseOptions(std::array{"--async-compute"sv}); });
+        RequireInvalid([] { ParseOptions(std::array{"--memory-alias"sv}); });
+        Require(ParseOptions(std::array{"--project"sv, "scene.rlproject"sv, "--memory-alias"sv})
+                    .memoryAlias,
+                "Memory alias switch was not parsed");
         Require(ParseOptions(std::array{"--project"sv, "scene.rlproject"sv, "--async-compute"sv})
                     .asyncCompute,
                 "Async compute switch was not parsed");

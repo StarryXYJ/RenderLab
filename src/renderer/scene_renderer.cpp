@@ -83,6 +83,7 @@ struct SceneRenderer::Impl
     std::map<std::string, CachedMaterial> materialAssets;
     material::Runtime materials;
     rendergraph::Pool pool;
+    bool memoryAlias = false;
     rhi::UploadPool uploadPool;
     AccelerationScene accelerationScene;
     std::unique_ptr<IndexedScene> indexedScene;
@@ -893,6 +894,11 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
 {
     const auto preparationStart = std::chrono::steady_clock::now();
     auto& self = *impl_;
+    if (self.memoryAlias != options.memoryAlias)
+    {
+        self.pool.Trim();
+        self.memoryAlias = options.memoryAlias;
+    }
     const bool rayTracing = options.pipeline == PipelineType::RayTracing;
     if (options.pipeline != PipelineType::Forward && options.pipeline != PipelineType::Deferred &&
         !rayTracing)
@@ -1874,7 +1880,8 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
                                   .count());
     graph.Compile({.profile = options.profile,
                    .recordingThreads = options.recordingThreads,
-                   .asyncCompute = options.asyncCompute});
+                   .asyncCompute = options.asyncCompute,
+                   .memoryAlias = options.memoryAlias});
     auto submitted = graph.Execute(self.pool, swapchain);
     if (indexed)
     {

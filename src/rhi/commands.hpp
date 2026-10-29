@@ -34,6 +34,11 @@ struct TextureBarrier
     std::shared_ptr<Texture> texture;
     State before, after;
 };
+struct TextureAlias
+{
+    std::shared_ptr<Texture> previous, texture;
+    State before, after;
+};
 struct BufferCopy
 {
     std::shared_ptr<Buffer> source, destination;
@@ -124,10 +129,10 @@ struct ResolveTimestamps
     uint32_t count;
 };
 using Command =
-    std::variant<BufferBarrier, TextureBarrier, BufferCopy, TextureCopy, TextureToTextureCopy,
-                 BeginRendering, EndRendering, SetPipeline, SetStencilReference, SetBindings,
-                 SetGeometry, Draw, DrawIndirect, Dispatch, TraceRays, BuildAccelerationStructure,
-                 Marker, Timestamp, ResolveTimestamps>;
+    std::variant<BufferBarrier, TextureBarrier, TextureAlias, BufferCopy, TextureCopy,
+                 TextureToTextureCopy, BeginRendering, EndRendering, SetPipeline,
+                 SetStencilReference, SetBindings, SetGeometry, Draw, DrawIndirect, Dispatch,
+                 TraceRays, BuildAccelerationStructure, Marker, Timestamp, ResolveTimestamps>;
 
 /**
  * @brief Single-threaded, one-shot command recording. Packets own every referenced object.
@@ -143,6 +148,9 @@ public:
     }
     void Barrier(std::shared_ptr<Buffer> buffer, State before, State after);
     void Barrier(std::shared_ptr<Texture> texture, State before, State after);
+    /// Activates an alias, discarding content; next use must clear the whole attachment.
+    void ActivateAlias(std::shared_ptr<Texture> previous, std::shared_ptr<Texture> texture,
+                       State before, State after);
     void Copy(std::shared_ptr<Buffer> source, std::shared_ptr<Buffer> destination, uint64_t size,
               uint64_t sourceOffset = 0, uint64_t destinationOffset = 0);
     /// Color formats only; rowPitch multiple of 256, offset multiple of 512 on both backends.

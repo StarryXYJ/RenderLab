@@ -125,6 +125,17 @@ std::shared_ptr<Runtime::Submission> DxRuntime::Execute(const CommandList& comma
                             }
                             else if constexpr (std::is_same_v<T, TextureBarrier>)
                                 barrier(As<DxTexture>(c.texture).native.Get(), c.before, c.after);
+                            else if constexpr (std::is_same_v<T, TextureAlias>)
+                            {
+                                D3D12_RESOURCE_BARRIER alias{};
+                                alias.Type = D3D12_RESOURCE_BARRIER_TYPE_ALIASING;
+                                alias.Aliasing.pResourceBefore =
+                                    c.previous ? As<DxTexture>(c.previous).native.Get() : nullptr;
+                                alias.Aliasing.pResourceAfter =
+                                    As<DxTexture>(c.texture).native.Get();
+                                list->ResourceBarrier(1, &alias);
+                                barrier(alias.Aliasing.pResourceAfter, c.before, c.after);
+                            }
                             else if constexpr (std::is_same_v<T, BufferCopy>)
                                 list->CopyBufferRegion(
                                     As<DxBuffer>(c.destination).native.Get(), c.destinationOffset,

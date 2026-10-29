@@ -161,6 +161,21 @@ void CommandList::Copy(std::shared_ptr<Buffer> source, std::shared_ptr<Buffer> d
     commands_.emplace_back(BufferCopy{std::move(source), std::move(destination), sourceOffset,
                                       destinationOffset, size});
 }
+void CommandList::ActivateAlias(std::shared_ptr<Texture> previous, std::shared_ptr<Texture> texture,
+                                State before, State after)
+{
+    Check(texture);
+    if (previous)
+        Check(previous);
+    Require(!rendering_ && texture->aliasBacking &&
+                (!previous || previous->aliasBacking == texture->aliasBacking),
+            "Alias activation requires shared texture backing outside rendering");
+    Require(texture->desc.attachment &&
+                after == (IsDepthFormat(texture->desc.format) ? State::DepthWrite
+                                                              : State::ColorAttachment),
+            "Alias activation requires attachment initialization");
+    commands_.emplace_back(TextureAlias{std::move(previous), std::move(texture), before, after});
+}
 void CommandList::CopyTexture(std::shared_ptr<Buffer> buffer, std::shared_ptr<Texture> texture,
                               uint32_t rowPitch, bool upload, uint64_t offset)
 {

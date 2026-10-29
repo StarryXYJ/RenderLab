@@ -23,6 +23,7 @@ renderer::SceneRenderOptions RenderOptions(const Options& options)
     render.reflectionDenoise = options.reflectionDenoise;
     render.recordingThreads = options.recordingThreads;
     render.asyncCompute = options.asyncCompute;
+    render.memoryAlias = options.memoryAlias;
     render.submission =
         options.submission == "gpu-culled"       ? renderer::GeometrySubmission::GpuCulled
         : options.submission == "cpu-indirect"   ? renderer::GeometrySubmission::CpuIndirect
@@ -168,6 +169,7 @@ void Statistics::Save(const std::filesystem::path& path, const Options& options,
                           {"submission", options.submission},
                           {"recordingThreads", options.recordingThreads},
                           {"asyncCompute", options.asyncCompute},
+                          {"memoryAlias", options.memoryAlias},
                           {"warmupFrames", options.Benchmark() ? options.warmupFrames : 0},
                           {"cpuRender", summary(cpu_)},
                           {"graphCompile", summary(compile_)},

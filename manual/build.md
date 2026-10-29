@@ -142,6 +142,8 @@ Release 替换构建目录；测试要求支持多条间接、Count 与非零 fi
 场景可独立添加 `--recording-threads 4` 启用 CPU 并行原生命令录制，范围 1..16，默认 1；与几何提交/管线选择独立。资源准备和 Graph 回调仍在 owner 线程，单 Graphics Queue 按原序提交。使用 `--cpu-profile` 和 Benchmark 的 `recordingThreads` 配对测量；`rhiNativeRecordMs` 包含任务调度/等待，已经包含在 NativeSubmit 中。`ctest --test-dir out/build/m5-release -R 'recording.contracts|indexed_scene' --output-on-failure` 检查线程持久性、异常与双后端串并行图像/时间戳；契约见 [并行录制](../docs/parallel-recording.md)。
 
 场景 `--submission gpu-culled --async-compute` 可把清零/视锥剔除交给独立 Compute Queue，默认关闭；可与 `--recording-threads 1|4` 配对。DX12 使用 COMPUTE 队列，Vulkan 首版要求 Graphics family 的第二队列；不支持时明确报错。`ctest --test-dir out/build/m5-release -R 'rendergraph.contracts|indexed_scene' --output-on-failure` 验证依赖、失败保活、GPU 可见列表与连续帧 History。运行 `python tools/benchmark/run.py sample/benchmark/async-compute.json --output out/benchmarks/async-compute` 前先由 indexed_scene 测试生成规模场景；状态与交接见 [异步 Compute](../docs/async-compute.md)。
+
+`--memory-alias` 可选复用同 Graphics Queue 上不重叠的瞬态附件，默认关闭，可与上述队列/线程选项组合。`ctest --test-dir out/build/m5-release -R 'rendergraph.contracts|\.alias$|indexed_scene' --output-on-failure` 验证规划、原生共享分配、取消/连续帧和像素一致性；分配与限制见 [内存 Alias](../docs/memory-alias.md)。
 规模性能套件先运行 `ctest --preset windows-release -R 'gpu.dx12.indexed_scene'` 生成固定场景，
 再执行 `python tools/benchmark/run.py sample/benchmark/gpu-driven.json --output out/benchmarks/gpu-driven`。
 该配置为短测；完整条件与局限见 [测量记录](../docs/performance/m6-gpu-driven.md)。

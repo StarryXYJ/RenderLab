@@ -152,6 +152,7 @@ const Plan& Graph::Compile(CompileOptions options)
                     info.first = 0;
                 info.last = static_cast<uint32_t>(plan.schedule.size());
             }
+        g.PlanAliases(options.memoryAlias);
         g.Barriers();
         g.phase = detail::Phase::Compiled;
         plan.compileNs = std::chrono::duration_cast<std::chrono::nanoseconds>(

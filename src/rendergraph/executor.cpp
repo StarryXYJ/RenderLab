@@ -28,6 +28,17 @@ void Graph::Prepare(Pool& pool)
                 rhi::MaxTimestampSlots * 8, rhi::Memory::Readback, "Graph.Timestamps"});
             g.timestamps = g.timestampLease->buffer;
         }
+        for (const auto& members : g.plan.aliasGroups)
+        {
+            std::vector<rhi::TextureDesc> descs;
+            for (const auto member : members)
+                descs.push_back(g.resources[member].textureDesc);
+            auto group = pool.AcquireAliases(descs);
+            g.plan.aliasBackingBytes += group->bytes;
+            for (size_t i = 0; i < members.size(); ++i)
+                g.resources[members[i]].lease = group->members[i];
+            g.aliasLeases.push_back(std::move(group));
+        }
         for (uint32_t i = 0; i < g.resources.size(); ++i)
         {
             auto& r = g.resources[i];
@@ -43,7 +54,9 @@ void Graph::Prepare(Pool& pool)
             }
             else
             {
-                r.lease = r.isTexture ? pool.Acquire(r.textureDesc) : pool.Acquire(r.bufferDesc);
+                if (!r.lease)
+                    r.lease =
+                        r.isTexture ? pool.Acquire(r.textureDesc) : pool.Acquire(r.bufferDesc);
                 r.texture = r.lease->texture;
                 r.buffer = r.lease->buffer;
                 r.start = r.lease->state;
@@ -76,10 +89,22 @@ void Graph::Record()
     g.commands = g.pool->Device().CreateCommands();
     g.commands->SetRecordingThreads(g.recordingThreads);
     g.phase = detail::Phase::Recording;
+    uint32_t position = 0;
+    std::vector<std::shared_ptr<rhi::Texture>> activeAliases;
+    for (const auto& group : g.aliasLeases)
+        activeAliases.push_back(
+            group->active == UINT32_MAX ? nullptr : group->members[group->active]->texture);
     const auto barrier = [&](const Barrier& b)
     {
         const auto& r = g.resources[b.resource];
-        if (r.isTexture)
+        const auto& info = g.plan.resources[b.resource];
+        if (info.aliasGroup != UINT32_MAX && info.first == position)
+        {
+            auto& previous = activeAliases[info.aliasGroup];
+            g.commands->ActivateAlias(previous, r.texture, b.before, b.after);
+            previous = r.texture;
+        }
+        else if (r.isTexture)
             g.commands->Barrier(r.texture, b.before, b.after);
         else
             g.commands->Barrier(r.buffer, b.before, b.after);
@@ -144,6 +169,7 @@ void Graph::Record()
                 g.commands->WriteTimestamp(timestamp++);
             g.commands->EndMarker();
             g.commands->RecordingBoundary();
+            ++position;
         }
         g.commands->SelectQueue(rhi::QueueType::Graphics, g.plan.asyncCompute);
         for (const auto& b : g.plan.finalBarriers)
@@ -214,6 +240,8 @@ Submission Graph::Submit(rhi::Swapchain* presentation)
             r.lease->completion = result.completion;
         }
     g.phase = detail::Phase::Submitted;
+    for (auto& group : g.aliasLeases)
+        group->active = static_cast<uint32_t>(group->members.size() - 1);
     if (g.timestampLease)
     {
         g.timestampLease->state = rhi::State::HostRead;

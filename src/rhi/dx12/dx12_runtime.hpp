@@ -5,6 +5,7 @@
 
 #include <cstdint>
 #include <memory>
+#include <span>
 #include <vector>
 
 namespace renderlab::rhi::dx12
@@ -49,6 +50,9 @@ public:
     }
     std::shared_ptr<Buffer> CreateBuffer(const BufferDesc& desc) override;
     std::shared_ptr<Texture> CreateTexture(const TextureDesc& desc) override;
+    uint64_t QueryAliasedTextureBytes(std::span<const TextureDesc> descs) override;
+    std::vector<std::shared_ptr<Texture>>
+    CreateAliasedTextures(std::span<const TextureDesc> descs) override;
     std::shared_ptr<TextureView> CreateView(std::shared_ptr<Texture> texture,
                                             TextureViewUsage usage) override;
     std::shared_ptr<Sampler> CreateSampler() override;
@@ -79,6 +83,7 @@ protected:
                                         Swapchain*) override;
 
 private:
+    D3D12_RESOURCE_DESC TextureDescription(const TextureDesc& desc) const;
     std::shared_ptr<DxDescriptorRange> AllocateDescriptors(D3D12_DESCRIPTOR_HEAP_TYPE type,
                                                            uint32_t count);
     std::vector<std::shared_ptr<DxDescriptorPage>> descriptorPages_;

@@ -4,8 +4,8 @@
 
 ## 当前状态
 
-- 当前实施阶段：M6 IN_PROGRESS；M0–M5、R1、B1–B3 DONE。
-- 当前工作项：M6.1–M6.3 DONE；M6.4 GPU 多队列 IN_PROGRESS。M6.5 未启动；M7 提前试验保留既有结果，M8 未启动。
+- 当前实施阶段：M6 核心 M6.1–M6.5 DONE；M0–M5、R1、B1–B3 DONE。可选 M6.0 Forward+ 仍为 DEFERRED。
+- 当前工作项：本轮授权的 M6.1–M6.5 已验收，按子阶段提交；M7 提前试验保留既有结果，M8 未启动。
 - 用户约定：每个子阶段验收完成即提交 Git，无阻塞时在当前授权范围内继续推进。此前 M7 修改已进入 Git，本轮开始时工作区干净。
 
 | 阶段 | 目标 | 前置依赖 | 状态 |
@@ -20,7 +20,7 @@
 | B2 | 双后端性能差异调查 | B1 | DONE |
 | B3 | 逐帧资源复用优化 | B2 | DONE |
 | M5 | Deferred 与光追基础 | M4 | DONE |
-| M6 | GPU Driven 与执行优化 | M4；光追调度测试另需 M5 | IN_PROGRESS |
+| M6 | GPU Driven 与执行优化 | M4；光追调度测试另需 M5 | DONE（M6.1–M6.5；可选 M6.0 延期） |
 | M7 | C# 编辑器与完整项目工作流 | M4；默认在 M5、M6 的核心目标后开展 | IN_PROGRESS（提前试验 M7.1a/b 已完成） |
 | M8 | 一个深入的渲染专题与作品交付 | 所选专题依赖已满足 | NOT_STARTED |
 
@@ -261,11 +261,15 @@ R1 契约修订、B1 样例整理/Benchmark、B2 调查和 B3 资源复用已完
 
 ## M6 GPU Driven 与执行优化
 
-按 CPU 基线、GPU 提交、并行录制、多队列、Alias 的顺序分别评估。M6.1 与 M6.2 完成可构成最小 GPU Driven 成果，后续优化不要求一定提升所有场景。
+状态：DONE（核心 M6.1–M6.5），日期：2026 年 10 月 29 日。可选 M6.0 Forward+ 保持 DEFERRED，不计作已实现。
+
+结果：CPU 索引/间接基线、GPU 稳定视锥剔除、并行原生录制、受限 Compute feeder 多队列与瞬态附件 Alias 均有独立开关及双后端证据，共用同一执行器。RTX 5060 上最终 Debug/Release 全目标构建成功，所选 CPU/CLI 与双后端专项各 28/28，最终依赖补全后各追加 5/5；GPU validation errors=0、场景销毁后原生账本 0。具体测试范围、输入/二进制 hash、失败/排除记录与限制在下列说明中，不以本机通过代替其他硬件、设备丢失、人工画面或长期多视口验收。
+
+默认策略：Direct、1 个录制线程、asyncCompute=false、memoryAlias=false。CPU 准备复用有明显收益；GPU 剔除、并行录制、多队列和 Alias 的速度收益取决于场景，保留退化结果，不为增加收益重排无依赖工作或扩大既有容量预算。
 
 ### M6.0 Forward+（可选组合）
 
-状态：DEFERRED。当前只有单方向光；先完成 GPU Driven 核心，不扩展局部光源与分类系统。
+状态：DEFERRED。当前只有单方向光，待局部光源数据契约建立后再评估此可选组合。
 
 - [ ] 在普通 Forward 与场景光源数据基础上增加 Tiled/Clustered 光源分类 Compute Feature，声明深度、光源 Buffer、索引表和容量。
 - [ ] Opaque/Transparent 显式读取分类结果，保留普通 Forward 基线；处理空光源、溢出、透明覆盖与不同分辨率。
@@ -273,63 +277,37 @@ R1 契约修订、B1 样例整理/Benchmark、B2 调查和 B3 资源复用已完
 
 ### M6.1 可索引资源与间接提交
 
-状态：DONE，日期：2026 年 10 月 29 日。
+状态：DONE。双后端索引/非索引多条间接与 Count 截断，固定最多 64 项不可变 sampled-image 数组，逐元素访问/保活；内置 Lit/Unlit 的对象/材质/纹理表与打包静态几何。Direct、IndexedDirect、CpuIndirect 独立于算法，透明/光栅阴影保留 CPU 路径；实例 helper 统一 DXIL/SPIR-V 语义，DX12 索引 Shader 要求 SM 6.8。索引实例上限 16384，非完整 Bindless。两配置初始专项各 19/19，间接/索引像素与容量/在途版本验证通过。
 
-结果：双后端索引/非索引多条间接与 GPU Count 截断；固定最多 64 项的不可变 sampled-image 数组、逐元素 Graph 访问和资源保活；内置 Lit/Unlit 的对象/材质/原分辨率纹理表与打包静态几何。Direct、IndexedDirect、CpuIndirect 独立于渲染算法，透明/光栅阴影保留原 CPU 路径。实例 helper 处理 DXIL 相对实例 ID 与 SPIR-V 绝对实例 ID，DX12 索引 Shader 明确要求 SM 6.8，基础 Shader 保持 SM 6.0。
-
-验证：RTX 5060、MSVC NMake Debug/Release 全目标构建成功，当前所选 Core/Graph/CLI 和双后端 indexed_scene/descriptor_array/indirect/rhi/graph/render_state/PBR/Deferred 各 19/19。GPU validation errors=0，专项销毁后账本为 0。索引直接与 CPU 间接图像逐字节一致；原材质路径最大误差/MSE 检查通过。覆盖 Count 0/1/2/3/99、正负 baseVertex、多实例/乱序身份、64 元素同波非一致索引、缺项/重复/越界/用途/容量拒绝、取消/退休与在途版本，以及 PBR/Masked/透明、镜像、奇数尺寸、空场景/全剔除和 Ray Query 组合。双后端真实 CLI Deferred/cpu-indirect 报告各含 9 实例/9 材质/5 纹理/1 批次、静态几何仅上传一次，关闭错误为 0。构建同时修复旧 render_state/PBR 测试的颜色附件接口遗漏；暂存回拷时间戳导致的旧目标混用已通过完整重编译或刷新源码时间戳后重编译排除。
-
-边界：最多 16384 个索引实例和 64 个图像/色彩空间版本；非内置不透明 Shader 显式拒绝，透明仍排序提交；几何首次/集合变化同步打包上传，索引与原始几何双份保留。仅 sampled-image 数组，无部分绑定/变长数组/update-after-bind；CPU 仍准备材质/状态，GPU 剔除由 M6.2 交付，本条不单独承诺性能提升，其他 GPU 未验收。a/b/c 分别验证、提交，过程见 Git 历史。
-
-文档：[契约、布局、限制与验证](../docs/gpu-driven.md)、[运行](../manual/build.md#shader-与材质工具)。
+入口：[GPU Driven 契约、布局与限制](../docs/gpu-driven.md)、[运行](../manual/build.md#shader-与材质工具)。细分提交见 Git 历史。
 
 ### M6.2 GPU 剔除
 
-状态：DONE，日期：2026 年 10 月 29 日。
+状态：DONE。Compute 视锥测试、64 线程分块稳定压缩、GPU Args/Count 与显式 Storage/Indirect 依赖；GPU 模式跳过 CPU 相机剔除，诊断读回独立于绘制。按帧冻结材质/策略，准备按材质/Pass/绕序复用。两配置各 24/24，1/64/65/1024/4096 候选可见 ID 逐项等于 CPU，覆盖空/全剔除、Masked/透明、镜像、容量与在途版本。
 
-结果：Compute 八角/六面视锥测试、64 线程分块稳定压缩及 GPU Args/Count；图中声明清零、Storage 依赖与 Indirect/ShaderRead。GPU 模式跳过 CPU 相机剔除，CPU 只提交固定批次；可见数量在报告中标为未知，只有显式诊断才读回。零/全剔除、原序压缩和展开实例容量拒绝有确定行为。按帧冻结材质/策略，索引准备按材质/Pass/绕序复用，Pipeline 按原身份每帧准备一次；提取使用临时对象索引。
-
-验证：RTX 5060、MSVC NMake，Debug/Release 全目标构建成功，所选 Content/Core/Graph/CLI 与双后端索引/数组/间接/RHI/Graph/状态/PBR/Deferred/AS-Ray Query/反射各 24/24，GPU validation errors=0，专项销毁后账本 0；Python Benchmark 校验 15/15。GPU 可见列表逐项等于 CPU 测试，覆盖 1/64/65/1024/4096 候选和线程块边界、空/全剔除、Masked/透明、镜像、在途版本及 16384 展开实例上限拒绝。
-
-性能：Release/validation off、257×193 Deferred，两轮各 36 次、共 21665 测量帧，完整原始样本通过校验；最终每组 3 种提交的 12 组截图一致，准备复用前后 36 张截图逐字节相同。4096 实例帧均值由约 135–148 ms 降至 18–22 ms，主要收益来自 CPU 准备复用；GPU 剔除额外约 0.182/0.244 ms（DX12/Vulkan），仍由 CPU 准备主导，默认保持 Direct。不是窗口 FPS、长测或任意场景收益结论。
-
-边界：静态内置 Lit/Unlit、不透明/Masked；透明与光栅阴影仍为 CPU 路径，完整快照/表上传仍有成本。每批次单组分块限制 Compute 并行度；Hi-Z、LOD、CPU 并行录制、多队列与 Alias 均未由本条完成，M6 主阶段仍为 IN_PROGRESS。其他 GPU 未验收。
-
-文档：[契约与诊断](../docs/gpu-driven.md)、[输入/二进制 hash、成本、截图校验及复现](../docs/performance/m6-gpu-driven.md)、[Benchmark 设置](../docs/benchmark.md)。
+实测：两轮 72 次共 21665 测量帧，最终 12 组不同提交截图一致；4096 实例约 135–148 → 18–22 ms，主要来自 CPU 准备复用。GPU 剔除另增约 .182/.244 ms（DX12/Vulkan），默认仍 Direct；Hi-Z/LOD 未实现。入口：[契约](../docs/gpu-driven.md)、[完整数据与复现](../docs/performance/m6-gpu-driven.md)。
 
 ### M6.3 CPU 并行录制
 
-状态：DONE，日期：2026 年 10 月 29 日。
+状态：DONE。owner 完成回调/分配/PSO/绑定并冻结命令包，闭合 Pass 分块；1..16 线程（含调用者）的持久池，各块独立 DX12 Allocator/List 或 Vulkan CommandPool/Buffer，原序提交。失败先 join 再丢弃，整帧完成点保活。两配置各 26/26，另验证四线程取消、TLAS + TraceRays；静态 BLAS 仍为独立同步构建。
 
-结果：owner 线程完成 Graph 回调、资源/视图/不可变绑定与 PSO 准备，冻结 RHI 命令包后按闭合 Pass 边界分块；1..16 线程（含调用线程）的持久工作池，各块独立 DX12 Allocator/List 或 Vulkan CommandPool/Buffer。整组按原序一次提交单 Graphics Queue，由真实完成点保活。失败先 join，再移除本批次触及的上下文，不提交部分录制；GPU 时间戳与 CPU HeapBind 探针支持分块。
-
-验证：RTX 5060、MSVC NMake，Debug/Release 全目标构建成功，各所选 CPU/CLI 与双后端专项 26/26；最终头文件补全后 Release 追加 8/8，4 线程取消的 Graph 合约在两配置通过，新增并行 TLAS + TraceRays 在两配置双后端另行通过。GPU validation errors=0，场景专项销毁后账本为 0；Python Benchmark 15/15。检查 16 任务真实同时进入、线程持久/异常后复用、闭合分块完整、owner 回调、串并行像素、时间戳与在途版本。
-
-性能：Release/validation off、CPU profiling on，32 次、26139 测量帧，8 组串行/并行截图一致。请求 4 线程实际分成 2 或 4 块；原生录制均值约 0.03–0.10 ms，多数配置持平或增加，没有普遍收益，默认保持 1 线程。4096 经典 Direct 的首轮测量触及既有描述符页上限，失败记录保留、未计入最终套件；该规模用 IndexedDirect 对照，没有扩大预算。
-
-边界：回调与场景准备仍串行，单个 Pass 不拆；静态 BLAS 仍在独立同步 Graph 构建，并行 AS 证据针对 TLAS。未验证设备丢失/原生驱动故障、其他 GPU、多视口或窗口长期吞吐；本条不完成多队列与 Alias。
-
-文档：[契约与生命周期](../docs/parallel-recording.md)、[数据/hash、失败记录、成本与复现](../docs/performance/m6-parallel-recording.md)、[Benchmark 设置](../docs/benchmark.md)。
+实测：32 次、26139 测量帧，八组截图一致。录制约 .03–.10 ms，多数并行持平或退化，默认 1 线程。4096 经典 Direct 触及既有描述符页上限，最终使用 IndexedDirect，失败记录保留。入口：[生命周期与分块](../docs/parallel-recording.md)、[数据与复现](../docs/performance/m6-parallel-recording.md)。
 
 ### M6.4 GPU 多队列
 
-状态：DONE，日期：2026 年 10 月 29 日。
+状态：DONE。可选 Buffer-only Compute feeder（清零/剔除），只读 Upload 与瞬态 Storage；Graphics prologue、消费者等待、尾部汇合保护真实整帧完成点与 History/上传/池退休。部分入队失败保活并 poison，真实排空后才释放。DX12 COMPUTE Queue；Vulkan 同族第二队列，各队列频率与共同时间域、提交事件与区间可查。无纹理/AS/导入 Device Buffer 异步、Graphics→Compute 前置依赖、Copy Queue 或跨族调度。
 
-结果：可选的 Buffer-only Compute feeder（Indexed.ClearCounts/FrustumCulling），只读 Upload 输入与瞬态 Storage 输出。Graphics prologue、消费者等待和尾部汇合保护真实整帧完成点与 History/上传/池退休；部分入队失败保活并 poison，真实排空后才释放。DX12 使用 Compute Queue，Vulkan 仅同族第二队列；各队列频率与共同时间域、真实提交事件、队列区间/跨度/交集可检查。
+验证：两配置各 26/26，时钟修正后各追加 6/6，Shadow128 双后端通过；覆盖全部线程/队列组合、在途版本、TLAS/TraceRays 与 progressive History。双后端窗口各 54 帧、10 次重建/挂起，错误 0；RenderDoc 解释原生等待/信号，未运行图形 Replay。最终 48 次、32394 测量帧，六组截图一致；GPU span 全部增加，Vulkan 已计时 Pass 无重叠，DX12 仅 .8–8.2 μs 交集，不宣称有效收益。未启用共同时间域的首轮套件整体排除，Shadow256 描述符容量失败保留。默认关闭。
 
-验证：RTX 5060、MSVC NMake，Debug/Release 全目标构建成功，所选 CPU/CLI 与双后端专项各 26/26，最终时钟修正后各追加 6/6；Shadow128 在两配置双后端通过。GPU validation errors=0，场景销毁后账本 0，Python Benchmark 15/15。覆盖可见 ID、单/双队列 × 1/4 线程像素/时间戳、在途版本、TLAS/TraceRays 与双在途 progressive History；CPU 失败注入不伪造完成点。双后端窗口各 54 帧、10 次重建/挂起，错误 0。RenderDoc 原生 Capture 验证队列等待/信号和四线程录制，未执行图形 Replay。
-
-性能：最终 48 次、32394 测量帧，六组各八张截图一致；GPU span 全部增加，Vulkan 已计时 Pass 无重叠，DX12 仅约 0.8–8.2 μs 交集，不宣称有效收益，默认保持关闭。未启用共同时间域的首轮套件整体排除；Shadow256 触及既有描述符容量上限，最终使用 Shadow128，失败记录保留。
-
-边界：不支持纹理/AS/导入 Device Buffer 异步、Graphics→Compute 生产者、独立 Copy Queue 或跨族调度；设备丢失、人工画面/长测、其他 GPU 未验证。文档：[契约](../docs/async-compute.md)、[数据/hash、Capture 等待点、排除记录与复现](../docs/performance/m6-async-compute.md)。
+入口：[范围与失败事务](../docs/async-compute.md)、[数据、Capture、排除记录与复现](../docs/performance/m6-async-compute.md)。
 
 ### M6.5 内存 Alias
 
-- [ ] 在已有资源池之上增加 placed/alias 分配、兼容性与 alias 屏障。
-- [ ] 基于真实队列 happens-before 关系判断重叠，不只看拓扑位置。
-- [ ] 与关闭 Alias 的同一执行器比较画面、内存和时间。
+状态：DONE。仅同 Graphics Queue、不重叠、首次附件完整 Clear 的瞬态 Texture，同格式/attachment/storage 类，2..16 成员，排除 import/export/History 与 Buffer/跨队列。DX12 placed resources 共享 Heap，Vulkan ALIAS images 共享兼容 Memory；激活包含内存依赖和附件转换，Vulkan 从 UNDEFINED 丢弃旧内容/元数据。池整组保活/计费/退休，成功提交才发布状态与活动成员，准备/录制/提交失败不伪造状态。
 
-退出条件：各子能力有独立开关和证据；GPU Driven 在双后端验证，调度与 Alias 正确性独立成立。优化没有收益时保留测量和默认策略，不为制造收益增加无效场景限制。
+验证：最终两配置各 28/28、依赖补全后各追加 5/5，Python Benchmark 15/15。原生不同尺寸附件、D32/D32S8/Storage 类初始化、两个在途图/相机版本、缓存反复激活、取消/准备失败/部分入队失败、View 保活、按组容量淘汰及账本归零通过；场景全部线程/队列/Alias 组合像素一致。双后端窗口各 54 帧、10 次重建/挂起，错误 0；原生 Capture 证明 offset 0 共享、alias 屏障与 Clear，未运行图形 Replay。
+
+实测：48 次、74974 测量帧，六组各八张截图一致。Shadow 原生分配减少 .25–1 MiB；关闭阴影的 PBR 仍有 1×1 占位深度，节省 DX12 64 KiB、Vulkan 512 B，不能当作无候选负对照。耗时有升有降，默认关闭；不是驱动总驻留显存、窗口 FPS 或普遍速度收益。入口：[分配/激活/池契约](../docs/memory-alias.md)、[数据/hash、Capture、限制与复现](../docs/performance/m6-memory-alias.md)。
 
 ## M7 C# 编辑器与完整项目工作流
 

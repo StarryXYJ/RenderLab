@@ -148,6 +148,8 @@ Options ParseOptions(std::span<const std::string_view> arguments)
             if (!options.recordingThreads || options.recordingThreads > 16)
                 throw std::invalid_argument("--recording-threads requires 1..16");
         }
+        else if (arg == "--memory-alias")
+            options.memoryAlias = true;
         else if (arg == "--async-compute")
             options.asyncCompute = true;
         else if (arg == "--submission")
@@ -238,6 +240,8 @@ Options ParseOptions(std::span<const std::string_view> arguments)
         throw std::invalid_argument("--submission requires --project");
     if (options.recordingThreads != 1 && options.projectPath.empty())
         throw std::invalid_argument("--recording-threads requires --project");
+    if (options.memoryAlias && options.projectPath.empty())
+        throw std::invalid_argument("--memory-alias requires --project");
     if (options.asyncCompute && options.projectPath.empty())
         throw std::invalid_argument("--async-compute requires --project");
     if (options.pipeline != "forward" && options.pipeline != "deferred" &&
@@ -293,6 +297,7 @@ std::string_view Usage()
            "denoised  Select "
            "the displayed texture\n"
            "  --recording-threads N       Native recording threads (1..16, default 1)\n"
+           "  --memory-alias             Optional transient attachment memory reuse (scene only)\n"
            "  --async-compute            Optional buffer feeder Compute Queue (scene only)\n"
            "  --submission direct|indexed-direct|cpu-indirect|gpu-culled  Geometry submission\n"
            "  --pipeline forward|deferred|raytracing  Select scene rendering path\n"

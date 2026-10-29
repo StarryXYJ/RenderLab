@@ -44,6 +44,7 @@ struct SceneRenderOptions
     GeometrySubmission submission = GeometrySubmission::Direct;
     uint32_t recordingThreads = 1;
     bool asyncCompute = false;
+    bool memoryAlias = false;
     /// Optional count/visible-index readback from this submission; never controls its draws.
     bool cullingDiagnostics = false;
     SceneView view = SceneView::Final;

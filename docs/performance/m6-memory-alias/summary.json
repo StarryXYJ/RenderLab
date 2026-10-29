@@ -1,0 +1,3203 @@
+{
+  "schemaVersion": 1,
+  "kind": "renderlab.memory-alias-evidence",
+  "generatedAtUtc": "2026-10-29T09:54:17.883032+00:00",
+  "suite": "out/m65-benchmark",
+  "manifestSha256": "0801898927a3d27d51128372abaa88caaa7fcc05b2ccfcd71c2ef114b76587c4",
+  "provenance": {
+    "workspace": {
+      "sourceRevision": "f1c4fc198092ecc9fe3c18a55119c0a7779c405e",
+      "trackedChanges": true,
+      "note": "Workspace state; executable SHA-256 identifies the tested binary."
+    },
+    "executableSha256": "b6d920afc7018abfb682c445ab3194309db0b0e82ad1a5b98bef6af0b4646db4",
+    "engineShadersSha256": "2d521dab0ac39bae12a6c67645a04d2fd7cd74334c8881e47ced859d494e33ee",
+    "cases": [
+      {
+        "seconds": 2,
+        "warmupSeconds": 0.25,
+        "warmupFrames": 4,
+        "width": 257,
+        "height": 193,
+        "quality": "scene",
+        "view": "final",
+        "validation": "off",
+        "cpuProfiling": false,
+        "pipeline": "deferred",
+        "submission": "gpu-culled",
+        "recordingThreads": 1,
+        "asyncCompute": false,
+        "memoryAlias": false,
+        "name": "pbr64-t1-a0",
+        "project": "D:\\Personal\\RenderLab\\out\\build\\m5-release\\indexed-scene\\dx12\\Pbr\\scale-64\\Pbr.rlproject",
+        "inputs": {
+          "manifest": "b59beab4ff91d6cbf4389c770ea3a1a625e99e44c1a98542090475534ea0287c",
+          "assets": "d99a32dd277ee8d49c56d2c02b6561a851e2aabffa1ad311fbf00368b552e76f"
+        }
+      },
+      {
+        "seconds": 2,
+        "warmupSeconds": 0.25,
+        "warmupFrames": 4,
+        "width": 257,
+        "height": 193,
+        "quality": "scene",
+        "view": "final",
+        "validation": "off",
+        "cpuProfiling": false,
+        "pipeline": "deferred",
+        "submission": "gpu-culled",
+        "recordingThreads": 1,
+        "asyncCompute": false,
+        "memoryAlias": true,
+        "name": "pbr64-t1-a1",
+        "project": "D:\\Personal\\RenderLab\\out\\build\\m5-release\\indexed-scene\\dx12\\Pbr\\scale-64\\Pbr.rlproject",
+        "inputs": {
+          "manifest": "b59beab4ff91d6cbf4389c770ea3a1a625e99e44c1a98542090475534ea0287c",
+          "assets": "d99a32dd277ee8d49c56d2c02b6561a851e2aabffa1ad311fbf00368b552e76f"
+        }
+      },
+      {
+        "seconds": 2,
+        "warmupSeconds": 0.25,
+        "warmupFrames": 4,
+        "width": 257,
+        "height": 193,
+        "quality": "scene",
+        "view": "final",
+        "validation": "off",
+        "cpuProfiling": false,
+        "pipeline": "deferred",
+        "submission": "gpu-culled",
+        "recordingThreads": 4,
+        "asyncCompute": true,
+        "memoryAlias": false,
+        "name": "pbr64-t4-a0",
+        "project": "D:\\Personal\\RenderLab\\out\\build\\m5-release\\indexed-scene\\dx12\\Pbr\\scale-64\\Pbr.rlproject",
+        "inputs": {
+          "manifest": "b59beab4ff91d6cbf4389c770ea3a1a625e99e44c1a98542090475534ea0287c",
+          "assets": "d99a32dd277ee8d49c56d2c02b6561a851e2aabffa1ad311fbf00368b552e76f"
+        }
+      },
+      {
+        "seconds": 2,
+        "warmupSeconds": 0.25,
+        "warmupFrames": 4,
+        "width": 257,
+        "height": 193,
+        "quality": "scene",
+        "view": "final",
+        "validation": "off",
+        "cpuProfiling": false,
+        "pipeline": "deferred",
+        "submission": "gpu-culled",
+        "recordingThreads": 4,
+        "asyncCompute": true,
+        "memoryAlias": true,
+        "name": "pbr64-t4-a1",
+        "project": "D:\\Personal\\RenderLab\\out\\build\\m5-release\\indexed-scene\\dx12\\Pbr\\scale-64\\Pbr.rlproject",
+        "inputs": {
+          "manifest": "b59beab4ff91d6cbf4389c770ea3a1a625e99e44c1a98542090475534ea0287c",
+          "assets": "d99a32dd277ee8d49c56d2c02b6561a851e2aabffa1ad311fbf00368b552e76f"
+        }
+      },
+      {
+        "seconds": 2,
+        "warmupSeconds": 0.25,
+        "warmupFrames": 4,
+        "width": 257,
+        "height": 193,
+        "quality": "scene",
+        "view": "final",
+        "validation": "off",
+        "cpuProfiling": false,
+        "pipeline": "deferred",
+        "submission": "gpu-culled",
+        "recordingThreads": 1,
+        "asyncCompute": false,
+        "memoryAlias": false,
+        "name": "shadow257-t1-a0",
+        "project": "D:\\Personal\\RenderLab\\sample\\m4\\Shadow.rlproject",
+        "inputs": {
+          "manifest": "16ebd5e5415960306e0caabcf00dd5e988cc1e6f05b600c39348a0b11a48613c",
+          "assets": "02c1f83b2c163e8c111326075d024358e83f048a45caab9718c33089bcada0ef"
+        }
+      },
+      {
+        "seconds": 2,
+        "warmupSeconds": 0.25,
+        "warmupFrames": 4,
+        "width": 257,
+        "height": 193,
+        "quality": "scene",
+        "view": "final",
+        "validation": "off",
+        "cpuProfiling": false,
+        "pipeline": "deferred",
+        "submission": "gpu-culled",
+        "recordingThreads": 1,
+        "asyncCompute": false,
+        "memoryAlias": true,
+        "name": "shadow257-t1-a1",
+        "project": "D:\\Personal\\RenderLab\\sample\\m4\\Shadow.rlproject",
+        "inputs": {
+          "manifest": "16ebd5e5415960306e0caabcf00dd5e988cc1e6f05b600c39348a0b11a48613c",
+          "assets": "02c1f83b2c163e8c111326075d024358e83f048a45caab9718c33089bcada0ef"
+        }
+      },
+      {
+        "seconds": 2,
+        "warmupSeconds": 0.25,
+        "warmupFrames": 4,
+        "width": 257,
+        "height": 193,
+        "quality": "scene",
+        "view": "final",
+        "validation": "off",
+        "cpuProfiling": false,
+        "pipeline": "deferred",
+        "submission": "gpu-culled",
+        "recordingThreads": 4,
+        "asyncCompute": true,
+        "memoryAlias": false,
+        "name": "shadow257-t4-a0",
+        "project": "D:\\Personal\\RenderLab\\sample\\m4\\Shadow.rlproject",
+        "inputs": {
+          "manifest": "16ebd5e5415960306e0caabcf00dd5e988cc1e6f05b600c39348a0b11a48613c",
+          "assets": "02c1f83b2c163e8c111326075d024358e83f048a45caab9718c33089bcada0ef"
+        }
+      },
+      {
+        "seconds": 2,
+        "warmupSeconds": 0.25,
+        "warmupFrames": 4,
+        "width": 257,
+        "height": 193,
+        "quality": "scene",
+        "view": "final",
+        "validation": "off",
+        "cpuProfiling": false,
+        "pipeline": "deferred",
+        "submission": "gpu-culled",
+        "recordingThreads": 4,
+        "asyncCompute": true,
+        "memoryAlias": true,
+        "name": "shadow257-t4-a1",
+        "project": "D:\\Personal\\RenderLab\\sample\\m4\\Shadow.rlproject",
+        "inputs": {
+          "manifest": "16ebd5e5415960306e0caabcf00dd5e988cc1e6f05b600c39348a0b11a48613c",
+          "assets": "02c1f83b2c163e8c111326075d024358e83f048a45caab9718c33089bcada0ef"
+        }
+      },
+      {
+        "seconds": 2,
+        "warmupSeconds": 0.25,
+        "warmupFrames": 4,
+        "width": 1280,
+        "height": 720,
+        "quality": "scene",
+        "view": "final",
+        "validation": "off",
+        "cpuProfiling": false,
+        "pipeline": "deferred",
+        "submission": "gpu-culled",
+        "recordingThreads": 1,
+        "asyncCompute": false,
+        "memoryAlias": false,
+        "name": "shadow720-t1-a0",
+        "project": "D:\\Personal\\RenderLab\\sample\\m4\\Shadow.rlproject",
+        "inputs": {
+          "manifest": "16ebd5e5415960306e0caabcf00dd5e988cc1e6f05b600c39348a0b11a48613c",
+          "assets": "02c1f83b2c163e8c111326075d024358e83f048a45caab9718c33089bcada0ef"
+        }
+      },
+      {
+        "seconds": 2,
+        "warmupSeconds": 0.25,
+        "warmupFrames": 4,
+        "width": 1280,
+        "height": 720,
+        "quality": "scene",
+        "view": "final",
+        "validation": "off",
+        "cpuProfiling": false,
+        "pipeline": "deferred",
+        "submission": "gpu-culled",
+        "recordingThreads": 1,
+        "asyncCompute": false,
+        "memoryAlias": true,
+        "name": "shadow720-t1-a1",
+        "project": "D:\\Personal\\RenderLab\\sample\\m4\\Shadow.rlproject",
+        "inputs": {
+          "manifest": "16ebd5e5415960306e0caabcf00dd5e988cc1e6f05b600c39348a0b11a48613c",
+          "assets": "02c1f83b2c163e8c111326075d024358e83f048a45caab9718c33089bcada0ef"
+        }
+      },
+      {
+        "seconds": 2,
+        "warmupSeconds": 0.25,
+        "warmupFrames": 4,
+        "width": 1280,
+        "height": 720,
+        "quality": "scene",
+        "view": "final",
+        "validation": "off",
+        "cpuProfiling": false,
+        "pipeline": "deferred",
+        "submission": "gpu-culled",
+        "recordingThreads": 4,
+        "asyncCompute": true,
+        "memoryAlias": false,
+        "name": "shadow720-t4-a0",
+        "project": "D:\\Personal\\RenderLab\\sample\\m4\\Shadow.rlproject",
+        "inputs": {
+          "manifest": "16ebd5e5415960306e0caabcf00dd5e988cc1e6f05b600c39348a0b11a48613c",
+          "assets": "02c1f83b2c163e8c111326075d024358e83f048a45caab9718c33089bcada0ef"
+        }
+      },
+      {
+        "seconds": 2,
+        "warmupSeconds": 0.25,
+        "warmupFrames": 4,
+        "width": 1280,
+        "height": 720,
+        "quality": "scene",
+        "view": "final",
+        "validation": "off",
+        "cpuProfiling": false,
+        "pipeline": "deferred",
+        "submission": "gpu-culled",
+        "recordingThreads": 4,
+        "asyncCompute": true,
+        "memoryAlias": true,
+        "name": "shadow720-t4-a1",
+        "project": "D:\\Personal\\RenderLab\\sample\\m4\\Shadow.rlproject",
+        "inputs": {
+          "manifest": "16ebd5e5415960306e0caabcf00dd5e988cc1e6f05b600c39348a0b11a48613c",
+          "assets": "02c1f83b2c163e8c111326075d024358e83f048a45caab9718c33089bcada0ef"
+        }
+      }
+    ]
+  },
+  "frames": 74974,
+  "runs": [
+    {
+      "id": "pbr64-t1-a0-01-dx12",
+      "case": "pbr64-t1-a0",
+      "backend": "dx12",
+      "repeat": 0,
+      "sampleCount": 1869,
+      "memoryAlias": false,
+      "asyncCompute": false,
+      "recordingThreads": 1,
+      "recordingChunks": 1,
+      "aliasBackingBytes": 0,
+      "aliasGroups": [],
+      "memory": {
+        "budgetBytes": 2147483648,
+        "highWaterBytes": 14286848,
+        "processPrivateBytes": 101617664,
+        "processWorkingSetBytes": 113586176,
+        "usedBytes": 14221312
+      },
+      "metricsMs": {
+        "cpuRenderMs": 0.8095790262172279,
+        "frameTimeMs": 1.0450333333333317,
+        "gpuPassSumMs": 0.042820708400214055,
+        "gpuQueueOverlapMs": 0.0,
+        "gpuQueueSpanMs": 0.04326031888710532,
+        "gpuWaitMs": 0.23545430711610452,
+        "graphCompileMs": 0.019129534510433397,
+        "graphPrepareMs": 0.003844248261102199,
+        "graphRecordMs": 0.10147030497592295
+      },
+      "captureSha256": "030c41f232650c232427ef9c9d6400b055ee899e72bac0cb1a66d0f8b4b02f6b",
+      "reportSha256": "9789ec3d7867530e795480d14eb4db5aca1b099e90ddab874db734162ace04d8",
+      "samplesSha256": "56d51c7e588095b9a0a57685dec67938564db2fe20b7c21e41b66dfe9c7df7d9",
+      "planSha256": "2d1ffe75e2f013051ba8901233f874162e14fc925dfefca1032024565829102f"
+    },
+    {
+      "id": "pbr64-t1-a0-01-vulkan",
+      "case": "pbr64-t1-a0",
+      "backend": "vulkan",
+      "repeat": 0,
+      "sampleCount": 2112,
+      "memoryAlias": false,
+      "asyncCompute": false,
+      "recordingThreads": 1,
+      "recordingChunks": 1,
+      "aliasBackingBytes": 0,
+      "aliasGroups": [],
+      "memory": {
+        "budgetBytes": 2147483648,
+        "highWaterBytes": 13737920,
+        "processPrivateBytes": 348823552,
+        "processWorkingSetBytes": 324411392,
+        "usedBytes": 13737664
+      },
+      "metricsMs": {
+        "cpuRenderMs": 0.652536458333333,
+        "frameTimeMs": 0.9205969223484846,
+        "gpuPassSumMs": 0.03698009090909101,
+        "gpuQueueOverlapMs": 0.0,
+        "gpuQueueSpanMs": 0.04592450000000011,
+        "gpuWaitMs": 0.26806046401515177,
+        "graphCompileMs": 0.018478503787878766,
+        "graphPrepareMs": 0.0035576704545454575,
+        "graphRecordMs": 0.09198745265151502
+      },
+      "captureSha256": "030c41f232650c232427ef9c9d6400b055ee899e72bac0cb1a66d0f8b4b02f6b",
+      "reportSha256": "aeee739b725c6ef4058e1d35647e489f602889ee801fa4f1149b00713b386713",
+      "samplesSha256": "74db5b49f07d50fddf6e505cb04b524536d00591b6f107d921c8056f2055e844",
+      "planSha256": "7ecae695e5410847081d5de78b4d4183826b07dd8851f5490c1974d980ffbce6"
+    },
+    {
+      "id": "pbr64-t1-a0-02-vulkan",
+      "case": "pbr64-t1-a0",
+      "backend": "vulkan",
+      "repeat": 1,
+      "sampleCount": 2113,
+      "memoryAlias": false,
+      "asyncCompute": false,
+      "recordingThreads": 1,
+      "recordingChunks": 1,
+      "aliasBackingBytes": 0,
+      "aliasGroups": [],
+      "memory": {
+        "budgetBytes": 2147483648,
+        "highWaterBytes": 13737920,
+        "processPrivateBytes": 346476544,
+        "processWorkingSetBytes": 324304896,
+        "usedBytes": 13737664
+      },
+      "metricsMs": {
+        "cpuRenderMs": 0.6479780880265025,
+        "frameTimeMs": 0.9198528632276388,
+        "gpuPassSumMs": 0.03726637008991953,
+        "gpuQueueOverlapMs": 0.0,
+        "gpuQueueSpanMs": 0.0464746767628963,
+        "gpuWaitMs": 0.2718747752011357,
+        "graphCompileMs": 0.018967155702792237,
+        "graphPrepareMs": 0.0034797917652626574,
+        "graphRecordMs": 0.09165049692380513
+      },
+      "captureSha256": "030c41f232650c232427ef9c9d6400b055ee899e72bac0cb1a66d0f8b4b02f6b",
+      "reportSha256": "bf0f62834e489644c1a744ad855195ac24a586c5054e1c5094c5d0e8119e06ee",
+      "samplesSha256": "5c1510090e59db4e28d5100bb3681b2fc4ec98030599453484277c66d8994d97",
+      "planSha256": "a764650aaa5b4db7e18c026f327944bc4f83eb12badd58a58e81a11e2243b94b"
+    },
+    {
+      "id": "pbr64-t1-a0-02-dx12",
+      "case": "pbr64-t1-a0",
+      "backend": "dx12",
+      "repeat": 1,
+      "sampleCount": 1858,
+      "memoryAlias": false,
+      "asyncCompute": false,
+      "recordingThreads": 1,
+      "recordingChunks": 1,
+      "aliasBackingBytes": 0,
+      "aliasGroups": [],
+      "memory": {
+        "budgetBytes": 2147483648,
+        "highWaterBytes": 14286848,
+        "processPrivateBytes": 101036032,
+        "processWorkingSetBytes": 113684480,
+        "usedBytes": 14221312
+      },
+      "metricsMs": {
+        "cpuRenderMs": 0.8088444564047365,
+        "frameTimeMs": 1.0512052744886977,
+        "gpuPassSumMs": 0.04185319268030141,
+        "gpuQueueOverlapMs": 0.0,
+        "gpuQueueSpanMs": 0.042206208826695325,
+        "gpuWaitMs": 0.2423608180839612,
+        "graphCompileMs": 0.01922093649085038,
+        "graphPrepareMs": 0.0039536060279870755,
+        "graphRecordMs": 0.09990769644779339
+      },
+      "captureSha256": "030c41f232650c232427ef9c9d6400b055ee899e72bac0cb1a66d0f8b4b02f6b",
+      "reportSha256": "63d91ad401ff927af8709a65e48699f9f0ff4ab9076666a4e2850f524ae93942",
+      "samplesSha256": "d886d39b1e8a5fa2df2e0797175822ba86280d06455da5fa4b6f639fd888e02f",
+      "planSha256": "275cd70ea9128b163e257ae293e4f27617a2231815412e4f90de079f4684976e"
+    },
+    {
+      "id": "pbr64-t1-a1-01-dx12",
+      "case": "pbr64-t1-a1",
+      "backend": "dx12",
+      "repeat": 0,
+      "sampleCount": 1920,
+      "memoryAlias": true,
+      "asyncCompute": false,
+      "recordingThreads": 1,
+      "recordingChunks": 1,
+      "aliasBackingBytes": 262144,
+      "aliasGroups": [
+        [
+          {
+            "aliasGroup": 0,
+            "estimatedBytes": 4,
+            "final": "DepthWrite",
+            "first": 2,
+            "imported": false,
+            "initial": "DepthWrite",
+            "last": 2,
+            "name": "MainLightShadowDepth",
+            "versions": 2
+          },
+          {
+            "aliasGroup": 0,
+            "estimatedBytes": 198404,
+            "final": "Sampled",
+            "first": 3,
+            "imported": false,
+            "initial": "Sampled",
+            "last": 4,
+            "name": "CameraDepth",
+            "versions": 2
+          }
+        ]
+      ],
+      "memory": {
+        "budgetBytes": 2147483648,
+        "highWaterBytes": 14221312,
+        "processPrivateBytes": 100507648,
+        "processWorkingSetBytes": 113909760,
+        "usedBytes": 14155776
+      },
+      "metricsMs": {
+        "cpuRenderMs": 0.7813890104166669,
+        "frameTimeMs": 1.0170823958333308,
+        "gpuPassSumMs": 0.03737681666666666,
+        "gpuQueueOverlapMs": 0.0,
+        "gpuQueueSpanMs": 0.03752196666666675,
+        "gpuWaitMs": 0.2356933854166665,
+        "graphCompileMs": 0.021003385416666673,
+        "graphPrepareMs": 0.004170468749999989,
+        "graphRecordMs": 0.0992553645833333
+      },
+      "captureSha256": "030c41f232650c232427ef9c9d6400b055ee899e72bac0cb1a66d0f8b4b02f6b",
+      "reportSha256": "fd747a6c6f8d147e7df7eb51f9141ab6a6401c9e2626df26187e63a3794eb0ae",
+      "samplesSha256": "47d143756d89b92ef4ca3c494d0d884e13548b6d6f8e90c9740eb129f6afefa5",
+      "planSha256": "94c5368c9806678b5c21303cd35d2d49a746b60722fb3c03adca4cd9414c6745"
+    },
+    {
+      "id": "pbr64-t1-a1-01-vulkan",
+      "case": "pbr64-t1-a1",
+      "backend": "vulkan",
+      "repeat": 0,
+      "sampleCount": 2029,
+      "memoryAlias": true,
+      "asyncCompute": false,
+      "recordingThreads": 1,
+      "recordingChunks": 1,
+      "aliasBackingBytes": 278528,
+      "aliasGroups": [
+        [
+          {
+            "aliasGroup": 0,
+            "estimatedBytes": 4,
+            "final": "DepthWrite",
+            "first": 2,
+            "imported": false,
+            "initial": "DepthWrite",
+            "last": 2,
+            "name": "MainLightShadowDepth",
+            "versions": 2
+          },
+          {
+            "aliasGroup": 0,
+            "estimatedBytes": 198404,
+            "final": "Sampled",
+            "first": 3,
+            "imported": false,
+            "initial": "Sampled",
+            "last": 4,
+            "name": "CameraDepth",
+            "versions": 2
+          }
+        ]
+      ],
+      "memory": {
+        "budgetBytes": 2147483648,
+        "highWaterBytes": 13737408,
+        "processPrivateBytes": 349102080,
+        "processWorkingSetBytes": 325599232,
+        "usedBytes": 13737152
+      },
+      "metricsMs": {
+        "cpuRenderMs": 0.685537210448496,
+        "frameTimeMs": 0.9590738787580082,
+        "gpuPassSumMs": 0.036686698866436634,
+        "gpuQueueOverlapMs": 0.0,
+        "gpuQueueSpanMs": 0.04922360177427302,
+        "gpuWaitMs": 0.273536668309512,
+        "graphCompileMs": 0.021399408575653044,
+        "graphPrepareMs": 0.004041054706752093,
+        "graphRecordMs": 0.09443942828979791
+      },
+      "captureSha256": "030c41f232650c232427ef9c9d6400b055ee899e72bac0cb1a66d0f8b4b02f6b",
+      "reportSha256": "7394f98fa68e77f346e76ea08d8b11eadef76afd6cf998ad89b5036a3eb6c0ed",
+      "samplesSha256": "05080b79db7b5bc09c58769381c9cb757cfb94dd31f632fc4b47f06125ce3c98",
+      "planSha256": "522a7756c931183787a355db206081ca7fbb0a583de87c28ba66fc70585d857d"
+    },
+    {
+      "id": "pbr64-t1-a1-02-vulkan",
+      "case": "pbr64-t1-a1",
+      "backend": "vulkan",
+      "repeat": 1,
+      "sampleCount": 1994,
+      "memoryAlias": true,
+      "asyncCompute": false,
+      "recordingThreads": 1,
+      "recordingChunks": 1,
+      "aliasBackingBytes": 278528,
+      "aliasGroups": [
+        [
+          {
+            "aliasGroup": 0,
+            "estimatedBytes": 4,
+            "final": "DepthWrite",
+            "first": 2,
+            "imported": false,
+            "initial": "DepthWrite",
+            "last": 2,
+            "name": "MainLightShadowDepth",
+            "versions": 2
+          },
+          {
+            "aliasGroup": 0,
+            "estimatedBytes": 198404,
+            "final": "Sampled",
+            "first": 3,
+            "imported": false,
+            "initial": "Sampled",
+            "last": 4,
+            "name": "CameraDepth",
+            "versions": 2
+          }
+        ]
+      ],
+      "memory": {
+        "budgetBytes": 2147483648,
+        "highWaterBytes": 13737408,
+        "processPrivateBytes": 349483008,
+        "processWorkingSetBytes": 324694016,
+        "usedBytes": 13737152
+      },
+      "metricsMs": {
+        "cpuRenderMs": 0.6925095787362093,
+        "frameTimeMs": 0.9758323470411232,
+        "gpuPassSumMs": 0.03645750050150446,
+        "gpuQueueOverlapMs": 0.0,
+        "gpuQueueSpanMs": 0.04889750852557675,
+        "gpuWaitMs": 0.2833227683049148,
+        "graphCompileMs": 0.022319307923771292,
+        "graphPrepareMs": 0.004112637913741219,
+        "graphRecordMs": 0.09562321965897702
+      },
+      "captureSha256": "030c41f232650c232427ef9c9d6400b055ee899e72bac0cb1a66d0f8b4b02f6b",
+      "reportSha256": "14b3f390e94824c2acceed85582de06339f4c2f909e1f25298fd603c24cd26d7",
+      "samplesSha256": "368fe5aace72894bce53df9d0c40218aa7ce41df3d9c3a5a0f0fe88c630d3db9",
+      "planSha256": "c3962d95009f580fe6de865ee89b08d5fba1a3d8a7bd15732a96390c7c861b9f"
+    },
+    {
+      "id": "pbr64-t1-a1-02-dx12",
+      "case": "pbr64-t1-a1",
+      "backend": "dx12",
+      "repeat": 1,
+      "sampleCount": 1916,
+      "memoryAlias": true,
+      "asyncCompute": false,
+      "recordingThreads": 1,
+      "recordingChunks": 1,
+      "aliasBackingBytes": 262144,
+      "aliasGroups": [
+        [
+          {
+            "aliasGroup": 0,
+            "estimatedBytes": 4,
+            "final": "DepthWrite",
+            "first": 2,
+            "imported": false,
+            "initial": "DepthWrite",
+            "last": 2,
+            "name": "MainLightShadowDepth",
+            "versions": 2
+          },
+          {
+            "aliasGroup": 0,
+            "estimatedBytes": 198404,
+            "final": "Sampled",
+            "first": 3,
+            "imported": false,
+            "initial": "Sampled",
+            "last": 4,
+            "name": "CameraDepth",
+            "versions": 2
+          }
+        ]
+      ],
+      "memory": {
+        "budgetBytes": 2147483648,
+        "highWaterBytes": 14221312,
+        "processPrivateBytes": 99811328,
+        "processWorkingSetBytes": 113942528,
+        "usedBytes": 14155776
+      },
+      "metricsMs": {
+        "cpuRenderMs": 0.7973591858037581,
+        "frameTimeMs": 1.0201394572025038,
+        "gpuPassSumMs": 0.037893461377870634,
+        "gpuQueueOverlapMs": 0.0,
+        "gpuQueueSpanMs": 0.03804038413361173,
+        "gpuWaitMs": 0.22278027139874743,
+        "graphCompileMs": 0.020731471816283913,
+        "graphPrepareMs": 0.00420328810020876,
+        "graphRecordMs": 0.10168716075156575
+      },
+      "captureSha256": "030c41f232650c232427ef9c9d6400b055ee899e72bac0cb1a66d0f8b4b02f6b",
+      "reportSha256": "271419f36ecd468849a34117b8166710a562656f90cee5e0df9200b6956a3c40",
+      "samplesSha256": "3d377abf850e169a35051b1bb1623a60949f48932f2d352d13b0286ff0c36c87",
+      "planSha256": "60423206d7e5f22241087410f81f6048101a04d4a6a3cc898ab0cda76e124112"
+    },
+    {
+      "id": "pbr64-t4-a0-01-dx12",
+      "case": "pbr64-t4-a0",
+      "backend": "dx12",
+      "repeat": 0,
+      "sampleCount": 1645,
+      "memoryAlias": false,
+      "asyncCompute": true,
+      "recordingThreads": 4,
+      "recordingChunks": 4,
+      "aliasBackingBytes": 0,
+      "aliasGroups": [],
+      "memory": {
+        "budgetBytes": 2147483648,
+        "highWaterBytes": 14286848,
+        "processPrivateBytes": 122068992,
+        "processWorkingSetBytes": 132026368,
+        "usedBytes": 14221312
+      },
+      "metricsMs": {
+        "cpuRenderMs": 0.9335249848024321,
+        "frameTimeMs": 1.189551671732525,
+        "gpuPassSumMs": 0.04585913191489352,
+        "gpuQueueOverlapMs": 0.0013162285714285714,
+        "gpuQueueSpanMs": 0.1087782954407296,
+        "gpuWaitMs": 0.256026686930091,
+        "graphCompileMs": 0.021855501519756872,
+        "graphPrepareMs": 0.004159331306990886,
+        "graphRecordMs": 0.10620747720364751
+      },
+      "captureSha256": "030c41f232650c232427ef9c9d6400b055ee899e72bac0cb1a66d0f8b4b02f6b",
+      "reportSha256": "d0456c01f11098d85ab45ffab0ba72e85a12111035d418a4996be92f6c7e602e",
+      "samplesSha256": "2155918daafebe870f3615a80b56d30db17495c851421e76c37d80166a5a5597",
+      "planSha256": "4f8e668776249986aff6c6b0c480432f1a3950821ab714211a02b2858c3c2600"
+    },
+    {
+      "id": "pbr64-t4-a0-01-vulkan",
+      "case": "pbr64-t4-a0",
+      "backend": "vulkan",
+      "repeat": 0,
+      "sampleCount": 1666,
+      "memoryAlias": false,
+      "asyncCompute": true,
+      "recordingThreads": 4,
+      "recordingChunks": 4,
+      "aliasBackingBytes": 0,
+      "aliasGroups": [],
+      "memory": {
+        "budgetBytes": 2147483648,
+        "highWaterBytes": 13737920,
+        "processPrivateBytes": 352899072,
+        "processWorkingSetBytes": 324755456,
+        "usedBytes": 13737664
+      },
+      "metricsMs": {
+        "cpuRenderMs": 0.7330920168067232,
+        "frameTimeMs": 1.174021008403361,
+        "gpuPassSumMs": 0.03526885954381757,
+        "gpuQueueOverlapMs": 0.0,
+        "gpuQueueSpanMs": 0.24565053541416518,
+        "gpuWaitMs": 0.4409289915966384,
+        "graphCompileMs": 0.02020030012004802,
+        "graphPrepareMs": 0.0037109843937575032,
+        "graphRecordMs": 0.09442839135654252
+      },
+      "captureSha256": "030c41f232650c232427ef9c9d6400b055ee899e72bac0cb1a66d0f8b4b02f6b",
+      "reportSha256": "f19d7c2df1b9ec02527ea698b31495191a41eb4c079785c4e237b8eabb98c26d",
+      "samplesSha256": "83768159bc1376a8fe4c813272cba2723d5c62233b552f6db740cf0100163969",
+      "planSha256": "90c1e30999f8fa792cfc96b5395557f951e1043664894ff130e2c16f1d8a463f"
+    },
+    {
+      "id": "pbr64-t4-a0-02-vulkan",
+      "case": "pbr64-t4-a0",
+      "backend": "vulkan",
+      "repeat": 1,
+      "sampleCount": 1673,
+      "memoryAlias": false,
+      "asyncCompute": true,
+      "recordingThreads": 4,
+      "recordingChunks": 4,
+      "aliasBackingBytes": 0,
+      "aliasGroups": [],
+      "memory": {
+        "budgetBytes": 2147483648,
+        "highWaterBytes": 13737920,
+        "processPrivateBytes": 353058816,
+        "processWorkingSetBytes": 325206016,
+        "usedBytes": 13737664
+      },
+      "metricsMs": {
+        "cpuRenderMs": 0.7239877465630602,
+        "frameTimeMs": 1.1680586969515854,
+        "gpuPassSumMs": 0.03558698386132682,
+        "gpuQueueOverlapMs": 0.0,
+        "gpuQueueSpanMs": 0.24529734847579196,
+        "gpuWaitMs": 0.4440709503885235,
+        "graphCompileMs": 0.02025361625821874,
+        "graphPrepareMs": 0.0037288105200239097,
+        "graphRecordMs": 0.09356150627615066
+      },
+      "captureSha256": "030c41f232650c232427ef9c9d6400b055ee899e72bac0cb1a66d0f8b4b02f6b",
+      "reportSha256": "eb950bcc5c5475ab3e553fe6d1314d909794905f2bd2464309906d6859cf68b6",
+      "samplesSha256": "98e2e85898b82468ae8d10d2ecfd5e34cc83609ebb27826caeadd60e36715a13",
+      "planSha256": "6fc6fd37cdb70bebdd5dbfb72f6064e51484f15c706d22e8e8124cd098d9cbbc"
+    },
+    {
+      "id": "pbr64-t4-a0-02-dx12",
+      "case": "pbr64-t4-a0",
+      "backend": "dx12",
+      "repeat": 1,
+      "sampleCount": 1700,
+      "memoryAlias": false,
+      "asyncCompute": true,
+      "recordingThreads": 4,
+      "recordingChunks": 4,
+      "aliasBackingBytes": 0,
+      "aliasGroups": [],
+      "memory": {
+        "budgetBytes": 2147483648,
+        "highWaterBytes": 14286848,
+        "processPrivateBytes": 121155584,
+        "processWorkingSetBytes": 131870720,
+        "usedBytes": 14221312
+      },
+      "metricsMs": {
+        "cpuRenderMs": 0.8943745294117657,
+        "frameTimeMs": 1.1506864117647075,
+        "gpuPassSumMs": 0.04625692235294128,
+        "gpuQueueOverlapMs": 0.0014350658823529417,
+        "gpuQueueSpanMs": 0.10861882352941181,
+        "gpuWaitMs": 0.2563118823529408,
+        "graphCompileMs": 0.021013999999999984,
+        "graphPrepareMs": 0.004055764705882362,
+        "graphRecordMs": 0.10371341176470583
+      },
+      "captureSha256": "030c41f232650c232427ef9c9d6400b055ee899e72bac0cb1a66d0f8b4b02f6b",
+      "reportSha256": "ff5bbfa7b888e13a7cbfdd800b7628423c416b3e3fcc6722e8438fb202a65fe2",
+      "samplesSha256": "c0cd0d3fcf14d185a37dd733990ead4a0cceca33e15ce9779f99e514d6c4a030",
+      "planSha256": "d47d3c769b469d1a8083394dda2e9e3384e15ecb18b56ccacd2114e4cfa76cff"
+    },
+    {
+      "id": "pbr64-t4-a1-01-dx12",
+      "case": "pbr64-t4-a1",
+      "backend": "dx12",
+      "repeat": 0,
+      "sampleCount": 1706,
+      "memoryAlias": true,
+      "asyncCompute": true,
+      "recordingThreads": 4,
+      "recordingChunks": 4,
+      "aliasBackingBytes": 262144,
+      "aliasGroups": [
+        [
+          {
+            "aliasGroup": 0,
+            "estimatedBytes": 4,
+            "final": "DepthWrite",
+            "first": 2,
+            "imported": false,
+            "initial": "DepthWrite",
+            "last": 2,
+            "name": "MainLightShadowDepth",
+            "versions": 2
+          },
+          {
+            "aliasGroup": 0,
+            "estimatedBytes": 198404,
+            "final": "Sampled",
+            "first": 3,
+            "imported": false,
+            "initial": "Sampled",
+            "last": 4,
+            "name": "CameraDepth",
+            "versions": 2
+          }
+        ]
+      ],
+      "memory": {
+        "budgetBytes": 2147483648,
+        "highWaterBytes": 14221312,
+        "processPrivateBytes": 121233408,
+        "processWorkingSetBytes": 131846144,
+        "usedBytes": 14155776
+      },
+      "metricsMs": {
+        "cpuRenderMs": 0.892850586166472,
+        "frameTimeMs": 1.1470511137162978,
+        "gpuPassSumMs": 0.04272045017584998,
+        "gpuQueueOverlapMs": 0.001936944900351701,
+        "gpuQueueSpanMs": 0.10325029073856966,
+        "gpuWaitMs": 0.2542005275498242,
+        "graphCompileMs": 0.025689390386869872,
+        "graphPrepareMs": 0.0045172919109026976,
+        "graphRecordMs": 0.1019155920281359
+      },
+      "captureSha256": "030c41f232650c232427ef9c9d6400b055ee899e72bac0cb1a66d0f8b4b02f6b",
+      "reportSha256": "097ce1fcd2466e7b17c8392dd42b1cc2f365cbac31b08eff1b1245dcef481cf5",
+      "samplesSha256": "1efa9a37d66ef2fe672ef33c6be03d7c1295eb14842d5ffd1269a411daafc51d",
+      "planSha256": "f1d7a74752dc75c0db1101630f35047b3499b6641ca875fed3e2eb4bbb3d4bf1"
+    },
+    {
+      "id": "pbr64-t4-a1-01-vulkan",
+      "case": "pbr64-t4-a1",
+      "backend": "vulkan",
+      "repeat": 0,
+      "sampleCount": 1629,
+      "memoryAlias": true,
+      "asyncCompute": true,
+      "recordingThreads": 4,
+      "recordingChunks": 4,
+      "aliasBackingBytes": 278528,
+      "aliasGroups": [
+        [
+          {
+            "aliasGroup": 0,
+            "estimatedBytes": 4,
+            "final": "DepthWrite",
+            "first": 2,
+            "imported": false,
+            "initial": "DepthWrite",
+            "last": 2,
+            "name": "MainLightShadowDepth",
+            "versions": 2
+          },
+          {
+            "aliasGroup": 0,
+            "estimatedBytes": 198404,
+            "final": "Sampled",
+            "first": 3,
+            "imported": false,
+            "initial": "Sampled",
+            "last": 4,
+            "name": "CameraDepth",
+            "versions": 2
+          }
+        ]
+      ],
+      "memory": {
+        "budgetBytes": 2147483648,
+        "highWaterBytes": 13737408,
+        "processPrivateBytes": 351768576,
+        "processWorkingSetBytes": 325287936,
+        "usedBytes": 13737152
+      },
+      "metricsMs": {
+        "cpuRenderMs": 0.7602647022713317,
+        "frameTimeMs": 1.199375076734195,
+        "gpuPassSumMs": 0.03539702885205648,
+        "gpuQueueOverlapMs": 0.0,
+        "gpuQueueSpanMs": 0.24364273542050296,
+        "gpuWaitMs": 0.4391103744628608,
+        "graphCompileMs": 0.023434683855125843,
+        "graphPrepareMs": 0.004338612645794976,
+        "graphRecordMs": 0.09622559852670341
+      },
+      "captureSha256": "030c41f232650c232427ef9c9d6400b055ee899e72bac0cb1a66d0f8b4b02f6b",
+      "reportSha256": "de5a415c11e6d42f32dc7aa81fc66d3b4a93795cb98b7b04c0fd1b9117ad9528",
+      "samplesSha256": "78dbfa0d179b465306d088f48326af43770b8aabb5bd7b5b1a18a552dd569fea",
+      "planSha256": "fff4ae0548a78d044092b0e0b794f7ab9c3a36e85839aed03880b2a17c631904"
+    },
+    {
+      "id": "pbr64-t4-a1-02-vulkan",
+      "case": "pbr64-t4-a1",
+      "backend": "vulkan",
+      "repeat": 1,
+      "sampleCount": 1647,
+      "memoryAlias": true,
+      "asyncCompute": true,
+      "recordingThreads": 4,
+      "recordingChunks": 4,
+      "aliasBackingBytes": 278528,
+      "aliasGroups": [
+        [
+          {
+            "aliasGroup": 0,
+            "estimatedBytes": 4,
+            "final": "DepthWrite",
+            "first": 2,
+            "imported": false,
+            "initial": "DepthWrite",
+            "last": 2,
+            "name": "MainLightShadowDepth",
+            "versions": 2
+          },
+          {
+            "aliasGroup": 0,
+            "estimatedBytes": 198404,
+            "final": "Sampled",
+            "first": 3,
+            "imported": false,
+            "initial": "Sampled",
+            "last": 4,
+            "name": "CameraDepth",
+            "versions": 2
+          }
+        ]
+      ],
+      "memory": {
+        "budgetBytes": 2147483648,
+        "highWaterBytes": 13737408,
+        "processPrivateBytes": 351633408,
+        "processWorkingSetBytes": 325484544,
+        "usedBytes": 13737152
+      },
+      "metricsMs": {
+        "cpuRenderMs": 0.7355658166363072,
+        "frameTimeMs": 1.1862150576806316,
+        "gpuPassSumMs": 0.03563471038251369,
+        "gpuQueueOverlapMs": 0.0,
+        "gpuQueueSpanMs": 0.2468010200364296,
+        "gpuWaitMs": 0.45064924104432336,
+        "graphCompileMs": 0.023149301760777157,
+        "graphPrepareMs": 0.004293017607771705,
+        "graphRecordMs": 0.09323284760170004
+      },
+      "captureSha256": "030c41f232650c232427ef9c9d6400b055ee899e72bac0cb1a66d0f8b4b02f6b",
+      "reportSha256": "d3148dd550a4f9d1b12fe41f6c36a8de6e38b22ef026c048e424aeaf016f963f",
+      "samplesSha256": "ef9d6f0b91754517e30bdc63f84cf1b0791dd16d0a9040753bc2c928395470cc",
+      "planSha256": "662ecbf9f14afc21e9b6894416760469a71988bab758a4f082f184b50e750008"
+    },
+    {
+      "id": "pbr64-t4-a1-02-dx12",
+      "case": "pbr64-t4-a1",
+      "backend": "dx12",
+      "repeat": 1,
+      "sampleCount": 1699,
+      "memoryAlias": true,
+      "asyncCompute": true,
+      "recordingThreads": 4,
+      "recordingChunks": 4,
+      "aliasBackingBytes": 262144,
+      "aliasGroups": [
+        [
+          {
+            "aliasGroup": 0,
+            "estimatedBytes": 4,
+            "final": "DepthWrite",
+            "first": 2,
+            "imported": false,
+            "initial": "DepthWrite",
+            "last": 2,
+            "name": "MainLightShadowDepth",
+            "versions": 2
+          },
+          {
+            "aliasGroup": 0,
+            "estimatedBytes": 198404,
+            "final": "Sampled",
+            "first": 3,
+            "imported": false,
+            "initial": "Sampled",
+            "last": 4,
+            "name": "CameraDepth",
+            "versions": 2
+          }
+        ]
+      ],
+      "memory": {
+        "budgetBytes": 2147483648,
+        "highWaterBytes": 14221312,
+        "processPrivateBytes": 122572800,
+        "processWorkingSetBytes": 131817472,
+        "usedBytes": 14155776
+      },
+      "metricsMs": {
+        "cpuRenderMs": 0.8986989994114184,
+        "frameTimeMs": 1.1522671571512655,
+        "gpuPassSumMs": 0.04303738198940563,
+        "gpuQueueOverlapMs": 0.0018070700412007089,
+        "gpuQueueSpanMs": 0.10330027545615059,
+        "gpuWaitMs": 0.2535681577398468,
+        "graphCompileMs": 0.023868510888758084,
+        "graphPrepareMs": 0.004483107710417893,
+        "graphRecordMs": 0.10197074749852839
+      },
+      "captureSha256": "030c41f232650c232427ef9c9d6400b055ee899e72bac0cb1a66d0f8b4b02f6b",
+      "reportSha256": "0b01cb6d7ec22a6064f725d17a79400649284ddd0e6b5202faac3550397bd545",
+      "samplesSha256": "2dcf0e7419a03c083e4f43b6159f5e14f8623742567917a55f5ee7457f172ba3",
+      "planSha256": "11ce2ca6d31cd6d45343d52cf5820134a5a304854bf60acc3c0fc3b65c12b8a9"
+    },
+    {
+      "id": "shadow257-t1-a0-01-dx12",
+      "case": "shadow257-t1-a0",
+      "backend": "dx12",
+      "repeat": 0,
+      "sampleCount": 1458,
+      "memoryAlias": false,
+      "asyncCompute": false,
+      "recordingThreads": 1,
+      "recordingChunks": 1,
+      "aliasBackingBytes": 0,
+      "aliasGroups": [],
+      "memory": {
+        "budgetBytes": 2147483648,
+        "highWaterBytes": 19791872,
+        "processPrivateBytes": 107094016,
+        "processWorkingSetBytes": 114921472,
+        "usedBytes": 19726336
+      },
+      "metricsMs": {
+        "cpuRenderMs": 1.073641563786008,
+        "frameTimeMs": 1.3442493827160513,
+        "gpuPassSumMs": 0.053400537722908065,
+        "gpuQueueOverlapMs": 0.0,
+        "gpuQueueSpanMs": 0.053660115226337415,
+        "gpuWaitMs": 0.2706078189300406,
+        "graphCompileMs": 0.028546913580246917,
+        "graphPrepareMs": 0.004960562414266115,
+        "graphRecordMs": 0.2046572016460905
+      },
+      "captureSha256": "3691e82c9ff5391ce863e17a9d1b94e8cd4cc9b3f2e9126c832f98b4a28bd246",
+      "reportSha256": "92ac953173425003c29029b707c4aea4010ce35760757469c1241d337d152d1f",
+      "samplesSha256": "867812d1e4d085fb62ed69392f5ec07d54f98d988b586303acbaebbb18c2e15a",
+      "planSha256": "516d51cd42a52a1b85a2131bd7a8fcc9c4660843971c1733a7f2a96961999baa"
+    },
+    {
+      "id": "shadow257-t1-a0-01-vulkan",
+      "case": "shadow257-t1-a0",
+      "backend": "vulkan",
+      "repeat": 0,
+      "sampleCount": 1738,
+      "memoryAlias": false,
+      "asyncCompute": false,
+      "recordingThreads": 1,
+      "recordingChunks": 1,
+      "aliasBackingBytes": 0,
+      "aliasGroups": [],
+      "memory": {
+        "budgetBytes": 2147483648,
+        "highWaterBytes": 18982144,
+        "processPrivateBytes": 331825152,
+        "processWorkingSetBytes": 326660096,
+        "usedBytes": 18981888
+      },
+      "metricsMs": {
+        "cpuRenderMs": 0.8340315304948216,
+        "frameTimeMs": 1.1232178941311868,
+        "gpuPassSumMs": 0.04470887917146149,
+        "gpuQueueOverlapMs": 0.0,
+        "gpuQueueSpanMs": 0.055917901035673165,
+        "gpuWaitMs": 0.28918636363636324,
+        "graphCompileMs": 0.02559666283084006,
+        "graphPrepareMs": 0.004277675489067893,
+        "graphRecordMs": 0.1697305523590332
+      },
+      "captureSha256": "d2e01c98e48675d4d515cdc0fa09f066f0783d3599d34999e250768a8b7bdd51",
+      "reportSha256": "bfa8cb5b48ca0bc228aa6ca375b8d1520da615459cbccef60f744c0390e26e92",
+      "samplesSha256": "7f2dcc0897cf882d9269a558f538e18998f4cf961ffe15d4c97b612eb157184b",
+      "planSha256": "506b5920622a3b471de44c25fcdd12cd44bc233f22bc271bb1487184ae2d6430"
+    },
+    {
+      "id": "shadow257-t1-a0-02-vulkan",
+      "case": "shadow257-t1-a0",
+      "backend": "vulkan",
+      "repeat": 1,
+      "sampleCount": 1698,
+      "memoryAlias": false,
+      "asyncCompute": false,
+      "recordingThreads": 1,
+      "recordingChunks": 1,
+      "aliasBackingBytes": 0,
+      "aliasGroups": [],
+      "memory": {
+        "budgetBytes": 2147483648,
+        "highWaterBytes": 18982144,
+        "processPrivateBytes": 334598144,
+        "processWorkingSetBytes": 326803456,
+        "usedBytes": 18981888
+      },
+      "metricsMs": {
+        "cpuRenderMs": 0.8563800353356897,
+        "frameTimeMs": 1.1500299764428743,
+        "gpuPassSumMs": 0.04466500824499414,
+        "gpuQueueOverlapMs": 0.0,
+        "gpuQueueSpanMs": 0.056294784452296874,
+        "gpuWaitMs": 0.2936499411071845,
+        "graphCompileMs": 0.026617608951707863,
+        "graphPrepareMs": 0.00440259128386337,
+        "graphRecordMs": 0.17790659599528855
+      },
+      "captureSha256": "d2e01c98e48675d4d515cdc0fa09f066f0783d3599d34999e250768a8b7bdd51",
+      "reportSha256": "a4c800a83f04cba6d4eca8e469e86c1a2e2f375295782d8f7aff56c97758c0d1",
+      "samplesSha256": "549ad0400cba3b0f93b0e4de29f3adc7f080ad5eb69a39aaf3e5b01c663153cf",
+      "planSha256": "c7d2b342ebf59ded6d1591f0cb45604cedea6724fb27475d53108faa1982af83"
+    },
+    {
+      "id": "shadow257-t1-a0-02-dx12",
+      "case": "shadow257-t1-a0",
+      "backend": "dx12",
+      "repeat": 1,
+      "sampleCount": 1529,
+      "memoryAlias": false,
+      "asyncCompute": false,
+      "recordingThreads": 1,
+      "recordingChunks": 1,
+      "aliasBackingBytes": 0,
+      "aliasGroups": [],
+      "memory": {
+        "budgetBytes": 2147483648,
+        "highWaterBytes": 19791872,
+        "processPrivateBytes": 106381312,
+        "processWorkingSetBytes": 114802688,
+        "usedBytes": 19726336
+      },
+      "metricsMs": {
+        "cpuRenderMs": 1.0140417920209284,
+        "frameTimeMs": 1.2808189012426412,
+        "gpuPassSumMs": 0.053575304120340055,
+        "gpuQueueOverlapMs": 0.0,
+        "gpuQueueSpanMs": 0.053810040549378685,
+        "gpuWaitMs": 0.2667771092217139,
+        "graphCompileMs": 0.0268085676913015,
+        "graphPrepareMs": 0.00482275997383911,
+        "graphRecordMs": 0.19750568999345985
+      },
+      "captureSha256": "3691e82c9ff5391ce863e17a9d1b94e8cd4cc9b3f2e9126c832f98b4a28bd246",
+      "reportSha256": "af5aace52037a366cb0bacfff366f421cded11defecd2d6f3a1dfe6bacabe204",
+      "samplesSha256": "6949eb6cee9a6d102f33641cf828b2c304c24ab54595057e11e4fea1b792d74b",
+      "planSha256": "1750e299faf1166da69f2b67678578247bf7d54a19d87a3fb8d5fd2fc79c49a1"
+    },
+    {
+      "id": "shadow257-t1-a1-01-dx12",
+      "case": "shadow257-t1-a1",
+      "backend": "dx12",
+      "repeat": 0,
+      "sampleCount": 1471,
+      "memoryAlias": true,
+      "asyncCompute": false,
+      "recordingThreads": 1,
+      "recordingChunks": 1,
+      "aliasBackingBytes": 1048576,
+      "aliasGroups": [
+        [
+          {
+            "aliasGroup": 0,
+            "estimatedBytes": 1048576,
+            "final": "DepthWrite",
+            "first": 2,
+            "imported": false,
+            "initial": "DepthWrite",
+            "last": 2,
+            "name": "MainLightShadowDepth",
+            "versions": 2
+          },
+          {
+            "aliasGroup": 0,
+            "estimatedBytes": 198404,
+            "final": "DepthWrite",
+            "first": 3,
+            "imported": false,
+            "initial": "DepthWrite",
+            "last": 5,
+            "name": "CameraDepth",
+            "versions": 2
+          }
+        ]
+      ],
+      "memory": {
+        "budgetBytes": 2147483648,
+        "highWaterBytes": 19529728,
+        "processPrivateBytes": 107126784,
+        "processWorkingSetBytes": 114958336,
+        "usedBytes": 19464192
+      },
+      "metricsMs": {
+        "cpuRenderMs": 1.074092454112847,
+        "frameTimeMs": 1.3309624065261727,
+        "gpuPassSumMs": 0.051320494901427684,
+        "gpuQueueOverlapMs": 0.0,
+        "gpuQueueSpanMs": 0.05148332290958525,
+        "gpuWaitMs": 0.2568699524133241,
+        "graphCompileMs": 0.03108803535010198,
+        "graphPrepareMs": 0.005440108769544524,
+        "graphRecordMs": 0.2042259007477904
+      },
+      "captureSha256": "3691e82c9ff5391ce863e17a9d1b94e8cd4cc9b3f2e9126c832f98b4a28bd246",
+      "reportSha256": "600f49a5b23c877a7bf8b96356758e3eb84e1542116c13121c0068e44e25b2de",
+      "samplesSha256": "7f1a60f73dad8283d072f1d71e83498158fc30bc52f232cd3c507fc24f933e1e",
+      "planSha256": "e054fc653877ab0fa77d644471b2bee52811e225865d40fa05e0e3dd7778f962"
+    },
+    {
+      "id": "shadow257-t1-a1-01-vulkan",
+      "case": "shadow257-t1-a1",
+      "backend": "vulkan",
+      "repeat": 0,
+      "sampleCount": 1723,
+      "memoryAlias": true,
+      "asyncCompute": false,
+      "recordingThreads": 1,
+      "recordingChunks": 1,
+      "aliasBackingBytes": 1048576,
+      "aliasGroups": [
+        [
+          {
+            "aliasGroup": 0,
+            "estimatedBytes": 1048576,
+            "final": "DepthWrite",
+            "first": 2,
+            "imported": false,
+            "initial": "DepthWrite",
+            "last": 2,
+            "name": "MainLightShadowDepth",
+            "versions": 2
+          },
+          {
+            "aliasGroup": 0,
+            "estimatedBytes": 198404,
+            "final": "DepthWrite",
+            "first": 3,
+            "imported": false,
+            "initial": "DepthWrite",
+            "last": 5,
+            "name": "CameraDepth",
+            "versions": 2
+          }
+        ]
+      ],
+      "memory": {
+        "budgetBytes": 2147483648,
+        "highWaterBytes": 18703616,
+        "processPrivateBytes": 332935168,
+        "processWorkingSetBytes": 326336512,
+        "usedBytes": 18703360
+      },
+      "metricsMs": {
+        "cpuRenderMs": 0.8279798026697619,
+        "frameTimeMs": 1.13276529309344,
+        "gpuPassSumMs": 0.04377182124201973,
+        "gpuQueueOverlapMs": 0.0,
+        "gpuQueueSpanMs": 0.06021692396982017,
+        "gpuWaitMs": 0.3047854904236798,
+        "graphCompileMs": 0.027309518282066143,
+        "graphPrepareMs": 0.004770980847359256,
+        "graphRecordMs": 0.1694563551944281
+      },
+      "captureSha256": "d2e01c98e48675d4d515cdc0fa09f066f0783d3599d34999e250768a8b7bdd51",
+      "reportSha256": "e182743f4f3ed4ed5c2d06e99b5331801b5b0afa82d2f9be83bcfd6ae416cf16",
+      "samplesSha256": "726a040f8d0ec43dda0bbce27fe05a8134be19ce92a2f83405909a61a97a83ff",
+      "planSha256": "f946799d37edd1a3cb66a4c221f76a6fc9cec238ef4099b46a652865f264e741"
+    },
+    {
+      "id": "shadow257-t1-a1-02-vulkan",
+      "case": "shadow257-t1-a1",
+      "backend": "vulkan",
+      "repeat": 1,
+      "sampleCount": 1714,
+      "memoryAlias": true,
+      "asyncCompute": false,
+      "recordingThreads": 1,
+      "recordingChunks": 1,
+      "aliasBackingBytes": 1048576,
+      "aliasGroups": [
+        [
+          {
+            "aliasGroup": 0,
+            "estimatedBytes": 1048576,
+            "final": "DepthWrite",
+            "first": 2,
+            "imported": false,
+            "initial": "DepthWrite",
+            "last": 2,
+            "name": "MainLightShadowDepth",
+            "versions": 2
+          },
+          {
+            "aliasGroup": 0,
+            "estimatedBytes": 198404,
+            "final": "DepthWrite",
+            "first": 3,
+            "imported": false,
+            "initial": "DepthWrite",
+            "last": 5,
+            "name": "CameraDepth",
+            "versions": 2
+          }
+        ]
+      ],
+      "memory": {
+        "budgetBytes": 2147483648,
+        "highWaterBytes": 18703616,
+        "processPrivateBytes": 332976128,
+        "processWorkingSetBytes": 326381568,
+        "usedBytes": 18703360
+      },
+      "metricsMs": {
+        "cpuRenderMs": 0.835663243873978,
+        "frameTimeMs": 1.1391687281213534,
+        "gpuPassSumMs": 0.0439040933488915,
+        "gpuQueueOverlapMs": 0.0,
+        "gpuQueueSpanMs": 0.0604223850641774,
+        "gpuWaitMs": 0.30350548424737467,
+        "graphCompileMs": 0.027434889148191404,
+        "graphPrepareMs": 0.004742707117852975,
+        "graphRecordMs": 0.1716271295215869
+      },
+      "captureSha256": "d2e01c98e48675d4d515cdc0fa09f066f0783d3599d34999e250768a8b7bdd51",
+      "reportSha256": "058ab8e4753a4e3245137c36022b8beaee606d460cfbc2ae7fcf1fd2f1dcdb52",
+      "samplesSha256": "870c8c726c64fc43594cb7a2d9c4095fa366ec072b11aeb5af52f7365f627384",
+      "planSha256": "8c80f6e49e3769d7d36284b61264880347a2e8f15fb109ce38fadb72b2697983"
+    },
+    {
+      "id": "shadow257-t1-a1-02-dx12",
+      "case": "shadow257-t1-a1",
+      "backend": "dx12",
+      "repeat": 1,
+      "sampleCount": 1537,
+      "memoryAlias": true,
+      "asyncCompute": false,
+      "recordingThreads": 1,
+      "recordingChunks": 1,
+      "aliasBackingBytes": 1048576,
+      "aliasGroups": [
+        [
+          {
+            "aliasGroup": 0,
+            "estimatedBytes": 1048576,
+            "final": "DepthWrite",
+            "first": 2,
+            "imported": false,
+            "initial": "DepthWrite",
+            "last": 2,
+            "name": "MainLightShadowDepth",
+            "versions": 2
+          },
+          {
+            "aliasGroup": 0,
+            "estimatedBytes": 198404,
+            "final": "DepthWrite",
+            "first": 3,
+            "imported": false,
+            "initial": "DepthWrite",
+            "last": 5,
+            "name": "CameraDepth",
+            "versions": 2
+          }
+        ]
+      ],
+      "memory": {
+        "budgetBytes": 2147483648,
+        "highWaterBytes": 19529728,
+        "processPrivateBytes": 106905600,
+        "processWorkingSetBytes": 114937856,
+        "usedBytes": 19464192
+      },
+      "metricsMs": {
+        "cpuRenderMs": 1.0124954456733914,
+        "frameTimeMs": 1.2749029277813935,
+        "gpuPassSumMs": 0.050966672739102076,
+        "gpuQueueOverlapMs": 0.0,
+        "gpuQueueSpanMs": 0.05121840468445019,
+        "gpuWaitMs": 0.2624074821080028,
+        "graphCompileMs": 0.029419518542615496,
+        "graphPrepareMs": 0.005234092387768385,
+        "graphRecordMs": 0.19843558880936887
+      },
+      "captureSha256": "3691e82c9ff5391ce863e17a9d1b94e8cd4cc9b3f2e9126c832f98b4a28bd246",
+      "reportSha256": "86074460c3d7222f778f096e5b3b68682919a09b7a3a974c6e3baf120a38fe76",
+      "samplesSha256": "e10855816c113b179fc87b940beb83d52e57a5495f9f38f5c8cbbab75edcb32c",
+      "planSha256": "fde1d0f18d77de49725660446ec4ea22fd798e042fcf87c79693d92cf49b5352"
+    },
+    {
+      "id": "shadow257-t4-a0-01-dx12",
+      "case": "shadow257-t4-a0",
+      "backend": "dx12",
+      "repeat": 0,
+      "sampleCount": 1433,
+      "memoryAlias": false,
+      "asyncCompute": true,
+      "recordingThreads": 4,
+      "recordingChunks": 4,
+      "aliasBackingBytes": 0,
+      "aliasGroups": [],
+      "memory": {
+        "budgetBytes": 2147483648,
+        "highWaterBytes": 19791872,
+        "processPrivateBytes": 130662400,
+        "processWorkingSetBytes": 132988928,
+        "usedBytes": 19726336
+      },
+      "metricsMs": {
+        "cpuRenderMs": 1.0880491974877877,
+        "frameTimeMs": 1.3684457083042567,
+        "gpuPassSumMs": 0.05556439357990228,
+        "gpuQueueOverlapMs": 0.005554727145847866,
+        "gpuQueueSpanMs": 0.11485372784368461,
+        "gpuWaitMs": 0.2803965108164694,
+        "graphCompileMs": 0.028815910676901625,
+        "graphPrepareMs": 0.004922889043963706,
+        "graphRecordMs": 0.19989909281228158
+      },
+      "captureSha256": "3691e82c9ff5391ce863e17a9d1b94e8cd4cc9b3f2e9126c832f98b4a28bd246",
+      "reportSha256": "42f64d28c48ac0444ddf86b508689380ffc70dc4586da37750f08824f17f6426",
+      "samplesSha256": "cbb4c27f27f5ecabc1351e1128ebf87df5018d00a6ec5587bc03ec6206c7bc97",
+      "planSha256": "b3e8d58298a905e0018fe9d278d4a5a4360b8d87097dc94d121b8bbb27f1dede"
+    },
+    {
+      "id": "shadow257-t4-a0-01-vulkan",
+      "case": "shadow257-t4-a0",
+      "backend": "vulkan",
+      "repeat": 0,
+      "sampleCount": 1393,
+      "memoryAlias": false,
+      "asyncCompute": true,
+      "recordingThreads": 4,
+      "recordingChunks": 4,
+      "aliasBackingBytes": 0,
+      "aliasGroups": [],
+      "memory": {
+        "budgetBytes": 2147483648,
+        "highWaterBytes": 18982144,
+        "processPrivateBytes": 332247040,
+        "processWorkingSetBytes": 326160384,
+        "usedBytes": 18981888
+      },
+      "metricsMs": {
+        "cpuRenderMs": 0.9407850681981338,
+        "frameTimeMs": 1.4059113424264158,
+        "gpuPassSumMs": 0.04521239339554916,
+        "gpuQueueOverlapMs": 1.5069633883704213e-05,
+        "gpuQueueSpanMs": 0.24972209619526234,
+        "gpuWaitMs": 0.46512627422828345,
+        "graphCompileMs": 0.028672648959081094,
+        "graphPrepareMs": 0.004710050251256282,
+        "graphRecordMs": 0.17651852117731512
+      },
+      "captureSha256": "d2e01c98e48675d4d515cdc0fa09f066f0783d3599d34999e250768a8b7bdd51",
+      "reportSha256": "a8b14740f4a0c13a77680bf98a2eeb8cdda12780388a19ba9fd24138a8115bff",
+      "samplesSha256": "353219ea4a0e878e1a0af83584dbb21cfe6f6cb3778fde36a68d86ccdbd8f45a",
+      "planSha256": "0ddae9080095afd3dfce96463a65464f9c27e78e12e25dcaffc00f4f0b5a2f90"
+    },
+    {
+      "id": "shadow257-t4-a0-02-vulkan",
+      "case": "shadow257-t4-a0",
+      "backend": "vulkan",
+      "repeat": 1,
+      "sampleCount": 1411,
+      "memoryAlias": false,
+      "asyncCompute": true,
+      "recordingThreads": 4,
+      "recordingChunks": 4,
+      "aliasBackingBytes": 0,
+      "aliasGroups": [],
+      "memory": {
+        "budgetBytes": 2147483648,
+        "highWaterBytes": 18982144,
+        "processPrivateBytes": 336097280,
+        "processWorkingSetBytes": 326316032,
+        "usedBytes": 18981888
+      },
+      "metricsMs": {
+        "cpuRenderMs": 0.9171715095676829,
+        "frameTimeMs": 1.388414670446493,
+        "gpuPassSumMs": 0.044561417434443695,
+        "gpuQueueOverlapMs": 0.0,
+        "gpuQueueSpanMs": 0.25002325726435104,
+        "gpuWaitMs": 0.4712431608788093,
+        "graphCompileMs": 0.027818781006378454,
+        "graphPrepareMs": 0.004547271438695952,
+        "graphRecordMs": 0.175226364280652
+      },
+      "captureSha256": "d2e01c98e48675d4d515cdc0fa09f066f0783d3599d34999e250768a8b7bdd51",
+      "reportSha256": "51872950be4b390fbc618f31a68a47c01f05598a4bc423f0e51a1b5a241e44f4",
+      "samplesSha256": "8152494d618bb4d22c57e63a62cb2de3a7e047096653bef2c3a3d5ec2c5871d2",
+      "planSha256": "07406d1ad9aee863c9864efc98b775de676bcedb22dd03b015517de50533062c"
+    },
+    {
+      "id": "shadow257-t4-a0-02-dx12",
+      "case": "shadow257-t4-a0",
+      "backend": "dx12",
+      "repeat": 1,
+      "sampleCount": 1347,
+      "memoryAlias": false,
+      "asyncCompute": true,
+      "recordingThreads": 4,
+      "recordingChunks": 4,
+      "aliasBackingBytes": 0,
+      "aliasGroups": [],
+      "memory": {
+        "budgetBytes": 2147483648,
+        "highWaterBytes": 19791872,
+        "processPrivateBytes": 129310720,
+        "processWorkingSetBytes": 132718592,
+        "usedBytes": 19726336
+      },
+      "metricsMs": {
+        "cpuRenderMs": 1.1687465478841872,
+        "frameTimeMs": 1.4561492204899777,
+        "gpuPassSumMs": 0.05587603860430591,
+        "gpuQueueOverlapMs": 0.005331403118040091,
+        "gpuQueueSpanMs": 0.11807419153674845,
+        "gpuWaitMs": 0.2874026726057909,
+        "graphCompileMs": 0.03136495916852263,
+        "graphPrepareMs": 0.005093689680772076,
+        "graphRecordMs": 0.2026092798812172
+      },
+      "captureSha256": "3691e82c9ff5391ce863e17a9d1b94e8cd4cc9b3f2e9126c832f98b4a28bd246",
+      "reportSha256": "292eb5cc6aa17338372c603e7074dabf049e4d47fb150a7f5f6495fa52ced917",
+      "samplesSha256": "7c11dbd5f907d89497e3118a2c6bdbbd7f5e6fd10344b8e5e35a2c252c46ca2c",
+      "planSha256": "ecb5841522ccb8519e9b6810ea268165076406da575164acfd571d386088bbe9"
+    },
+    {
+      "id": "shadow257-t4-a1-01-dx12",
+      "case": "shadow257-t4-a1",
+      "backend": "dx12",
+      "repeat": 0,
+      "sampleCount": 1415,
+      "memoryAlias": true,
+      "asyncCompute": true,
+      "recordingThreads": 4,
+      "recordingChunks": 4,
+      "aliasBackingBytes": 1048576,
+      "aliasGroups": [
+        [
+          {
+            "aliasGroup": 0,
+            "estimatedBytes": 1048576,
+            "final": "DepthWrite",
+            "first": 2,
+            "imported": false,
+            "initial": "DepthWrite",
+            "last": 2,
+            "name": "MainLightShadowDepth",
+            "versions": 2
+          },
+          {
+            "aliasGroup": 0,
+            "estimatedBytes": 198404,
+            "final": "DepthWrite",
+            "first": 3,
+            "imported": false,
+            "initial": "DepthWrite",
+            "last": 5,
+            "name": "CameraDepth",
+            "versions": 2
+          }
+        ]
+      ],
+      "memory": {
+        "budgetBytes": 2147483648,
+        "highWaterBytes": 19529728,
+        "processPrivateBytes": 127422464,
+        "processWorkingSetBytes": 132829184,
+        "usedBytes": 19464192
+      },
+      "metricsMs": {
+        "cpuRenderMs": 1.1029316607773854,
+        "frameTimeMs": 1.3859515194346277,
+        "gpuPassSumMs": 0.0536676636042403,
+        "gpuQueueOverlapMs": 0.0058184819787986015,
+        "gpuQueueSpanMs": 0.11292196466431084,
+        "gpuWaitMs": 0.283019858657244,
+        "graphCompileMs": 0.03170734982332154,
+        "graphPrepareMs": 0.005615053003533569,
+        "graphRecordMs": 0.19970148409893987
+      },
+      "captureSha256": "3691e82c9ff5391ce863e17a9d1b94e8cd4cc9b3f2e9126c832f98b4a28bd246",
+      "reportSha256": "a19a74e4426e808661660e8c8a6ce2bf7a181bfaffa96bdda15cad05a20ded79",
+      "samplesSha256": "11203b5eb65bc79e8d3d3205a1915cf787d25149c6eb38d74473aef4f4e12649",
+      "planSha256": "1c922e7c880debb48151c4a1a7395e7c51db2bcb88a8ac4491cc9b1c8c126080"
+    },
+    {
+      "id": "shadow257-t4-a1-01-vulkan",
+      "case": "shadow257-t4-a1",
+      "backend": "vulkan",
+      "repeat": 0,
+      "sampleCount": 1365,
+      "memoryAlias": true,
+      "asyncCompute": true,
+      "recordingThreads": 4,
+      "recordingChunks": 4,
+      "aliasBackingBytes": 1048576,
+      "aliasGroups": [
+        [
+          {
+            "aliasGroup": 0,
+            "estimatedBytes": 1048576,
+            "final": "DepthWrite",
+            "first": 2,
+            "imported": false,
+            "initial": "DepthWrite",
+            "last": 2,
+            "name": "MainLightShadowDepth",
+            "versions": 2
+          },
+          {
+            "aliasGroup": 0,
+            "estimatedBytes": 198404,
+            "final": "DepthWrite",
+            "first": 3,
+            "imported": false,
+            "initial": "DepthWrite",
+            "last": 5,
+            "name": "CameraDepth",
+            "versions": 2
+          }
+        ]
+      ],
+      "memory": {
+        "budgetBytes": 2147483648,
+        "highWaterBytes": 18703616,
+        "processPrivateBytes": 336482304,
+        "processWorkingSetBytes": 327147520,
+        "usedBytes": 18703360
+      },
+      "metricsMs": {
+        "cpuRenderMs": 0.9499284981684973,
+        "frameTimeMs": 1.4350134798534804,
+        "gpuPassSumMs": 0.04521117069597068,
+        "gpuQueueOverlapMs": 0.0,
+        "gpuQueueSpanMs": 0.26078649670329634,
+        "gpuWaitMs": 0.4850849816849816,
+        "graphCompileMs": 0.030668058608058595,
+        "graphPrepareMs": 0.005087399267399269,
+        "graphRecordMs": 0.17817743589743598
+      },
+      "captureSha256": "d2e01c98e48675d4d515cdc0fa09f066f0783d3599d34999e250768a8b7bdd51",
+      "reportSha256": "8e6bd0053bcc4d4075902f2862d6887b0bba3df249800c88a540b43560e92dc4",
+      "samplesSha256": "6f2ddae82a4d89353b6c8d972216dd3b3b5e9755f1f680aac30a86dfbb6da141",
+      "planSha256": "c366efd63b6f66a0aa5931558e6113ed6639c5c363db25907ed2e9c6e34f5cd4"
+    },
+    {
+      "id": "shadow257-t4-a1-02-vulkan",
+      "case": "shadow257-t4-a1",
+      "backend": "vulkan",
+      "repeat": 1,
+      "sampleCount": 1395,
+      "memoryAlias": true,
+      "asyncCompute": true,
+      "recordingThreads": 4,
+      "recordingChunks": 4,
+      "aliasBackingBytes": 1048576,
+      "aliasGroups": [
+        [
+          {
+            "aliasGroup": 0,
+            "estimatedBytes": 1048576,
+            "final": "DepthWrite",
+            "first": 2,
+            "imported": false,
+            "initial": "DepthWrite",
+            "last": 2,
+            "name": "MainLightShadowDepth",
+            "versions": 2
+          },
+          {
+            "aliasGroup": 0,
+            "estimatedBytes": 198404,
+            "final": "DepthWrite",
+            "first": 3,
+            "imported": false,
+            "initial": "DepthWrite",
+            "last": 5,
+            "name": "CameraDepth",
+            "versions": 2
+          }
+        ]
+      ],
+      "memory": {
+        "budgetBytes": 2147483648,
+        "highWaterBytes": 18703616,
+        "processPrivateBytes": 334147584,
+        "processWorkingSetBytes": 326877184,
+        "usedBytes": 18703360
+      },
+      "metricsMs": {
+        "cpuRenderMs": 0.9277103225806452,
+        "frameTimeMs": 1.4053624372759852,
+        "gpuPassSumMs": 0.0442977949820789,
+        "gpuQueueOverlapMs": 0.0,
+        "gpuQueueSpanMs": 0.2586293448028678,
+        "gpuWaitMs": 0.4776521146953407,
+        "graphCompileMs": 0.029903297491039427,
+        "graphPrepareMs": 0.004974551971326167,
+        "graphRecordMs": 0.17487956989247322
+      },
+      "captureSha256": "d2e01c98e48675d4d515cdc0fa09f066f0783d3599d34999e250768a8b7bdd51",
+      "reportSha256": "535d8bd026cd21efc79aeece6042545b23cd22f38a3a09ec56ebfc37bb5c77da",
+      "samplesSha256": "e47b789c6fbf6b580cc72740ef42459a51a3db8b758d24f858d8af8d8a47fbe2",
+      "planSha256": "0e58888256f404875672aced69f2bb10af8995eb23f8e0ca4a84ee724da30acb"
+    },
+    {
+      "id": "shadow257-t4-a1-02-dx12",
+      "case": "shadow257-t4-a1",
+      "backend": "dx12",
+      "repeat": 1,
+      "sampleCount": 1358,
+      "memoryAlias": true,
+      "asyncCompute": true,
+      "recordingThreads": 4,
+      "recordingChunks": 4,
+      "aliasBackingBytes": 1048576,
+      "aliasGroups": [
+        [
+          {
+            "aliasGroup": 0,
+            "estimatedBytes": 1048576,
+            "final": "DepthWrite",
+            "first": 2,
+            "imported": false,
+            "initial": "DepthWrite",
+            "last": 2,
+            "name": "MainLightShadowDepth",
+            "versions": 2
+          },
+          {
+            "aliasGroup": 0,
+            "estimatedBytes": 198404,
+            "final": "DepthWrite",
+            "first": 3,
+            "imported": false,
+            "initial": "DepthWrite",
+            "last": 5,
+            "name": "CameraDepth",
+            "versions": 2
+          }
+        ]
+      ],
+      "memory": {
+        "budgetBytes": 2147483648,
+        "highWaterBytes": 19529728,
+        "processPrivateBytes": 126902272,
+        "processWorkingSetBytes": 132796416,
+        "usedBytes": 19464192
+      },
+      "metricsMs": {
+        "cpuRenderMs": 1.163850220913106,
+        "frameTimeMs": 1.4448131075110457,
+        "gpuPassSumMs": 0.05318124300441825,
+        "gpuQueueOverlapMs": 0.0051565184094256224,
+        "gpuQueueSpanMs": 0.11472091310751101,
+        "gpuWaitMs": 0.2809628865979377,
+        "graphCompileMs": 0.034859572901325485,
+        "graphPrepareMs": 0.005543519882179669,
+        "graphRecordMs": 0.20392577319587618
+      },
+      "captureSha256": "3691e82c9ff5391ce863e17a9d1b94e8cd4cc9b3f2e9126c832f98b4a28bd246",
+      "reportSha256": "c6252c564fee7bad31aa0cfcd9760198b0959fde2b542e7a7442848596626845",
+      "samplesSha256": "d9405f2ae90363798a036d582e90330c6cb5f82b626aaeca66381b9b092da490",
+      "planSha256": "574b82d85ac506fd3467e6f8c5dbbaed97b3fb9eb79c7d7e6b60fc8a43cbb56d"
+    },
+    {
+      "id": "shadow720-t1-a0-01-dx12",
+      "case": "shadow720-t1-a0",
+      "backend": "dx12",
+      "repeat": 0,
+      "sampleCount": 1402,
+      "memoryAlias": false,
+      "asyncCompute": false,
+      "recordingThreads": 1,
+      "recordingChunks": 1,
+      "aliasBackingBytes": 0,
+      "aliasGroups": [],
+      "memory": {
+        "budgetBytes": 2147483648,
+        "highWaterBytes": 86114304,
+        "processPrivateBytes": 181686272,
+        "processWorkingSetBytes": 117694464,
+        "usedBytes": 86048768
+      },
+      "metricsMs": {
+        "cpuRenderMs": 1.0372808131241102,
+        "frameTimeMs": 1.399804065620543,
+        "gpuPassSumMs": 0.1271526162624823,
+        "gpuQueueOverlapMs": 0.0,
+        "gpuQueueSpanMs": 0.12731035663338078,
+        "gpuWaitMs": 0.3625232524964333,
+        "graphCompileMs": 0.026875463623395122,
+        "graphPrepareMs": 0.00486654778887304,
+        "graphRecordMs": 0.20004543509272457
+      },
+      "captureSha256": "346d21d2b5bcc2b1d84f23f361086f5c2190f2cb7ed0d5a082e8c030c9b2e991",
+      "reportSha256": "92199dfab0eb4349093d27132e38707bb72fe20b7d52db20df947bb8a4002231",
+      "samplesSha256": "21220e0a054d852a2a19dc22334df19536ac697814e957573b2a79f031807b23",
+      "planSha256": "af77d8b4d95f295280b2b95a68df80b62ae544ca0bae6f990158fd43b3572761"
+    },
+    {
+      "id": "shadow720-t1-a0-01-vulkan",
+      "case": "shadow720-t1-a0",
+      "backend": "vulkan",
+      "repeat": 0,
+      "sampleCount": 1577,
+      "memoryAlias": false,
+      "asyncCompute": false,
+      "recordingThreads": 1,
+      "recordingChunks": 1,
+      "aliasBackingBytes": 0,
+      "aliasGroups": [],
+      "memory": {
+        "budgetBytes": 2147483648,
+        "highWaterBytes": 84944128,
+        "processPrivateBytes": 405135360,
+        "processWorkingSetBytes": 329662464,
+        "usedBytes": 84943872
+      },
+      "metricsMs": {
+        "cpuRenderMs": 0.8409433734939753,
+        "frameTimeMs": 1.2393413443246648,
+        "gpuPassSumMs": 0.11659986303107173,
+        "gpuQueueOverlapMs": 0.0,
+        "gpuQueueSpanMs": 0.12959687507926476,
+        "gpuWaitMs": 0.39839797083069173,
+        "graphCompileMs": 0.025465250475586548,
+        "graphPrepareMs": 0.004320608750792646,
+        "graphRecordMs": 0.17116201648700094
+      },
+      "captureSha256": "bea4fbab597f93061c43c40cde54494bbe94cfbcbf51e0418d2761067b22b847",
+      "reportSha256": "85bf82a0eee0fd9e9add911044619be048a68404697e755e86a837b7a1da0c5e",
+      "samplesSha256": "ef0f4b1352b382bb7aa27bf36e3e86d4a5415b0148539315106b4aba8aa02227",
+      "planSha256": "65b94addc0b8461b4668e0bc65e53b121cb9b93ea46c6a3529f423ccc06d50ca"
+    },
+    {
+      "id": "shadow720-t1-a0-02-vulkan",
+      "case": "shadow720-t1-a0",
+      "backend": "vulkan",
+      "repeat": 1,
+      "sampleCount": 1480,
+      "memoryAlias": false,
+      "asyncCompute": false,
+      "recordingThreads": 1,
+      "recordingChunks": 1,
+      "aliasBackingBytes": 0,
+      "aliasGroups": [],
+      "memory": {
+        "budgetBytes": 2147483648,
+        "highWaterBytes": 84944128,
+        "processPrivateBytes": 407105536,
+        "processWorkingSetBytes": 329953280,
+        "usedBytes": 84943872
+      },
+      "metricsMs": {
+        "cpuRenderMs": 0.9146143918918919,
+        "frameTimeMs": 1.3218179729729698,
+        "gpuPassSumMs": 0.11586888648648629,
+        "gpuQueueOverlapMs": 0.0,
+        "gpuQueueSpanMs": 0.12875846486486517,
+        "gpuWaitMs": 0.407203581081082,
+        "graphCompileMs": 0.02710148648648649,
+        "graphPrepareMs": 0.004608445945945951,
+        "graphRecordMs": 0.18137229729729756
+      },
+      "captureSha256": "bea4fbab597f93061c43c40cde54494bbe94cfbcbf51e0418d2761067b22b847",
+      "reportSha256": "6ae7d73823e69481372575aa94c236997e2daea537b528e0e5bf1332280b05f1",
+      "samplesSha256": "8fbf63b49c075128942df21c5120b2730b00473241a760fc72f1bb358fac53c8",
+      "planSha256": "dd7ab2acbfcbe5e558bf5d3096efaf01b687d91deeea2e44fa44313453865e91"
+    },
+    {
+      "id": "shadow720-t1-a0-02-dx12",
+      "case": "shadow720-t1-a0",
+      "backend": "dx12",
+      "repeat": 1,
+      "sampleCount": 1403,
+      "memoryAlias": false,
+      "asyncCompute": false,
+      "recordingThreads": 1,
+      "recordingChunks": 1,
+      "aliasBackingBytes": 0,
+      "aliasGroups": [],
+      "memory": {
+        "budgetBytes": 2147483648,
+        "highWaterBytes": 86114304,
+        "processPrivateBytes": 182882304,
+        "processWorkingSetBytes": 118620160,
+        "usedBytes": 86048768
+      },
+      "metricsMs": {
+        "cpuRenderMs": 1.0303042052744105,
+        "frameTimeMs": 1.3984060584461857,
+        "gpuPassSumMs": 0.1299328638631501,
+        "gpuQueueOverlapMs": 0.0,
+        "gpuQueueSpanMs": 0.13008941981468283,
+        "gpuWaitMs": 0.3681018531717752,
+        "graphCompileMs": 0.027107697790449047,
+        "graphPrepareMs": 0.00496279401282965,
+        "graphRecordMs": 0.2003558089807556
+      },
+      "captureSha256": "346d21d2b5bcc2b1d84f23f361086f5c2190f2cb7ed0d5a082e8c030c9b2e991",
+      "reportSha256": "96e0601705c072b8b293c3874f2f057c44424bb6d22fa1028060f12ed6e30b00",
+      "samplesSha256": "45064bb3395d8cbfce467a64c4f89ad67093d04e026c3cfbd15d33760e452e59",
+      "planSha256": "257c465a53426953b87e4f80540776c630065b44892fe57c6e173b2c53a54002"
+    },
+    {
+      "id": "shadow720-t1-a1-01-dx12",
+      "case": "shadow720-t1-a1",
+      "backend": "dx12",
+      "repeat": 0,
+      "sampleCount": 1329,
+      "memoryAlias": true,
+      "asyncCompute": false,
+      "recordingThreads": 1,
+      "recordingChunks": 1,
+      "aliasBackingBytes": 3932160,
+      "aliasGroups": [
+        [
+          {
+            "aliasGroup": 0,
+            "estimatedBytes": 1048576,
+            "final": "DepthWrite",
+            "first": 2,
+            "imported": false,
+            "initial": "DepthWrite",
+            "last": 2,
+            "name": "MainLightShadowDepth",
+            "versions": 2
+          },
+          {
+            "aliasGroup": 0,
+            "estimatedBytes": 3686400,
+            "final": "DepthWrite",
+            "first": 3,
+            "imported": false,
+            "initial": "DepthWrite",
+            "last": 5,
+            "name": "CameraDepth",
+            "versions": 2
+          }
+        ]
+      ],
+      "memory": {
+        "budgetBytes": 2147483648,
+        "highWaterBytes": 85065728,
+        "processPrivateBytes": 180969472,
+        "processWorkingSetBytes": 117829632,
+        "usedBytes": 85000192
+      },
+      "metricsMs": {
+        "cpuRenderMs": 1.1017011286681708,
+        "frameTimeMs": 1.4758208427388995,
+        "gpuPassSumMs": 0.12359230699774272,
+        "gpuQueueOverlapMs": 0.0,
+        "gpuQueueSpanMs": 0.12395933182844243,
+        "gpuWaitMs": 0.3741197140707296,
+        "graphCompileMs": 0.03110188111361926,
+        "graphPrepareMs": 0.0054902182091798495,
+        "graphRecordMs": 0.20470082768999273
+      },
+      "captureSha256": "346d21d2b5bcc2b1d84f23f361086f5c2190f2cb7ed0d5a082e8c030c9b2e991",
+      "reportSha256": "5d7a71ff9438af87d90d0e6634ec9181c8b43cd9e62b797a744acab8eb72d49b",
+      "samplesSha256": "212dba7f749a457491bb8dbc4e09eaaeb4c6a664095101277c4e939436d2d88e",
+      "planSha256": "2e9ba2dbbaa56e10be4416622408edf6b0f44243df962fdfe08f73bbfa3b658d"
+    },
+    {
+      "id": "shadow720-t1-a1-01-vulkan",
+      "case": "shadow720-t1-a1",
+      "backend": "vulkan",
+      "repeat": 0,
+      "sampleCount": 1559,
+      "memoryAlias": true,
+      "asyncCompute": false,
+      "recordingThreads": 1,
+      "recordingChunks": 1,
+      "aliasBackingBytes": 3932160,
+      "aliasGroups": [
+        [
+          {
+            "aliasGroup": 0,
+            "estimatedBytes": 1048576,
+            "final": "DepthWrite",
+            "first": 2,
+            "imported": false,
+            "initial": "DepthWrite",
+            "last": 2,
+            "name": "MainLightShadowDepth",
+            "versions": 2
+          },
+          {
+            "aliasGroup": 0,
+            "estimatedBytes": 3686400,
+            "final": "DepthWrite",
+            "first": 3,
+            "imported": false,
+            "initial": "DepthWrite",
+            "last": 5,
+            "name": "CameraDepth",
+            "versions": 2
+          }
+        ]
+      ],
+      "memory": {
+        "budgetBytes": 2147483648,
+        "highWaterBytes": 83895552,
+        "processPrivateBytes": 402726912,
+        "processWorkingSetBytes": 330326016,
+        "usedBytes": 83895296
+      },
+      "metricsMs": {
+        "cpuRenderMs": 0.8597522771007052,
+        "frameTimeMs": 1.2548972418216788,
+        "gpuPassSumMs": 0.1159908043617703,
+        "gpuQueueOverlapMs": 0.0,
+        "gpuQueueSpanMs": 0.133303112251443,
+        "gpuWaitMs": 0.39514496472097466,
+        "graphCompileMs": 0.028088261706221897,
+        "graphPrepareMs": 0.004809493264913402,
+        "graphRecordMs": 0.17248569595894808
+      },
+      "captureSha256": "bea4fbab597f93061c43c40cde54494bbe94cfbcbf51e0418d2761067b22b847",
+      "reportSha256": "ee6a86d22761c1f0ac6c59d4646be15505c27347f52eec8c33a2cd8b00cfa7f9",
+      "samplesSha256": "7354736c092736ea9a2fdbf472a42bddf1d815b07eea5f6ccb1fd63de1b1d15f",
+      "planSha256": "58d0b7df17ce2b13ec3d04bd29843057806a3dfd4abb11ac91bf84e58f90cef5"
+    },
+    {
+      "id": "shadow720-t1-a1-02-vulkan",
+      "case": "shadow720-t1-a1",
+      "backend": "vulkan",
+      "repeat": 1,
+      "sampleCount": 1576,
+      "memoryAlias": true,
+      "asyncCompute": false,
+      "recordingThreads": 1,
+      "recordingChunks": 1,
+      "aliasBackingBytes": 3932160,
+      "aliasGroups": [
+        [
+          {
+            "aliasGroup": 0,
+            "estimatedBytes": 1048576,
+            "final": "DepthWrite",
+            "first": 2,
+            "imported": false,
+            "initial": "DepthWrite",
+            "last": 2,
+            "name": "MainLightShadowDepth",
+            "versions": 2
+          },
+          {
+            "aliasGroup": 0,
+            "estimatedBytes": 3686400,
+            "final": "DepthWrite",
+            "first": 3,
+            "imported": false,
+            "initial": "DepthWrite",
+            "last": 5,
+            "name": "CameraDepth",
+            "versions": 2
+          }
+        ]
+      ],
+      "memory": {
+        "budgetBytes": 2147483648,
+        "highWaterBytes": 83895552,
+        "processPrivateBytes": 406605824,
+        "processWorkingSetBytes": 330145792,
+        "usedBytes": 83895296
+      },
+      "metricsMs": {
+        "cpuRenderMs": 0.848027411167514,
+        "frameTimeMs": 1.2414653553299488,
+        "gpuPassSumMs": 0.11665090355329934,
+        "gpuQueueOverlapMs": 0.0,
+        "gpuQueueSpanMs": 0.13367721827411158,
+        "gpuWaitMs": 0.3934379441624366,
+        "graphCompileMs": 0.02782131979695429,
+        "graphPrepareMs": 0.004769035532994943,
+        "graphRecordMs": 0.17227093908629443
+      },
+      "captureSha256": "bea4fbab597f93061c43c40cde54494bbe94cfbcbf51e0418d2761067b22b847",
+      "reportSha256": "091235a1cf7dfa71ac77ef82921597f52bb84164b9ffdab703b319296563e43a",
+      "samplesSha256": "2f34eb9fad4d486674996f078bf2f725b4f2a2d07fd9cd0f810b76290ddf577e",
+      "planSha256": "103316e7790e4c0af9d20e2a2a5e6a09acf2128d3add571952c806a6a093ecc2"
+    },
+    {
+      "id": "shadow720-t1-a1-02-dx12",
+      "case": "shadow720-t1-a1",
+      "backend": "dx12",
+      "repeat": 1,
+      "sampleCount": 1336,
+      "memoryAlias": true,
+      "asyncCompute": false,
+      "recordingThreads": 1,
+      "recordingChunks": 1,
+      "aliasBackingBytes": 3932160,
+      "aliasGroups": [
+        [
+          {
+            "aliasGroup": 0,
+            "estimatedBytes": 1048576,
+            "final": "DepthWrite",
+            "first": 2,
+            "imported": false,
+            "initial": "DepthWrite",
+            "last": 2,
+            "name": "MainLightShadowDepth",
+            "versions": 2
+          },
+          {
+            "aliasGroup": 0,
+            "estimatedBytes": 3686400,
+            "final": "DepthWrite",
+            "first": 3,
+            "imported": false,
+            "initial": "DepthWrite",
+            "last": 5,
+            "name": "CameraDepth",
+            "versions": 2
+          }
+        ]
+      ],
+      "memory": {
+        "budgetBytes": 2147483648,
+        "highWaterBytes": 85065728,
+        "processPrivateBytes": 181706752,
+        "processWorkingSetBytes": 118259712,
+        "usedBytes": 85000192
+      },
+      "metricsMs": {
+        "cpuRenderMs": 1.1081186377245504,
+        "frameTimeMs": 1.4690252994011976,
+        "gpuPassSumMs": 0.12442004790419177,
+        "gpuQueueOverlapMs": 0.0,
+        "gpuQueueSpanMs": 0.12457925748503,
+        "gpuWaitMs": 0.3609066616766466,
+        "graphCompileMs": 0.031141467065868254,
+        "graphPrepareMs": 0.005793338323353297,
+        "graphRecordMs": 0.22835785928143695
+      },
+      "captureSha256": "346d21d2b5bcc2b1d84f23f361086f5c2190f2cb7ed0d5a082e8c030c9b2e991",
+      "reportSha256": "ebe536eb363a5c10b8e835acb79628a202fac3fe28b56f25c948ee308e3ce8e5",
+      "samplesSha256": "c57f374de47450fcb8164155700f66b6428f3d727e88564d1d689d48b0149aee",
+      "planSha256": "0fa22223ea2d352c14d24ccdf8f958bc5bfe4c37d444d41755ec84c6d268bdc6"
+    },
+    {
+      "id": "shadow720-t4-a0-01-dx12",
+      "case": "shadow720-t4-a0",
+      "backend": "dx12",
+      "repeat": 0,
+      "sampleCount": 1269,
+      "memoryAlias": false,
+      "asyncCompute": true,
+      "recordingThreads": 4,
+      "recordingChunks": 4,
+      "aliasBackingBytes": 0,
+      "aliasGroups": [],
+      "memory": {
+        "budgetBytes": 2147483648,
+        "highWaterBytes": 86114304,
+        "processPrivateBytes": 204091392,
+        "processWorkingSetBytes": 136343552,
+        "usedBytes": 86048768
+      },
+      "metricsMs": {
+        "cpuRenderMs": 1.1746706067769894,
+        "frameTimeMs": 1.547907959022852,
+        "gpuPassSumMs": 0.1297039432624113,
+        "gpuQueueOverlapMs": 0.006260434988179663,
+        "gpuQueueSpanMs": 0.19027194641449957,
+        "gpuWaitMs": 0.37323735224586285,
+        "graphCompileMs": 0.0309038613081166,
+        "graphPrepareMs": 0.0061482269503546055,
+        "graphRecordMs": 0.2326952718676124
+      },
+      "captureSha256": "346d21d2b5bcc2b1d84f23f361086f5c2190f2cb7ed0d5a082e8c030c9b2e991",
+      "reportSha256": "d96d279607c64a037a60cef3253bdfd0fc151ac9fd298baf7927fa0bf5212b19",
+      "samplesSha256": "e6331b110e419cdb1062bc1f41dca44f9295930061bef9fed040fce8bec9ffba",
+      "planSha256": "c8376e0e002494dfcc11f89d19f9a772a9ff548041ae67b8d4a824a7465d0f56"
+    },
+    {
+      "id": "shadow720-t4-a0-01-vulkan",
+      "case": "shadow720-t4-a0",
+      "backend": "vulkan",
+      "repeat": 0,
+      "sampleCount": 1309,
+      "memoryAlias": false,
+      "asyncCompute": true,
+      "recordingThreads": 4,
+      "recordingChunks": 4,
+      "aliasBackingBytes": 0,
+      "aliasGroups": [],
+      "memory": {
+        "budgetBytes": 2147483648,
+        "highWaterBytes": 84944128,
+        "processPrivateBytes": 406204416,
+        "processWorkingSetBytes": 330698752,
+        "usedBytes": 84943872
+      },
+      "metricsMs": {
+        "cpuRenderMs": 0.9386195569136749,
+        "frameTimeMs": 1.4981343009931256,
+        "gpuPassSumMs": 0.11693878074866311,
+        "gpuQueueOverlapMs": 7.969442322383508e-06,
+        "gpuQueueSpanMs": 0.3276086172650875,
+        "gpuWaitMs": 0.5595147440794497,
+        "graphCompileMs": 0.02827272727272731,
+        "graphPrepareMs": 0.004661191749427037,
+        "graphRecordMs": 0.17665836516424754
+      },
+      "captureSha256": "bea4fbab597f93061c43c40cde54494bbe94cfbcbf51e0418d2761067b22b847",
+      "reportSha256": "cae72afaaa5e4f32901120c7b6ab5dfb57e9faf0ea718f22ebe42c9673406c31",
+      "samplesSha256": "6de4ca01d867a1cea465ee9dffe9e2083736ef21843d50c9dfadb14805a3aad1",
+      "planSha256": "a770f5fd97fe36d0993788b06fc39f1e434d79ea2d694aca42a126762790feef"
+    },
+    {
+      "id": "shadow720-t4-a0-02-vulkan",
+      "case": "shadow720-t4-a0",
+      "backend": "vulkan",
+      "repeat": 1,
+      "sampleCount": 1328,
+      "memoryAlias": false,
+      "asyncCompute": true,
+      "recordingThreads": 4,
+      "recordingChunks": 4,
+      "aliasBackingBytes": 0,
+      "aliasGroups": [],
+      "memory": {
+        "budgetBytes": 2147483648,
+        "highWaterBytes": 84944128,
+        "processPrivateBytes": 404381696,
+        "processWorkingSetBytes": 330145792,
+        "usedBytes": 84943872
+      },
+      "metricsMs": {
+        "cpuRenderMs": 0.9184752259036145,
+        "frameTimeMs": 1.4777812500000005,
+        "gpuPassSumMs": 0.1160824337349398,
+        "gpuQueueOverlapMs": 0.0,
+        "gpuQueueSpanMs": 0.32850197590361563,
+        "gpuWaitMs": 0.559306024096385,
+        "graphCompileMs": 0.02784299698795178,
+        "graphPrepareMs": 0.004494277108433736,
+        "graphRecordMs": 0.1750748493975903
+      },
+      "captureSha256": "bea4fbab597f93061c43c40cde54494bbe94cfbcbf51e0418d2761067b22b847",
+      "reportSha256": "86efc0e8dc81f73921062e143636f65ce7b27e50147d1e99805f303e3d022aaa",
+      "samplesSha256": "c5bd8c4187c9f963599a8957269998bb9da7545f14644d6f8e14e88e10400b66",
+      "planSha256": "2a06f955cd4cfc14ec55b77571072419ccd427e5191423bc9d633a057ef7fb63"
+    },
+    {
+      "id": "shadow720-t4-a0-02-dx12",
+      "case": "shadow720-t4-a0",
+      "backend": "dx12",
+      "repeat": 1,
+      "sampleCount": 1222,
+      "memoryAlias": false,
+      "asyncCompute": true,
+      "recordingThreads": 4,
+      "recordingChunks": 4,
+      "aliasBackingBytes": 0,
+      "aliasGroups": [],
+      "memory": {
+        "budgetBytes": 2147483648,
+        "highWaterBytes": 86114304,
+        "processPrivateBytes": 202326016,
+        "processWorkingSetBytes": 136323072,
+        "usedBytes": 86048768
+      },
+      "metricsMs": {
+        "cpuRenderMs": 1.2212390343698882,
+        "frameTimeMs": 1.6077047463175125,
+        "gpuPassSumMs": 0.1314562356792144,
+        "gpuQueueOverlapMs": 0.006849057283142383,
+        "gpuQueueSpanMs": 0.1928061440261866,
+        "gpuWaitMs": 0.3864657119476267,
+        "graphCompileMs": 0.029391489361702102,
+        "graphPrepareMs": 0.00512291325695581,
+        "graphRecordMs": 0.2034133387888707
+      },
+      "captureSha256": "346d21d2b5bcc2b1d84f23f361086f5c2190f2cb7ed0d5a082e8c030c9b2e991",
+      "reportSha256": "e31a9a5a65ba3bfdd8653b230acbca89e498fb1f2cb89d1cb53d4ea93421bec0",
+      "samplesSha256": "0d7030db688f5a03d0d5fae0c9ccae7463a3f670b19b09184df949b3c0bb5ad8",
+      "planSha256": "290da12d03c63939c5378e0f6985ed3ef8910933c51fa92b43be7061ab045632"
+    },
+    {
+      "id": "shadow720-t4-a1-01-dx12",
+      "case": "shadow720-t4-a1",
+      "backend": "dx12",
+      "repeat": 0,
+      "sampleCount": 1254,
+      "memoryAlias": true,
+      "asyncCompute": true,
+      "recordingThreads": 4,
+      "recordingChunks": 4,
+      "aliasBackingBytes": 3932160,
+      "aliasGroups": [
+        [
+          {
+            "aliasGroup": 0,
+            "estimatedBytes": 1048576,
+            "final": "DepthWrite",
+            "first": 2,
+            "imported": false,
+            "initial": "DepthWrite",
+            "last": 2,
+            "name": "MainLightShadowDepth",
+            "versions": 2
+          },
+          {
+            "aliasGroup": 0,
+            "estimatedBytes": 3686400,
+            "final": "DepthWrite",
+            "first": 3,
+            "imported": false,
+            "initial": "DepthWrite",
+            "last": 5,
+            "name": "CameraDepth",
+            "versions": 2
+          }
+        ]
+      ],
+      "memory": {
+        "budgetBytes": 2147483648,
+        "highWaterBytes": 85065728,
+        "processPrivateBytes": 199086080,
+        "processWorkingSetBytes": 136224768,
+        "usedBytes": 85000192
+      },
+      "metricsMs": {
+        "cpuRenderMs": 1.1884350877193002,
+        "frameTimeMs": 1.5661243221690593,
+        "gpuPassSumMs": 0.1261657416267942,
+        "gpuQueueOverlapMs": 0.00702453588516746,
+        "gpuQueueSpanMs": 0.18629770015948965,
+        "gpuWaitMs": 0.37768923444976027,
+        "graphCompileMs": 0.033281100478468835,
+        "graphPrepareMs": 0.005628229665071777,
+        "graphRecordMs": 0.24503700159489616
+      },
+      "captureSha256": "346d21d2b5bcc2b1d84f23f361086f5c2190f2cb7ed0d5a082e8c030c9b2e991",
+      "reportSha256": "cd20f0f19829b96a689b0eed83b116b0e58ac3fdd41ddbdc573aa1430ed718b7",
+      "samplesSha256": "d6bc566bb4bfc8fa4bb2d1cf82a29ff5c047a5a1561de3e0fb26998038e41acb",
+      "planSha256": "6462d5ebc9a848e185091a69721ab12767a6ee3650b97d9abf8363c0b449b84b"
+    },
+    {
+      "id": "shadow720-t4-a1-01-vulkan",
+      "case": "shadow720-t4-a1",
+      "backend": "vulkan",
+      "repeat": 0,
+      "sampleCount": 1249,
+      "memoryAlias": true,
+      "asyncCompute": true,
+      "recordingThreads": 4,
+      "recordingChunks": 4,
+      "aliasBackingBytes": 3932160,
+      "aliasGroups": [
+        [
+          {
+            "aliasGroup": 0,
+            "estimatedBytes": 1048576,
+            "final": "DepthWrite",
+            "first": 2,
+            "imported": false,
+            "initial": "DepthWrite",
+            "last": 2,
+            "name": "MainLightShadowDepth",
+            "versions": 2
+          },
+          {
+            "aliasGroup": 0,
+            "estimatedBytes": 3686400,
+            "final": "DepthWrite",
+            "first": 3,
+            "imported": false,
+            "initial": "DepthWrite",
+            "last": 5,
+            "name": "CameraDepth",
+            "versions": 2
+          }
+        ]
+      ],
+      "memory": {
+        "budgetBytes": 2147483648,
+        "highWaterBytes": 83895552,
+        "processPrivateBytes": 404434944,
+        "processWorkingSetBytes": 330002432,
+        "usedBytes": 83895296
+      },
+      "metricsMs": {
+        "cpuRenderMs": 0.9797539631705359,
+        "frameTimeMs": 1.5707717373899146,
+        "gpuPassSumMs": 0.11828657806245006,
+        "gpuQueueOverlapMs": 0.0,
+        "gpuQueueSpanMs": 0.3389113594875907,
+        "gpuWaitMs": 0.5910177742193743,
+        "graphCompileMs": 0.031835868694955895,
+        "graphPrepareMs": 0.005242594075260208,
+        "graphRecordMs": 0.18099911929543616
+      },
+      "captureSha256": "bea4fbab597f93061c43c40cde54494bbe94cfbcbf51e0418d2761067b22b847",
+      "reportSha256": "68e65c5f6e2e053dce510e236cbfa70f7130d11a85bfa7afa306c3ebe2d5f69f",
+      "samplesSha256": "541a1e950e529a4975bc61dde58b27058671aa6560207632ed5d0efb9627d278",
+      "planSha256": "808e0520bc09e3a045ee435204c996410dbba2553219f597b96e2d5b39f25168"
+    },
+    {
+      "id": "shadow720-t4-a1-02-vulkan",
+      "case": "shadow720-t4-a1",
+      "backend": "vulkan",
+      "repeat": 1,
+      "sampleCount": 1242,
+      "memoryAlias": true,
+      "asyncCompute": true,
+      "recordingThreads": 4,
+      "recordingChunks": 4,
+      "aliasBackingBytes": 3932160,
+      "aliasGroups": [
+        [
+          {
+            "aliasGroup": 0,
+            "estimatedBytes": 1048576,
+            "final": "DepthWrite",
+            "first": 2,
+            "imported": false,
+            "initial": "DepthWrite",
+            "last": 2,
+            "name": "MainLightShadowDepth",
+            "versions": 2
+          },
+          {
+            "aliasGroup": 0,
+            "estimatedBytes": 3686400,
+            "final": "DepthWrite",
+            "first": 3,
+            "imported": false,
+            "initial": "DepthWrite",
+            "last": 5,
+            "name": "CameraDepth",
+            "versions": 2
+          }
+        ]
+      ],
+      "memory": {
+        "budgetBytes": 2147483648,
+        "highWaterBytes": 83895552,
+        "processPrivateBytes": 404623360,
+        "processWorkingSetBytes": 329912320,
+        "usedBytes": 83895296
+      },
+      "metricsMs": {
+        "cpuRenderMs": 0.9952012077294672,
+        "frameTimeMs": 1.5795929146537844,
+        "gpuPassSumMs": 0.11797598711755246,
+        "gpuQueueOverlapMs": 0.0,
+        "gpuQueueSpanMs": 0.33985280515297855,
+        "gpuWaitMs": 0.584391706924316,
+        "graphCompileMs": 0.03261779388083733,
+        "graphPrepareMs": 0.005346698872785839,
+        "graphRecordMs": 0.18208333333333324
+      },
+      "captureSha256": "bea4fbab597f93061c43c40cde54494bbe94cfbcbf51e0418d2761067b22b847",
+      "reportSha256": "9f7e66e9204da6d5eecf005c234e72f0ff812e67288e70f53ae1d8028ad1ae30",
+      "samplesSha256": "f8aa9f9deb45266f3d28fb4bf3753761c5709856aa488735ffb9a0bed8319ba1",
+      "planSha256": "d8984cdf809f04bd72a136262fdcb7c48ab9db4b5b5c39ba933705d163f473d1"
+    },
+    {
+      "id": "shadow720-t4-a1-02-dx12",
+      "case": "shadow720-t4-a1",
+      "backend": "dx12",
+      "repeat": 1,
+      "sampleCount": 1278,
+      "memoryAlias": true,
+      "asyncCompute": true,
+      "recordingThreads": 4,
+      "recordingChunks": 4,
+      "aliasBackingBytes": 3932160,
+      "aliasGroups": [
+        [
+          {
+            "aliasGroup": 0,
+            "estimatedBytes": 1048576,
+            "final": "DepthWrite",
+            "first": 2,
+            "imported": false,
+            "initial": "DepthWrite",
+            "last": 2,
+            "name": "MainLightShadowDepth",
+            "versions": 2
+          },
+          {
+            "aliasGroup": 0,
+            "estimatedBytes": 3686400,
+            "final": "DepthWrite",
+            "first": 3,
+            "imported": false,
+            "initial": "DepthWrite",
+            "last": 5,
+            "name": "CameraDepth",
+            "versions": 2
+          }
+        ]
+      ],
+      "memory": {
+        "budgetBytes": 2147483648,
+        "highWaterBytes": 85065728,
+        "processPrivateBytes": 199593984,
+        "processWorkingSetBytes": 136396800,
+        "usedBytes": 85000192
+      },
+      "metricsMs": {
+        "cpuRenderMs": 1.1684796557120498,
+        "frameTimeMs": 1.5363104851330203,
+        "gpuPassSumMs": 0.12605934272300487,
+        "gpuQueueOverlapMs": 0.005869974960876374,
+        "gpuQueueSpanMs": 0.1852208012519562,
+        "gpuWaitMs": 0.36783082942097045,
+        "graphCompileMs": 0.0355424100156495,
+        "graphPrepareMs": 0.005615336463223793,
+        "graphRecordMs": 0.20105320813771543
+      },
+      "captureSha256": "346d21d2b5bcc2b1d84f23f361086f5c2190f2cb7ed0d5a082e8c030c9b2e991",
+      "reportSha256": "82e30b97eaed881adceee0e235b12cffc82568b27b69ee2acd73e7bbd4093535",
+      "samplesSha256": "26d8e769237eafa96d5b24d0e307b609fd18b5ecc7c3a4e8c9987b75b1a4ee20",
+      "planSha256": "3c65c55e85e433d73173cecb21cc4942d8b3bb60db832e02f91ccca734c76bdd"
+    }
+  ],
+  "comparisons": [
+    {
+      "backend": "dx12",
+      "case": "pbr64",
+      "recordingThreads": 1,
+      "asyncCompute": false,
+      "pixelsEqual": true,
+      "ordinary": {
+        "samples": 3727,
+        "recordingChunks": [
+          1
+        ],
+        "metricsMs": {
+          "cpuRenderMs": 0.8092117413109822,
+          "frameTimeMs": 1.0481193039110148,
+          "gpuPassSumMs": 0.04233695054025773,
+          "gpuQueueOverlapMs": 0.0,
+          "gpuQueueSpanMs": 0.04273326385690032,
+          "gpuWaitMs": 0.23890756260003287,
+          "graphCompileMs": 0.019175235500641888,
+          "graphPrepareMs": 0.0038989271445446375,
+          "graphRecordMs": 0.10068900071185817
+        },
+        "usedBytes": 14221312,
+        "highWaterBytes": 14286848,
+        "aliasBackingBytes": [
+          0
+        ],
+        "frameP95MeanMs": 1.2706825
+      },
+      "aliased": {
+        "samples": 3836,
+        "recordingChunks": [
+          1
+        ],
+        "metricsMs": {
+          "cpuRenderMs": 0.7893740981102124,
+          "frameTimeMs": 1.0186109265179173,
+          "gpuPassSumMs": 0.03763513902226864,
+          "gpuQueueOverlapMs": 0.0,
+          "gpuQueueSpanMs": 0.03778117540013924,
+          "gpuWaitMs": 0.22923682840770698,
+          "graphCompileMs": 0.020867428616475295,
+          "graphPrepareMs": 0.004186878425104375,
+          "graphRecordMs": 0.10047126266744952
+        },
+        "usedBytes": 14155776,
+        "highWaterBytes": 14221312,
+        "aliasBackingBytes": [
+          262144
+        ],
+        "frameP95MeanMs": 1.1638175
+      }
+    },
+    {
+      "backend": "dx12",
+      "case": "pbr64",
+      "recordingThreads": 4,
+      "asyncCompute": true,
+      "pixelsEqual": true,
+      "ordinary": {
+        "samples": 3345,
+        "recordingChunks": [
+          4
+        ],
+        "metricsMs": {
+          "cpuRenderMs": 0.9139497571070989,
+          "frameTimeMs": 1.1701190417486163,
+          "gpuPassSumMs": 0.0460580271339174,
+          "gpuQueueOverlapMs": 0.0013756472268907564,
+          "gpuQueueSpanMs": 0.1086985594850707,
+          "gpuWaitMs": 0.2561692846415159,
+          "graphCompileMs": 0.021434750759878426,
+          "graphPrepareMs": 0.004107548006436625,
+          "graphRecordMs": 0.10496044448417667
+        },
+        "usedBytes": 14221312,
+        "highWaterBytes": 14286848,
+        "aliasBackingBytes": [
+          0
+        ],
+        "frameP95MeanMs": 1.419255
+      },
+      "aliased": {
+        "samples": 3405,
+        "recordingChunks": [
+          4
+        ],
+        "metricsMs": {
+          "cpuRenderMs": 0.8957747927889452,
+          "frameTimeMs": 1.1496591354337817,
+          "gpuPassSumMs": 0.04287891608262781,
+          "gpuQueueOverlapMs": 0.001872007470776205,
+          "gpuQueueSpanMs": 0.10327528309736012,
+          "gpuWaitMs": 0.2538843426448355,
+          "graphCompileMs": 0.024778950637813976,
+          "graphPrepareMs": 0.004500199810660296,
+          "graphRecordMs": 0.10194316976333215
+        },
+        "usedBytes": 14155776,
+        "highWaterBytes": 14221312,
+        "aliasBackingBytes": [
+          262144
+        ],
+        "frameP95MeanMs": 1.3113199999999998
+      }
+    },
+    {
+      "backend": "dx12",
+      "case": "shadow257",
+      "recordingThreads": 1,
+      "asyncCompute": false,
+      "pixelsEqual": true,
+      "ordinary": {
+        "samples": 2987,
+        "recordingChunks": [
+          1
+        ],
+        "metricsMs": {
+          "cpuRenderMs": 1.043841677903468,
+          "frameTimeMs": 1.3125341419793464,
+          "gpuPassSumMs": 0.05348792092162406,
+          "gpuQueueOverlapMs": 0.0,
+          "gpuQueueSpanMs": 0.05373507788785805,
+          "gpuWaitMs": 0.2686924640758772,
+          "graphCompileMs": 0.02767774063577421,
+          "graphPrepareMs": 0.004891661194052613,
+          "graphRecordMs": 0.20108144581977516
+        },
+        "usedBytes": 19726336,
+        "highWaterBytes": 19791872,
+        "aliasBackingBytes": [
+          0
+        ],
+        "frameP95MeanMs": 1.5454649999999996
+      },
+      "aliased": {
+        "samples": 3008,
+        "recordingChunks": [
+          1
+        ],
+        "metricsMs": {
+          "cpuRenderMs": 1.043293949893119,
+          "frameTimeMs": 1.302932667153783,
+          "gpuPassSumMs": 0.051143583820264876,
+          "gpuQueueOverlapMs": 0.0,
+          "gpuQueueSpanMs": 0.051350863797017726,
+          "gpuWaitMs": 0.25963871726066345,
+          "graphCompileMs": 0.030253776946358737,
+          "graphPrepareMs": 0.005337100578656455,
+          "graphRecordMs": 0.20133074477857965
+        },
+        "usedBytes": 19464192,
+        "highWaterBytes": 19529728,
+        "aliasBackingBytes": [
+          1048576
+        ],
+        "frameP95MeanMs": 1.523205
+      }
+    },
+    {
+      "backend": "dx12",
+      "case": "shadow257",
+      "recordingThreads": 4,
+      "asyncCompute": true,
+      "pixelsEqual": true,
+      "ordinary": {
+        "samples": 2780,
+        "recordingChunks": [
+          4
+        ],
+        "metricsMs": {
+          "cpuRenderMs": 1.1283978726859876,
+          "frameTimeMs": 1.4122974643971173,
+          "gpuPassSumMs": 0.05572021609210409,
+          "gpuQueueOverlapMs": 0.005443065131943979,
+          "gpuQueueSpanMs": 0.11646395969021653,
+          "gpuWaitMs": 0.2838995917111301,
+          "graphCompileMs": 0.030090434922712128,
+          "graphPrepareMs": 0.005008289362367891,
+          "graphRecordMs": 0.2012541863467494
+        },
+        "usedBytes": 19726336,
+        "highWaterBytes": 19791872,
+        "aliasBackingBytes": [
+          0
+        ],
+        "frameP95MeanMs": 1.643415
+      },
+      "aliased": {
+        "samples": 2773,
+        "recordingChunks": [
+          4
+        ],
+        "metricsMs": {
+          "cpuRenderMs": 1.1333909408452456,
+          "frameTimeMs": 1.4153823134728367,
+          "gpuPassSumMs": 0.053424453304329274,
+          "gpuQueueOverlapMs": 0.005487500194112112,
+          "gpuQueueSpanMs": 0.11382143888591092,
+          "gpuWaitMs": 0.2819913726275909,
+          "graphCompileMs": 0.03328346136232351,
+          "graphPrepareMs": 0.005579286442856619,
+          "graphRecordMs": 0.20181362864740804
+        },
+        "usedBytes": 19464192,
+        "highWaterBytes": 19529728,
+        "aliasBackingBytes": [
+          1048576
+        ],
+        "frameP95MeanMs": 1.6123499999999997
+      }
+    },
+    {
+      "backend": "dx12",
+      "case": "shadow720",
+      "recordingThreads": 1,
+      "asyncCompute": false,
+      "pixelsEqual": true,
+      "ordinary": {
+        "samples": 2805,
+        "recordingChunks": [
+          1
+        ],
+        "metricsMs": {
+          "cpuRenderMs": 1.0337925091992604,
+          "frameTimeMs": 1.3991050620333643,
+          "gpuPassSumMs": 0.12854274006281619,
+          "gpuQueueOverlapMs": 0.0,
+          "gpuQueueSpanMs": 0.1286998882240318,
+          "gpuWaitMs": 0.36531255283410424,
+          "graphCompileMs": 0.026991580706922084,
+          "graphPrepareMs": 0.004914670900851345,
+          "graphRecordMs": 0.2002006220367401
+        },
+        "usedBytes": 86048768,
+        "highWaterBytes": 86114304,
+        "aliasBackingBytes": [
+          0
+        ],
+        "frameP95MeanMs": 1.5733224999999997
+      },
+      "aliased": {
+        "samples": 2665,
+        "recordingChunks": [
+          1
+        ],
+        "metricsMs": {
+          "cpuRenderMs": 1.1049098831963606,
+          "frameTimeMs": 1.4724230710700486,
+          "gpuPassSumMs": 0.12400617745096724,
+          "gpuQueueOverlapMs": 0.0,
+          "gpuQueueSpanMs": 0.12426929465673622,
+          "gpuWaitMs": 0.3675131878736881,
+          "graphCompileMs": 0.031121674089743756,
+          "graphPrepareMs": 0.005641778266266573,
+          "graphRecordMs": 0.21652934348571484
+        },
+        "usedBytes": 85000192,
+        "highWaterBytes": 85065728,
+        "aliasBackingBytes": [
+          3932160
+        ],
+        "frameP95MeanMs": 1.7625799999999998
+      }
+    },
+    {
+      "backend": "dx12",
+      "case": "shadow720",
+      "recordingThreads": 4,
+      "asyncCompute": true,
+      "pixelsEqual": true,
+      "ordinary": {
+        "samples": 2491,
+        "recordingChunks": [
+          4
+        ],
+        "metricsMs": {
+          "cpuRenderMs": 1.1979548205734387,
+          "frameTimeMs": 1.5778063526701822,
+          "gpuPassSumMs": 0.13058008947081284,
+          "gpuQueueOverlapMs": 0.0065547461356610225,
+          "gpuQueueSpanMs": 0.1915390452203431,
+          "gpuWaitMs": 0.37985153209674477,
+          "graphCompileMs": 0.03014767533490935,
+          "graphPrepareMs": 0.005635570103655207,
+          "graphRecordMs": 0.21805430532824155
+        },
+        "usedBytes": 86048768,
+        "highWaterBytes": 86114304,
+        "aliasBackingBytes": [
+          0
+        ],
+        "frameP95MeanMs": 1.76668
+      },
+      "aliased": {
+        "samples": 2532,
+        "recordingChunks": [
+          4
+        ],
+        "metricsMs": {
+          "cpuRenderMs": 1.178457371715675,
+          "frameTimeMs": 1.5512174036510398,
+          "gpuPassSumMs": 0.12611254217489953,
+          "gpuQueueOverlapMs": 0.006447255423021917,
+          "gpuQueueSpanMs": 0.1857592507057229,
+          "gpuWaitMs": 0.37276003193536533,
+          "graphCompileMs": 0.03441175524705917,
+          "graphPrepareMs": 0.005621783064147785,
+          "graphRecordMs": 0.2230451048663058
+        },
+        "usedBytes": 85000192,
+        "highWaterBytes": 85065728,
+        "aliasBackingBytes": [
+          3932160
+        ],
+        "frameP95MeanMs": 1.7311349999999996
+      }
+    },
+    {
+      "backend": "vulkan",
+      "case": "pbr64",
+      "recordingThreads": 1,
+      "asyncCompute": false,
+      "pixelsEqual": true,
+      "ordinary": {
+        "samples": 4225,
+        "recordingChunks": [
+          1
+        ],
+        "metricsMs": {
+          "cpuRenderMs": 0.6502572731799177,
+          "frameTimeMs": 0.9202248927880616,
+          "gpuPassSumMs": 0.03712323049950527,
+          "gpuQueueOverlapMs": 0.0,
+          "gpuQueueSpanMs": 0.046199588381448206,
+          "gpuWaitMs": 0.26996761960814375,
+          "graphCompileMs": 0.0187228297453355,
+          "graphPrepareMs": 0.0035187311099040574,
+          "graphRecordMs": 0.09181897478766007
+        },
+        "usedBytes": 13737664,
+        "highWaterBytes": 13737920,
+        "aliasBackingBytes": [
+          0
+        ],
+        "frameP95MeanMs": 1.1174624999999998
+      },
+      "aliased": {
+        "samples": 4023,
+        "recordingChunks": [
+          1
+        ],
+        "metricsMs": {
+          "cpuRenderMs": 0.6890233945923527,
+          "frameTimeMs": 0.9674531128995657,
+          "gpuPassSumMs": 0.036572099683970544,
+          "gpuQueueOverlapMs": 0.0,
+          "gpuQueueSpanMs": 0.049060555149924884,
+          "gpuWaitMs": 0.2784297183072134,
+          "graphCompileMs": 0.02185935824971217,
+          "graphPrepareMs": 0.004076846310246656,
+          "graphRecordMs": 0.09503132397438746
+        },
+        "usedBytes": 13737152,
+        "highWaterBytes": 13737408,
+        "aliasBackingBytes": [
+          278528
+        ],
+        "frameP95MeanMs": 1.1737924999999998
+      }
+    },
+    {
+      "backend": "vulkan",
+      "case": "pbr64",
+      "recordingThreads": 4,
+      "asyncCompute": true,
+      "pixelsEqual": true,
+      "ordinary": {
+        "samples": 3339,
+        "recordingChunks": [
+          4
+        ],
+        "metricsMs": {
+          "cpuRenderMs": 0.7285398816848917,
+          "frameTimeMs": 1.1710398526774732,
+          "gpuPassSumMs": 0.035427921702572196,
+          "gpuQueueOverlapMs": 0.0,
+          "gpuQueueSpanMs": 0.24547394194497857,
+          "gpuWaitMs": 0.442499970992581,
+          "graphCompileMs": 0.02022695818913338,
+          "graphPrepareMs": 0.0037198974568907065,
+          "graphRecordMs": 0.0939949488163466
+        },
+        "usedBytes": 13737664,
+        "highWaterBytes": 13737920,
+        "aliasBackingBytes": [
+          0
+        ],
+        "frameP95MeanMs": 1.363305
+      },
+      "aliased": {
+        "samples": 3276,
+        "recordingChunks": [
+          4
+        ],
+        "metricsMs": {
+          "cpuRenderMs": 0.7479152594538194,
+          "frameTimeMs": 1.1927950672074132,
+          "gpuPassSumMs": 0.03551586961728508,
+          "gpuQueueOverlapMs": 0.0,
+          "gpuQueueSpanMs": 0.24522187772846626,
+          "gpuWaitMs": 0.44487980775359204,
+          "graphCompileMs": 0.023291992807951502,
+          "graphPrepareMs": 0.0043158151267833405,
+          "graphRecordMs": 0.09472922306420173
+        },
+        "usedBytes": 13737152,
+        "highWaterBytes": 13737408,
+        "aliasBackingBytes": [
+          278528
+        ],
+        "frameP95MeanMs": 1.3885299999999994
+      }
+    },
+    {
+      "backend": "vulkan",
+      "case": "shadow257",
+      "recordingThreads": 1,
+      "asyncCompute": false,
+      "pixelsEqual": true,
+      "ordinary": {
+        "samples": 3436,
+        "recordingChunks": [
+          1
+        ],
+        "metricsMs": {
+          "cpuRenderMs": 0.8452057829152557,
+          "frameTimeMs": 1.1366239352870307,
+          "gpuPassSumMs": 0.044686943708227816,
+          "gpuQueueOverlapMs": 0.0,
+          "gpuQueueSpanMs": 0.056106342743985016,
+          "gpuWaitMs": 0.2914181523717739,
+          "graphCompileMs": 0.02610713589127396,
+          "graphPrepareMs": 0.0043401333864656316,
+          "graphRecordMs": 0.17381857417716087
+        },
+        "usedBytes": 18981888,
+        "highWaterBytes": 18982144,
+        "aliasBackingBytes": [
+          0
+        ],
+        "frameP95MeanMs": 1.3231949999999997
+      },
+      "aliased": {
+        "samples": 3437,
+        "recordingChunks": [
+          1
+        ],
+        "metricsMs": {
+          "cpuRenderMs": 0.83182152327187,
+          "frameTimeMs": 1.1359670106073967,
+          "gpuPassSumMs": 0.043837957295455615,
+          "gpuQueueOverlapMs": 0.0,
+          "gpuQueueSpanMs": 0.060319654516998784,
+          "gpuWaitMs": 0.30414548733552726,
+          "graphCompileMs": 0.027372203715128773,
+          "graphPrepareMs": 0.004756843982606116,
+          "graphRecordMs": 0.1705417423580075
+        },
+        "usedBytes": 18703360,
+        "highWaterBytes": 18703616,
+        "aliasBackingBytes": [
+          1048576
+        ],
+        "frameP95MeanMs": 1.2854625
+      }
+    },
+    {
+      "backend": "vulkan",
+      "case": "shadow257",
+      "recordingThreads": 4,
+      "asyncCompute": true,
+      "pixelsEqual": true,
+      "ordinary": {
+        "samples": 2804,
+        "recordingChunks": [
+          4
+        ],
+        "metricsMs": {
+          "cpuRenderMs": 0.9289782888829083,
+          "frameTimeMs": 1.3971630064364544,
+          "gpuPassSumMs": 0.04488690541499643,
+          "gpuQueueOverlapMs": 7.5348169418521065e-06,
+          "gpuQueueSpanMs": 0.24987267672980668,
+          "gpuWaitMs": 0.4681847175535464,
+          "graphCompileMs": 0.028245714982729774,
+          "graphPrepareMs": 0.004628660844976117,
+          "graphRecordMs": 0.17587244272898356
+        },
+        "usedBytes": 18981888,
+        "highWaterBytes": 18982144,
+        "aliasBackingBytes": [
+          0
+        ],
+        "frameP95MeanMs": 1.62431
+      },
+      "aliased": {
+        "samples": 2760,
+        "recordingChunks": [
+          4
+        ],
+        "metricsMs": {
+          "cpuRenderMs": 0.9388194103745713,
+          "frameTimeMs": 1.4201879585647328,
+          "gpuPassSumMs": 0.04475448283902479,
+          "gpuQueueOverlapMs": 0.0,
+          "gpuQueueSpanMs": 0.2597079207530821,
+          "gpuWaitMs": 0.48136854819016117,
+          "graphCompileMs": 0.03028567804954901,
+          "graphPrepareMs": 0.005030975619362717,
+          "graphRecordMs": 0.1765285028949546
+        },
+        "usedBytes": 18703360,
+        "highWaterBytes": 18703616,
+        "aliasBackingBytes": [
+          1048576
+        ],
+        "frameP95MeanMs": 1.6210049999999998
+      }
+    },
+    {
+      "backend": "vulkan",
+      "case": "shadow720",
+      "recordingThreads": 1,
+      "asyncCompute": false,
+      "pixelsEqual": true,
+      "ordinary": {
+        "samples": 3057,
+        "recordingChunks": [
+          1
+        ],
+        "metricsMs": {
+          "cpuRenderMs": 0.8777788826929336,
+          "frameTimeMs": 1.2805796586488172,
+          "gpuPassSumMs": 0.11623437475877901,
+          "gpuQueueOverlapMs": 0.0,
+          "gpuQueueSpanMs": 0.12917766997206498,
+          "gpuWaitMs": 0.40280077595588687,
+          "graphCompileMs": 0.026283368481036518,
+          "graphPrepareMs": 0.004464527348369298,
+          "graphRecordMs": 0.17626715689214925
+        },
+        "usedBytes": 84943872,
+        "highWaterBytes": 84944128,
+        "aliasBackingBytes": [
+          0
+        ],
+        "frameP95MeanMs": 1.5435449999999997
+      },
+      "aliased": {
+        "samples": 3135,
+        "recordingChunks": [
+          1
+        ],
+        "metricsMs": {
+          "cpuRenderMs": 0.8538898441341096,
+          "frameTimeMs": 1.2481812985758138,
+          "gpuPassSumMs": 0.11632085395753482,
+          "gpuQueueOverlapMs": 0.0,
+          "gpuQueueSpanMs": 0.1334901652627773,
+          "gpuWaitMs": 0.39429145444170566,
+          "graphCompileMs": 0.027954790751588094,
+          "graphPrepareMs": 0.004789264398954172,
+          "graphRecordMs": 0.17237831752262125
+        },
+        "usedBytes": 83895296,
+        "highWaterBytes": 83895552,
+        "aliasBackingBytes": [
+          3932160
+        ],
+        "frameP95MeanMs": 1.4049325000000001
+      }
+    },
+    {
+      "backend": "vulkan",
+      "case": "shadow720",
+      "recordingThreads": 4,
+      "asyncCompute": true,
+      "pixelsEqual": true,
+      "ordinary": {
+        "samples": 2637,
+        "recordingChunks": [
+          4
+        ],
+        "metricsMs": {
+          "cpuRenderMs": 0.9285473914086447,
+          "frameTimeMs": 1.4879577754965632,
+          "gpuPassSumMs": 0.11651060724180146,
+          "gpuQueueOverlapMs": 3.984721161191754e-06,
+          "gpuQueueSpanMs": 0.32805529658435156,
+          "gpuWaitMs": 0.5594103840879173,
+          "graphCompileMs": 0.028057862130339548,
+          "graphPrepareMs": 0.004577734428930386,
+          "graphRecordMs": 0.1758666072809189
+        },
+        "usedBytes": 84943872,
+        "highWaterBytes": 84944128,
+        "aliasBackingBytes": [
+          0
+        ],
+        "frameP95MeanMs": 1.6928699999999999
+      },
+      "aliased": {
+        "samples": 2491,
+        "recordingChunks": [
+          4
+        ],
+        "metricsMs": {
+          "cpuRenderMs": 0.9874775854500015,
+          "frameTimeMs": 1.5751823260218494,
+          "gpuPassSumMs": 0.11813128259000126,
+          "gpuQueueOverlapMs": 0.0,
+          "gpuQueueSpanMs": 0.33938208232028466,
+          "gpuWaitMs": 0.5877047405718452,
+          "graphCompileMs": 0.032226831287896614,
+          "graphPrepareMs": 0.005294646474023024,
+          "graphRecordMs": 0.18154122631438468
+        },
+        "usedBytes": 83895296,
+        "highWaterBytes": 83895552,
+        "aliasBackingBytes": [
+          3932160
+        ],
+        "frameP95MeanMs": 1.8089549999999999
+      }
+    }
+  ]
+}

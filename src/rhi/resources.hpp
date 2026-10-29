@@ -194,6 +194,8 @@ struct Texture : Object
 {
     Texture(const void* owner, TextureDesc desc) : Object(owner), desc(std::move(desc)) {}
     const TextureDesc desc;
+    /// Shared native heap/memory; derived image destruction precedes release of this backing.
+    std::shared_ptr<void> aliasBacking;
     /// Owner-thread cache of the immutable default view; weak to avoid a Texture/View cycle.
     std::weak_ptr<TextureView> defaultView;
     /// Depth sampling needs a distinct native view from the attachment view.
