@@ -1,5 +1,6 @@
 #pragma once
 
+#include "renderer/indexed_scene.hpp"
 #include "renderer/pipeline.hpp"
 #include "rendergraph/types.hpp"
 #include "rhi/resources.hpp"
@@ -30,9 +31,16 @@ enum class SceneView
     ReflectionHistory,
     ReflectionDenoised
 };
+enum class GeometrySubmission
+{
+    Direct,
+    IndexedDirect,
+    CpuIndirect
+};
 struct SceneRenderOptions
 {
     PipelineType pipeline = PipelineType::Forward;
+    GeometrySubmission submission = GeometrySubmission::Direct;
     SceneView view = SceneView::Final;
     bool profile = false;
     /// Zero preserves the scene setting; otherwise a power of two in [128,2048].
@@ -66,6 +74,7 @@ struct SceneReadback
     uint64_t compileNs = 0, prepareNs = 0, recordNs = 0;
     /// CPU scene/material preparation and graph construction, before graph compilation.
     uint64_t scenePrepareNs = 0;
+    IndexedSceneStatistics indexedScene;
 };
 /// Cumulative ray-surface preparation work; no timing overhead.
 struct RaySceneStatistics

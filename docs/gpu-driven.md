@@ -29,8 +29,22 @@ DX12 使用两个无 Root Signature 的固定 CommandSignature，分别调用 Ex
 
 命令包拥有参数与 Count 的强引用。取消录制释放引用；提交后由 Runtime 保留至完成点退休，不能因 CPU 丢弃句柄而提前回收。布局与绑定仍为不可变快照。
 
+## 场景索引基线
+
+`SceneRenderOptions::submission` 独立于 Forward/Deferred/RayTracing 管线。Direct 保留原有材质与每对象提交；IndexedDirect 以公共表和同一绑定快照逐条直接绘制，CpuIndirect 以 CPU 已知可见列表生成索引参数后执行多条间接绘制。CLI 分别为 `--submission direct|indexed-direct|cpu-indirect`，默认 Direct。
+
+IndexedScene 从提取快照建立对象、去重材质、纹理和可见实例表。对象记录为 256 字节（当前/法线/历史矩阵、世界 Bounds、网格范围和材质索引），材质为 128 字节；矩阵明确采用 row_major 存储和列向量乘法。纹理下标只在当前不可变快照内有效，不是资产身份或永久物理描述符。材质可合并相同值与纹理版本；CPU Material/Scene 继续拥有编辑权威。
+
+静态网格按导入身份打包为一个顶点和索引 Buffer，替换时创建新版本，命令保活旧版本。首次启用或几何集合变化会同步上传一次；相机、对象变换和普通连续帧不重传几何。索引路径与原始每网格 Buffer 当前同时保留，增加内存以便独立选择基线；光追表仍保持 M5 的独立格式/纹理 footprint 边界。
+
+Frame/View、Lighting、Shadow 沿用生成参数 ABI，内置材质通过公共采样/BRDF/IBL/阴影库求值。GPU 表支持内置 Lit/Unlit 的 Opaque/Masked，保留镜像绕序和原 PSO 状态；透明仍使用 CPU 排序/普通 Forward，光栅阴影保留相机外的 CPU 投影。其他 Shader 的不透明表面显式拒绝，不自动改成 Lit。RayTracing 组合可使用相同索引 GBuffer，AS/反射保持自己的支持约束。
+
+最大 16384 个索引实例、64 个图像/色彩空间版本；超限明确报错。表从独立的有界上传页（8 MiB × 最多 8 页）生成，成功提交后封存；结构化 stride 与偏移对齐由 RHI 验证。CPU 间接参数通过 Graph Copy 写入 Device Buffer，然后声明 Indirect Read，正常渲染不等待/读回 Count。原 `UploadStatistics()` 统计普通帧上传池，索引表页计入 Runtime 总内存账本。
+
 ## 验证入口
 
 `gpu.dx12.indirect` / `gpu.vulkan.indirect` 使用同一真实 GPU Shader，比较直接、CPU 参数与 Compute 参数的完整 RGBA8 图像。覆盖索引/非索引、多条固定命令、Count 0/1/2/3/99 截断、非零 firstVertex/firstIndex/vertexOffset/firstInstance、跨命令实例身份和单命令多实例；同时检查偏移/容量/能力拒绝、未声明 Count、取消与提交退休后的资源引用。测试要求实际设备支持这组可选能力，不静默降级。
 
 `gpu.dx12.descriptor_array` / `gpu.vulkan.descriptor_array` 在同一 64 线程组中打乱访问 64 个数组元素，检查跨 space 映射、完整表与两套在途不可变表的独立结果、旧纹理保活/退休、每个元素的 Graph 访问、缺项/重复/越界/空 View/布局重叠拒绝，以及描述符计数和销毁后资源账本。
+
+`gpu.dx12.indexed_scene` / `gpu.vulkan.indexed_scene` 对比原材质路径、索引直接与 CPU 间接结果，覆盖 PBR、Masked/透明、镜像、奇数尺寸、空场景/全剔除和两个在途版本。CPU 索引直接与间接要求逐字节一致；与原材质路径的比较另外检查最大误差及 MSE。验证状态以计划中的实际结果为准。

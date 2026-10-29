@@ -71,6 +71,12 @@ int main()
         RequireInvalid([] { ParseOptions(std::array{"--view"sv, "missing"sv}); });
         RequireInvalid([] { ParseOptions(std::array{"--denoise"sv, "maybe"sv}); });
         RequireInvalid([] { ParseOptions(std::array{"--temporal-denoise"sv, "maybe"sv}); });
+        RequireInvalid([] { ParseOptions(std::array{"--submission"sv, "missing"sv}); });
+        RequireInvalid([] { ParseOptions(std::array{"--submission"sv, "cpu-indirect"sv}); });
+        Require(ParseOptions(std::array{"--project"sv, "scene.rlproject"sv, "--submission"sv,
+                                        "cpu-indirect"sv})
+                        .submission == "cpu-indirect",
+                "Geometry submission switch was not parsed");
         Require(!ParseOptions(std::array{"--temporal-denoise"sv, "off"sv}).reflectionTemporal,
                 "Temporal denoise switch was not parsed");
         RequireInvalid([] { ParseOptions(std::array{"--gpu-budget-mib"sv, "0"sv}); });

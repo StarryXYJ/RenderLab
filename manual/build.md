@@ -70,9 +70,9 @@ cmake --build --preset windows-release --parallel 4
 ctest --preset windows-release
 ```
 
-输出分别在 `out/build/windows-debug` 和 `out/build/windows-release`。默认注册 13 项不需要创建设备的测试，包含实际 DXC 双目标编译的 `shader.contracts`、生成 C++ 契约的 `parameters.contracts` 和流式计时数据的 `benchmark.contracts`。预设与依赖版本纳入 Git，本机设置使用被忽略的 `CMakeUserPresets.json`。
+输出分别在 `out/build/windows-debug` 和 `out/build/windows-release`。默认注册 14 项不需要创建设备的测试，包含实际 DXC 双目标编译的 `shader.contracts`、生成 C++ 契约的 `parameters.contracts` 和流式计时数据的 `benchmark.contracts`。预设与依赖版本纳入 Git，本机设置使用被忽略的 `CMakeUserPresets.json`。
 
-完整验收启用 GPU 测试，当前共 41 项（13 项 CPU/CLI、28 项 GPU）。GPU 测试要求验证层和桌面会话，会短暂打开原生窗口：
+完整验收启用 GPU 测试，当前共 58 项（14 项 CPU/CLI、44 项 GPU）。GPU 测试要求验证层和桌面会话，会短暂打开原生窗口：
 
 ```powershell
 cmake --preset windows-debug -DRENDERLAB_GPU_TESTS=ON
@@ -130,6 +130,12 @@ Release 替换构建目录；测试要求支持多条间接、Count 与非零 fi
 
 有界非一致纹理数组的独立入口是 `renderlab_descriptor_array_tests`，CTest 使用
 `-R 'gpu\.(dx12|vulkan)\.descriptor_array'`；要求 64 个 sampled-texture 数组元素和对应非一致索引能力。
+
+实际场景可添加 `--submission indexed-direct` 或 `--submission cpu-indirect`，与
+`--pipeline forward|deferred|raytracing` 独立组合；默认 `--submission direct` 保留原始基线。
+例如 `renderlab_sandbox.exe --backend vulkan --headless --validation on --project sample/m4/Pbr.rlproject --submission cpu-indirect --output out/indexed`。
+场景专项为 `renderlab_indexed_scene_tests` / `gpu.dx12.indexed_scene` / `gpu.vulkan.indexed_scene`，
+支持范围、容量与内存边界见 [GPU Driven](../docs/gpu-driven.md#场景索引基线)。
 
 ```powershell
 ./out/build/windows-debug/renderlab_shaderc.exe shaders/m2/surface.shader --cache out/shader-cache --schema out/surface-schema.json

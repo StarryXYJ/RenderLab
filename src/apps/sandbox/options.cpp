@@ -142,6 +142,8 @@ Options ParseOptions(std::span<const std::string_view> arguments)
         }
         else if (arg == "--pipeline")
             options.pipeline = value();
+        else if (arg == "--submission")
+            options.submission = value();
         else if (arg == "--profile")
         {
             options.profilePath = value();
@@ -220,6 +222,11 @@ Options ParseOptions(std::span<const std::string_view> arguments)
         options.view != "reflection-denoised")
         throw std::invalid_argument("--view must be final, hdr, shadow, environment, brdf, "
                                     "reflection-raw, reflection-history or reflection-denoised");
+    if (options.submission != "direct" && options.submission != "indexed-direct" &&
+        options.submission != "cpu-indirect")
+        throw std::invalid_argument("--submission must be direct, indexed-direct or cpu-indirect");
+    if (options.submission != "direct" && options.projectPath.empty())
+        throw std::invalid_argument("--submission requires --project");
     if (options.pipeline != "forward" && options.pipeline != "deferred" &&
         options.pipeline != "raytracing")
         throw std::invalid_argument("--pipeline must be forward, deferred or raytracing");
@@ -272,6 +279,7 @@ std::string_view Usage()
            "final|hdr|shadow|environment|brdf|reflection-raw|reflection-history|reflection-"
            "denoised  Select "
            "the displayed texture\n"
+           "  --submission direct|indexed-direct|cpu-indirect  Geometry submission\n"
            "  --pipeline forward|deferred|raytracing  Select scene rendering path\n"
            "  --debug-panel               Open native scene controls (F1 toggles)\n"
            "  --fixed-camera              Ignore camera movement keys\n"

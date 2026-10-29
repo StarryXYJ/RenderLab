@@ -76,7 +76,7 @@ target_link_libraries(renderlab_rendergraph PRIVATE renderlab_options renderlab_
 
 add_library(renderlab_renderer STATIC src/renderer/forward.cpp src/renderer/deferred.cpp
     src/renderer/raytracing.cpp src/renderer/acceleration_scene.cpp
-    src/renderer/pipeline.cpp
+    src/renderer/pipeline.cpp src/renderer/indexed_scene.cpp
     src/renderer/scene_renderer.cpp src/renderer/environment.cpp src/renderer/shadow.cpp)
 target_include_directories(renderlab_renderer PUBLIC src)
 target_link_libraries(renderlab_renderer PRIVATE renderlab_options renderlab_rendergraph renderlab_rhi
@@ -217,6 +217,15 @@ install(DIRECTORY sample/m4/Assets DESTINATION project)
 install(FILES sample/m4/RenderLab.rlproject sample/m4/Pbr.rlproject sample/m4/Shadow.rlproject DESTINATION project)
 
 if(BUILD_TESTING)
+    add_executable(renderlab_indexed_scene_tests tests/indexed_scene_tests.cpp)
+    target_link_libraries(renderlab_indexed_scene_tests PRIVATE renderlab_options renderlab_renderer
+        renderlab_samples renderlab_rhi renderlab_content renderlab_core renderlab_platform)
+    add_dependencies(renderlab_indexed_scene_tests renderlab_scene_shaders)
+    add_custom_command(TARGET renderlab_indexed_scene_tests POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_FILE:renderlab_dxc>
+            $<TARGET_FILE_DIR:renderlab_indexed_scene_tests>
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_FILE:renderlab_pix>
+            $<TARGET_FILE_DIR:renderlab_indexed_scene_tests> VERBATIM)
     add_executable(renderlab_descriptor_array_tests tests/descriptor_array_tests.cpp)
     target_link_libraries(renderlab_descriptor_array_tests PRIVATE renderlab_options renderlab_shader
         renderlab_rendergraph renderlab_rhi renderlab_core renderlab_platform)
@@ -321,6 +330,10 @@ if(BUILD_TESTING)
         PROPERTIES WILL_FAIL TRUE)
     if(RENDERLAB_GPU_TESTS)
         foreach(backend IN ITEMS dx12 vulkan)
+            add_test(NAME gpu.${backend}.indexed_scene COMMAND renderlab_indexed_scene_tests ${backend}
+                ${CMAKE_SOURCE_DIR}/sample/m4/Pbr.rlproject ${CMAKE_SOURCE_DIR}/sample/m4/Shadow.rlproject
+                ${CMAKE_SOURCE_DIR}/shaders ${CMAKE_BINARY_DIR}/indexed-scene/${backend})
+            set_tests_properties(gpu.${backend}.indexed_scene PROPERTIES LABELS gpu RUN_SERIAL TRUE TIMEOUT 180)
             add_test(NAME gpu.${backend}.descriptor_array COMMAND renderlab_descriptor_array_tests
                 ${backend} ${CMAKE_BINARY_DIR}/descriptor-array/${backend})
             set_tests_properties(gpu.${backend}.descriptor_array PROPERTIES LABELS gpu RUN_SERIAL TRUE TIMEOUT 120)

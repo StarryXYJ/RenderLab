@@ -20,6 +20,7 @@ struct Options
     std::string projectPath;
     std::string outputPath = "out/m1";
     std::string quality = "scene", view = "final", pipeline = "forward", profilePath;
+    std::string submission = "direct";
     uint32_t width = 1280, height = 720, benchmarkFrames = 0;
     /// Zero selects the host default: scene 2048 MiB, standalone RHI demos 256 MiB.
     uint32_t gpuBudgetMiB = 0;

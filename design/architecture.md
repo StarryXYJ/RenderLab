@@ -195,6 +195,8 @@ Scene Document 使用稳定对象 ID，运行时使用类型明确的 Handle。�
 
 CPU 和 GPU 剔除路径消费相同的场景身份与数据契约。首期只建立当前用到的表和字段，并上传必要数据；LOD、完整 Bindless 和增量更新在对应功能需要时再实现。GPU Scene 是渲染快照的投影，不单独维护第二套可编辑场景。
 
+索引光栅投影以固定布局的对象/材质/可见实例表和最多 64 项原分辨率 sampled-image 数组消费内置 Lit/Unlit；静态几何按导入身份打包，旧版本由命令保活。CPU 原始提交、索引直接和 CPU 间接各有独立选择，保持相同 Shader 与绑定建立间接基线。透明和光栅阴影继续使用既有 CPU 路径；光追的有限图集暂不与光栅采样 ABI 混合。资源边界见 [GPU Driven](../docs/gpu-driven.md)。
+
 GPU Driven 的第一条工作流为：
 
 ```text

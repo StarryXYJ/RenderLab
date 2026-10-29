@@ -22,7 +22,7 @@ void Require(bool condition, const char* message)
 struct ResolvedDraw
 {
     DrawPacket draw;
-    BufferHandle vertices, indices, indirect;
+    BufferHandle vertices, indices, indirect, count;
     std::vector<TextureHandle> textures;
     std::vector<BufferHandle> buffers;
 };
@@ -31,16 +31,25 @@ ResolvedDraw Declare(RasterPassBuilder& pass, const DrawPacket& draw)
     Require(draw.pipeline && !draw.pipeline->desc.compute,
             "Forward draws require a raster pipeline");
     Require(draw.kind == DrawKind::Vertices || draw.kind == DrawKind::Indexed ||
-                draw.kind == DrawKind::Indirect,
+                draw.kind == DrawKind::Indirect || draw.kind == DrawKind::IndexedIndirect ||
+                draw.kind == DrawKind::IndexedSequence,
             "Unknown forward draw kind");
     ResolvedDraw result;
     result.draw = draw;
     result.vertices = pass.ReadBuffer(draw.vertices, Use::Vertex);
-    if (draw.kind == DrawKind::Indexed)
+    if (draw.kind == DrawKind::Indexed || draw.kind == DrawKind::IndexedIndirect ||
+        draw.kind == DrawKind::IndexedSequence)
         result.indices = pass.ReadBuffer(draw.indices, Use::Index);
-    if (draw.kind == DrawKind::Indirect)
-        result.indirect = pass.ReadBuffer(draw.indirect, Use::Indirect,
-                                          {draw.indirectOffset, sizeof(rhi::DrawArguments)});
+    if (draw.kind == DrawKind::Indirect || draw.kind == DrawKind::IndexedIndirect)
+        result.indirect =
+            pass.ReadBuffer(draw.indirect, Use::Indirect,
+                            {draw.indirectOffset, uint64_t(draw.indirectMaxCount) *
+                                                      (draw.kind == DrawKind::IndexedIndirect
+                                                           ? sizeof(rhi::DrawIndexedArguments)
+                                                           : sizeof(rhi::DrawArguments))});
+    if (!draw.indirectCount.empty())
+        result.count =
+            pass.ReadBuffer(draw.indirectCount, Use::Indirect, {draw.indirectCountOffset, 4});
     for (const auto& binding : draw.textures)
         result.textures.push_back(pass.ReadTexture(binding.texture));
     for (const auto& binding : draw.buffers)
@@ -71,13 +80,22 @@ void Record(RasterContext& context, const ResolvedDraw& resolved)
     switch (draw.kind)
     {
     case DrawKind::Vertices:
-        context.Draw(draw.count, draw.first);
+        context.Draw(draw.count, draw.first, draw.instances, draw.firstInstance);
         break;
     case DrawKind::Indexed:
-        context.DrawIndexed(draw.count, draw.first);
+        context.DrawIndexed(draw.count, draw.first, draw.instances, draw.firstInstance,
+                            draw.vertexOffset);
         break;
+    case DrawKind::IndexedSequence:
+        for (const auto& argument : draw.indexedDraws)
+            context.DrawIndexed(argument.indexCount, argument.firstIndex, argument.instanceCount,
+                                argument.firstInstance, argument.vertexOffset);
+        break;
+    case DrawKind::IndexedIndirect:
     case DrawKind::Indirect:
-        context.DrawIndirect(resolved.indirect, draw.indirectOffset);
+        context.DrawIndirect(resolved.indirect, draw.indirectOffset, draw.indirectMaxCount,
+                             draw.kind == DrawKind::IndexedIndirect, resolved.count,
+                             draw.indirectCountOffset);
         break;
     }
 }

@@ -38,6 +38,7 @@ std::string_view ApplicationUsage()
            "final|hdr|shadow|environment|brdf|reflection-raw|reflection-history|reflection-"
            "denoised  Texture "
            "preview\n"
+           "  --submission direct|indexed-direct|cpu-indirect  Geometry submission\n"
            "  --pipeline forward|deferred|raytracing  Scene rendering path\n"
            "  --fixed-camera --debug-panel  Camera and native controls\n"
            "  --headless --benchmark N    Capture or measure a fixed scene\n"

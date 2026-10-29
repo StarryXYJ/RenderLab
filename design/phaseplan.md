@@ -5,7 +5,7 @@
 ## 当前状态
 
 - 当前实施阶段：M6 IN_PROGRESS；M0–M5、R1、B1–B3 DONE。
-- 当前工作项：M6.1a 间接提交语义 DONE；M6.1b 有界纹理数组 DONE；继续 M6.1c 场景资源索引和 CPU 间接基线，随后接入 GPU 剔除。M7 提前试验暂停在既有结果，M8 未启动。
+- 当前工作项：M6.1 可索引资源与间接提交 DONE；继续 M6.2 GPU Frustum Culling、压缩与 GPU Count 消费。M7 提前试验暂停在既有结果，M8 未启动。
 - 用户约定：每个子阶段验收完成即提交 Git，无阻塞时在当前授权范围内继续推进。此前 M7 修改已进入 Git，本轮开始时工作区干净。
 
 | 阶段 | 目标 | 前置依赖 | 状态 |
@@ -273,21 +273,19 @@ R1 契约修订、B1 样例整理/Benchmark、B2 调查和 B3 资源复用已完
 
 ### M6.1 可索引资源与间接提交
 
-状态：IN_PROGRESS。子阶段按下面顺序验收、提交。
+状态：DONE，日期：2026 年 10 月 29 日。
 
-M6.1a DONE（2026 年 10 月 29 日）：双后端紧密排列的索引/非索引多条间接命令、可选 GPU Count 截断与 Graph 范围/用途验证。实例 helper 显式处理 DXIL SV_InstanceID 不含 firstInstance、SPIR-V 已包含的差异；DX12 索引 Shader 要求 SM 6.8，基础路径保持 SM 6.0。RTX 5060、MSVC NMake，Debug/Release 全目标构建成功；Debug 所选 Core/Graph、双后端 indirect/rhi/graph/render_state 10/10，追加 CPU 与双后端 PBR 3/3，Release 同组选测 10/10。GPU 验证错误 0，专项销毁后账本 0；直接/CPU 参数/Compute 参数逐像素一致，覆盖 Count 0/1/2/3/99、固定多条、实例乱序、多实例、正负 baseVertex、偏移/容量/能力拒绝、未声明 Count 以及取消/提交退休。全量构建同时修复旧 render_state/PBR 测试遗漏的颜色附件接口迁移。本轮未测其他 GPU，不将底层专项当作场景 GPU Driven 完成。入口：[契约与验证](../docs/gpu-driven.md)、[运行](../manual/build.md#shader-与材质工具)。
+结果：双后端索引/非索引多条间接与 GPU Count 截断；固定最多 64 项的不可变 sampled-image 数组、逐元素 Graph 访问和资源保活；内置 Lit/Unlit 的对象/材质/原分辨率纹理表与打包静态几何。Direct、IndexedDirect、CpuIndirect 独立于渲染算法，透明/光栅阴影保留原 CPU 路径。实例 helper 处理 DXIL 相对实例 ID 与 SPIR-V 绝对实例 ID，DX12 索引 Shader 明确要求 SM 6.8，基础 Shader 保持 SM 6.0。
 
-M6.1b DONE（2026 年 10 月 29 日）：固定 count 的 sampled-texture 数组（最多 64 项）、显式 arrayElement 与完整不可变绑定；双后端连续/固定数组描述符、逐元素 Graph 访问与资源保活，容量按元素统计。RTX 5060、MSVC NMake Debug/Release 均完整 clean build，所选 Core/Graph 与双后端 descriptor_array/indirect/rhi/graph/render_state/PBR 各 14/14；GPU validation errors=0，专项关闭后账本与在用描述符均为 0。覆盖同波非一致访问 64 元素、跨 space、两套在途表的独立颜色、旧纹理退休、缺项/重复/越界/空 View/布局重叠拒绝。构建发现旧 NMake 依赖遗漏，变更公共接口后采用完整重编译，未用旧目标文件的成功替代验证。边界：仅 sampled-image 数组，不支持部分绑定、变长数组或 update-after-bind，其他 GPU 未验收。契约与命令同上。
+验证：RTX 5060、MSVC NMake Debug/Release 全目标构建成功，当前所选 Core/Graph/CLI 和双后端 indexed_scene/descriptor_array/indirect/rhi/graph/render_state/PBR/Deferred 各 19/19。GPU validation errors=0，专项销毁后账本为 0。索引直接与 CPU 间接图像逐字节一致；原材质路径最大误差/MSE 检查通过。覆盖 Count 0/1/2/3/99、正负 baseVertex、多实例/乱序身份、64 元素同波非一致索引、缺项/重复/越界/用途/容量拒绝、取消/退休与在途版本，以及 PBR/Masked/透明、镜像、奇数尺寸、空场景/全剔除和 Ray Query 组合。双后端真实 CLI Deferred/cpu-indirect 报告各含 9 实例/9 材质/5 纹理/1 批次、静态几何仅上传一次，关闭错误为 0。构建同时修复旧 render_state/PBR 测试的颜色附件接口遗漏；暂存回拷时间戳导致的旧目标混用已通过完整重编译或刷新源码时间戳后重编译排除。
 
-M6.1c IN_PROGRESS：场景对象/材质/纹理索引与 CPU 间接基线。
+边界：最多 16384 个索引实例和 64 个图像/色彩空间版本；非内置不透明 Shader 显式拒绝，透明仍排序提交；几何首次/集合变化同步打包上传，索引与原始几何双份保留。仅 sampled-image 数组，无部分绑定/变长数组/update-after-bind；CPU 仍准备材质/状态，尚未接入 GPU 剔除或承诺性能提升，其他 GPU 未验收。a/b/c 分别验证、提交，过程见 Git 历史。
 
-- [ ] 让已有 GPU Scene 的对象、材质和纹理通过明确索引消费。
-- [ ] 实现所需的描述符数组能力和在途安全，不建立无需求的全资源 Bindless 框架。
-- [x] 用 CPU 生成已知 Indirect Args，验证 InstanceID/firstInstance 和 Count；公共对象身份不依赖 DrawID。
-
-验收结果与直接绘制一致。先隔离间接提交语义，再接入 GPU 剔除。
+文档：[契约、布局、限制与验证](../docs/gpu-driven.md)、[运行](../manual/build.md#shader-与材质工具)。
 
 ### M6.2 GPU 剔除
+
+状态：IN_PROGRESS。
 
 - [ ] Compute Frustum Culling、可见实例压缩、Indirect Args 和 Count。
 - [ ] 图中声明清零、写入和 Indirect Read；CPU 只遍历有限 Pipeline 批次。

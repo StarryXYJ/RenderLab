@@ -21,6 +21,10 @@ renderer::SceneRenderOptions RenderOptions(const Options& options)
                       : options.pipeline == "raytracing" ? renderer::PipelineType::RayTracing
                                                          : renderer::PipelineType::Forward;
     render.reflectionDenoise = options.reflectionDenoise;
+    render.submission =
+        options.submission == "cpu-indirect"     ? renderer::GeometrySubmission::CpuIndirect
+        : options.submission == "indexed-direct" ? renderer::GeometrySubmission::IndexedDirect
+                                                 : renderer::GeometrySubmission::Direct;
     render.reflectionTemporal = options.reflectionTemporal;
     render.profile = options.debugPanel || !options.profilePath.empty() || options.Benchmark();
     if (options.quality != "scene")
@@ -62,6 +66,7 @@ void Statistics::Add(const renderer::SceneReadback& frame, const rhi::Runtime& r
     reflectionSamples_ = frame.reflectionSamples;
     reflectionTemporalFrames_ = frame.reflectionTemporalFrames;
     reflectionResets_ += frame.reflectionHistoryReset ? 1 : 0;
+    indexedScene_ = frame.indexedScene;
     const auto timings = frame.profile.Read(runtime);
     cpu_.Add(cpuMs);
     compile_.Add(double(frame.compileNs) / 1e6);
@@ -135,6 +140,7 @@ void Statistics::Save(const std::filesystem::path& path, const Options& options,
                           {"reflectionDenoise", options.reflectionDenoise},
                           {"reflectionTemporal", options.reflectionTemporal},
                           {"pipeline", options.pipeline},
+                          {"submission", options.submission},
                           {"warmupFrames", options.Benchmark() ? options.warmupFrames : 0},
                           {"cpuRender", summary(cpu_)},
                           {"graphCompile", summary(compile_)},
@@ -148,6 +154,10 @@ void Statistics::Save(const std::filesystem::path& path, const Options& options,
     result["reflectionHistory"] = {{"samples", reflectionSamples_},
                                    {"observedResets", reflectionResets_},
                                    {"temporalSourceFrames", reflectionTemporalFrames_}};
+    result["indexedScene"] = {
+        {"instances", indexedScene_.instances}, {"visible", indexedScene_.visible},
+        {"materials", indexedScene_.materials}, {"textures", indexedScene_.textures},
+        {"batches", indexedScene_.batches},     {"geometryUploads", indexedScene_.geometryUploads}};
     result["recordedAtUtc"] = std::format(
         "{:%FT%TZ}", std::chrono::floor<std::chrono::seconds>(std::chrono::system_clock::now()));
 #ifdef NDEBUG
