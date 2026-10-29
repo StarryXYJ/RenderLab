@@ -1,6 +1,7 @@
 #include "assets/json_io.hpp"
 #include "core/log.hpp"
 #include "material/asset.hpp"
+#include "material/runtime.hpp"
 #include "renderer/scene_renderer.hpp"
 #include "renderer/shadow.hpp"
 #include "rhi/commands.hpp"
@@ -15,6 +16,7 @@
 #include <chrono>
 #include <cmath>
 #include <cstring>
+#include <fstream>
 #include <iostream>
 #include <stdexcept>
 
@@ -53,11 +55,119 @@ uint8_t Display(float x)
     x = x <= .0031308f ? x * 12.92f : 1.055f * std::pow(x, 1 / 2.4f) - .055f;
     return uint8_t(std::round(x * 255));
 }
+void ShadowFilter(rhi::Runtime& runtime, shader::Target target, const std::filesystem::path& engine,
+                  const std::filesystem::path& root)
+{
+    std::ofstream(root / "filter.shader") << R"(shader "Test/ShadowFilter"
+{
+    use "RenderLab/Shadow.params";
+    pass Test
+    {
+        parameters { Texture2D<float4> Map; }
+        vertex = "filter.hlsl:VSMain";
+        pixel = "filter.hlsl:PSMain";
+        state { depth { test = false; write = false; } }
+    }
+})";
+    std::ofstream(root / "filter.hlsl") << R"(#include <renderlab/generated/parameters.hlsli>
+#include "RenderLab/Shadows.hlsli"
+float4 VSMain(float2 position : POSITION) : SV_Position { return float4(position, 0, 1); }
+float4 PSMain(float4 position : SV_Position) : SV_Target
+{
+    bool plane = position.y > 1;
+    float t = 2 + position.x / 16;
+    float2 uv = plane ? float2(1.75, t) / 8 : float2(t / 8, 0.5);
+    float depth = (plane ? 0.25 + 1e-5 : 0.5) + 0.02 * (uv.y * 8 - 0.5);
+    RasterShadowSamplingContext context = MakeShadowSamplingContext(float3(uv, depth),
+        float3(0.125, 0, 0), float3(0, 0.125, 0.02));
+    float visibility = MainLightVisibility(SceneShadow, Map, context);
+    return float4(visibility, visibility, visibility, 1);
+}
+)";
+    shader::CompileOptions compile;
+    compile.targets = {target};
+    compile.includeDirectories = {engine};
+    compile.cacheDirectory = root / "filter-cache";
+    const auto build = shader::CompileShader(root / "filter.shader", compile);
+    Require(bool(build), build.diagnostics.c_str());
+    auto map = runtime.CreateTexture({8, 8, rhi::Format::Rgba32Float, false, false, "Filter.Map"});
+    const auto mapPitch = rhi::TextureRowPitch(8, rhi::Format::Rgba32Float);
+    auto upload = runtime.CreateBuffer({mapPitch * 8, rhi::Memory::Upload, "Filter.Upload"});
+    const auto bytes = upload->Map();
+    for (uint32_t y = 0; y < 8; ++y)
+        for (uint32_t x = 0; x < 8; ++x)
+        {
+            const std::array<float, 4> texel{(x < 4 ? .25f : .75f) + .02f * y, 0, 0, 0};
+            std::memcpy(bytes.data() + y * mapPitch + x * sizeof(texel), texel.data(),
+                        sizeof(texel));
+        }
+    const std::array<float, 6> triangle{-1, -1, 3, -1, -1, 3};
+    auto vertexUpload =
+        runtime.CreateBuffer({sizeof(triangle), rhi::Memory::Upload, "Filter.VertexUpload"});
+    auto vertices =
+        runtime.CreateBuffer({sizeof(triangle), rhi::Memory::Device, "Filter.Vertices"});
+    std::memcpy(vertexUpload->Map().data(), triangle.data(), sizeof(triangle));
+    auto color =
+        runtime.CreateTexture({64, 2, rhi::Format::Rgba32Float, false, true, "Filter.Result"});
+    const auto pitch = rhi::TextureRowPitch(64, rhi::Format::Rgba32Float);
+    auto readback = runtime.CreateBuffer({pitch * 2, rhi::Memory::Readback, "Filter.Readback"});
+    material::Runtime materials(runtime, target);
+    material::Preparation preparation;
+    preparation.pass = "Test";
+    preparation.colorFormats = {rhi::Format::Rgba32Float};
+    preparation.vertexStride = 2 * sizeof(float);
+    preparation.attributes = {{"POSITION", 0, rhi::VertexFormat::Float2, 0}};
+    const auto pass = build.package->ResolvePass(preparation.pass);
+    preparation.bindings[build.package->ResourceBinding(pass, "Map")].view =
+        runtime.CreateView(map);
+    preparation
+        .constants[build.package->BlockBinding(pass, "SceneShadow")]["MainLightShadowParameters"] =
+        material::Value{"float4", 1, {.125, 0, 0, 1}};
+    const auto prepared = materials.Prepare(
+        build.package, material::Create(shader::MaterialTemplate(build.package)), preparation);
+    auto group = runtime.CreateGroup(prepared.pipeline->desc.layout, prepared.resources);
+    auto commands = runtime.CreateCommands();
+    commands->Barrier(upload, rhi::State::HostWrite, rhi::State::CopySource);
+    commands->Barrier(map, rhi::State::Undefined, rhi::State::CopyDest);
+    commands->CopyTexture(upload, map, mapPitch, true);
+    commands->Barrier(map, rhi::State::CopyDest, rhi::State::Sampled);
+    commands->Barrier(vertexUpload, rhi::State::HostWrite, rhi::State::CopySource);
+    commands->Barrier(vertices, rhi::State::Undefined, rhi::State::CopyDest);
+    commands->Copy(vertexUpload, vertices, sizeof(triangle));
+    commands->Barrier(vertices, rhi::State::CopyDest, rhi::State::Vertex);
+    for (const auto& constant : prepared.constants)
+        commands->Barrier(constant, rhi::State::HostWrite, rhi::State::UniformRead);
+    commands->Barrier(color, rhi::State::Undefined, rhi::State::ColorAttachment);
+    commands->Begin(runtime.CreateView(color));
+    commands->Bind(prepared.pipeline);
+    commands->Bind(group);
+    commands->Geometry(vertices);
+    commands->DrawVertices(3);
+    commands->End();
+    commands->Barrier(color, rhi::State::ColorAttachment, rhi::State::CopySource);
+    commands->CopyTexture(readback, color, pitch, false);
+    commands->Barrier(readback, rhi::State::CopyDest, rhi::State::HostRead);
+    runtime.Wait(runtime.Submit(std::move(commands)));
+    const auto pixels = readback->Map();
+    for (uint32_t x = 0; x < 64; ++x)
+    {
+        float edge, plane;
+        std::memcpy(&edge, pixels.data() + x * 16, sizeof(edge));
+        std::memcpy(&plane, pixels.data() + pitch + x * 16, sizeof(plane));
+        // A filtered half-plane has a linear transition spanning three shadow texels.
+        const float expected = std::clamp((5.5f - (2 + (x + .5f) / 16)) / 3, 0.f, 1.f);
+        Require(std::abs(edge - expected) < 1e-5f,
+                "Shadow edge visibility must vary continuously through subtexel movement");
+        Require(plane == 1,
+                "Receiver-plane correction must keep a sloped surface free of self-shadow");
+    }
+}
 void Gpu(rhi::Runtime& runtime, shader::Target target, const std::filesystem::path& manifest,
          const std::filesystem::path& engine, const std::filesystem::path& output)
 {
     const auto root = output / project::NewId();
     std::filesystem::create_directories(root);
+    ShadowFilter(runtime, target, engine, root);
     std::filesystem::copy(manifest.parent_path() / "Assets", root / "Assets",
                           std::filesystem::copy_options::recursive);
     std::filesystem::copy_file(manifest, root / "Shadow.rlproject");

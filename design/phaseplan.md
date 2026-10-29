@@ -5,8 +5,8 @@
 ## 当前状态
 
 - 当前实施阶段：M0–M5、R1、B1–B3 DONE。
-- 当前工作项：M7.1d–f DONE；M7.1g 无上限模式 DONE，支持 target-fps 0 并取消双后端的强制 VSync；本轮授权范围完成，等待后续授权。跨屏 DPI/Docking 与完整编辑器工作流不展开，M6/M8 未启动。
-- 用户约定：每个子阶段验收完成即提交 Git，无阻塞时在当前授权范围内继续推进。本轮 Git 自动权限审核两次超时，用户接管本机提交；d–f 修改仍在工作区，代理未创建提交。
+- 当前工作项：光栅阴影质量修复 DONE，验证记录见 M4 后的修复摘要。M7.1d–g 已完成；跨屏 DPI/Docking 与完整编辑器工作流不展开，M6/M8 未启动。
+- 用户约定：每个子阶段验收完成即提交 Git，无阻塞时在当前授权范围内继续推进。此前 M7 修改已进入 Git，本轮开始时工作区干净。
 
 | 阶段 | 目标 | 前置依赖 | 状态 |
 | --- | --- | --- | --- |
@@ -114,6 +114,18 @@ R1 契约修订、B1 样例整理/Benchmark、B2 调查和 B3 资源复用已完
 边界：静态几何、单视图/mip/layer、低分辨率 CPU IBL/LDR 环境、单张阴影和排序透明；无级联/OIT，其他 GPU 与新面板手动操作未完整验收。
 
 入口：[场景](../docs/m4-scene.md)、[PBR](../docs/m4-forward-pbr.md)、[阴影/Alpha](../docs/m4-shadows-alpha.md)、[工具/Player](../docs/m4-tools.md)、[基线](../docs/performance/m4-rtx5060.md)。
+
+### 光栅阴影质量修复
+
+状态：DONE，日期：2026 年 10 月 29 日。
+
+结果：Editor 默认阴影由原型的 128² 提高到 1024²；Forward/Deferred 共用连续加权 PCF，16 次 Load 合并 3×3 双线性比较过滤，保留接收平面深度修正，完整亮/暗区域精确返回 1/0，防止浮点误差影响无阴影像素。
+
+验证：RTX 5060、Release、Validation On，`out/build/m5-release` 的 `surface.contracts`、`gpu.dx12.surface`、`gpu.vulkan.surface` 3/3 通过，GPU validation error 为 0、销毁后资源账本为 0；原生 Bridge/Player 与托管 Editor 构建成功，最新 DLL/Shader 已同步至托管 Release 输出。新增 64 个子 texel 采样的半平面解析比较和斜面自阴影检查，旧 PCF 负对照按预期失败。960×540 的 RayTracing 样例在 DX12 Forward/Deferred、Vulkan Deferred 的光栅截图通过；修改前后对照位于本机 `out/shadow-quality`。
+
+边界：过滤与分辨率增加 GPU/显存成本，1024² 阴影附件逻辑大小 20 MiB；仍为单张阴影图，大场景密度和具体几何的 bias 需另行调整。本轮未重跑交互窗口/DPI 验收，也未修改反射重投影算法。
+
+文档：[阴影与 Alpha](../docs/m4-shadows-alpha.md)、[Editor 宿主](../docs/editor-host.md)。
 
 ## R1 Shader/Material 契约修订
 

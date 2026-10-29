@@ -147,7 +147,7 @@ struct RenderState
         options.profile = profiling;
         stats.validation_enabled = device->GetReport().validationEnabled;
         stats.profiling_enabled = profiling;
-        options.shadowResolution = 128;
+        options.shadowResolution = 1024;
         logger.Write(LogLevel::Info,
                      "Embedded child HWND created; UI owns HWND/input; render thread owns Runtime");
     }
