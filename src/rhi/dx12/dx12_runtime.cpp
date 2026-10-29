@@ -17,6 +17,11 @@ DxRuntime::DxRuntime(ID3D12Device* device, ID3D12CommandQueue* queue, IDXGIFacto
                                                sizeof(shaderModel))) &&
         shaderModel.HighestShaderModel >= D3D_SHADER_MODEL_6_8;
     device_->QueryInterface(IID_PPV_ARGS(&rayDevice_));
+    D3D12_FEATURE_DATA_D3D12_OPTIONS options{};
+    if (SUCCEEDED(
+            device_->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS, &options, sizeof(options))) &&
+        options.ResourceBindingTier >= D3D12_RESOURCE_BINDING_TIER_2)
+        sampledTextureArrayLimit_ = 64;
     Check(device_->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&fence_)), "CreateFence");
     D3D12_INDIRECT_ARGUMENT_DESC argument{};
     argument.Type = D3D12_INDIRECT_ARGUMENT_TYPE_DRAW;

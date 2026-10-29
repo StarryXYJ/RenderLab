@@ -38,16 +38,27 @@ void BindingContext::Bind(std::shared_ptr<rhi::Pipeline> pipeline)
 }
 void BindingContext::SetBinding(rhi::Binding binding)
 {
-    auto found =
-        std::ranges::find_if(bindings_, [&](const auto& b)
-                             { return b.slot == binding.slot && b.space == binding.space; });
+    Require(bool(pipeline_), "Bind a pipeline before resources");
+    const auto entry =
+        std::ranges::find_if(pipeline_->desc.layout->entries, [&](const auto& e)
+                             { return e.slot == binding.slot && e.space == binding.space; });
+    Require(entry != pipeline_->desc.layout->entries.end() && binding.arrayElement < entry->count,
+            "Binding array element outside pipeline layout");
+    auto found = std::ranges::find_if(bindings_,
+                                      [&](const auto& b)
+                                      {
+                                          return b.slot == binding.slot &&
+                                                 b.space == binding.space &&
+                                                 b.arrayElement == binding.arrayElement;
+                                      });
     if (found == bindings_.end())
         bindings_.push_back(std::move(binding));
     else
         *found = std::move(binding);
     dirty_ = true;
 }
-void BindingContext::BindTexture(uint32_t slot, TextureHandle h, uint32_t space)
+void BindingContext::BindTexture(uint32_t slot, TextureHandle h, uint32_t space,
+                                 uint32_t arrayElement)
 {
     auto& g = *graph_.impl_;
     g.Scope(pass_);
@@ -59,6 +70,7 @@ void BindingContext::BindTexture(uint32_t slot, TextureHandle h, uint32_t space)
     rhi::Binding b{slot};
     b.view = g.pool->Device().CreateView(r.texture, rhi::TextureViewUsage::Sampled);
     b.space = space;
+    b.arrayElement = arrayElement;
     SetBinding(std::move(b));
 }
 void BindingContext::BindBuffer(uint32_t slot, BufferHandle h, uint64_t offset, uint64_t size,

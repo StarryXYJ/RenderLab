@@ -57,7 +57,8 @@ void Record(RasterContext& context, const ResolvedDraw& resolved)
     context.Bind(draw.pipeline);
     context.StencilReference(draw.stencilReference);
     for (size_t i = 0; i < draw.textures.size(); ++i)
-        context.BindTexture(draw.textures[i].slot, resolved.textures[i], draw.textures[i].space);
+        context.BindTexture(draw.textures[i].slot, resolved.textures[i], draw.textures[i].space,
+                            draw.textures[i].arrayElement);
     for (size_t i = 0; i < draw.buffers.size(); ++i)
     {
         const auto& b = draw.buffers[i];

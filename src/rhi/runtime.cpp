@@ -202,66 +202,103 @@ void Runtime::Validate(const PipelineDesc& desc) const
         }
     }
 }
+void Runtime::ValidateLayout(const std::vector<BindingDesc>& entries) const
+{
+    Require(entries.size() <= 64, "Too many binding layout entries");
+    for (const auto& entry : entries)
+    {
+        Require(entry.space < 4 && entry.count && entry.count <= 64,
+                "Invalid binding space or descriptor count");
+        Require(static_cast<uint32_t>(entry.kind) <=
+                    static_cast<uint32_t>(BindingKind::AccelerationStructure),
+                "Invalid binding kind");
+        Require(entry.count == 1 || (entry.kind == BindingKind::SampledTexture &&
+                                     entry.count <= SampledTextureArrayLimit()),
+                "Only supported bounded sampled-texture arrays may contain multiple elements");
+        Require(std::ranges::count_if(entries,
+                                      [&](const auto& other)
+                                      {
+                                          return entry.space == other.space &&
+                                                 uint64_t(entry.slot) <
+                                                     uint64_t(other.slot) + other.count &&
+                                                 uint64_t(other.slot) <
+                                                     uint64_t(entry.slot) + entry.count;
+                                      }) == 1,
+                "Overlapping descriptor register ranges");
+    }
+}
 void Runtime::Validate(const std::shared_ptr<BindingLayout>& layout,
                        const std::vector<Binding>& bindings) const
 {
     CheckOwner(layout);
-    Require(bindings.size() == layout->entries.size(), "Binding count mismatch");
+    ValidateLayout(layout->entries);
+    Require(bindings.size() == layout->DescriptorCount(), "Binding count mismatch");
     for (const auto& entry : layout->entries)
     {
-        Require(entry.space < 4, "Binding space must be in [0,3]");
-        Require(std::ranges::count_if(bindings, [&](const Binding& b)
-                                      { return b.slot == entry.slot && b.space == entry.space; }) ==
-                    1,
-                "Missing or duplicate binding slot");
-        const auto& b =
-            *std::ranges::find_if(bindings, [&](const Binding& b)
-                                  { return b.slot == entry.slot && b.space == entry.space; });
-        if (entry.kind == BindingKind::ConstantBuffer ||
-            entry.kind == BindingKind::ReadOnlyBuffer || entry.kind == BindingKind::StorageBuffer)
+        for (uint32_t element = 0; element < entry.count; ++element)
         {
-            CheckOwner(b.buffer);
-            Require(!b.view && !b.sampler && b.size && b.offset <= b.buffer->desc.size &&
-                        b.size <= b.buffer->desc.size - b.offset,
-                    "Invalid buffer binding range");
-            Require(b.buffer->desc.memory != Memory::Readback,
-                    "Cannot bind a readback buffer to a shader");
-            if (entry.kind == BindingKind::ConstantBuffer)
-                Require(b.offset % 256 == 0 && b.size % 256 == 0 && b.size <= 65536,
-                        "Constant buffer range must be 256-byte aligned and <=64KiB");
+            Require(std::ranges::count_if(bindings,
+                                          [&](const Binding& b)
+                                          {
+                                              return b.slot == entry.slot &&
+                                                     b.space == entry.space &&
+                                                     b.arrayElement == element;
+                                          }) == 1,
+                    "Missing or duplicate binding slot");
+            const auto& b = *std::ranges::find_if(bindings,
+                                                  [&](const Binding& b)
+                                                  {
+                                                      return b.slot == entry.slot &&
+                                                             b.space == entry.space &&
+                                                             b.arrayElement == element;
+                                                  });
+            if (entry.kind == BindingKind::ConstantBuffer ||
+                entry.kind == BindingKind::ReadOnlyBuffer ||
+                entry.kind == BindingKind::StorageBuffer)
+            {
+                CheckOwner(b.buffer);
+                Require(!b.view && !b.sampler && b.size && b.offset <= b.buffer->desc.size &&
+                            b.size <= b.buffer->desc.size - b.offset,
+                        "Invalid buffer binding range");
+                Require(b.buffer->desc.memory != Memory::Readback,
+                        "Cannot bind a readback buffer to a shader");
+                if (entry.kind == BindingKind::ConstantBuffer)
+                    Require(b.offset % 256 == 0 && b.size % 256 == 0 && b.size <= 65536,
+                            "Constant buffer range must be 256-byte aligned and <=64KiB");
+                else
+                    Require(b.stride && b.stride % 4 == 0 && b.offset % b.stride == 0 &&
+                                b.offset % 256 == 0 && b.size % b.stride == 0,
+                            "Structured buffer requires aligned offset and whole elements");
+                Require(entry.kind != BindingKind::StorageBuffer || b.buffer->desc.storage,
+                        "Storage binding requires storage buffer usage");
+                continue;
+            }
+            if (entry.kind == BindingKind::AccelerationStructure)
+            {
+                CheckOwner(b.accelerationStructure);
+                Require(b.accelerationStructure->desc.topLevel,
+                        "Shader acceleration structure bindings require a TLAS");
+                Require(!b.view && !b.sampler && !b.buffer,
+                        "Acceleration structure slot contains another resource type");
+                continue;
+            }
+            Require(!b.buffer && !b.accelerationStructure,
+                    "Texture/sampler slot contains a non-texture resource");
+            if (entry.kind == BindingKind::Sampler)
+            {
+                CheckOwner(b.sampler);
+                Require(!b.view, "Sampler slot contains texture");
+            }
             else
-                Require(b.stride && b.stride % 4 == 0 && b.offset % b.stride == 0 &&
-                            b.offset % 256 == 0 && b.size % b.stride == 0,
-                        "Structured buffer requires aligned offset and whole elements");
-            Require(entry.kind != BindingKind::StorageBuffer || b.buffer->desc.storage,
-                    "Storage binding requires storage buffer usage");
-            continue;
-        }
-        if (entry.kind == BindingKind::AccelerationStructure)
-        {
-            CheckOwner(b.accelerationStructure);
-            Require(b.accelerationStructure->desc.topLevel,
-                    "Shader acceleration structure bindings require a TLAS");
-            Require(!b.view && !b.sampler && !b.buffer,
-                    "Acceleration structure slot contains another resource type");
-            continue;
-        }
-        Require(!b.buffer && !b.accelerationStructure,
-                "Texture/sampler slot contains a non-texture resource");
-        if (entry.kind == BindingKind::Sampler)
-        {
-            CheckOwner(b.sampler);
-            Require(!b.view, "Sampler slot contains texture");
-        }
-        else
-        {
-            CheckOwner(b.view);
-            Require(!b.sampler, "Texture slot contains sampler");
-            Require(entry.kind != BindingKind::StorageTexture || b.view->texture->desc.storage,
-                    "Storage binding requires storage texture");
-            Require(!IsDepthFormat(b.view->texture->desc.format) ||
-                        b.view->usage == TextureViewUsage::Sampled,
-                    "Sampled depth textures require a sampled view");
+            {
+                CheckOwner(b.view);
+                Require(!b.sampler, "Texture slot contains sampler");
+                Require(entry.kind != BindingKind::StorageTexture || b.view->texture->desc.storage,
+                        "Storage binding requires storage texture");
+                Require(!IsDepthFormat(b.view->texture->desc.format) ||
+                            b.view->usage == TextureViewUsage::Sampled,
+                        "Sampled depth textures require a sampled view");
+            }
         }
     }
 }

@@ -15,6 +15,7 @@ struct TextureBinding
     uint32_t slot;
     std::string texture;
     uint32_t space = 0;
+    uint32_t arrayElement = 0;
 };
 struct BufferBinding
 {

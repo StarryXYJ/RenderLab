@@ -5,7 +5,7 @@
 ## 当前状态
 
 - 当前实施阶段：M6 IN_PROGRESS；M0–M5、R1、B1–B3 DONE。
-- 当前工作项：M6.1a 间接提交语义 DONE；继续 M6.1b 有界纹理数组与在途安全，随后接入场景资源索引和 GPU 剔除。M7 提前试验暂停在既有结果，M8 未启动。
+- 当前工作项：M6.1a 间接提交语义 DONE；M6.1b 有界纹理数组 DONE；继续 M6.1c 场景资源索引和 CPU 间接基线，随后接入 GPU 剔除。M7 提前试验暂停在既有结果，M8 未启动。
 - 用户约定：每个子阶段验收完成即提交 Git，无阻塞时在当前授权范围内继续推进。此前 M7 修改已进入 Git，本轮开始时工作区干净。
 
 | 阶段 | 目标 | 前置依赖 | 状态 |
@@ -277,7 +277,9 @@ R1 契约修订、B1 样例整理/Benchmark、B2 调查和 B3 资源复用已完
 
 M6.1a DONE（2026 年 10 月 29 日）：双后端紧密排列的索引/非索引多条间接命令、可选 GPU Count 截断与 Graph 范围/用途验证。实例 helper 显式处理 DXIL SV_InstanceID 不含 firstInstance、SPIR-V 已包含的差异；DX12 索引 Shader 要求 SM 6.8，基础路径保持 SM 6.0。RTX 5060、MSVC NMake，Debug/Release 全目标构建成功；Debug 所选 Core/Graph、双后端 indirect/rhi/graph/render_state 10/10，追加 CPU 与双后端 PBR 3/3，Release 同组选测 10/10。GPU 验证错误 0，专项销毁后账本 0；直接/CPU 参数/Compute 参数逐像素一致，覆盖 Count 0/1/2/3/99、固定多条、实例乱序、多实例、正负 baseVertex、偏移/容量/能力拒绝、未声明 Count 以及取消/提交退休。全量构建同时修复旧 render_state/PBR 测试遗漏的颜色附件接口迁移。本轮未测其他 GPU，不将底层专项当作场景 GPU Driven 完成。入口：[契约与验证](../docs/gpu-driven.md)、[运行](../manual/build.md#shader-与材质工具)。
 
-M6.1b：有界 sampled-texture 描述符数组与不可变快照；M6.1c：场景对象/材质/纹理索引与 CPU 间接基线。后两项尚未验收。
+M6.1b DONE（2026 年 10 月 29 日）：固定 count 的 sampled-texture 数组（最多 64 项）、显式 arrayElement 与完整不可变绑定；双后端连续/固定数组描述符、逐元素 Graph 访问与资源保活，容量按元素统计。RTX 5060、MSVC NMake Debug/Release 均完整 clean build，所选 Core/Graph 与双后端 descriptor_array/indirect/rhi/graph/render_state/PBR 各 14/14；GPU validation errors=0，专项关闭后账本与在用描述符均为 0。覆盖同波非一致访问 64 元素、跨 space、两套在途表的独立颜色、旧纹理退休、缺项/重复/越界/空 View/布局重叠拒绝。构建发现旧 NMake 依赖遗漏，变更公共接口后采用完整重编译，未用旧目标文件的成功替代验证。边界：仅 sampled-image 数组，不支持部分绑定、变长数组或 update-after-bind，其他 GPU 未验收。契约与命令同上。
+
+M6.1c IN_PROGRESS：场景对象/材质/纹理索引与 CPU 间接基线。
 
 - [ ] 让已有 GPU Scene 的对象、材质和纹理通过明确索引消费。
 - [ ] 实现所需的描述符数组能力和在途安全，不建立无需求的全资源 Bindless 框架。

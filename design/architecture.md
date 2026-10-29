@@ -155,6 +155,8 @@ RenderPipeline 是组织渲染算法的上层对象，与 RHI 的 Pipeline State
 
 描述符、上传区和 GPU Scene 更新采用安全的帧版本或提交完成点回收。句柄回收包含代际检查；不能在旧帧仍访问时复用物理索引。
 
+M6 的有界 sampled-texture 数组按布局声明固定 count，组内每个元素显式绑定并保活。描述符为不可变快照；Graph 声明全部动态可达纹理，计数与原生页/块容量按数组元素统计。首版仅提供最多 64 项的非一致 sampled-image 索引，不引入全资源 Bindless、更新在途描述符或部分未绑定数组。
+
 ### 资源访问与生命周期
 
 屏障描述区分资源用途、Pipeline Stage、读写访问、Texture Layout 语义和子资源范围。后端翻译为对应 API 的状态与屏障。即使状态名称不变，也要处理 Storage/UAV 写入后的内存依赖。

@@ -19,7 +19,8 @@ public:
     BindingContext(const BindingContext&) = delete;
     BindingContext& operator=(const BindingContext&) = delete;
     void Bind(std::shared_ptr<rhi::Pipeline> pipeline);
-    void BindTexture(uint32_t slot, TextureHandle handle, uint32_t space = 0);
+    void BindTexture(uint32_t slot, TextureHandle handle, uint32_t space = 0,
+                     uint32_t arrayElement = 0);
     void BindBuffer(uint32_t slot, BufferHandle handle, uint64_t offset = 0, uint64_t size = 0,
                     uint32_t stride = 0, uint32_t space = 0);
     void BindSampler(uint32_t slot, std::shared_ptr<rhi::Sampler> sampler, uint32_t space = 0);

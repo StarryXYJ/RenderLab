@@ -74,6 +74,7 @@ struct DeviceCapabilities
     bool indirectCount = false;
     bool indirectFirstInstance = false;
     bool descriptorIndexing = false;
+    bool sampledTextureArrayNonUniformIndexing = false;
     bool accelerationStructure = false;
     bool rayQuery = false;
     bool rayTracingPipeline = false;

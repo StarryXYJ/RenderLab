@@ -65,6 +65,11 @@ public:
     {
         return {};
     }
+    /// Bounded, immutable sampled-image arrays with nonuniform indexing; zero if unsupported.
+    virtual uint32_t SampledTextureArrayLimit() const
+    {
+        return 0;
+    }
     virtual bool SupportsAccelerationStructures() const
     {
         return false;
@@ -127,6 +132,7 @@ protected:
                                                 Swapchain* presentation) = 0;
     virtual void WaitNative(uint64_t point) = 0;
     void Validate(const BufferDesc& desc) const;
+    void ValidateLayout(const std::vector<BindingDesc>& entries) const;
     void Validate(const TextureDesc& desc) const;
     void Validate(const AccelerationStructureDesc& desc) const;
     void Validate(const PipelineDesc& desc) const;

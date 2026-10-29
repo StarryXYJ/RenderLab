@@ -192,6 +192,7 @@ struct BindingDesc
     uint32_t slot;
     BindingKind kind;
     uint32_t space = 0;
+    uint32_t count = 1;
 };
 struct BindingLayout : Object
 {
@@ -200,6 +201,13 @@ struct BindingLayout : Object
     {
     }
     const std::vector<BindingDesc> entries;
+    uint32_t DescriptorCount() const
+    {
+        uint32_t count = 0;
+        for (const auto& entry : entries)
+            count += entry.count;
+        return count;
+    }
 };
 struct AccelerationStructure;
 struct Binding
@@ -213,6 +221,7 @@ struct Binding
     uint32_t stride = 0;
     uint32_t space = 0;
     std::shared_ptr<AccelerationStructure> accelerationStructure;
+    uint32_t arrayElement = 0;
 };
 struct AccelerationStructureGeometry
 {

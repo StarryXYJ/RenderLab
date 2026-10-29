@@ -15,6 +15,10 @@ struct DxDescriptorRange;
 class DxRuntime final : public Runtime
 {
 public:
+    uint32_t SampledTextureArrayLimit() const override
+    {
+        return sampledTextureArrayLimit_;
+    }
     IndirectSupport GetIndirectSupport() const override
     {
         return indirectSupport_;
@@ -78,6 +82,7 @@ private:
     bool accelerationStructureEnabled_, rayQueryEnabled_, rayTracingPipelineEnabled_;
     ComPtr<ID3D12CommandSignature> indirect_, indexedIndirect_;
     IndirectSupport indirectSupport_{UINT32_MAX, true, true, false};
+    uint32_t sampledTextureArrayLimit_ = 0;
     HANDLE event_ = nullptr;
     uint64_t frequency_ = 0;
     std::vector<std::shared_ptr<Work>> contexts_;

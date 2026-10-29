@@ -217,6 +217,14 @@ install(DIRECTORY sample/m4/Assets DESTINATION project)
 install(FILES sample/m4/RenderLab.rlproject sample/m4/Pbr.rlproject sample/m4/Shadow.rlproject DESTINATION project)
 
 if(BUILD_TESTING)
+    add_executable(renderlab_descriptor_array_tests tests/descriptor_array_tests.cpp)
+    target_link_libraries(renderlab_descriptor_array_tests PRIVATE renderlab_options renderlab_shader
+        renderlab_rendergraph renderlab_rhi renderlab_core renderlab_platform)
+    add_custom_command(TARGET renderlab_descriptor_array_tests POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_FILE:renderlab_dxc>
+            $<TARGET_FILE_DIR:renderlab_descriptor_array_tests>
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_FILE:renderlab_pix>
+            $<TARGET_FILE_DIR:renderlab_descriptor_array_tests> VERBATIM)
     add_executable(renderlab_indirect_tests tests/indirect_tests.cpp)
     target_link_libraries(renderlab_indirect_tests PRIVATE renderlab_options renderlab_shader
         renderlab_rendergraph renderlab_rhi renderlab_core renderlab_platform)
@@ -313,6 +321,9 @@ if(BUILD_TESTING)
         PROPERTIES WILL_FAIL TRUE)
     if(RENDERLAB_GPU_TESTS)
         foreach(backend IN ITEMS dx12 vulkan)
+            add_test(NAME gpu.${backend}.descriptor_array COMMAND renderlab_descriptor_array_tests
+                ${backend} ${CMAKE_BINARY_DIR}/descriptor-array/${backend})
+            set_tests_properties(gpu.${backend}.descriptor_array PROPERTIES LABELS gpu RUN_SERIAL TRUE TIMEOUT 120)
             add_test(NAME gpu.${backend}.indirect COMMAND renderlab_indirect_tests ${backend}
                 ${CMAKE_SOURCE_DIR}/shaders/RenderLab ${CMAKE_BINARY_DIR}/indirect/${backend})
             set_tests_properties(gpu.${backend}.indirect PROPERTIES LABELS gpu RUN_SERIAL TRUE TIMEOUT 120)

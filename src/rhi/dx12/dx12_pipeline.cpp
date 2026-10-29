@@ -51,6 +51,7 @@ D3D12_DEPTH_STENCILOP_DESC Native(const StencilFaceState& face)
 
 std::shared_ptr<BindingLayout> DxRuntime::CreateLayout(std::vector<BindingDesc> entries)
 {
+    ValidateLayout(entries);
     auto layout = std::make_shared<DxLayout>(this, std::move(entries));
     std::vector<D3D12_DESCRIPTOR_RANGE> ranges(layout->entries.size());
     std::vector<D3D12_ROOT_PARAMETER> parameters(layout->entries.size());
@@ -68,7 +69,7 @@ std::shared_ptr<BindingLayout> DxRuntime::CreateLayout(std::vector<BindingDesc> 
                 ? D3D12_DESCRIPTOR_RANGE_TYPE_UAV
             : entry.kind == BindingKind::ConstantBuffer ? D3D12_DESCRIPTOR_RANGE_TYPE_CBV
                                                         : D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
-        range.NumDescriptors = 1;
+        range.NumDescriptors = entry.count;
         range.BaseShaderRegister = entry.slot;
         range.RegisterSpace = entry.space;
         auto& param = parameters[i];
@@ -137,7 +138,7 @@ std::shared_ptr<BindingGroup> DxRuntime::CreateGroup(std::shared_ptr<BindingLayo
     auto group = std::make_shared<DxGroup>(layout, std::move(bindings));
     const auto samplerCount = static_cast<UINT>(std::ranges::count_if(
         layout->entries, [](auto e) { return e.kind == BindingKind::Sampler; }));
-    const auto resourceCount = static_cast<UINT>(layout->entries.size()) - samplerCount;
+    const auto resourceCount = layout->DescriptorCount() - samplerCount;
     group->resourceRange =
         AllocateDescriptors(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, resourceCount);
     group->samplerRange = AllocateDescriptors(D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER, samplerCount);
@@ -149,87 +150,96 @@ std::shared_ptr<BindingGroup> DxRuntime::CreateGroup(std::shared_ptr<BindingLayo
     UINT samplerIndex = group->samplerRange ? group->samplerRange->first : 0;
     for (auto entry : layout->entries)
     {
-        const auto& binding =
-            *std::ranges::find_if(group->bindings, [&](const Binding& b)
-                                  { return b.slot == entry.slot && b.space == entry.space; });
-        const bool sampler = entry.kind == BindingKind::Sampler;
-        auto* heap = sampler ? group->samplers.Get() : group->resources.Get();
-        const auto type =
-            sampler ? D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER : D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
-        const auto offset = (sampler ? samplerIndex++ : resourceIndex++) *
-                            device_->GetDescriptorHandleIncrementSize(type);
-        auto cpu = heap->GetCPUDescriptorHandleForHeapStart();
-        cpu.ptr += offset;
-        auto gpu = heap->GetGPUDescriptorHandleForHeapStart();
-        gpu.ptr += offset;
-        group->handles.push_back(gpu);
-        if (sampler)
+        for (uint32_t element = 0; element < entry.count; ++element)
         {
-            D3D12_SAMPLER_DESC desc{};
-            desc.Filter = D3D12_FILTER_MIN_MAG_MIP_POINT;
-            desc.AddressU = desc.AddressV = desc.AddressW = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
-            desc.MaxLOD = D3D12_FLOAT32_MAX;
-            desc.ComparisonFunc = D3D12_COMPARISON_FUNC_NONE;
-            device_->CreateSampler(&desc, cpu);
-        }
-        else if (entry.kind == BindingKind::ConstantBuffer)
-        {
-            D3D12_CONSTANT_BUFFER_VIEW_DESC desc{};
-            desc.BufferLocation =
-                As<DxBuffer>(binding.buffer).native->GetGPUVirtualAddress() + binding.offset;
-            desc.SizeInBytes = static_cast<UINT>(binding.size);
-            device_->CreateConstantBufferView(&desc, cpu);
-        }
-        else if (entry.kind == BindingKind::ReadOnlyBuffer)
-        {
-            D3D12_SHADER_RESOURCE_VIEW_DESC desc{};
-            desc.ViewDimension = D3D12_SRV_DIMENSION_BUFFER;
-            desc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-            desc.Buffer.FirstElement = binding.offset / binding.stride;
-            desc.Buffer.NumElements = static_cast<UINT>(binding.size / binding.stride);
-            desc.Buffer.StructureByteStride = binding.stride;
-            device_->CreateShaderResourceView(As<DxBuffer>(binding.buffer).native.Get(), &desc,
-                                              cpu);
-        }
-        else if (entry.kind == BindingKind::StorageBuffer)
-        {
-            D3D12_UNORDERED_ACCESS_VIEW_DESC desc{};
-            desc.ViewDimension = D3D12_UAV_DIMENSION_BUFFER;
-            desc.Buffer.FirstElement = binding.offset / binding.stride;
-            desc.Buffer.NumElements = static_cast<UINT>(binding.size / binding.stride);
-            desc.Buffer.StructureByteStride = binding.stride;
-            device_->CreateUnorderedAccessView(As<DxBuffer>(binding.buffer).native.Get(), nullptr,
-                                               &desc, cpu);
-        }
-        else if (entry.kind == BindingKind::StorageTexture)
-        {
-            D3D12_UNORDERED_ACCESS_VIEW_DESC desc{};
-            desc.Format = NativeFormat(binding.view->texture->desc.format);
-            desc.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2D;
-            device_->CreateUnorderedAccessView(As<DxTexture>(binding.view->texture).native.Get(),
-                                               nullptr, &desc, cpu);
-        }
-        else if (entry.kind == BindingKind::AccelerationStructure)
-        {
-            D3D12_SHADER_RESOURCE_VIEW_DESC desc{};
-            desc.ViewDimension = D3D12_SRV_DIMENSION_RAYTRACING_ACCELERATION_STRUCTURE;
-            desc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-            desc.RaytracingAccelerationStructure.Location =
-                As<DxBuffer>(binding.accelerationStructure->storage).native->GetGPUVirtualAddress();
-            device_->CreateShaderResourceView(nullptr, &desc, cpu);
-        }
-        else
-        {
-            D3D12_SHADER_RESOURCE_VIEW_DESC desc{};
-            const auto format = binding.view->texture->desc.format;
-            desc.Format = format == Format::D32     ? DXGI_FORMAT_R32_FLOAT
-                          : format == Format::D32S8 ? DXGI_FORMAT_R32_FLOAT_X8X24_TYPELESS
-                                                    : NativeFormat(format);
-            desc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
-            desc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-            desc.Texture2D.MipLevels = 1;
-            device_->CreateShaderResourceView(As<DxTexture>(binding.view->texture).native.Get(),
-                                              &desc, cpu);
+            const auto& binding = *std::ranges::find_if(group->bindings,
+                                                        [&](const Binding& b)
+                                                        {
+                                                            return b.slot == entry.slot &&
+                                                                   b.space == entry.space &&
+                                                                   b.arrayElement == element;
+                                                        });
+            const bool sampler = entry.kind == BindingKind::Sampler;
+            auto* heap = sampler ? group->samplers.Get() : group->resources.Get();
+            const auto type = sampler ? D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER
+                                      : D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
+            const auto offset = (sampler ? samplerIndex++ : resourceIndex++) *
+                                device_->GetDescriptorHandleIncrementSize(type);
+            auto cpu = heap->GetCPUDescriptorHandleForHeapStart();
+            cpu.ptr += offset;
+            auto gpu = heap->GetGPUDescriptorHandleForHeapStart();
+            gpu.ptr += offset;
+            if (element == 0)
+                group->handles.push_back(gpu);
+            if (sampler)
+            {
+                D3D12_SAMPLER_DESC desc{};
+                desc.Filter = D3D12_FILTER_MIN_MAG_MIP_POINT;
+                desc.AddressU = desc.AddressV = desc.AddressW = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
+                desc.MaxLOD = D3D12_FLOAT32_MAX;
+                desc.ComparisonFunc = D3D12_COMPARISON_FUNC_NONE;
+                device_->CreateSampler(&desc, cpu);
+            }
+            else if (entry.kind == BindingKind::ConstantBuffer)
+            {
+                D3D12_CONSTANT_BUFFER_VIEW_DESC desc{};
+                desc.BufferLocation =
+                    As<DxBuffer>(binding.buffer).native->GetGPUVirtualAddress() + binding.offset;
+                desc.SizeInBytes = static_cast<UINT>(binding.size);
+                device_->CreateConstantBufferView(&desc, cpu);
+            }
+            else if (entry.kind == BindingKind::ReadOnlyBuffer)
+            {
+                D3D12_SHADER_RESOURCE_VIEW_DESC desc{};
+                desc.ViewDimension = D3D12_SRV_DIMENSION_BUFFER;
+                desc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+                desc.Buffer.FirstElement = binding.offset / binding.stride;
+                desc.Buffer.NumElements = static_cast<UINT>(binding.size / binding.stride);
+                desc.Buffer.StructureByteStride = binding.stride;
+                device_->CreateShaderResourceView(As<DxBuffer>(binding.buffer).native.Get(), &desc,
+                                                  cpu);
+            }
+            else if (entry.kind == BindingKind::StorageBuffer)
+            {
+                D3D12_UNORDERED_ACCESS_VIEW_DESC desc{};
+                desc.ViewDimension = D3D12_UAV_DIMENSION_BUFFER;
+                desc.Buffer.FirstElement = binding.offset / binding.stride;
+                desc.Buffer.NumElements = static_cast<UINT>(binding.size / binding.stride);
+                desc.Buffer.StructureByteStride = binding.stride;
+                device_->CreateUnorderedAccessView(As<DxBuffer>(binding.buffer).native.Get(),
+                                                   nullptr, &desc, cpu);
+            }
+            else if (entry.kind == BindingKind::StorageTexture)
+            {
+                D3D12_UNORDERED_ACCESS_VIEW_DESC desc{};
+                desc.Format = NativeFormat(binding.view->texture->desc.format);
+                desc.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2D;
+                device_->CreateUnorderedAccessView(
+                    As<DxTexture>(binding.view->texture).native.Get(), nullptr, &desc, cpu);
+            }
+            else if (entry.kind == BindingKind::AccelerationStructure)
+            {
+                D3D12_SHADER_RESOURCE_VIEW_DESC desc{};
+                desc.ViewDimension = D3D12_SRV_DIMENSION_RAYTRACING_ACCELERATION_STRUCTURE;
+                desc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+                desc.RaytracingAccelerationStructure.Location =
+                    As<DxBuffer>(binding.accelerationStructure->storage)
+                        .native->GetGPUVirtualAddress();
+                device_->CreateShaderResourceView(nullptr, &desc, cpu);
+            }
+            else
+            {
+                D3D12_SHADER_RESOURCE_VIEW_DESC desc{};
+                const auto format = binding.view->texture->desc.format;
+                desc.Format = format == Format::D32     ? DXGI_FORMAT_R32_FLOAT
+                              : format == Format::D32S8 ? DXGI_FORMAT_R32_FLOAT_X8X24_TYPELESS
+                                                        : NativeFormat(format);
+                desc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+                desc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+                desc.Texture2D.MipLevels = 1;
+                device_->CreateShaderResourceView(As<DxTexture>(binding.view->texture).native.Get(),
+                                                  &desc, cpu);
+            }
         }
     }
     return group;

@@ -16,6 +16,10 @@ struct VkDescriptorBlock;
 class VulkanRuntime final : public Runtime
 {
 public:
+    uint32_t SampledTextureArrayLimit() const override
+    {
+        return sampledTextureArrayLimit_;
+    }
     IndirectSupport GetIndirectSupport() const override
     {
         return indirect_;
@@ -88,6 +92,7 @@ private:
     uint32_t family_;
     bool debug_;
     IndirectSupport indirect_;
+    uint32_t sampledTextureArrayLimit_ = 0;
     bool accelerationStructureEnabled_;
     bool rayQueryEnabled_, rayTracingPipelineEnabled_;
     VkPhysicalDeviceMemoryProperties memory_{};

@@ -178,32 +178,38 @@ void Graph::Impl::ValidateBindings(uint32_t pass, const rhi::BindingGroup& group
 {
     for (const auto& entry : group.layout->entries)
     {
-        if (entry.kind == rhi::BindingKind::Sampler)
-            continue;
-        const auto found =
-            std::ranges::find_if(group.bindings, [&](const auto& b)
-                                 { return b.space == entry.space && b.slot == entry.slot; });
-        Require(found != group.bindings.end(), "Incomplete binding group");
-        const auto use = entry.kind == rhi::BindingKind::ConstantBuffer   ? Use::Uniform
-                         : entry.kind == rhi::BindingKind::ReadOnlyBuffer ? Use::ShaderRead
-                         : entry.kind == rhi::BindingKind::SampledTexture ? Use::Sampled
-                         : entry.kind == rhi::BindingKind::AccelerationStructure
-                             ? Use::AccelerationStructureRead
-                             : Use::Storage;
-        const auto resource =
-            std::ranges::find_if(resources,
-                                 [&](auto& r)
-                                 {
-                                     if (found->accelerationStructure)
-                                         return r.buffer == found->accelerationStructure->storage;
-                                     return found->buffer
-                                                ? r.buffer == found->buffer
-                                                : found->view && r.texture == found->view->texture;
-                                 });
-        Require(resource != resources.end(),
-                "Binding references a resource outside the graph in " + passes[pass].name);
-        const auto index = static_cast<uint32_t>(resource - resources.begin());
-        Require(std::ranges::any_of(passes[pass].accesses,
+        for (uint32_t element = 0; element < entry.count; ++element)
+        {
+            if (entry.kind == rhi::BindingKind::Sampler)
+                continue;
+            const auto found = std::ranges::find_if(group.bindings,
+                                                    [&](const auto& b)
+                                                    {
+                                                        return b.space == entry.space &&
+                                                               b.slot == entry.slot &&
+                                                               b.arrayElement == element;
+                                                    });
+            Require(found != group.bindings.end(), "Incomplete binding group");
+            const auto use = entry.kind == rhi::BindingKind::ConstantBuffer   ? Use::Uniform
+                             : entry.kind == rhi::BindingKind::ReadOnlyBuffer ? Use::ShaderRead
+                             : entry.kind == rhi::BindingKind::SampledTexture ? Use::Sampled
+                             : entry.kind == rhi::BindingKind::AccelerationStructure
+                                 ? Use::AccelerationStructureRead
+                                 : Use::Storage;
+            const auto resource = std::ranges::find_if(
+                resources,
+                [&](auto& r)
+                {
+                    if (found->accelerationStructure)
+                        return r.buffer == found->accelerationStructure->storage;
+                    return found->buffer ? r.buffer == found->buffer
+                                         : found->view && r.texture == found->view->texture;
+                });
+            Require(resource != resources.end(),
+                    "Binding references a resource outside the graph in " + passes[pass].name);
+            const auto index = static_cast<uint32_t>(resource - resources.begin());
+            Require(
+                std::ranges::any_of(passes[pass].accesses,
                                     [&](auto& a)
                                     {
                                         return a.resource == index && a.use == use &&
@@ -213,14 +219,16 @@ void Graph::Impl::ValidateBindings(uint32_t pass, const rhi::BindingGroup& group
                                     }),
                 "Binding access was not declared in " + passes[pass].name + ": " +
                     resource->Name());
-        if (found->buffer)
-        {
-            const auto& a =
-                *std::ranges::find(passes[pass].accesses, index, &detail::Access::resource);
-            Require(found->offset >= a.bufferRange.offset &&
-                        found->offset - a.bufferRange.offset <= a.bufferRange.size &&
-                        found->size <= a.bufferRange.size - (found->offset - a.bufferRange.offset),
-                    "Binding exceeds declared buffer range in " + passes[pass].name);
+            if (found->buffer)
+            {
+                const auto& a =
+                    *std::ranges::find(passes[pass].accesses, index, &detail::Access::resource);
+                Require(found->offset >= a.bufferRange.offset &&
+                            found->offset - a.bufferRange.offset <= a.bufferRange.size &&
+                            found->size <=
+                                a.bufferRange.size - (found->offset - a.bufferRange.offset),
+                        "Binding exceeds declared buffer range in " + passes[pass].name);
+            }
         }
     }
 }

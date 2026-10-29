@@ -69,6 +69,7 @@ VkStencilOpState Native(const StencilFaceState& face, const StencilState& stenci
 
 std::shared_ptr<BindingLayout> VulkanRuntime::CreateLayout(std::vector<BindingDesc> entries)
 {
+    ValidateLayout(entries);
     auto layout = std::make_shared<VkLayout>(this, std::move(entries));
     layout->device = device_;
     std::array<std::vector<VkDescriptorSetLayoutBinding>, 4> bindings;
@@ -79,7 +80,7 @@ std::shared_ptr<BindingLayout> VulkanRuntime::CreateLayout(std::vector<BindingDe
                                   { return e.slot == entry.slot && e.space == entry.space; }) != 1)
             throw std::invalid_argument("Duplicate binding slot");
         bindings[entry.space].push_back(
-            {entry.slot, DescriptorType(entry.kind), 1,
+            {entry.slot, DescriptorType(entry.kind), entry.count,
              VkShaderStageFlags(VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT |
                                 VK_SHADER_STAGE_COMPUTE_BIT |
                                 (rayTracingPipelineEnabled_
@@ -130,8 +131,10 @@ VulkanRuntime::AcquireDescriptors(std::shared_ptr<BindingLayout> layout)
           VK_DESCRIPTOR_TYPE_SAMPLER, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
           VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR})
     {
-        const auto count = static_cast<uint32_t>(std::ranges::count_if(
-            layout->entries, [&](auto e) { return DescriptorType(e.kind) == type; }));
+        uint32_t count = 0;
+        for (const auto& entry : layout->entries)
+            if (DescriptorType(entry.kind) == type)
+                count += entry.count;
         if (count)
             sizes.push_back({type, count});
     }
@@ -153,7 +156,7 @@ VulkanRuntime::AcquireDescriptors(std::shared_ptr<BindingLayout> layout)
     allocation->stats = descriptorStats_;
     ++descriptorStats_->pages;
     ++descriptorStats_->creations;
-    descriptorStats_->capacity += layout->entries.size();
+    descriptorStats_->capacity += layout->DescriptorCount();
     descriptorBlocks_.push_back(allocation);
     return allocation;
 }
@@ -165,52 +168,62 @@ std::shared_ptr<BindingGroup> VulkanRuntime::CreateGroup(std::shared_ptr<Binding
     Validate(layout, bindings);
     auto group = std::make_shared<VkGroup>(layout, std::move(bindings));
     group->allocation = AcquireDescriptors(layout);
-    descriptorStats_->inUse += layout->entries.size();
+    descriptorStats_->inUse += layout->DescriptorCount();
     descriptorStats_->highWater = std::max(descriptorStats_->highWater, descriptorStats_->inUse);
     group->native = group->allocation->native;
     for (auto entry : layout->entries)
     {
-        const auto& binding =
-            *std::ranges::find_if(group->bindings, [&](const Binding& b)
-                                  { return b.slot == entry.slot && b.space == entry.space; });
-        VkDescriptorImageInfo image{};
-        VkDescriptorBufferInfo buffer{};
-        const bool isBuffer = entry.kind == BindingKind::ConstantBuffer ||
-                              entry.kind == BindingKind::ReadOnlyBuffer ||
-                              entry.kind == BindingKind::StorageBuffer;
-        if (isBuffer)
+        for (uint32_t element = 0; element < entry.count; ++element)
         {
-            buffer = {As<VkBufferObject>(binding.buffer).native, binding.offset, binding.size};
+            const auto& binding = *std::ranges::find_if(group->bindings,
+                                                        [&](const Binding& b)
+                                                        {
+                                                            return b.slot == entry.slot &&
+                                                                   b.space == entry.space &&
+                                                                   b.arrayElement == element;
+                                                        });
+            VkDescriptorImageInfo image{};
+            VkDescriptorBufferInfo buffer{};
+            const bool isBuffer = entry.kind == BindingKind::ConstantBuffer ||
+                                  entry.kind == BindingKind::ReadOnlyBuffer ||
+                                  entry.kind == BindingKind::StorageBuffer;
+            if (isBuffer)
+            {
+                buffer = {As<VkBufferObject>(binding.buffer).native, binding.offset, binding.size};
+            }
+            else if (entry.kind == BindingKind::Sampler)
+                image.sampler = As<VkSamplerObject>(binding.sampler).native;
+            else if (entry.kind != BindingKind::AccelerationStructure)
+            {
+                image.imageView = As<VkView>(binding.view).native;
+                image.imageLayout = entry.kind == BindingKind::StorageTexture
+                                        ? VK_IMAGE_LAYOUT_GENERAL
+                                        : VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+            }
+            VkWriteDescriptorSet write{};
+            write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+            write.dstSet = group->native[entry.space];
+            write.dstBinding = entry.slot;
+            write.dstArrayElement = element;
+            write.descriptorCount = 1;
+            write.descriptorType = DescriptorType(entry.kind);
+            VkWriteDescriptorSetAccelerationStructureKHR acceleration{};
+            VkAccelerationStructureKHR nativeAcceleration = VK_NULL_HANDLE;
+            if (entry.kind == BindingKind::AccelerationStructure)
+            {
+                acceleration.sType =
+                    VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET_ACCELERATION_STRUCTURE_KHR;
+                nativeAcceleration =
+                    As<VkAccelerationStructure>(binding.accelerationStructure).native;
+                acceleration.accelerationStructureCount = 1;
+                acceleration.pAccelerationStructures = &nativeAcceleration;
+                write.pNext = &acceleration;
+            }
+            write.pImageInfo =
+                isBuffer || entry.kind == BindingKind::AccelerationStructure ? nullptr : &image;
+            write.pBufferInfo = isBuffer ? &buffer : nullptr;
+            vkUpdateDescriptorSets(device_, 1, &write, 0, nullptr);
         }
-        else if (entry.kind == BindingKind::Sampler)
-            image.sampler = As<VkSamplerObject>(binding.sampler).native;
-        else if (entry.kind != BindingKind::AccelerationStructure)
-        {
-            image.imageView = As<VkView>(binding.view).native;
-            image.imageLayout = entry.kind == BindingKind::StorageTexture
-                                    ? VK_IMAGE_LAYOUT_GENERAL
-                                    : VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-        }
-        VkWriteDescriptorSet write{};
-        write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-        write.dstSet = group->native[entry.space];
-        write.dstBinding = entry.slot;
-        write.descriptorCount = 1;
-        write.descriptorType = DescriptorType(entry.kind);
-        VkWriteDescriptorSetAccelerationStructureKHR acceleration{};
-        VkAccelerationStructureKHR nativeAcceleration = VK_NULL_HANDLE;
-        if (entry.kind == BindingKind::AccelerationStructure)
-        {
-            acceleration.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET_ACCELERATION_STRUCTURE_KHR;
-            nativeAcceleration = As<VkAccelerationStructure>(binding.accelerationStructure).native;
-            acceleration.accelerationStructureCount = 1;
-            acceleration.pAccelerationStructures = &nativeAcceleration;
-            write.pNext = &acceleration;
-        }
-        write.pImageInfo =
-            isBuffer || entry.kind == BindingKind::AccelerationStructure ? nullptr : &image;
-        write.pBufferInfo = isBuffer ? &buffer : nullptr;
-        vkUpdateDescriptorSets(device_, 1, &write, 0, nullptr);
     }
     return group;
 }

@@ -22,6 +22,10 @@ VulkanRuntime::VulkanRuntime(VkInstance instance, VkPhysicalDevice physical, VkD
     features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
     features.pNext = &features12;
     vkGetPhysicalDeviceFeatures2(physical_, &features);
+    if (features12.shaderSampledImageArrayNonUniformIndexing &&
+        props.limits.maxPerStageDescriptorSampledImages >= 80 &&
+        props.limits.maxDescriptorSetSampledImages >= 80)
+        sampledTextureArrayLimit_ = 64;
     indirect_ = {features.features.multiDrawIndirect ? props.limits.maxDrawIndirectCount : 1,
                  features12.drawIndirectCount != 0,
                  features.features.drawIndirectFirstInstance != 0, true};

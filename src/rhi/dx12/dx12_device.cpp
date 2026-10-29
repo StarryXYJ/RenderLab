@@ -201,6 +201,7 @@ public:
         caps.indirectCount = true;
         caps.indirectFirstInstance = true;
         caps.descriptorIndexing = base.ResourceBindingTier >= D3D12_RESOURCE_BINDING_TIER_2;
+        caps.sampledTextureArrayNonUniformIndexing = caps.descriptorIndexing;
         caps.accelerationStructure =
             rayTracing.RaytracingTier != D3D12_RAYTRACING_TIER_NOT_SUPPORTED;
         caps.rayTracingPipeline = caps.accelerationStructure;

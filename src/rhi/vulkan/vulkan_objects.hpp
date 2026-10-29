@@ -114,7 +114,7 @@ struct VkDescriptorBlock
         if (stats)
         {
             --stats->pages;
-            stats->capacity -= layout->entries.size();
+            stats->capacity -= layout->DescriptorCount();
         }
     }
 };
@@ -126,7 +126,7 @@ struct VkGroup : BindingGroup
     ~VkGroup() override
     {
         if (allocation)
-            allocation->stats->inUse -= layout->entries.size();
+            allocation->stats->inUse -= layout->DescriptorCount();
     }
 };
 struct VkPipelineObject : Pipeline

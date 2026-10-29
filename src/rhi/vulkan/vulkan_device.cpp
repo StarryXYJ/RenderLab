@@ -258,6 +258,8 @@ public:
         enabled12.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES;
         enabled12.timelineSemaphore = VK_TRUE;
         enabled12.drawIndirectCount = report_.supported.indirectCount;
+        enabled12.shaderSampledImageArrayNonUniformIndexing =
+            report_.supported.sampledTextureArrayNonUniformIndexing;
         VkPhysicalDeviceFeatures enabledBase{};
         enabledBase.multiDrawIndirect = report_.supported.multiDrawIndirect;
         enabledBase.drawIndirectFirstInstance = report_.supported.indirectFirstInstance;
@@ -466,6 +468,8 @@ private:
         caps.multiDrawIndirect = features.features.multiDrawIndirect != VK_FALSE;
         caps.indirectCount = features12.drawIndirectCount != VK_FALSE;
         caps.indirectFirstInstance = features.features.drawIndirectFirstInstance != VK_FALSE;
+        caps.sampledTextureArrayNonUniformIndexing =
+            features12.shaderSampledImageArrayNonUniformIndexing != VK_FALSE;
         report_.details.emplace_back("maxDrawIndirectCount",
                                      std::to_string(props.limits.maxDrawIndirectCount));
         caps.descriptorIndexing = features12.descriptorIndexing &&
