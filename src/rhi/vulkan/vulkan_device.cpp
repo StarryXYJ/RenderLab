@@ -67,6 +67,7 @@ public:
             vkDestroyDevice(device_, nullptr);
             device_ = VK_NULL_HANDLE;
             queue_ = VK_NULL_HANDLE;
+            computeQueue_ = VK_NULL_HANDLE;
         }
         if (messenger_ != VK_NULL_HANDLE)
         {
@@ -297,13 +298,15 @@ public:
             *featureTail = &enabledRayPipeline;
             featureTail = &enabledRayPipeline.pNext;
         }
-        const float queuePriority = 1.0f;
+        const float queuePriorities[] = {1.0f, 1.0f};
         VkDeviceQueueCreateInfo queueInfo{};
         queueInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
         queueInfo.queueFamilyIndex = queueFamily_;
-        queueInfo.queueCount = 1;
-        queueInfo.pQueuePriorities = &queuePriority;
+        queueInfo.queueCount = asyncQueueAvailable_ ? 2 : 1;
+        queueInfo.pQueuePriorities = queuePriorities;
         std::vector<const char*> deviceExtensions{VK_KHR_SWAPCHAIN_EXTENSION_NAME};
+        if (calibratedTimestampExtension_)
+            deviceExtensions.push_back(calibratedTimestampExtension_);
         if (report_.supported.accelerationStructure)
         {
             deviceExtensions.push_back(VK_KHR_DEFERRED_HOST_OPERATIONS_EXTENSION_NAME);
@@ -326,6 +329,8 @@ public:
         // earlier.
         volkLoadDevice(device_);
         vkGetDeviceQueue(device_, queueFamily_, 0, &queue_);
+        if (asyncQueueAvailable_)
+            vkGetDeviceQueue(device_, queueFamily_, 1, &computeQueue_);
         if (queue_ == VK_NULL_HANDLE)
         {
             throw std::runtime_error("vkGetDeviceQueue returned a null queue");
@@ -341,7 +346,9 @@ public:
                 (report_.supported.multiDrawIndirect ? "; multiDrawIndirect" : "") +
                 (report_.supported.indirectCount ? "; drawIndirectCount" : "") +
                 (report_.supported.indirectFirstInstance ? "; drawIndirectFirstInstance" : "") +
-                "; one graphics queue");
+                (asyncQueueAvailable_ ? "; graphics queue 0 + optional compute queue 1 in same "
+                                        "family; no ownership transfer"
+                                      : "; one graphics queue; async compute unavailable"));
     }
 
     const DeviceReport& GetReport() const override
@@ -350,10 +357,11 @@ public:
     }
     std::unique_ptr<Runtime> CreateRuntime() override
     {
-        return CreateVulkanRuntime(
-            instance_, physical_, device_, queue_, queueFamily_, report_.validationEnabled,
-            report_.supported.accelerationStructure, report_.supported.rayQuery,
-            report_.supported.rayTracingPipeline);
+        return CreateVulkanRuntime(instance_, physical_, device_, queue_, computeQueue_,
+                                   queueFamily_, report_.validationEnabled,
+                                   report_.supported.accelerationStructure,
+                                   report_.supported.rayQuery, report_.supported.rayTracingPipeline,
+                                   calibratedTimestampExtension_ != nullptr);
     }
     void PollDiagnostics() override {}
     uint32_t GetValidationErrorCount() const override
@@ -443,6 +451,19 @@ private:
         }
         physical_ = physical;
         queueFamily_ = *selectedQueue;
+        asyncQueueAvailable_ = queues[queueFamily_].queueCount >= 2;
+        calibratedTimestampExtension_ =
+            HasExtension(extensions, VK_KHR_CALIBRATED_TIMESTAMPS_EXTENSION_NAME)
+                ? VK_KHR_CALIBRATED_TIMESTAMPS_EXTENSION_NAME
+            : HasExtension(extensions, VK_EXT_CALIBRATED_TIMESTAMPS_EXTENSION_NAME)
+                ? VK_EXT_CALIBRATED_TIMESTAMPS_EXTENSION_NAME
+                : nullptr;
+        report_.details.emplace_back(
+            "timestampClockScope",
+            calibratedTimestampExtension_
+                ? std::string(calibratedTimestampExtension_) +
+                      "; common device clock across all queues"
+                : "single-queue timestamps only; async profiling unavailable");
         report_.apiVersion = Version(props.apiVersion);
         report_.shaderTarget = "SPIR-V 1.6 (Vulkan 1.3 target); M1 build-time DXC";
         VkPhysicalDeviceDriverProperties driver{};
@@ -556,6 +577,9 @@ private:
     uint32_t queueFamily_ = 0;
     VkDevice device_ = VK_NULL_HANDLE;
     VkQueue queue_ = VK_NULL_HANDLE;
+    VkQueue computeQueue_ = VK_NULL_HANDLE;
+    bool asyncQueueAvailable_ = false;
+    const char* calibratedTimestampExtension_ = nullptr;
 };
 } // namespace
 

@@ -11,8 +11,18 @@
 #include <variant>
 #include <vector>
 
+namespace renderlab::rendergraph
+{
+class Graph;
+}
 namespace renderlab::rhi
 {
+struct RecordingRange
+{
+    size_t first = 0, last = 0;
+    QueueType queue = QueueType::Graphics;
+    bool waitCompute = false;
+};
 inline constexpr uint32_t MaxTimestampSlots = 64;
 struct BufferBarrier
 {
@@ -174,7 +184,11 @@ public:
     void RecordingBoundary();
     void SetRecordingThreads(uint32_t count);
     /// Immutable packet ranges, split only at explicit closed boundaries, in submission order.
-    std::vector<std::pair<size_t, size_t>> RecordingRanges() const;
+    std::vector<RecordingRange> RecordingRanges() const;
+    uint32_t RecordingThreads() const
+    {
+        return recordingThreads_;
+    }
     const std::vector<Command>& GetCommands() const
     {
         return commands_;
@@ -182,6 +196,15 @@ public:
 
 private:
     friend class Runtime;
+    friend class rendergraph::Graph;
+    void SelectQueue(QueueType queue, bool waitCompute = false);
+    struct QueueChange
+    {
+        size_t first;
+        QueueType queue;
+        bool waitCompute;
+    };
+    std::vector<QueueChange> queueChanges_{{0, QueueType::Graphics, false}};
     void Check(const std::shared_ptr<Object>& object) const;
     void Recording() const;
     void DrawReady(bool indexed) const;

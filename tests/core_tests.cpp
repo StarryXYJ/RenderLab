@@ -72,6 +72,10 @@ int main()
         RequireInvalid([] { ParseOptions(std::array{"--denoise"sv, "maybe"sv}); });
         RequireInvalid([] { ParseOptions(std::array{"--temporal-denoise"sv, "maybe"sv}); });
         RequireInvalid([] { ParseOptions(std::array{"--submission"sv, "missing"sv}); });
+        RequireInvalid([] { ParseOptions(std::array{"--async-compute"sv}); });
+        Require(ParseOptions(std::array{"--project"sv, "scene.rlproject"sv, "--async-compute"sv})
+                    .asyncCompute,
+                "Async compute switch was not parsed");
         RequireInvalid([] { ParseOptions(std::array{"--recording-threads"sv, "0"sv}); });
         RequireInvalid([] { ParseOptions(std::array{"--recording-threads"sv, "17"sv}); });
         Require(ParseOptions(

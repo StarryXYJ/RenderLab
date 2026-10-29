@@ -1,0 +1,257 @@
+{
+  "schemaVersion": 1,
+  "kind": "renderlab.native-queue-capture",
+  "tool": "RenderDoc v1.46 portable x64",
+  "toolUrl": "https://renderdoc.org/stable/1.46/RenderDoc_1.46_64.zip",
+  "toolArchiveSha256": "9ca4d09ecaba2cc791168660d6fc2a7e3d70fe67146e87ec05c5f8dea70772f7",
+  "captureExecutableSha256": "0bd4a44f3305b430aa3e074df2540ae58ba6cb5a7c76fcfdbdde2d286afab683",
+  "temporaryWrapperSourceSha256": "adf50049ce1d6529689b0201ae15f5e03f61d126ec5d3915272449799f5d9a22",
+  "validation": false,
+  "notes": "Temporary headless capture wrapper links the production Release libraries. Pixel parity is checked inside capture. Timing under RenderDoc is not performance evidence.",
+  "captures": [
+    {
+      "backend": "dx12",
+      "path": "out/m64-capture-final/dx12/Pbr/async-queues_capture.rdc",
+      "captureSha256": "9ab04233f09a514ed1b148660a90f84afd1f28dce2c5bba600f29b908f7a5106",
+      "xmlSha256": "2d24c94f017f45e2b5af74e1667fe8efd580d111ba8d9d4001b7b28a0a14199f",
+      "enabledExtensions": [],
+      "consoleSha256": "b4af47da672b1ab778a11f8f8d2bd1bd4a12a5a9b59df50623a65dcbc6eb75c2",
+      "recordingHostThreadIds": [
+        "15580",
+        "26884",
+        "62244",
+        "70252"
+      ],
+      "queues": [
+        {
+          "chunkIndex": 1,
+          "type": "D3D12_COMMAND_LIST_TYPE_DIRECT",
+          "resources": {
+            "pCommandQueue": "8"
+          }
+        },
+        {
+          "chunkIndex": 124,
+          "type": "D3D12_COMMAND_LIST_TYPE_COMPUTE",
+          "resources": {
+            "pCommandQueue": "402"
+          }
+        }
+      ],
+      "submissions": [
+        {
+          "chunkIndex": 428,
+          "api": "ID3D12CommandQueue::Wait",
+          "pQueue": "402",
+          "pFence": "279",
+          "Value": "12"
+        },
+        {
+          "chunkIndex": 432,
+          "api": "ID3D12CommandQueue::ExecuteCommandLists",
+          "pQueue": "8",
+          "NumCommandLists": "1"
+        },
+        {
+          "chunkIndex": 433,
+          "api": "ID3D12CommandQueue::Signal",
+          "pQueue": "8",
+          "pFence": "405",
+          "Value": "1"
+        },
+        {
+          "chunkIndex": 434,
+          "api": "ID3D12CommandQueue::Wait",
+          "pQueue": "402",
+          "pFence": "405",
+          "Value": "1"
+        },
+        {
+          "chunkIndex": 435,
+          "api": "ID3D12CommandQueue::ExecuteCommandLists",
+          "pQueue": "402",
+          "NumCommandLists": "1"
+        },
+        {
+          "chunkIndex": 436,
+          "api": "ID3D12CommandQueue::Signal",
+          "pQueue": "402",
+          "pFence": "404",
+          "Value": "2"
+        },
+        {
+          "chunkIndex": 437,
+          "api": "ID3D12CommandQueue::ExecuteCommandLists",
+          "pQueue": "8",
+          "NumCommandLists": "1"
+        },
+        {
+          "chunkIndex": 438,
+          "api": "ID3D12CommandQueue::Signal",
+          "pQueue": "8",
+          "pFence": "405",
+          "Value": "3"
+        },
+        {
+          "chunkIndex": 439,
+          "api": "ID3D12CommandQueue::Wait",
+          "pQueue": "8",
+          "pFence": "404",
+          "Value": "2"
+        },
+        {
+          "chunkIndex": 440,
+          "api": "ID3D12CommandQueue::ExecuteCommandLists",
+          "pQueue": "8",
+          "NumCommandLists": "1"
+        },
+        {
+          "chunkIndex": 441,
+          "api": "ID3D12CommandQueue::Signal",
+          "pQueue": "8",
+          "pFence": "405",
+          "Value": "4"
+        },
+        {
+          "chunkIndex": 442,
+          "api": "ID3D12CommandQueue::Signal",
+          "pQueue": "8",
+          "pFence": "279",
+          "Value": "13"
+        }
+      ]
+    },
+    {
+      "backend": "vulkan",
+      "path": "out/m64-capture-final/vulkan/Pbr/async-queues_capture.rdc",
+      "captureSha256": "bf713610b3e5553551fdb9d8c016a98828825082308ae7d5d023511c33d1f6a4",
+      "xmlSha256": "a6019c2c13e697b3baed7db1a399c40b54f8067370d031da1a41aaf60968e52a",
+      "enabledExtensions": [
+        "VK_KHR_swapchain",
+        "VK_KHR_calibrated_timestamps",
+        "VK_KHR_deferred_host_operations",
+        "VK_KHR_acceleration_structure",
+        "VK_KHR_ray_query",
+        "VK_KHR_ray_tracing_pipeline"
+      ],
+      "consoleSha256": "28e7bbfd8fa85a3aba32bfe15d5169bb1c96a944487591726c0cd0463e0ce424",
+      "recordingHostThreadIds": [
+        "17864",
+        "31188",
+        "61860",
+        "63376"
+      ],
+      "queues": [
+        {
+          "chunkIndex": 4,
+          "device": "10",
+          "queueFamilyIndex": "0",
+          "queueIndex": "0",
+          "Queue": "91"
+        },
+        {
+          "chunkIndex": 5,
+          "device": "10",
+          "queueFamilyIndex": "0",
+          "queueIndex": "1",
+          "Queue": "92"
+        }
+      ],
+      "submissions": [
+        {
+          "chunkIndex": 464,
+          "api": "vkQueueSubmit2",
+          "queue": "91",
+          "commandBuffers": 1,
+          "waits": [],
+          "signals": [
+            {
+              "semaphore": "410",
+              "value": 1,
+              "stage": "VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT"
+            }
+          ]
+        },
+        {
+          "chunkIndex": 465,
+          "api": "vkQueueSubmit2",
+          "queue": "92",
+          "commandBuffers": 1,
+          "waits": [
+            {
+              "semaphore": "410",
+              "value": 1,
+              "stage": "VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT"
+            },
+            {
+              "semaphore": "93",
+              "value": 12,
+              "stage": "VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT"
+            }
+          ],
+          "signals": [
+            {
+              "semaphore": "411",
+              "value": 2,
+              "stage": "VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT"
+            }
+          ]
+        },
+        {
+          "chunkIndex": 466,
+          "api": "vkQueueSubmit2",
+          "queue": "91",
+          "commandBuffers": 1,
+          "waits": [],
+          "signals": [
+            {
+              "semaphore": "410",
+              "value": 3,
+              "stage": "VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT"
+            }
+          ]
+        },
+        {
+          "chunkIndex": 467,
+          "api": "vkQueueSubmit2",
+          "queue": "91",
+          "commandBuffers": 1,
+          "waits": [
+            {
+              "semaphore": "411",
+              "value": 2,
+              "stage": "VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT"
+            }
+          ],
+          "signals": [
+            {
+              "semaphore": "410",
+              "value": 4,
+              "stage": "VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT"
+            }
+          ]
+        },
+        {
+          "chunkIndex": 468,
+          "api": "vkQueueSubmit2",
+          "queue": "91",
+          "commandBuffers": 0,
+          "waits": [
+            {
+              "semaphore": "411",
+              "value": 2,
+              "stage": "VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT"
+            }
+          ],
+          "signals": [
+            {
+              "semaphore": "93",
+              "value": 13,
+              "stage": "VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

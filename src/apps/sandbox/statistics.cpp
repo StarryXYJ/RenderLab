@@ -22,6 +22,7 @@ renderer::SceneRenderOptions RenderOptions(const Options& options)
                                                          : renderer::PipelineType::Forward;
     render.reflectionDenoise = options.reflectionDenoise;
     render.recordingThreads = options.recordingThreads;
+    render.asyncCompute = options.asyncCompute;
     render.submission =
         options.submission == "gpu-culled"       ? renderer::GeometrySubmission::GpuCulled
         : options.submission == "cpu-indirect"   ? renderer::GeometrySubmission::CpuIndirect
@@ -70,6 +71,8 @@ void Statistics::Add(const renderer::SceneReadback& frame, const rhi::Runtime& r
     reflectionResets_ += frame.reflectionHistoryReset ? 1 : 0;
     indexedScene_ = frame.indexedScene;
     const auto timings = frame.profile.Read(runtime);
+    queueTimeline_ = timings;
+    queueTrace_ = runtime.LastQueueTrace();
     cpu_.Add(cpuMs);
     compile_.Add(double(frame.compileNs) / 1e6);
     prepare_.Add(double(frame.prepareNs) / 1e6);
@@ -90,6 +93,25 @@ void Statistics::Add(const renderer::SceneReadback& frame, const rhi::Runtime& r
         for (const auto& [name, ms] : sample->gpuPassesMs)
             gpuSumMs += ms;
         sample->metricsMs.emplace("gpuPassSumMs", gpuSumMs);
+        double overlap = 0;
+        for (size_t i = 0; i < timings.size(); ++i)
+            for (size_t j = i + 1; j < timings.size(); ++j)
+                if (timings[i].queue != timings[j].queue)
+                    overlap += std::max(
+                        0.0,
+                        std::min(timings[i].endNanoseconds, timings[j].endNanoseconds) -
+                            std::max(timings[i].startNanoseconds, timings[j].startNanoseconds));
+        double span = 0;
+        if (!timings.empty())
+        {
+            const auto first = std::ranges::min(
+                timings, {}, &rendergraph::Submission::GpuProfile::Timing::startNanoseconds);
+            const auto last = std::ranges::max(
+                timings, {}, &rendergraph::Submission::GpuProfile::Timing::endNanoseconds);
+            span = std::max(0.0, last.endNanoseconds - first.startNanoseconds);
+        }
+        sample->metricsMs.emplace("gpuQueueOverlapMs", overlap / 1e6);
+        sample->metricsMs.emplace("gpuQueueSpanMs", span / 1e6);
     }
 }
 std::string Statistics::Text(const scene::Snapshot& snapshot, rhi::MemoryStats memory) const
@@ -145,6 +167,7 @@ void Statistics::Save(const std::filesystem::path& path, const Options& options,
                           {"pipeline", options.pipeline},
                           {"submission", options.submission},
                           {"recordingThreads", options.recordingThreads},
+                          {"asyncCompute", options.asyncCompute},
                           {"warmupFrames", options.Benchmark() ? options.warmupFrames : 0},
                           {"cpuRender", summary(cpu_)},
                           {"graphCompile", summary(compile_)},
@@ -158,6 +181,28 @@ void Statistics::Save(const std::filesystem::path& path, const Options& options,
     result["reflectionHistory"] = {{"samples", reflectionSamples_},
                                    {"observedResets", reflectionResets_},
                                    {"temporalSourceFrames", reflectionTemporalFrames_}};
+    result["queueTimeline"] = nlohmann::json::array();
+    result["queueSubmissions"] = nlohmann::json::array();
+    constexpr const char* actions[] = {"execute",     "waitGraphics",   "waitCompute",
+                                       "waitFrame",   "signalGraphics", "signalCompute",
+                                       "signalFrame", "waitAcquire",    "signalPresent"};
+    for (const auto& event : queueTrace_)
+        result["queueSubmissions"].push_back(
+            {{"queue", event.queue == rhi::QueueType::Compute ? "compute" : "graphics"},
+             {"action", actions[static_cast<size_t>(event.action)]},
+             {"value", event.value},
+             {"range",
+              event.range == UINT32_MAX ? nlohmann::json(nullptr) : nlohmann::json(event.range)}});
+    result["queueClockDomain"] =
+        device.backend == "dx12"
+            ? "QPC calibrated per queue"
+            : "device timestamp clock relative to first slot; async requires calibrated_timestamps";
+    for (const auto& timing : queueTimeline_)
+        result["queueTimeline"].push_back(
+            {{"pass", timing.name},
+             {"queue", timing.queue == rhi::QueueType::Compute ? "compute" : "graphics"},
+             {"startNs", timing.startNanoseconds},
+             {"endNs", timing.endNanoseconds}});
     result["indexedScene"] = {{"instances", indexedScene_.instances},
                               {"visible", indexedScene_.gpuCulling
                                               ? nlohmann::json(nullptr)

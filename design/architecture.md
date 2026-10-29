@@ -348,7 +348,9 @@ Imported 资源描述初始状态、外部完成点、所有权和最终需求�
 
 M6.3 先在 owner 线程完成 Graph 回调、资源/视图/不可变绑定准备与命令包生成，再冻结包并按闭合 Pass 边界分配给持久录制工作线程。各块有独立原生 Allocator/List 或 CommandPool/Buffer，不继承绑定状态；所有块完成后按原序提交同一 Graphics Queue，由一个真实完成点保活。工作线程不修改 Graph、Pool 或共享 CPU 计时器；失败先 join 再丢弃全部受影响上下文，不提交部分录制。串行/1..16 线程共用执行器，默认 1；契约与测量含义见 [并行录制](../docs/parallel-recording.md)。
 
-Pass 提供队列兼容性和 AsyncEligible 等提示，编译器决定合法调度。TraceRays 不预设只能在 Graphics Queue，按后端与设备支持的队列命令能力安排。首版全在 Graphics Queue 上执行，后续策略提供开关和性能测量。
+Pass 提供队列兼容性和 AsyncEligible 等提示，编译器决定合法调度。TraceRays 不预设永远只能在 Graphics Queue，后续按后端与设备支持的队列命令能力扩展；基础路径和当前光追仍在 Graphics Queue，M6.4 仅允许下述 feeder 范围异步执行。
+
+M6.4 首个可选异步范围为 Buffer feeder Compute：只读 Upload 输入与瞬态 Storage 输出，禁止纹理、AS、导入 Device Buffer 和 Graphics 前置依赖。Graphics prologue 准备初态，消费者显式等待；Graphics 尾部汇合所有 Compute 后才发布既有整帧完成点，跨帧 History/上传/池租约仍由真实整点保护。DX12 使用独立 COMPUTE 队列；Vulkan 仅使用同 Graphics family 的第二队列，无跨族转移。原生部分提交失败后保留整批引用、停止后续提交，实际排空后释放；不发布虚构完成点或图最终状态。默认关闭，范围、时钟校准、提交事件捕获及限制见 [异步 Compute](../docs/async-compute.md)。
 
 Execute 只读取声明的数据并录制命令，使用预先准备的 View、绑定和程序，不进行会改变执行计划的资源创建、同步等待或全局状态修改。录制用的临时命令内存由局部上下文提供。原生逃生接口首版不公开；接入外部 SDK 确实需要时，新增有边界的 ExternalPass，完整声明资源、前后状态和队列需求，并限制优化范围。仅把 Pass 标为 Unsafe 无法补回缺失依赖。
 

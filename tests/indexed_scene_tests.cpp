@@ -121,6 +121,40 @@ void Scene(rhi::Runtime& runtime, shader::Target target, const std::filesystem::
             Require(visible == indirectFrame.indexedScene.visible,
                     "GPU and CPU visible counts differ");
         }
+        for (const uint32_t threads : {1u, 4u})
+        {
+            options.submission = GeometrySubmission::GpuCulled;
+            options.asyncCompute = true;
+            options.recordingThreads = threads;
+            const auto async = renderer.Render(
+                color, rhi::State::CopySource, nullptr, true,
+                output / ("async-" + std::to_string(sequence++) + ".json"), options);
+            Require(Pixels(runtime, async, width, height) == indexed,
+                    "Async culling differs from single-queue output");
+            bool compute = false;
+            for (const auto& timing : async.profile.Read(runtime))
+            {
+                compute |= timing.queue == rhi::QueueType::Compute;
+                Require(timing.endNanoseconds >= timing.startNanoseconds &&
+                            std::isfinite(timing.nanoseconds),
+                        "Async timestamp clock is invalid");
+            }
+            Require(!gpuFrame.indexedScene.instances || compute,
+                    "Async culling silently used the Graphics queue");
+            bool submittedCompute = false, consumerWait = false, aggregate = false;
+            for (const auto& event : runtime.LastQueueTrace())
+            {
+                submittedCompute |= event.queue == rhi::QueueType::Compute &&
+                                    event.action == rhi::QueueAction::Execute;
+                consumerWait |= event.queue == rhi::QueueType::Graphics &&
+                                event.action == rhi::QueueAction::WaitCompute;
+                aggregate |= event.action == rhi::QueueAction::SignalFrame &&
+                             event.value == async.completion;
+            }
+            Require(aggregate &&
+                        (!gpuFrame.indexedScene.instances || (submittedCompute && consumerWait)),
+                    "Async backend did not capture real producer/wait/aggregate operations");
+        }
         Compare(direct, indexed);
         Require(indirectFrame.indexedScene.visible <= indirectFrame.indexedScene.instances &&
                     indirectFrame.indexedScene.textures <= IndexedTextureCapacity,
@@ -143,6 +177,7 @@ void Scene(rhi::Runtime& runtime, shader::Target target, const std::filesystem::
         rayOptions.reflectionDenoise = false;
         rayOptions.reflectionTemporal = false;
         rayOptions.recordingThreads = 4;
+        rayOptions.asyncCompute = true;
         rayOptions.profile = true;
         auto colorA =
             runtime.CreateTexture({97, 73, rhi::Format::Rgba8Srgb, false, true, "Parallel.Rays.A"});
@@ -151,6 +186,7 @@ void Scene(rhi::Runtime& runtime, shader::Target target, const std::filesystem::
         const auto parallel = rayRenderer.Render(colorA, rhi::State::Undefined, nullptr, true,
                                                  output / "parallel-raytracing.json", rayOptions);
         rayOptions.recordingThreads = 1;
+        rayOptions.asyncCompute = false;
         const auto serial =
             rayRenderer.Render(colorB, rhi::State::Undefined, nullptr, true, {}, rayOptions);
         Require(Pixels(runtime, parallel, 97, 73) == Pixels(runtime, serial, 97, 73),
@@ -164,6 +200,32 @@ void Scene(rhi::Runtime& runtime, shader::Target target, const std::filesystem::
                     "Parallel ray tracing timestamp is invalid");
         }
         Require(traced && built, "Parallel ray tracing test did not record trace and AS build");
+        rayOptions.reflectionHistory = true;
+        rayOptions.asyncCompute = true;
+        rayOptions.recordingThreads = 4;
+        const auto historyA =
+            rayRenderer.Render(colorA, rhi::State::CopySource, nullptr, true, {}, rayOptions);
+        const auto historyB =
+            rayRenderer.Render(colorB, rhi::State::CopySource, nullptr, true, {}, rayOptions);
+        Require(historyA.reflectionSamples == 2 && historyB.reflectionSamples == 3,
+                "Async aggregate completion lost progressive history across in-flight frames");
+        const auto asyncHistory = Pixels(runtime, historyB, 97, 73);
+        SceneRenderer serialHistory(runtime, target, project, shaders);
+        rayOptions.asyncCompute = false;
+        rayOptions.recordingThreads = 1;
+        auto referenceTarget = runtime.CreateTexture(
+            {97, 73, rhi::Format::Rgba8Srgb, false, true, "History.Reference"});
+        auto referenceState = rhi::State::Undefined;
+        std::vector<std::byte> expectedHistory;
+        for (uint32_t sample = 0; sample < 3; ++sample)
+        {
+            const auto referenceFrame = serialHistory.Render(referenceTarget, referenceState,
+                                                             nullptr, true, {}, rayOptions);
+            referenceState = rhi::State::CopySource;
+            expectedHistory = Pixels(runtime, referenceFrame, 97, 73);
+        }
+        Require(asyncHistory == expectedHistory,
+                "Async multi-queue history pixels differ from three serial reference samples");
     }
     // A mirrored transform exercises PSO winding and packed normal matrices.
     const auto firstMesh = std::ranges::find_if(document.objects, [](const auto& object)
@@ -193,6 +255,8 @@ void Scene(rhi::Runtime& runtime, shader::Target target, const std::filesystem::
     const auto after = renderer.Render(colorB, rhi::State::Undefined, nullptr, true, {}, options);
     const auto referenceB = Pixels(runtime, after, 97, 73);
     document = original;
+    options.submission = GeometrySubmission::GpuCulled;
+    options.asyncCompute = true;
     const auto pendingA =
         renderer.Render(colorA, rhi::State::CopySource, nullptr, true, {}, options);
     document.MoveCamera({.3f, 0, 0}, {0, 3, 0});
@@ -258,16 +322,43 @@ void Scene(rhi::Runtime& runtime, shader::Target target, const std::filesystem::
                 std::memcpy(&visible, bytes.data() + batch * 4, 4);
                 Require(visible <= gpu.culling.batchCapacities[batch], "Culling capacity overflow");
                 std::vector<uint32_t> indices(visible);
-                std::memcpy(indices.data(),
-                            bytes.data() + gpu.culling.visibleOffset +
-                                gpu.culling.batchOffsets[batch] * 4,
-                            visible * 4);
+                if (visible)
+                    std::memcpy(indices.data(),
+                                bytes.data() + gpu.culling.visibleOffset +
+                                    gpu.culling.batchOffsets[batch] * 4,
+                                visible * 4);
                 Require(std::ranges::is_sorted(indices),
                         "GPU compaction lost stable instance order");
                 actual.insert(actual.end(), indices.begin(), indices.end());
             }
             std::ranges::sort(actual);
             Require(actual == expected, "GPU visible list differs from the CPU six-plane test");
+            options.asyncCompute = true;
+            for (const uint32_t threads : {1u, 4u})
+            {
+                options.recordingThreads = threads;
+                const auto async = renderer.Render(color, initial, nullptr, true, {}, options);
+                Require(Pixels(runtime, async, 127, 95) == reference,
+                        "Scaled asynchronous culling image mismatch");
+                const auto results = async.culling.readback->Map();
+                std::vector<uint32_t> ids;
+                for (size_t batch = 0; batch < async.culling.batchCapacities.size(); ++batch)
+                {
+                    uint32_t visible;
+                    std::memcpy(&visible, results.data() + batch * 4, 4);
+                    Require(visible <= async.culling.batchCapacities[batch],
+                            "Async count overflow");
+                    const auto offset = ids.size();
+                    ids.resize(offset + visible);
+                    if (visible)
+                        std::memcpy(ids.data() + offset,
+                                    results.data() + async.culling.visibleOffset +
+                                        async.culling.batchOffsets[batch] * 4,
+                                    visible * 4);
+                }
+                std::ranges::sort(ids);
+                Require(ids == expected, "Scaled async candidate list differs from CPU reference");
+            }
             std::cout << "GPU culling " << count << " candidates, " << actual.size()
                       << " visible\n";
             if (count == 64 || count == 1024 || count == 4096)
@@ -305,6 +396,48 @@ void Scene(rhi::Runtime& runtime, shader::Target target, const std::filesystem::
             rejected = std::string(error.what()).find("16384") != std::string::npos;
         }
         Require(rejected, "Oversized GPU candidate set was not deterministically rejected");
+    }
+    else
+    {
+        document = original;
+        const auto found = std::ranges::find_if(original.objects, [](const auto& object)
+                                                { return object.name == "solid"; });
+        Require(found != original.objects.end(), "Shadow fixture lacks the solid prototype");
+        const auto prototype = *found;
+        std::erase_if(document.objects, [](const auto& object) { return object.name == "solid"; });
+        for (uint32_t i = 0; i < 125; ++i)
+        {
+            auto object = prototype;
+            object.id = std::format("6c14000000000000{:016x}", uint64_t(i));
+            object.name = "ShadowSolid." + std::to_string(i);
+            object.transform.scale = {.15f, .15f, .15f};
+            object.transform.position = {(float(i % 16) - 7.5f) * .45f, -.5f,
+                                         (float(i / 16) - 7.5f) * .4f};
+            document.objects.push_back(std::move(object));
+        }
+        SceneRenderOptions settings;
+        settings.pipeline = PipelineType::Deferred;
+        settings.submission = GeometrySubmission::GpuCulled;
+        settings.shadowResolution = 1024;
+        settings.recordingThreads = 4;
+        auto color = runtime.CreateTexture(
+            {257, 193, rhi::Format::Rgba8Srgb, false, true, "Async.Shadow128"});
+        const auto serial =
+            renderer.Render(color, rhi::State::Undefined, nullptr, true, {}, settings);
+        const auto expected = Pixels(runtime, serial, 257, 193);
+        settings.asyncCompute = true;
+        const auto async =
+            renderer.Render(color, rhi::State::CopySource, nullptr, true, {}, settings);
+        Require(Pixels(runtime, async, 257, 193) == expected,
+                "Async shadow overlap fixture pixels differ");
+        const auto destination = output / "scale-128";
+        std::filesystem::create_directories(destination);
+        std::filesystem::copy(project.parent_path() / "Assets", destination / "Assets",
+                              std::filesystem::copy_options::recursive |
+                                  std::filesystem::copy_options::overwrite_existing);
+        document.Save(destination / "Assets/Shadow.scene");
+        std::filesystem::copy_file(project, destination / "Shadow.rlproject",
+                                   std::filesystem::copy_options::overwrite_existing);
     }
 }
 } // namespace

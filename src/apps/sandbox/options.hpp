@@ -22,6 +22,7 @@ struct Options
     std::string quality = "scene", view = "final", pipeline = "forward", profilePath;
     std::string submission = "direct";
     uint32_t recordingThreads = 1;
+    bool asyncCompute = false;
     uint32_t width = 1280, height = 720, benchmarkFrames = 0;
     /// Zero selects the host default: scene 2048 MiB, standalone RHI demos 256 MiB.
     uint32_t gpuBudgetMiB = 0;

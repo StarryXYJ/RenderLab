@@ -62,6 +62,16 @@ public:
     void WaitIdle();
     virtual uint64_t Completed() const = 0;
     virtual double TimestampPeriodNs() const = 0;
+    virtual bool SupportsAsyncCompute() const
+    {
+        return false;
+    }
+    virtual void EnableAsyncCompute();
+    /// Same-backend common clock domain: QPC for DX12, device timestamp clock for Vulkan.
+    virtual QueueClock TimestampClock(QueueType queue) const
+    {
+        return {0, 0, TimestampPeriodNs(), queue};
+    }
     /// Enabled features/limits. Nonzero firstInstance in GPU arguments requires firstInstance.
     virtual IndirectSupport GetIndirectSupport() const
     {
@@ -103,6 +113,11 @@ public:
     {
         return lastSubmitted_;
     }
+    /// Owner-thread capture of actual native calls from the last successful aggregate submission.
+    const std::vector<QueueEvent>& LastQueueTrace() const
+    {
+        return lastTrace_;
+    }
     /// Owner-thread diagnostic scopes; enable between calls. Cumulative counters never reset.
     void SetCpuProfiling(bool enabled)
     {
@@ -114,8 +129,11 @@ public:
     }
 
 protected:
+    struct Submission;
     Runtime();
-    void RecordNative(size_t count, const std::function<void(size_t)>& job);
+    void RecordNative(size_t count, const std::function<void(size_t)>& job, uint32_t threads = 16);
+    /// Transfer native ownership before the first queue operation that can enqueue work.
+    void RetainSubmitting(std::shared_ptr<Submission> native);
     bool CpuProfiling() const
     {
         return cpuProfiling_;
@@ -135,10 +153,13 @@ protected:
     struct Submission
     {
         virtual ~Submission() = default;
+        std::vector<QueueEvent> trace;
     };
     virtual std::shared_ptr<Submission> Execute(const CommandList& commands, uint64_t point,
                                                 Swapchain* presentation) = 0;
     virtual void WaitNative(uint64_t point) = 0;
+    /// Drain all actual queued work after a partial submission; must not invent completion points.
+    virtual void DrainNative();
     void Validate(const BufferDesc& desc) const;
     void ValidateLayout(const std::vector<BindingDesc>& entries) const;
     void Validate(const TextureDesc& desc) const;
@@ -159,9 +180,12 @@ private:
         uint64_t point;
         std::unique_ptr<CommandList> commands;
         std::shared_ptr<Submission> native;
+        bool started = false;
     };
     std::deque<Pending> pending_;
     uint64_t lastSubmitted_ = 0;
+    bool poisoned_ = false;
+    std::vector<QueueEvent> lastTrace_;
     std::thread::id ownerThread_ = std::this_thread::get_id();
     std::vector<std::weak_ptr<Pipeline>> pipelines_;
 };

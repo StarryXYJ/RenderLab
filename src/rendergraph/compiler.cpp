@@ -136,6 +136,7 @@ const Plan& Graph::Compile(CompileOptions options)
             if (plan.passes[p].live && degrees[p])
                 cycle += " " + g.passes[p].name + " (" + g.passes[p].source + ")";
         Require(cycle.empty(), "Dependency/order cycle:" + cycle);
+        g.ScheduleQueues(options.asyncCompute);
         for (uint32_t i = 0; i < plan.schedule.size(); ++i)
             for (auto& a : g.passes[plan.schedule[i].pass].accesses)
             {
@@ -170,6 +171,12 @@ void Graph::Impl::Barriers()
     std::vector<bool> written(resources.size());
     for (auto& r : resources)
         states.push_back(r.start);
+    plan.prologueBarriers.clear();
+    for (const auto resource : plan.asyncResources)
+    {
+        plan.prologueBarriers.push_back({resource, states[resource], rhi::State::Storage});
+        states[resource] = rhi::State::Storage;
+    }
     for (auto& scheduled : plan.schedule)
     {
         scheduled.barriers.clear();

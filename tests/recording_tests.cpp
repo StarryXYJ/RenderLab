@@ -83,8 +83,9 @@ int main()
         auto ranges = commands.RecordingRanges();
         Require(ranges.size() == 4, "Packet partition failed to use four independent ranges");
         size_t previous = 0;
-        for (auto [first, last] : ranges)
+        for (const auto& range : ranges)
         {
+            const auto first = range.first, last = range.last;
             Require(first == previous && last > first && last % 2 == 0,
                     "Partition duplicated/skipped packets or split an open marker");
             previous = last;

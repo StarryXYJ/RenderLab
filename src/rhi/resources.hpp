@@ -14,6 +14,36 @@
 
 namespace renderlab::rhi
 {
+enum class QueueType
+{
+    Graphics,
+    Compute
+};
+struct QueueClock
+{
+    uint64_t gpuTick = 0;
+    double originNs = 0, periodNs = 1;
+    QueueType queue = QueueType::Graphics;
+};
+enum class QueueAction
+{
+    Execute,
+    WaitGraphics,
+    WaitCompute,
+    WaitFrame,
+    SignalGraphics,
+    SignalCompute,
+    SignalFrame,
+    WaitAcquire,
+    SignalPresent
+};
+struct QueueEvent
+{
+    QueueType queue;
+    QueueAction action;
+    uint64_t value = 0;
+    uint32_t range = UINT32_MAX;
+};
 enum class Memory
 {
     Device,

@@ -39,6 +39,7 @@ std::string_view ApplicationUsage()
            "denoised  Texture "
            "preview\n"
            "  --recording-threads N       Native recording threads (1..16, default 1)\n"
+           "  --async-compute            Optional buffer feeder Compute Queue (scene only)\n"
            "  --submission direct|indexed-direct|cpu-indirect|gpu-culled  Geometry submission\n"
            "  --pipeline forward|deferred|raytracing  Scene rendering path\n"
            "  --fixed-camera --debug-panel  Camera and native controls\n"

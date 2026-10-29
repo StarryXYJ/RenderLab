@@ -26,12 +26,38 @@ void CommandList::RecordingBoundary()
     vertex_.reset();
     index_.reset();
 }
-std::vector<std::pair<size_t, size_t>> CommandList::RecordingRanges() const
+void CommandList::SelectQueue(QueueType queue, bool waitCompute)
 {
+    RecordingBoundary();
+    const auto& previous = queueChanges_.back();
+    if (previous.queue == queue && previous.waitCompute == waitCompute)
+        return;
+    const QueueChange change{commands_.size(), queue, waitCompute};
+    if (previous.first == change.first)
+        queueChanges_.back() = change;
+    else
+        queueChanges_.push_back(change);
+}
+std::vector<RecordingRange> CommandList::RecordingRanges() const
+{
+    if (std::ranges::any_of(queueChanges_,
+                            [](const auto& c) { return c.queue == QueueType::Compute; }))
+    {
+        std::vector<RecordingRange> ranges;
+        for (size_t i = 0; i < queueChanges_.size(); ++i)
+        {
+            const auto& change = queueChanges_[i];
+            const auto last =
+                i + 1 < queueChanges_.size() ? queueChanges_[i + 1].first : commands_.size();
+            if (last > change.first)
+                ranges.push_back({change.first, last, change.queue, change.waitCompute});
+        }
+        return ranges;
+    }
     auto ends = recordingEnds_;
     if (ends.empty() || ends.back() != commands_.size())
         ends.push_back(commands_.size());
-    std::vector<std::pair<size_t, size_t>> ranges;
+    std::vector<RecordingRange> ranges;
     size_t begin = 0;
     for (uint32_t i = 1; i < recordingThreads_; ++i)
     {
@@ -39,11 +65,11 @@ std::vector<std::pair<size_t, size_t>> CommandList::RecordingRanges() const
         const auto end = *std::lower_bound(ends.begin(), ends.end(), target);
         if (end > begin && end < commands_.size())
         {
-            ranges.emplace_back(begin, end);
+            ranges.push_back({begin, end});
             begin = end;
         }
     }
-    ranges.emplace_back(begin, commands_.size());
+    ranges.push_back({begin, commands_.size()});
     return ranges;
 }
 

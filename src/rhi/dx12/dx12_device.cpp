@@ -212,8 +212,10 @@ public:
         report_.details.emplace_back("resourceBindingTier",
                                      std::to_string(base.ResourceBindingTier));
         report_.details.emplace_back("rayTracingTier", std::to_string(rayTracing.RaytracingTier));
-        report_.details.emplace_back("enabledWork", "one direct queue; graphics, compute, copy, "
-                                                    "indirect draw; AS/Ray Query when supported");
+        report_.details.emplace_back("enabledWork",
+                                     "one direct queue; graphics, compute, copy, "
+                                     "indirect draw; optional runtime COMPUTE queue on demand (no "
+                                     "dedicated-hardware claim); AS/Ray Query when supported");
         report_.details.emplace_back("descriptorIndexingScope",
                                      "resource arrays; shader and tier limits still apply");
 

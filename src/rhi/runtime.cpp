@@ -16,16 +16,37 @@ using detail::Require;
 Runtime::Runtime() = default;
 Runtime::~Runtime() = default;
 
-void Runtime::RecordNative(size_t count, const std::function<void(size_t)>& job)
+void Runtime::EnableAsyncCompute()
+{
+    throw std::invalid_argument("Async compute queue is unavailable");
+}
+void Runtime::DrainNative()
+{
+    if (lastSubmitted_)
+        WaitNative(lastSubmitted_);
+}
+void Runtime::RetainSubmitting(std::shared_ptr<Submission> native)
+{
+    Require(!pending_.empty() && native, "Native submission requires reserved ownership");
+    pending_.back().native = std::move(native);
+    pending_.back().started = true;
+}
+void Runtime::RecordNative(size_t count, const std::function<void(size_t)>& job, uint32_t threads)
 {
     auto timer = ProfileCpu(CpuOperation::NativeRecord);
-    if (count == 1)
-        job(0);
+    const auto workers = std::min<size_t>(count, threads);
+    const auto record = [&](size_t worker)
+    {
+        for (size_t i = worker; i < count; i += workers)
+            job(i);
+    };
+    if (workers == 1)
+        record(0);
     else
     {
         if (!recordingWorkers_)
             recordingWorkers_ = std::make_unique<RecordingWorkers>();
-        recordingWorkers_->Run(count, job);
+        recordingWorkers_->Run(workers, record);
     }
 }
 void Runtime::AddCpuMeasurement(CpuOperation operation, CpuMeasurement measurement)
@@ -363,6 +384,8 @@ std::unique_ptr<CommandList> Runtime::CreateCommands()
 }
 uint64_t Runtime::Submit(std::unique_ptr<CommandList> commands, Swapchain* presentation)
 {
+    Require(std::this_thread::get_id() == ownerThread_, "Submission requires runtime owner thread");
+    Require(!poisoned_, "Runtime poisoned by a partial native submission; shut it down");
     Collect();
     Require(pending_.size() < 8,
             "At most eight submissions may remain in flight; wait or collect first");
@@ -377,10 +400,17 @@ uint64_t Runtime::Submit(std::unique_ptr<CommandList> commands, Swapchain* prese
     {
         auto cpuTimer = ProfileCpu(CpuOperation::NativeSubmit);
         pending.native = Execute(*pending.commands, pending.point, presentation);
+        lastTrace_.swap(pending.native->trace);
     }
     catch (...)
     {
-        pending_.pop_back();
+        if (pending.started)
+        {
+            poisoned_ = true;
+            pending.point = UINT64_MAX;
+        }
+        else
+            pending_.pop_back();
         throw;
     }
     pending.commands->consumed_ = true;
@@ -407,6 +437,12 @@ void Runtime::Wait(uint64_t point)
 }
 void Runtime::WaitIdle()
 {
+    if (poisoned_)
+    {
+        DrainNative();
+        pending_.clear();
+        return;
+    }
     Wait(lastSubmitted_);
 }
 } // namespace renderlab::rhi

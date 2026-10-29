@@ -127,7 +127,7 @@ def compatible_key(report):
             benchmark["timingMode"], benchmark["requestedFrames"], benchmark["requestedSeconds"],
             benchmark["requestedWarmupFrames"], benchmark["requestedWarmupSeconds"],
             benchmark.get("cpuProfiling", False), report.get("pipeline", "forward"),
-            report.get("submission", "direct"), report.get("recordingThreads", 1))
+            report.get("submission", "direct"), report.get("recordingThreads", 1), report.get("asyncCompute", False))
 
 
 def ensure_plotting():

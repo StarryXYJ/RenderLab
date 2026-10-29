@@ -15,6 +15,12 @@ struct DxDescriptorRange;
 class DxRuntime final : public Runtime
 {
 public:
+    bool SupportsAsyncCompute() const override
+    {
+        return true;
+    }
+    void EnableAsyncCompute() override;
+    QueueClock TimestampClock(QueueType queue) const override;
     uint32_t SampledTextureArrayLimit() const override
     {
         return sampledTextureArrayLimit_;
@@ -61,11 +67,13 @@ protected:
     CreateAccelerationStructureNative(AccelerationStructureDesc desc,
                                       AccelerationStructureSizes sizes) override;
     void WaitNative(uint64_t point) override;
+    void DrainNative() override;
     struct Work : Submission
     {
         ComPtr<ID3D12CommandAllocator> allocator;
         ComPtr<ID3D12GraphicsCommandList> list;
         ComPtr<ID3D12QueryHeap> queries;
+        QueueType queue = QueueType::Graphics;
     };
     std::shared_ptr<Submission> Execute(const CommandList& commands, uint64_t point,
                                         Swapchain*) override;
@@ -78,6 +86,9 @@ private:
     ID3D12CommandQueue* queue_;
     IDXGIFactory6* factory_;
     ComPtr<ID3D12Fence> fence_;
+    ComPtr<ID3D12CommandQueue> computeQueue_;
+    ComPtr<ID3D12Fence> computeFence_, graphicsFence_;
+    uint64_t nativeSequence_ = 0, computeFrequency_ = 0;
     ComPtr<ID3D12Device5> rayDevice_;
     bool accelerationStructureEnabled_, rayQueryEnabled_, rayTracingPipelineEnabled_;
     ComPtr<ID3D12CommandSignature> indirect_, indexedIndirect_;

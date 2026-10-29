@@ -6,6 +6,8 @@
 #include <functional>
 
 #include <algorithm>
+#include <array>
+#include <cstring>
 #include <iostream>
 #include <memory>
 #include <span>
@@ -66,13 +68,27 @@ PassHandle Read(Graph& graph, TextureHandle texture, bool root = true)
 struct FakeBuffer : rhi::Buffer
 {
     using Buffer::Buffer;
+    std::vector<std::byte> bytes;
     std::span<std::byte> Map() override
     {
-        return {};
+        bytes.resize(static_cast<size_t>(desc.size));
+        return bytes;
     }
 };
 struct FakeRuntime : rhi::Runtime
 {
+    bool asyncAvailable = true, failBefore = false, failAfter = false, failDrain = false;
+    uint32_t drains = 0;
+    std::vector<rhi::RecordingRange> nativeRanges;
+    bool SupportsAsyncCompute() const override
+    {
+        return asyncAvailable;
+    }
+    void EnableAsyncCompute() override
+    {
+        if (!asyncAvailable)
+            rhi::Runtime::EnableAsyncCompute();
+    }
     uint64_t completed = 0;
     std::vector<uint32_t> drawnVertices;
     struct Work : Submission
@@ -122,10 +138,25 @@ struct FakeRuntime : rhi::Runtime
     std::shared_ptr<Submission> Execute(const rhi::CommandList& commands, uint64_t,
                                         rhi::Swapchain*) override
     {
+        if (failBefore)
+            throw std::runtime_error("Injected before enqueue");
+        auto work = std::make_shared<Work>();
+        if (failAfter)
+        {
+            RetainSubmitting(work);
+            throw std::runtime_error("Injected after enqueue");
+        }
+        nativeRanges = commands.RecordingRanges();
         for (const auto& command : commands.GetCommands())
             if (const auto* draw = std::get_if<rhi::Draw>(&command))
                 drawnVertices.push_back(draw->first);
-        return std::make_shared<Work>();
+        return work;
+    }
+    void DrainNative() override
+    {
+        if (failDrain)
+            throw std::runtime_error("Injected drain failure");
+        ++drains;
     }
     void WaitNative(uint64_t point) override
     {
@@ -787,6 +818,141 @@ void ProfilingContracts()
     profile.completion = 1;
     Fails([&] { profile.Read(runtime); }, "completed submission");
 }
+void QueueContracts()
+{
+    {
+        FakeRuntime runtime;
+        runtime.completed = 1;
+        Submission::GpuProfile profile;
+        profile.ticks = runtime.CreateBuffer({32, rhi::Memory::Readback, "LargeClock"});
+        profile.completion = 1;
+        profile.names = {"Compute", "Graphics"};
+        profile.clocks = {{0, 0, 1, rhi::QueueType::Compute}, {0, 0, 1, rhi::QueueType::Graphics}};
+        const uint64_t anchor = (uint64_t{1} << 62) + 1000;
+        const std::array<uint64_t, 4> ticks{anchor, anchor + 125, anchor - 25, anchor + 25};
+        std::memcpy(profile.ticks->Map().data(), ticks.data(), sizeof(ticks));
+        const auto times = profile.Read(runtime);
+        Require(times[0].startNanoseconds == 0 && times[0].endNanoseconds == 125 &&
+                    times[1].startNanoseconds == -25 && times[1].endNanoseconds == 25 &&
+                    times[1].nanoseconds == 50,
+                "Large shared GPU clock lost interval precision or cross-queue origin");
+    }
+    {
+        FakeRuntime runtime;
+        runtime.asyncAvailable = false;
+        Pool pool(runtime);
+        Graph graph;
+        auto pass = graph.AddComputePass("Unavailable");
+        pass.AllowAsyncCompute();
+        pass.SideEffect();
+        pass.Execute([](ComputeContext&) {});
+        graph.Compile({.asyncCompute = true});
+        Fails([&] { graph.Execute(pool); }, "unavailable");
+        Require(pool.Stats().cached == 0 && runtime.LastSubmitted() == 0,
+                "Unavailable async queue allocated or submitted work");
+    }
+    for (const bool enabled : {false, true})
+    {
+        FakeRuntime runtime;
+        Pool pool(runtime);
+        auto upload = runtime.CreateBuffer({16, rhi::Memory::Upload, "Upload"});
+        for (uint32_t frame = 0; frame < 2; ++frame)
+        {
+            Graph graph;
+            auto input = graph.ImportBuffer("Upload", upload, {rhi::State::HostWrite, true});
+            auto output = graph.CreateBuffer("Output", {16, rhi::Memory::Device, "", true});
+            auto produce = graph.AddComputePass("Produce");
+            produce.AllowAsyncCompute();
+            produce.ReadBuffer(input, Use::ShaderRead);
+            output = produce.WriteBuffer(output);
+            produce.Execute([](ComputeContext&) {});
+            auto independent = graph.AddComputePass("SharedUpload");
+            independent.ReadBuffer(input, Use::Uniform);
+            independent.SideEffect();
+            independent.Execute([](ComputeContext&) {});
+            auto consume = graph.AddCopyPass("Consume");
+            consume.ReadBuffer(output);
+            consume.SideEffect();
+            consume.Execute([](CopyContext&) {});
+            graph.Export(output, rhi::State::ShaderRead);
+            const auto& plan = graph.Compile({.recordingThreads = 1, .asyncCompute = enabled});
+            Require(plan.asyncCompute == enabled && !plan.schedule[1].waitCompute &&
+                        plan.schedule[2].waitCompute == enabled,
+                    "Queue plan serialized independent reads or missed a consumer wait");
+            graph.Execute(pool);
+            if (enabled)
+            {
+                Require(runtime.nativeRanges.size() == 4 &&
+                            runtime.nativeRanges[0].queue == rhi::QueueType::Graphics &&
+                            runtime.nativeRanges[1].queue == rhi::QueueType::Compute &&
+                            !runtime.nativeRanges[2].waitCompute &&
+                            runtime.nativeRanges[3].waitCompute,
+                        "Queue packet ranges lost prologue, independent work or consumer wait");
+                Require(frame == 0 || !plan.prologueBarriers.empty(),
+                        "Cached buffer state was not handed to the Compute queue");
+            }
+            runtime.WaitIdle();
+        }
+    }
+    for (const bool texture : {false, true})
+    {
+        FakeRuntime runtime;
+        Graph graph;
+        auto buffer = runtime.CreateBuffer({16, rhi::Memory::Device, "Device"});
+        auto imported = graph.ImportBuffer("Device", buffer, {rhi::State::ShaderRead, true});
+        auto image = Texture(graph);
+        auto pass = graph.AddComputePass("Unsupported");
+        pass.AllowAsyncCompute();
+        if (texture)
+            pass.WriteTexture(image);
+        else
+            pass.ReadBuffer(imported, Use::ShaderRead);
+        pass.SideEffect();
+        pass.Execute([](ComputeContext&) {});
+        Fails([&] { graph.Compile({.asyncCompute = true}); }, texture ? "textures" : "Upload");
+    }
+    {
+        Graph graph;
+        auto buffer = graph.CreateBuffer("Late", {16, rhi::Memory::Device, "", true});
+        auto graphics = graph.AddCopyPass("GraphicsProducer");
+        buffer = graphics.WriteBuffer(buffer);
+        graphics.Execute([](CopyContext&) {});
+        auto async = graph.AddComputePass("LateAsync");
+        async.AllowAsyncCompute();
+        buffer = async.ReadWriteBuffer(buffer);
+        async.Execute([](ComputeContext&) {});
+        graph.Export(buffer, rhi::State::ShaderRead);
+        Fails([&] { graph.Compile({.asyncCompute = true}); }, "depend on Graphics");
+    }
+    for (const bool started : {false, true})
+    {
+        FakeRuntime runtime;
+        runtime.failBefore = !started;
+        runtime.failAfter = started;
+        auto buffer = runtime.CreateBuffer({16, rhi::Memory::Upload, "Retained"});
+        std::weak_ptr<rhi::Buffer> weak = buffer;
+        auto commands = runtime.CreateCommands();
+        commands->Barrier(buffer, rhi::State::HostWrite, rhi::State::UniformRead);
+        buffer.reset();
+        Fails([&] { runtime.Submit(std::move(commands)); },
+              started ? "after enqueue" : "before enqueue");
+        Require(runtime.LastSubmitted() == 0 && runtime.Completed() == 0 &&
+                    runtime.PendingCount() == size_t(started) && weak.expired() != started,
+                "Failed submission lost native uses or invented a completion");
+        if (started)
+        {
+            runtime.Collect();
+            Fails([&] { runtime.Submit(runtime.CreateCommands()); }, "poisoned");
+            runtime.failDrain = true;
+            Fails([&] { runtime.WaitIdle(); }, "drain failure");
+            Require(!weak.expired(), "Failed drain released potentially in-flight resources");
+            runtime.failDrain = false;
+            runtime.WaitIdle();
+            Require(weak.expired() && runtime.drains == 1 && runtime.LastSubmitted() == 0,
+                    "Actual queue drain did not retire failed work safely");
+        }
+    }
+}
 void AccelerationStructureContracts()
 {
     FakeRuntime runtime;
@@ -920,6 +1086,7 @@ int main()
             runtime.WaitIdle();
         }
         AccelerationStructureContracts();
+        QueueContracts();
         ShaderTableContracts();
         std::cout << "Graph contracts passed: names, typed passes, versions, culling, hazards, "
                      "bindings and lifetime\n";

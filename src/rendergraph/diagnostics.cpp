@@ -63,11 +63,13 @@ const char* Name(PassKind kind)
 std::string Plan::ToJson() const
 {
     using Json = nlohmann::json;
-    Json output{{"queue", "graphics"},
+    Json output{{"queue", asyncCompute ? "graphics+compute" : "graphics"},
                 {"recording", recordingThreads == 1 ? "serial" : "parallel-native"},
                 {"recordingThreads", recordingThreads},
                 {"recordingChunks", recordingChunks},
                 {"aliasing", false}};
+    output["asyncCompute"] = asyncCompute;
+    output["asyncResources"] = asyncResources;
     output["passes"] = Json::array();
     output["resources"] = Json::array();
     output["edges"] = Json::array();
@@ -109,7 +111,12 @@ std::string Plan::ToJson() const
         return result;
     };
     for (const auto& p : schedule)
-        output["schedule"].push_back({{"pass", p.pass}, {"barriers", barriers(p.barriers)}});
+        output["schedule"].push_back(
+            {{"pass", p.pass},
+             {"barriers", barriers(p.barriers)},
+             {"queue", p.queue == rhi::QueueType::Compute ? "compute" : "graphics"},
+             {"waitCompute", p.waitCompute}});
+    output["prologueBarriers"] = barriers(prologueBarriers);
     output["finalBarriers"] = barriers(finalBarriers);
     return output.dump(2) + "\n";
 }

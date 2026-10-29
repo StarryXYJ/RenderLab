@@ -2,12 +2,14 @@
 
 #include "apps/sandbox/options.hpp"
 #include "renderer/scene_renderer.hpp"
+#include "rendergraph/types.hpp"
 #include "rhi/device.hpp"
 #include "rhi/runtime.hpp"
 
 #include <cstdint>
 #include <map>
 #include <string>
+#include <vector>
 
 namespace renderlab::benchmark
 {
@@ -34,6 +36,8 @@ public:
               const renderer::RaySceneStatistics* rayScene = nullptr) const;
 
 private:
+    std::vector<rendergraph::Submission::GpuProfile::Timing> queueTimeline_;
+    std::vector<rhi::QueueEvent> queueTrace_;
     struct Samples
     {
         uint64_t count = 0;

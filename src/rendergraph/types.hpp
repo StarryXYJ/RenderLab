@@ -110,6 +110,7 @@ struct CompileOptions
     bool profile = false;
     /// Native recording workers, including the caller. Callbacks/preparation stay on owner.
     uint32_t recordingThreads = 1;
+    bool asyncCompute = false;
 };
 struct Edge
 {
@@ -125,6 +126,8 @@ struct ScheduledPass
 {
     uint32_t pass;
     std::vector<Barrier> barriers;
+    rhi::QueueType queue = rhi::QueueType::Graphics;
+    bool waitCompute = false;
 };
 struct AccessInfo
 {
@@ -153,6 +156,9 @@ struct Plan
 {
     uint64_t compileNs = 0, prepareNs = 0, recordNs = 0;
     uint32_t recordingThreads = 1, recordingChunks = 0;
+    bool asyncCompute = false;
+    std::vector<uint32_t> asyncResources;
+    std::vector<Barrier> prologueBarriers;
     std::vector<PassInfo> passes;
     std::vector<ResourceInfo> resources;
     std::vector<Edge> edges;
@@ -177,11 +183,14 @@ struct Submission
         {
             std::string name;
             double nanoseconds;
+            double startNanoseconds = 0, endNanoseconds = 0;
+            rhi::QueueType queue = rhi::QueueType::Graphics;
         };
         std::shared_ptr<rhi::Buffer> ticks;
         std::vector<std::string> names;
         uint64_t completion = 0;
         double periodNs = 0;
+        std::vector<rhi::QueueClock> clocks;
         /// Requires the same runtime and completed submission; never waits or maps early.
         std::vector<Timing> Read(const rhi::Runtime& runtime) const;
     } profile;

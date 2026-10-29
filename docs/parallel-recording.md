@@ -23,3 +23,5 @@ DX12 使用一次 `ExecuteCommandLists` 提交整组列表；[Microsoft 的状�
 `recording.contracts` 验证 16 个工作同时进入、线程持久复用、owner 参与、多个异常后全员 join/复用，以及闭合边界分块完整性。`gpu.{dx12,vulkan}.indexed_scene` 比较串行/4 线程的 Direct、IndexedDirect、CpuIndirect、GpuCulled；覆盖 Forward/Deferred、AS 构建和 Ray Tracing、阴影/Masked/透明、空场景、全部剔除、镜像与在途版本，读取每个 GPU Pass 时间戳。
 
 并行只加速后端原生命令翻译；场景提取、材质准备、Graph 回调及命令包生成仍为串行。线程调度、更多原生命令列表和工作不均衡都有额外成本，默认继续使用 1 线程。它不实现多 GPU 队列或内存 Alias。实测与硬件范围由阶段计划和性能记录给出。
+
+M6.4 另行加入可选 [异步 Compute](async-compute.md)：队列/等待边界会要求额外命令块，块数可超过请求的 CPU 线程数；持久池仍最多用该请求数量的工作线程完成这些块。关闭异步时保持本节所述 M6.3 分块方式。

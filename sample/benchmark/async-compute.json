@@ -1,0 +1,108 @@
+{
+  "schemaVersion": 1,
+  "executable": "../../out/build/windows-release/renderlab_player.exe",
+  "backends": [
+    "dx12",
+    "vulkan"
+  ],
+  "repeats": 2,
+  "defaults": {
+    "width": 257,
+    "height": 193,
+    "pipeline": "deferred",
+    "submission": "gpu-culled",
+    "quality": "scene",
+    "view": "final",
+    "validation": "off",
+    "cpuProfiling": false,
+    "warmupFrames": 4,
+    "warmupSeconds": 0.25,
+    "seconds": 2
+  },
+  "cases": [
+    {
+      "name": "n64-t1-q1",
+      "project": "../../out/build/windows-release/indexed-scene/dx12/Pbr/scale-64/Pbr.rlproject",
+      "quality": "scene",
+      "recordingThreads": 1,
+      "asyncCompute": false
+    },
+    {
+      "name": "n64-t1-q2",
+      "project": "../../out/build/windows-release/indexed-scene/dx12/Pbr/scale-64/Pbr.rlproject",
+      "quality": "scene",
+      "recordingThreads": 1,
+      "asyncCompute": true
+    },
+    {
+      "name": "n64-t4-q1",
+      "project": "../../out/build/windows-release/indexed-scene/dx12/Pbr/scale-64/Pbr.rlproject",
+      "quality": "scene",
+      "recordingThreads": 4,
+      "asyncCompute": false
+    },
+    {
+      "name": "n64-t4-q2",
+      "project": "../../out/build/windows-release/indexed-scene/dx12/Pbr/scale-64/Pbr.rlproject",
+      "quality": "scene",
+      "recordingThreads": 4,
+      "asyncCompute": true
+    },
+    {
+      "name": "n4096-t1-q1",
+      "project": "../../out/build/windows-release/indexed-scene/dx12/Pbr/scale-4096/Pbr.rlproject",
+      "quality": "scene",
+      "recordingThreads": 1,
+      "asyncCompute": false
+    },
+    {
+      "name": "n4096-t1-q2",
+      "project": "../../out/build/windows-release/indexed-scene/dx12/Pbr/scale-4096/Pbr.rlproject",
+      "quality": "scene",
+      "recordingThreads": 1,
+      "asyncCompute": true
+    },
+    {
+      "name": "n4096-t4-q1",
+      "project": "../../out/build/windows-release/indexed-scene/dx12/Pbr/scale-4096/Pbr.rlproject",
+      "quality": "scene",
+      "recordingThreads": 4,
+      "asyncCompute": false
+    },
+    {
+      "name": "n4096-t4-q2",
+      "project": "../../out/build/windows-release/indexed-scene/dx12/Pbr/scale-4096/Pbr.rlproject",
+      "quality": "scene",
+      "recordingThreads": 4,
+      "asyncCompute": true
+    },
+    {
+      "name": "shadow128objects-t1-q1",
+      "project": "../../out/build/windows-release/indexed-scene/dx12/Shadow/scale-128/Shadow.rlproject",
+      "quality": "high",
+      "recordingThreads": 1,
+      "asyncCompute": false
+    },
+    {
+      "name": "shadow128objects-t1-q2",
+      "project": "../../out/build/windows-release/indexed-scene/dx12/Shadow/scale-128/Shadow.rlproject",
+      "quality": "high",
+      "recordingThreads": 1,
+      "asyncCompute": true
+    },
+    {
+      "name": "shadow128objects-t4-q1",
+      "project": "../../out/build/windows-release/indexed-scene/dx12/Shadow/scale-128/Shadow.rlproject",
+      "quality": "high",
+      "recordingThreads": 4,
+      "asyncCompute": false
+    },
+    {
+      "name": "shadow128objects-t4-q2",
+      "project": "../../out/build/windows-release/indexed-scene/dx12/Shadow/scale-128/Shadow.rlproject",
+      "quality": "high",
+      "recordingThreads": 4,
+      "asyncCompute": true
+    }
+  ]
+}

@@ -13,6 +13,10 @@ std::shared_ptr<Runtime::Submission> VulkanRuntime::Execute(const CommandList& c
                                                             uint64_t point, Swapchain* presentation)
 {
     const auto ranges = commands.RecordingRanges();
+    const bool async = std::ranges::any_of(ranges, [](const auto& range)
+                                           { return range.queue == QueueType::Compute; });
+    if (async)
+        EnableAsyncCompute();
     struct Batch final : Submission
     {
         std::vector<std::shared_ptr<Work>> contexts;
@@ -72,7 +76,7 @@ std::shared_ptr<Runtime::Submission> VulkanRuntime::Execute(const CommandList& c
                     vkCmdResetQueryPool(list, queries, 0, MaxTimestampSlots);
                 VkPipelineBindPoint bindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
                 VkPipelineLayout layout = VK_NULL_HANDLE;
-                const auto [first, last] = ranges[index];
+                const auto first = ranges[index].first, last = ranges[index].last;
                 for (size_t packet = first; packet < last; ++packet)
                     std::visit(
                         [&](const auto& c)
@@ -443,7 +447,8 @@ std::shared_ptr<Runtime::Submission> VulkanRuntime::Execute(const CommandList& c
                         },
                         commands.GetCommands()[packet]);
                 Check(vkEndCommandBuffer(list), "EndCommandBuffer");
-            });
+            },
+            commands.RecordingThreads());
     }
     catch (...)
     {
@@ -483,7 +488,103 @@ std::shared_ptr<Runtime::Submission> VulkanRuntime::Execute(const CommandList& c
         info.pWaitSemaphoreInfos = &wait;
         info.signalSemaphoreInfoCount = 2;
     }
-    Check(vkQueueSubmit2(queue_, 1, &info, VK_NULL_HANDLE), "Graphics submit");
+    if (async && nativeSequence_ > UINT64_MAX - ranges.size())
+        throw std::overflow_error("Queue timeline exhausted");
+    batch->trace.reserve(ranges.size() * 4 + 8);
+    RetainSubmitting(batch);
+    if (!async)
+    {
+        Check(vkQueueSubmit2(queue_, 1, &info, VK_NULL_HANDLE), "Graphics submit");
+        if (swapchain)
+            batch->trace.push_back({QueueType::Graphics, QueueAction::WaitAcquire});
+        batch->trace.push_back({QueueType::Graphics, QueueAction::Execute, buffers.size()});
+        batch->trace.push_back({QueueType::Graphics, QueueAction::SignalFrame, point});
+    }
+    else
+    {
+        uint64_t prologue = 0, compute = 0;
+        for (size_t i = 0; i < ranges.size(); ++i)
+        {
+            const bool onCompute = ranges[i].queue == QueueType::Compute;
+            VkSemaphoreSubmitInfo dependencies[3]{};
+            uint32_t count = 0;
+            const auto dependency = [&](VkSemaphore semaphore, uint64_t value)
+            {
+                auto& entry = dependencies[count++];
+                entry.sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO;
+                entry.semaphore = semaphore;
+                entry.value = value;
+                entry.stageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT;
+            };
+            if (onCompute)
+            {
+                if (!prologue)
+                    throw std::logic_error("Async compute requires a Graphics prologue");
+                dependency(graphicsTimeline_, prologue);
+                if (LastSubmitted())
+                    dependency(timeline_, LastSubmitted());
+            }
+            else
+            {
+                if (ranges[i].waitCompute && compute)
+                    dependency(computeTimeline_, compute);
+                if (i == 0 && swapchain)
+                    dependency(swapchain->Available(), 0);
+            }
+            VkSemaphoreSubmitInfo produced{};
+            produced.sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO;
+            produced.semaphore = onCompute ? computeTimeline_ : graphicsTimeline_;
+            produced.value = ++nativeSequence_;
+            produced.stageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT;
+            VkSubmitInfo2 segment{};
+            segment.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO_2;
+            segment.commandBufferInfoCount = 1;
+            segment.pCommandBufferInfos = &buffers[i];
+            segment.waitSemaphoreInfoCount = count;
+            segment.pWaitSemaphoreInfos = dependencies;
+            segment.signalSemaphoreInfoCount = 1;
+            segment.pSignalSemaphoreInfos = &produced;
+            Check(vkQueueSubmit2(onCompute ? computeQueue_ : queue_, 1, &segment, VK_NULL_HANDLE),
+                  "Submit queue segment");
+            const auto queue = onCompute ? QueueType::Compute : QueueType::Graphics;
+            const auto range = static_cast<uint32_t>(i);
+            if (onCompute)
+            {
+                batch->trace.push_back({queue, QueueAction::WaitGraphics, prologue, range});
+                if (LastSubmitted())
+                    batch->trace.push_back({queue, QueueAction::WaitFrame, LastSubmitted(), range});
+            }
+            else
+            {
+                if (ranges[i].waitCompute && compute)
+                    batch->trace.push_back({queue, QueueAction::WaitCompute, compute, range});
+                if (i == 0 && swapchain)
+                    batch->trace.push_back({queue, QueueAction::WaitAcquire, 0, range});
+            }
+            batch->trace.push_back({queue, QueueAction::Execute, 1, range});
+            batch->trace.push_back(
+                {queue, onCompute ? QueueAction::SignalCompute : QueueAction::SignalGraphics,
+                 produced.value, range});
+            if (onCompute)
+                compute = produced.value;
+            else if (!prologue)
+                prologue = produced.value;
+        }
+        // The public frame point always follows every actual queue, including unused producers.
+        info.commandBufferInfoCount = 0;
+        info.pCommandBufferInfos = nullptr;
+        info.waitSemaphoreInfoCount = compute ? 1 : 0;
+        wait.semaphore = computeTimeline_;
+        wait.value = compute;
+        wait.stageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT;
+        info.pWaitSemaphoreInfos = &wait;
+        Check(vkQueueSubmit2(queue_, 1, &info, VK_NULL_HANDLE), "Submit aggregate Graphics tail");
+        if (compute)
+            batch->trace.push_back({QueueType::Graphics, QueueAction::WaitCompute, compute});
+        batch->trace.push_back({QueueType::Graphics, QueueAction::SignalFrame, point});
+    }
+    if (swapchain)
+        batch->trace.push_back({QueueType::Graphics, QueueAction::SignalPresent});
     if (swapchain)
         swapchain->Submitted(point);
     return batch;

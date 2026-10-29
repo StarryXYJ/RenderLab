@@ -13,6 +13,10 @@ std::shared_ptr<Runtime::Submission> DxRuntime::Execute(const CommandList& comma
                                                         Swapchain*)
 {
     const auto ranges = commands.RecordingRanges();
+    const bool async = std::ranges::any_of(ranges, [](const auto& range)
+                                           { return range.queue == QueueType::Compute; });
+    if (async)
+        EnableAsyncCompute();
     struct Batch final : Submission
     {
         std::vector<std::shared_ptr<Work>> contexts;
@@ -27,7 +31,8 @@ std::shared_ptr<Runtime::Submission> DxRuntime::Execute(const CommandList& comma
         {
             std::shared_ptr<Work> work;
             const auto reusable =
-                std::ranges::find_if(contexts_, [](const auto& w) { return w.use_count() == 1; });
+                std::ranges::find_if(contexts_, [&](const auto& w)
+                                     { return w.use_count() == 1 && w->queue == ranges[i].queue; });
             if (reusable != contexts_.end())
             {
                 work = *reusable;
@@ -39,12 +44,14 @@ std::shared_ptr<Runtime::Submission> DxRuntime::Execute(const CommandList& comma
             else
             {
                 work = std::make_shared<Work>();
+                work->queue = ranges[i].queue;
                 batch->contexts.push_back(work);
-                Check(device_->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT,
-                                                      IID_PPV_ARGS(&work->allocator)),
+                const auto type = work->queue == QueueType::Compute
+                                      ? D3D12_COMMAND_LIST_TYPE_COMPUTE
+                                      : D3D12_COMMAND_LIST_TYPE_DIRECT;
+                Check(device_->CreateCommandAllocator(type, IID_PPV_ARGS(&work->allocator)),
                       "CommandAllocator");
-                Check(device_->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT,
-                                                 work->allocator.Get(), nullptr,
+                Check(device_->CreateCommandList(0, type, work->allocator.Get(), nullptr,
                                                  IID_PPV_ARGS(&work->list)),
                       "CommandList");
                 D3D12_QUERY_HEAP_DESC queryDesc{};
@@ -104,7 +111,7 @@ std::shared_ptr<Runtime::Submission> DxRuntime::Execute(const CommandList& comma
                     }
                     list->ResourceBarrier(1, &b);
                 };
-                const auto [first, last] = ranges[index];
+                const auto first = ranges[index].first, last = ranges[index].last;
                 for (size_t packet = first; packet < last; ++packet)
                     std::visit(
                         [&](const auto& c)
@@ -378,7 +385,8 @@ std::shared_ptr<Runtime::Submission> DxRuntime::Execute(const CommandList& comma
                         },
                         commands.GetCommands()[packet]);
                 Check(list->Close(), "Close command list");
-            });
+            },
+            commands.RecordingThreads());
     }
     catch (...)
     {
@@ -393,8 +401,72 @@ std::shared_ptr<Runtime::Submission> DxRuntime::Execute(const CommandList& comma
     std::vector<ID3D12CommandList*> lists;
     for (const auto& context : batch->contexts)
         lists.push_back(context->list.Get());
-    queue_->ExecuteCommandLists(static_cast<UINT>(lists.size()), lists.data());
+    if (async && nativeSequence_ > UINT64_MAX - ranges.size())
+        throw std::overflow_error("Queue timeline exhausted");
+    batch->trace.reserve(ranges.size() * 4 + 8);
+    RetainSubmitting(batch);
+    if (!async)
+    {
+        queue_->ExecuteCommandLists(static_cast<UINT>(lists.size()), lists.data());
+        batch->trace.push_back({QueueType::Graphics, QueueAction::Execute, lists.size()});
+    }
+    else
+    {
+        uint64_t prologue = 0, compute = 0, waited = 0;
+        if (LastSubmitted())
+        {
+            Check(computeQueue_->Wait(fence_.Get(), LastSubmitted()),
+                  "Compute waits prior aggregate frame");
+            batch->trace.push_back({QueueType::Compute, QueueAction::WaitFrame, LastSubmitted()});
+        }
+        for (size_t i = 0; i < ranges.size(); ++i)
+        {
+            if (ranges[i].queue == QueueType::Compute)
+            {
+                if (!prologue)
+                    throw std::logic_error("Async compute requires a Graphics prologue");
+                Check(computeQueue_->Wait(graphicsFence_.Get(), prologue),
+                      "Compute waits Graphics prologue");
+                batch->trace.push_back({QueueType::Compute, QueueAction::WaitGraphics, prologue,
+                                        static_cast<uint32_t>(i)});
+                computeQueue_->ExecuteCommandLists(1, &lists[i]);
+                batch->trace.push_back(
+                    {QueueType::Compute, QueueAction::Execute, 1, static_cast<uint32_t>(i)});
+                compute = ++nativeSequence_;
+                Check(computeQueue_->Signal(computeFence_.Get(), compute),
+                      "Signal Compute producer");
+                batch->trace.push_back({QueueType::Compute, QueueAction::SignalCompute, compute,
+                                        static_cast<uint32_t>(i)});
+            }
+            else
+            {
+                if (ranges[i].waitCompute && compute > waited)
+                {
+                    Check(queue_->Wait(computeFence_.Get(), compute),
+                          "Graphics waits Compute producer");
+                    batch->trace.push_back({QueueType::Graphics, QueueAction::WaitCompute, compute,
+                                            static_cast<uint32_t>(i)});
+                    waited = compute;
+                }
+                queue_->ExecuteCommandLists(1, &lists[i]);
+                batch->trace.push_back(
+                    {QueueType::Graphics, QueueAction::Execute, 1, static_cast<uint32_t>(i)});
+                const auto segment = ++nativeSequence_;
+                Check(queue_->Signal(graphicsFence_.Get(), segment), "Signal Graphics segment");
+                batch->trace.push_back({QueueType::Graphics, QueueAction::SignalGraphics, segment,
+                                        static_cast<uint32_t>(i)});
+                if (!prologue)
+                    prologue = segment;
+            }
+        }
+        if (compute > waited)
+        {
+            Check(queue_->Wait(computeFence_.Get(), compute), "Graphics joins Compute tail");
+            batch->trace.push_back({QueueType::Graphics, QueueAction::WaitCompute, compute});
+        }
+    }
     Check(queue_->Signal(fence_.Get(), point), "Signal graphics fence");
+    batch->trace.push_back({QueueType::Graphics, QueueAction::SignalFrame, point});
     return batch;
 }
 } // namespace renderlab::rhi::dx12

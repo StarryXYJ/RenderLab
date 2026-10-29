@@ -5,7 +5,7 @@
 ## 当前状态
 
 - 当前实施阶段：M6 IN_PROGRESS；M0–M5、R1、B1–B3 DONE。
-- 当前工作项：M6.1–M6.3 DONE；下一工作项为 M6.4 GPU 多队列，尚未启动。M6.5 未启动；M7 提前试验保留既有结果，M8 未启动。
+- 当前工作项：M6.1–M6.3 DONE；M6.4 GPU 多队列 IN_PROGRESS。M6.5 未启动；M7 提前试验保留既有结果，M8 未启动。
 - 用户约定：每个子阶段验收完成即提交 Git，无阻塞时在当前授权范围内继续推进。此前 M7 修改已进入 Git，本轮开始时工作区干净。
 
 | 阶段 | 目标 | 前置依赖 | 状态 |
@@ -313,11 +313,15 @@ R1 契约修订、B1 样例整理/Benchmark、B2 调查和 B3 资源复用已完
 
 ### M6.4 GPU 多队列
 
-- [ ] 首先增加一个适合异步执行的 Compute 工作，再考虑独立 Copy Queue。
-- [ ] 队列能力、所有权转移、提交完成点和跨队列等待。
-- [ ] 正确消费导入上传资源，跨帧 History 带完整完成信息。
+状态：DONE，日期：2026 年 10 月 29 日。
 
-验收竞争资源、只读共享和连续帧情况，Capture 中能解释等待点。记录有无实际重叠和收益，不强制所有 Compute 异步化。
+结果：可选的 Buffer-only Compute feeder（Indexed.ClearCounts/FrustumCulling），只读 Upload 输入与瞬态 Storage 输出。Graphics prologue、消费者等待和尾部汇合保护真实整帧完成点与 History/上传/池退休；部分入队失败保活并 poison，真实排空后才释放。DX12 使用 Compute Queue，Vulkan 仅同族第二队列；各队列频率与共同时间域、真实提交事件、队列区间/跨度/交集可检查。
+
+验证：RTX 5060、MSVC NMake，Debug/Release 全目标构建成功，所选 CPU/CLI 与双后端专项各 26/26，最终时钟修正后各追加 6/6；Shadow128 在两配置双后端通过。GPU validation errors=0，场景销毁后账本 0，Python Benchmark 15/15。覆盖可见 ID、单/双队列 × 1/4 线程像素/时间戳、在途版本、TLAS/TraceRays 与双在途 progressive History；CPU 失败注入不伪造完成点。双后端窗口各 54 帧、10 次重建/挂起，错误 0。RenderDoc 原生 Capture 验证队列等待/信号和四线程录制，未执行图形 Replay。
+
+性能：最终 48 次、32394 测量帧，六组各八张截图一致；GPU span 全部增加，Vulkan 已计时 Pass 无重叠，DX12 仅约 0.8–8.2 μs 交集，不宣称有效收益，默认保持关闭。未启用共同时间域的首轮套件整体排除；Shadow256 触及既有描述符容量上限，最终使用 Shadow128，失败记录保留。
+
+边界：不支持纹理/AS/导入 Device Buffer 异步、Graphics→Compute 生产者、独立 Copy Queue 或跨族调度；设备丢失、人工画面/长测、其他 GPU 未验证。文档：[契约](../docs/async-compute.md)、[数据/hash、Capture 等待点、排除记录与复现](../docs/performance/m6-async-compute.md)。
 
 ### M6.5 内存 Alias
 

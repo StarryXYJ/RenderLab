@@ -69,7 +69,7 @@ target_compile_definitions(renderlab_rhi PRIVATE USE_PIX)
 
 add_library(renderlab_rendergraph STATIC
     src/rendergraph/graph.cpp src/rendergraph/builder.cpp src/rendergraph/validation.cpp
-    src/rendergraph/compiler.cpp src/rendergraph/pool.cpp src/rendergraph/context.cpp
+    src/rendergraph/compiler.cpp src/rendergraph/queue_plan.cpp src/rendergraph/pool.cpp src/rendergraph/context.cpp
     src/rendergraph/executor.cpp src/rendergraph/diagnostics.cpp)
 target_include_directories(renderlab_rendergraph PUBLIC src)
 target_link_libraries(renderlab_rendergraph PRIVATE renderlab_options renderlab_rhi

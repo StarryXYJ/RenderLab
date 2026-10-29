@@ -1,0 +1,6136 @@
+{
+  "schemaVersion": 1,
+  "kind": "renderlab.async-compute-evidence",
+  "generatedAtUtc": "2026-10-29T09:03:59.233709+00:00",
+  "suite": "out/m64-benchmark-clock",
+  "manifestSha256": "fdf19a1f832f48dee3d0141bbb11453bb109ca9a8952b03454c0f0dccc4e78f2",
+  "provenance": {
+    "workspace": {
+      "sourceRevision": "6a70ba251786bcda4c74570565bd6ee78967d73e",
+      "trackedChanges": true,
+      "note": "Workspace state; executable SHA-256 identifies the tested binary."
+    },
+    "executableSha256": "a3ea1730ba16a44c78301c03cde472b10a0976143bdfa139ec66ca0a2af3d8d1",
+    "engineShadersSha256": "2d521dab0ac39bae12a6c67645a04d2fd7cd74334c8881e47ced859d494e33ee",
+    "cases": [
+      {
+        "seconds": 2,
+        "warmupSeconds": 0.25,
+        "warmupFrames": 4,
+        "width": 257,
+        "height": 193,
+        "quality": "scene",
+        "view": "final",
+        "validation": "off",
+        "cpuProfiling": false,
+        "pipeline": "deferred",
+        "submission": "gpu-culled",
+        "recordingThreads": 1,
+        "asyncCompute": false,
+        "name": "n64-t1-q1",
+        "project": "D:\\Personal\\RenderLab\\out\\build\\m5-release\\indexed-scene\\dx12\\Pbr\\scale-64\\Pbr.rlproject",
+        "inputs": {
+          "manifest": "b59beab4ff91d6cbf4389c770ea3a1a625e99e44c1a98542090475534ea0287c",
+          "assets": "d99a32dd277ee8d49c56d2c02b6561a851e2aabffa1ad311fbf00368b552e76f"
+        }
+      },
+      {
+        "seconds": 2,
+        "warmupSeconds": 0.25,
+        "warmupFrames": 4,
+        "width": 257,
+        "height": 193,
+        "quality": "scene",
+        "view": "final",
+        "validation": "off",
+        "cpuProfiling": false,
+        "pipeline": "deferred",
+        "submission": "gpu-culled",
+        "recordingThreads": 1,
+        "asyncCompute": true,
+        "name": "n64-t1-q2",
+        "project": "D:\\Personal\\RenderLab\\out\\build\\m5-release\\indexed-scene\\dx12\\Pbr\\scale-64\\Pbr.rlproject",
+        "inputs": {
+          "manifest": "b59beab4ff91d6cbf4389c770ea3a1a625e99e44c1a98542090475534ea0287c",
+          "assets": "d99a32dd277ee8d49c56d2c02b6561a851e2aabffa1ad311fbf00368b552e76f"
+        }
+      },
+      {
+        "seconds": 2,
+        "warmupSeconds": 0.25,
+        "warmupFrames": 4,
+        "width": 257,
+        "height": 193,
+        "quality": "scene",
+        "view": "final",
+        "validation": "off",
+        "cpuProfiling": false,
+        "pipeline": "deferred",
+        "submission": "gpu-culled",
+        "recordingThreads": 4,
+        "asyncCompute": false,
+        "name": "n64-t4-q1",
+        "project": "D:\\Personal\\RenderLab\\out\\build\\m5-release\\indexed-scene\\dx12\\Pbr\\scale-64\\Pbr.rlproject",
+        "inputs": {
+          "manifest": "b59beab4ff91d6cbf4389c770ea3a1a625e99e44c1a98542090475534ea0287c",
+          "assets": "d99a32dd277ee8d49c56d2c02b6561a851e2aabffa1ad311fbf00368b552e76f"
+        }
+      },
+      {
+        "seconds": 2,
+        "warmupSeconds": 0.25,
+        "warmupFrames": 4,
+        "width": 257,
+        "height": 193,
+        "quality": "scene",
+        "view": "final",
+        "validation": "off",
+        "cpuProfiling": false,
+        "pipeline": "deferred",
+        "submission": "gpu-culled",
+        "recordingThreads": 4,
+        "asyncCompute": true,
+        "name": "n64-t4-q2",
+        "project": "D:\\Personal\\RenderLab\\out\\build\\m5-release\\indexed-scene\\dx12\\Pbr\\scale-64\\Pbr.rlproject",
+        "inputs": {
+          "manifest": "b59beab4ff91d6cbf4389c770ea3a1a625e99e44c1a98542090475534ea0287c",
+          "assets": "d99a32dd277ee8d49c56d2c02b6561a851e2aabffa1ad311fbf00368b552e76f"
+        }
+      },
+      {
+        "seconds": 2,
+        "warmupSeconds": 0.25,
+        "warmupFrames": 4,
+        "width": 257,
+        "height": 193,
+        "quality": "scene",
+        "view": "final",
+        "validation": "off",
+        "cpuProfiling": false,
+        "pipeline": "deferred",
+        "submission": "gpu-culled",
+        "recordingThreads": 1,
+        "asyncCompute": false,
+        "name": "n4096-t1-q1",
+        "project": "D:\\Personal\\RenderLab\\out\\build\\m5-release\\indexed-scene\\dx12\\Pbr\\scale-4096\\Pbr.rlproject",
+        "inputs": {
+          "manifest": "b59beab4ff91d6cbf4389c770ea3a1a625e99e44c1a98542090475534ea0287c",
+          "assets": "5bd402ecda591d232719999daecaccec7fdf8e8123677d4bae66f133dce79acc"
+        }
+      },
+      {
+        "seconds": 2,
+        "warmupSeconds": 0.25,
+        "warmupFrames": 4,
+        "width": 257,
+        "height": 193,
+        "quality": "scene",
+        "view": "final",
+        "validation": "off",
+        "cpuProfiling": false,
+        "pipeline": "deferred",
+        "submission": "gpu-culled",
+        "recordingThreads": 1,
+        "asyncCompute": true,
+        "name": "n4096-t1-q2",
+        "project": "D:\\Personal\\RenderLab\\out\\build\\m5-release\\indexed-scene\\dx12\\Pbr\\scale-4096\\Pbr.rlproject",
+        "inputs": {
+          "manifest": "b59beab4ff91d6cbf4389c770ea3a1a625e99e44c1a98542090475534ea0287c",
+          "assets": "5bd402ecda591d232719999daecaccec7fdf8e8123677d4bae66f133dce79acc"
+        }
+      },
+      {
+        "seconds": 2,
+        "warmupSeconds": 0.25,
+        "warmupFrames": 4,
+        "width": 257,
+        "height": 193,
+        "quality": "scene",
+        "view": "final",
+        "validation": "off",
+        "cpuProfiling": false,
+        "pipeline": "deferred",
+        "submission": "gpu-culled",
+        "recordingThreads": 4,
+        "asyncCompute": false,
+        "name": "n4096-t4-q1",
+        "project": "D:\\Personal\\RenderLab\\out\\build\\m5-release\\indexed-scene\\dx12\\Pbr\\scale-4096\\Pbr.rlproject",
+        "inputs": {
+          "manifest": "b59beab4ff91d6cbf4389c770ea3a1a625e99e44c1a98542090475534ea0287c",
+          "assets": "5bd402ecda591d232719999daecaccec7fdf8e8123677d4bae66f133dce79acc"
+        }
+      },
+      {
+        "seconds": 2,
+        "warmupSeconds": 0.25,
+        "warmupFrames": 4,
+        "width": 257,
+        "height": 193,
+        "quality": "scene",
+        "view": "final",
+        "validation": "off",
+        "cpuProfiling": false,
+        "pipeline": "deferred",
+        "submission": "gpu-culled",
+        "recordingThreads": 4,
+        "asyncCompute": true,
+        "name": "n4096-t4-q2",
+        "project": "D:\\Personal\\RenderLab\\out\\build\\m5-release\\indexed-scene\\dx12\\Pbr\\scale-4096\\Pbr.rlproject",
+        "inputs": {
+          "manifest": "b59beab4ff91d6cbf4389c770ea3a1a625e99e44c1a98542090475534ea0287c",
+          "assets": "5bd402ecda591d232719999daecaccec7fdf8e8123677d4bae66f133dce79acc"
+        }
+      },
+      {
+        "seconds": 2,
+        "warmupSeconds": 0.25,
+        "warmupFrames": 4,
+        "width": 257,
+        "height": 193,
+        "quality": "high",
+        "view": "final",
+        "validation": "off",
+        "cpuProfiling": false,
+        "pipeline": "deferred",
+        "submission": "gpu-culled",
+        "recordingThreads": 1,
+        "asyncCompute": false,
+        "name": "shadow128objects-t1-q1",
+        "project": "D:\\Personal\\RenderLab\\out\\build\\m5-release\\indexed-scene\\dx12\\Shadow\\scale-128\\Shadow.rlproject",
+        "inputs": {
+          "manifest": "16ebd5e5415960306e0caabcf00dd5e988cc1e6f05b600c39348a0b11a48613c",
+          "assets": "b43b125faf1dd8994c540a02e7356bf8daa3855a80294207df4c33b893d70a14"
+        }
+      },
+      {
+        "seconds": 2,
+        "warmupSeconds": 0.25,
+        "warmupFrames": 4,
+        "width": 257,
+        "height": 193,
+        "quality": "high",
+        "view": "final",
+        "validation": "off",
+        "cpuProfiling": false,
+        "pipeline": "deferred",
+        "submission": "gpu-culled",
+        "recordingThreads": 1,
+        "asyncCompute": true,
+        "name": "shadow128objects-t1-q2",
+        "project": "D:\\Personal\\RenderLab\\out\\build\\m5-release\\indexed-scene\\dx12\\Shadow\\scale-128\\Shadow.rlproject",
+        "inputs": {
+          "manifest": "16ebd5e5415960306e0caabcf00dd5e988cc1e6f05b600c39348a0b11a48613c",
+          "assets": "b43b125faf1dd8994c540a02e7356bf8daa3855a80294207df4c33b893d70a14"
+        }
+      },
+      {
+        "seconds": 2,
+        "warmupSeconds": 0.25,
+        "warmupFrames": 4,
+        "width": 257,
+        "height": 193,
+        "quality": "high",
+        "view": "final",
+        "validation": "off",
+        "cpuProfiling": false,
+        "pipeline": "deferred",
+        "submission": "gpu-culled",
+        "recordingThreads": 4,
+        "asyncCompute": false,
+        "name": "shadow128objects-t4-q1",
+        "project": "D:\\Personal\\RenderLab\\out\\build\\m5-release\\indexed-scene\\dx12\\Shadow\\scale-128\\Shadow.rlproject",
+        "inputs": {
+          "manifest": "16ebd5e5415960306e0caabcf00dd5e988cc1e6f05b600c39348a0b11a48613c",
+          "assets": "b43b125faf1dd8994c540a02e7356bf8daa3855a80294207df4c33b893d70a14"
+        }
+      },
+      {
+        "seconds": 2,
+        "warmupSeconds": 0.25,
+        "warmupFrames": 4,
+        "width": 257,
+        "height": 193,
+        "quality": "high",
+        "view": "final",
+        "validation": "off",
+        "cpuProfiling": false,
+        "pipeline": "deferred",
+        "submission": "gpu-culled",
+        "recordingThreads": 4,
+        "asyncCompute": true,
+        "name": "shadow128objects-t4-q2",
+        "project": "D:\\Personal\\RenderLab\\out\\build\\m5-release\\indexed-scene\\dx12\\Shadow\\scale-128\\Shadow.rlproject",
+        "inputs": {
+          "manifest": "16ebd5e5415960306e0caabcf00dd5e988cc1e6f05b600c39348a0b11a48613c",
+          "assets": "b43b125faf1dd8994c540a02e7356bf8daa3855a80294207df4c33b893d70a14"
+        }
+      }
+    ]
+  },
+  "frames": 32394,
+  "runs": [
+    {
+      "id": "n64-t1-q1-01-dx12",
+      "case": "n64-t1-q1",
+      "backend": "dx12",
+      "repeat": 0,
+      "sampleCount": 2026,
+      "asyncCompute": false,
+      "recordingThreads": 1,
+      "recordingChunks": 1,
+      "candidates": 64,
+      "metricsMs": {
+        "cpuRenderMs": 0.7677033563672266,
+        "frameTimeMs": 0.9639424975320826,
+        "gpuPassSumMs": 0.041404035538005916,
+        "gpuQueueOverlapMs": 0.0,
+        "gpuQueueSpanMs": 0.04178980454096743,
+        "gpuWaitMs": 0.19623914116485655,
+        "graphCompileMs": 0.018529565646594245,
+        "graphPrepareMs": 0.003697482724580451,
+        "graphRecordMs": 0.09863583415597231
+      },
+      "captureSha256": "030c41f232650c232427ef9c9d6400b055ee899e72bac0cb1a66d0f8b4b02f6b",
+      "reportSha256": "9bd60982cf8d2af4c3a1ae8be8591a96131f536229bac5da25761a5763254108",
+      "samplesSha256": "ebdb8f0f20b70984e4208e1f6ffa54bc40af7e606b563cf2c8a1277a5e1b9de3",
+      "queueClockDomain": "QPC calibrated per queue",
+      "queueTimeline": [
+        {
+          "endNs": 77239254489208.0,
+          "pass": "Indexed.ClearCounts",
+          "queue": "graphics",
+          "startNs": 77239254486616.0
+        },
+        {
+          "endNs": 77239254494520.0,
+          "pass": "Indexed.FrustumCulling",
+          "queue": "graphics",
+          "startNs": 77239254489272.0
+        },
+        {
+          "endNs": 77239254498008.0,
+          "pass": "MainLight.Shadow",
+          "queue": "graphics",
+          "startNs": 77239254494584.0
+        },
+        {
+          "endNs": 77239254521144.0,
+          "pass": "Deferred.GBuffer",
+          "queue": "graphics",
+          "startNs": 77239254498232.0
+        },
+        {
+          "endNs": 77239254526360.0,
+          "pass": "Deferred.Lighting",
+          "queue": "graphics",
+          "startNs": 77239254521144.0
+        },
+        {
+          "endNs": 77239254528792.0,
+          "pass": "Display.ToneMapping",
+          "queue": "graphics",
+          "startNs": 77239254526392.0
+        }
+      ],
+      "queueSubmissions": [
+        {
+          "action": "execute",
+          "queue": "graphics",
+          "range": null,
+          "value": 1
+        },
+        {
+          "action": "signalFrame",
+          "queue": "graphics",
+          "range": null,
+          "value": 2039
+        }
+      ]
+    },
+    {
+      "id": "n64-t1-q1-01-vulkan",
+      "case": "n64-t1-q1",
+      "backend": "vulkan",
+      "repeat": 0,
+      "sampleCount": 2248,
+      "asyncCompute": false,
+      "recordingThreads": 1,
+      "recordingChunks": 1,
+      "candidates": 64,
+      "metricsMs": {
+        "cpuRenderMs": 0.6314427046263337,
+        "frameTimeMs": 0.8645710409252675,
+        "gpuPassSumMs": 0.03636031316725974,
+        "gpuQueueOverlapMs": 0.0,
+        "gpuQueueSpanMs": 0.04504241992882562,
+        "gpuWaitMs": 0.23312833629893234,
+        "graphCompileMs": 0.017957072953736723,
+        "graphPrepareMs": 0.003382206405693955,
+        "graphRecordMs": 0.08938465302491114
+      },
+      "captureSha256": "030c41f232650c232427ef9c9d6400b055ee899e72bac0cb1a66d0f8b4b02f6b",
+      "reportSha256": "c8912eaeabe87ae1cb3f5f2e4b0120c6c458ee8948ff0b1967056496a83aa536",
+      "samplesSha256": "b576c5df3a71bbd2c41c66675709b4cdf7dd527a0742b1cdf242b09929fa1b38",
+      "queueClockDomain": "device timestamp clock relative to first slot; async requires calibrated_timestamps",
+      "queueTimeline": [
+        {
+          "endNs": 4320.0,
+          "pass": "Indexed.ClearCounts",
+          "queue": "graphics",
+          "startNs": 0.0
+        },
+        {
+          "endNs": 12512.0,
+          "pass": "Indexed.FrustumCulling",
+          "queue": "graphics",
+          "startNs": 5216.0
+        },
+        {
+          "endNs": 14368.0,
+          "pass": "MainLight.Shadow",
+          "queue": "graphics",
+          "startNs": 12864.0
+        },
+        {
+          "endNs": 33056.0,
+          "pass": "Deferred.GBuffer",
+          "queue": "graphics",
+          "startNs": 17472.0
+        },
+        {
+          "endNs": 41184.0,
+          "pass": "Deferred.Lighting",
+          "queue": "graphics",
+          "startNs": 36288.0
+        },
+        {
+          "endNs": 44512.0,
+          "pass": "Display.ToneMapping",
+          "queue": "graphics",
+          "startNs": 41824.0
+        }
+      ],
+      "queueSubmissions": [
+        {
+          "action": "execute",
+          "queue": "graphics",
+          "range": null,
+          "value": 1
+        },
+        {
+          "action": "signalFrame",
+          "queue": "graphics",
+          "range": null,
+          "value": 2261
+        }
+      ]
+    },
+    {
+      "id": "n64-t1-q1-02-vulkan",
+      "case": "n64-t1-q1",
+      "backend": "vulkan",
+      "repeat": 1,
+      "sampleCount": 2271,
+      "asyncCompute": false,
+      "recordingThreads": 1,
+      "recordingChunks": 1,
+      "candidates": 64,
+      "metricsMs": {
+        "cpuRenderMs": 0.6277367239101713,
+        "frameTimeMs": 0.8557341699691766,
+        "gpuPassSumMs": 0.03631081285777207,
+        "gpuQueueOverlapMs": 0.0,
+        "gpuQueueSpanMs": 0.045062016732716884,
+        "gpuWaitMs": 0.22799744605900474,
+        "graphCompileMs": 0.01768643769264637,
+        "graphPrepareMs": 0.0033799207397622144,
+        "graphRecordMs": 0.0893589608102158
+      },
+      "captureSha256": "030c41f232650c232427ef9c9d6400b055ee899e72bac0cb1a66d0f8b4b02f6b",
+      "reportSha256": "a3d9c55c5ca38bca66531cd689eb041c162f1d36b3800b84565c6d36994748a5",
+      "samplesSha256": "5c9b8057f85549adfb3676e6e5def5d7576ada1a7b90468168e4c8a5b6fe5a4b",
+      "queueClockDomain": "device timestamp clock relative to first slot; async requires calibrated_timestamps",
+      "queueTimeline": [
+        {
+          "endNs": 4000.0,
+          "pass": "Indexed.ClearCounts",
+          "queue": "graphics",
+          "startNs": 0.0
+        },
+        {
+          "endNs": 12128.0,
+          "pass": "Indexed.FrustumCulling",
+          "queue": "graphics",
+          "startNs": 4928.0
+        },
+        {
+          "endNs": 14016.0,
+          "pass": "MainLight.Shadow",
+          "queue": "graphics",
+          "startNs": 12512.0
+        },
+        {
+          "endNs": 33408.0,
+          "pass": "Deferred.GBuffer",
+          "queue": "graphics",
+          "startNs": 17120.0
+        },
+        {
+          "endNs": 41536.0,
+          "pass": "Deferred.Lighting",
+          "queue": "graphics",
+          "startNs": 36544.0
+        },
+        {
+          "endNs": 44864.0,
+          "pass": "Display.ToneMapping",
+          "queue": "graphics",
+          "startNs": 42144.0
+        }
+      ],
+      "queueSubmissions": [
+        {
+          "action": "execute",
+          "queue": "graphics",
+          "range": null,
+          "value": 1
+        },
+        {
+          "action": "signalFrame",
+          "queue": "graphics",
+          "range": null,
+          "value": 2284
+        }
+      ]
+    },
+    {
+      "id": "n64-t1-q1-02-dx12",
+      "case": "n64-t1-q1",
+      "backend": "dx12",
+      "repeat": 1,
+      "sampleCount": 1872,
+      "asyncCompute": false,
+      "recordingThreads": 1,
+      "recordingChunks": 1,
+      "candidates": 64,
+      "metricsMs": {
+        "cpuRenderMs": 0.8371447649572635,
+        "frameTimeMs": 1.043019497863248,
+        "gpuPassSumMs": 0.04157170940170935,
+        "gpuQueueOverlapMs": 0.0,
+        "gpuQueueSpanMs": 0.041956068376068474,
+        "gpuWaitMs": 0.20587473290598277,
+        "graphCompileMs": 0.019530982905982916,
+        "graphPrepareMs": 0.0038942307692307696,
+        "graphRecordMs": 0.10390427350427353
+      },
+      "captureSha256": "030c41f232650c232427ef9c9d6400b055ee899e72bac0cb1a66d0f8b4b02f6b",
+      "reportSha256": "fe2500304de933781c04e0c1a3553d49ae1f89474d95e95fc05f860e4fb2996e",
+      "samplesSha256": "fc2648007294a87aaef3c6b9e8f0685059b28e2656b938e9eac6c7ee4b5104a9",
+      "queueClockDomain": "QPC calibrated per queue",
+      "queueTimeline": [
+        {
+          "endNs": 77249285289648.0,
+          "pass": "Indexed.ClearCounts",
+          "queue": "graphics",
+          "startNs": 77249285286576.0
+        },
+        {
+          "endNs": 77249285295024.0,
+          "pass": "Indexed.FrustumCulling",
+          "queue": "graphics",
+          "startNs": 77249285289744.0
+        },
+        {
+          "endNs": 77249285297872.0,
+          "pass": "MainLight.Shadow",
+          "queue": "graphics",
+          "startNs": 77249285295120.0
+        },
+        {
+          "endNs": 77249285322832.0,
+          "pass": "Deferred.GBuffer",
+          "queue": "graphics",
+          "startNs": 77249285298064.0
+        },
+        {
+          "endNs": 77249285328336.0,
+          "pass": "Deferred.Lighting",
+          "queue": "graphics",
+          "startNs": 77249285322832.0
+        },
+        {
+          "endNs": 77249285330896.0,
+          "pass": "Display.ToneMapping",
+          "queue": "graphics",
+          "startNs": 77249285328336.0
+        }
+      ],
+      "queueSubmissions": [
+        {
+          "action": "execute",
+          "queue": "graphics",
+          "range": null,
+          "value": 1
+        },
+        {
+          "action": "signalFrame",
+          "queue": "graphics",
+          "range": null,
+          "value": 1885
+        }
+      ]
+    },
+    {
+      "id": "n64-t1-q2-01-dx12",
+      "case": "n64-t1-q2",
+      "backend": "dx12",
+      "repeat": 0,
+      "sampleCount": 1780,
+      "asyncCompute": true,
+      "recordingThreads": 1,
+      "recordingChunks": 4,
+      "candidates": 64,
+      "metricsMs": {
+        "cpuRenderMs": 0.8728775280898888,
+        "frameTimeMs": 1.0992452247191011,
+        "gpuPassSumMs": 0.044754660674157315,
+        "gpuQueueOverlapMs": 0.0010277056179775266,
+        "gpuQueueSpanMs": 0.1046653460674159,
+        "gpuWaitMs": 0.2263676966292135,
+        "graphCompileMs": 0.020106123595505638,
+        "graphPrepareMs": 0.003986179775280899,
+        "graphRecordMs": 0.101896404494382
+      },
+      "captureSha256": "030c41f232650c232427ef9c9d6400b055ee899e72bac0cb1a66d0f8b4b02f6b",
+      "reportSha256": "8987fc635ebe6713d464340a2910bc58629f5dfebd01e46eb4c7b19c6e196218",
+      "samplesSha256": "2c97f858e4c9c7834fade58356ab0f07113ab75d333f8f26a33b4cbb2e96e752",
+      "queueClockDomain": "QPC calibrated per queue",
+      "queueTimeline": [
+        {
+          "endNs": 77252394700452.0,
+          "pass": "Indexed.ClearCounts",
+          "queue": "compute",
+          "startNs": 77252394695332.0
+        },
+        {
+          "endNs": 77252394705700.0,
+          "pass": "Indexed.FrustumCulling",
+          "queue": "compute",
+          "startNs": 77252394700548.0
+        },
+        {
+          "endNs": 77252394731144.0,
+          "pass": "MainLight.Shadow",
+          "queue": "graphics",
+          "startNs": 77252394727176.0
+        },
+        {
+          "endNs": 77252394804136.0,
+          "pass": "Deferred.GBuffer",
+          "queue": "graphics",
+          "startNs": 77252394781672.0
+        },
+        {
+          "endNs": 77252394809768.0,
+          "pass": "Deferred.Lighting",
+          "queue": "graphics",
+          "startNs": 77252394804136.0
+        },
+        {
+          "endNs": 77252394812296.0,
+          "pass": "Display.ToneMapping",
+          "queue": "graphics",
+          "startNs": 77252394809768.0
+        }
+      ],
+      "queueSubmissions": [
+        {
+          "action": "waitFrame",
+          "queue": "compute",
+          "range": null,
+          "value": 1792
+        },
+        {
+          "action": "execute",
+          "queue": "graphics",
+          "range": 0,
+          "value": 1
+        },
+        {
+          "action": "signalGraphics",
+          "queue": "graphics",
+          "range": 0,
+          "value": 7133
+        },
+        {
+          "action": "waitGraphics",
+          "queue": "compute",
+          "range": 1,
+          "value": 7133
+        },
+        {
+          "action": "execute",
+          "queue": "compute",
+          "range": 1,
+          "value": 1
+        },
+        {
+          "action": "signalCompute",
+          "queue": "compute",
+          "range": 1,
+          "value": 7134
+        },
+        {
+          "action": "execute",
+          "queue": "graphics",
+          "range": 2,
+          "value": 1
+        },
+        {
+          "action": "signalGraphics",
+          "queue": "graphics",
+          "range": 2,
+          "value": 7135
+        },
+        {
+          "action": "waitCompute",
+          "queue": "graphics",
+          "range": 3,
+          "value": 7134
+        },
+        {
+          "action": "execute",
+          "queue": "graphics",
+          "range": 3,
+          "value": 1
+        },
+        {
+          "action": "signalGraphics",
+          "queue": "graphics",
+          "range": 3,
+          "value": 7136
+        },
+        {
+          "action": "signalFrame",
+          "queue": "graphics",
+          "range": null,
+          "value": 1793
+        }
+      ]
+    },
+    {
+      "id": "n64-t1-q2-01-vulkan",
+      "case": "n64-t1-q2",
+      "backend": "vulkan",
+      "repeat": 0,
+      "sampleCount": 1504,
+      "asyncCompute": true,
+      "recordingThreads": 1,
+      "recordingChunks": 4,
+      "candidates": 64,
+      "metricsMs": {
+        "cpuRenderMs": 0.803632180851063,
+        "frameTimeMs": 1.297757180851066,
+        "gpuPassSumMs": 0.03559951063829789,
+        "gpuQueueOverlapMs": 0.0,
+        "gpuQueueSpanMs": 0.23971453191489345,
+        "gpuWaitMs": 0.49412500000000026,
+        "graphCompileMs": 0.022040691489361688,
+        "graphPrepareMs": 0.004050598404255317,
+        "graphRecordMs": 0.10417453457446803
+      },
+      "captureSha256": "030c41f232650c232427ef9c9d6400b055ee899e72bac0cb1a66d0f8b4b02f6b",
+      "reportSha256": "4fe3930099d25e2578987029658a2e40e1561bcd9c380050ea8629e8921e3729",
+      "samplesSha256": "c61c598792d67aefa5d8fa34ddcd016096bda892763df4658ba65dae4dd18d5a",
+      "queueClockDomain": "device timestamp clock relative to first slot; async requires calibrated_timestamps",
+      "queueTimeline": [
+        {
+          "endNs": 3360.0,
+          "pass": "Indexed.ClearCounts",
+          "queue": "compute",
+          "startNs": 0.0
+        },
+        {
+          "endNs": 11552.0,
+          "pass": "Indexed.FrustumCulling",
+          "queue": "compute",
+          "startNs": 4256.0
+        },
+        {
+          "endNs": -94400.0,
+          "pass": "MainLight.Shadow",
+          "queue": "graphics",
+          "startNs": -95072.0
+        },
+        {
+          "endNs": 126272.0,
+          "pass": "Deferred.GBuffer",
+          "queue": "graphics",
+          "startNs": 109472.0
+        },
+        {
+          "endNs": 134400.0,
+          "pass": "Deferred.Lighting",
+          "queue": "graphics",
+          "startNs": 129440.0
+        },
+        {
+          "endNs": 137728.0,
+          "pass": "Display.ToneMapping",
+          "queue": "graphics",
+          "startNs": 135040.0
+        }
+      ],
+      "queueSubmissions": [
+        {
+          "action": "execute",
+          "queue": "graphics",
+          "range": 0,
+          "value": 1
+        },
+        {
+          "action": "signalGraphics",
+          "queue": "graphics",
+          "range": 0,
+          "value": 6029
+        },
+        {
+          "action": "waitGraphics",
+          "queue": "compute",
+          "range": 1,
+          "value": 6029
+        },
+        {
+          "action": "waitFrame",
+          "queue": "compute",
+          "range": 1,
+          "value": 1516
+        },
+        {
+          "action": "execute",
+          "queue": "compute",
+          "range": 1,
+          "value": 1
+        },
+        {
+          "action": "signalCompute",
+          "queue": "compute",
+          "range": 1,
+          "value": 6030
+        },
+        {
+          "action": "execute",
+          "queue": "graphics",
+          "range": 2,
+          "value": 1
+        },
+        {
+          "action": "signalGraphics",
+          "queue": "graphics",
+          "range": 2,
+          "value": 6031
+        },
+        {
+          "action": "waitCompute",
+          "queue": "graphics",
+          "range": 3,
+          "value": 6030
+        },
+        {
+          "action": "execute",
+          "queue": "graphics",
+          "range": 3,
+          "value": 1
+        },
+        {
+          "action": "signalGraphics",
+          "queue": "graphics",
+          "range": 3,
+          "value": 6032
+        },
+        {
+          "action": "waitCompute",
+          "queue": "graphics",
+          "range": null,
+          "value": 6030
+        },
+        {
+          "action": "signalFrame",
+          "queue": "graphics",
+          "range": null,
+          "value": 1517
+        }
+      ]
+    },
+    {
+      "id": "n64-t1-q2-02-vulkan",
+      "case": "n64-t1-q2",
+      "backend": "vulkan",
+      "repeat": 1,
+      "sampleCount": 1058,
+      "asyncCompute": true,
+      "recordingThreads": 1,
+      "recordingChunks": 4,
+      "candidates": 64,
+      "metricsMs": {
+        "cpuRenderMs": 0.9762321361058588,
+        "frameTimeMs": 1.8584423440453663,
+        "gpuPassSumMs": 0.034815243856332695,
+        "gpuQueueOverlapMs": 0.0,
+        "gpuQueueSpanMs": 0.23800807561436668,
+        "gpuWaitMs": 0.882210207939508,
+        "graphCompileMs": 0.025439224952741025,
+        "graphPrepareMs": 0.004176275992438563,
+        "graphRecordMs": 0.11164574669187152
+      },
+      "captureSha256": "030c41f232650c232427ef9c9d6400b055ee899e72bac0cb1a66d0f8b4b02f6b",
+      "reportSha256": "5e128c66d4d5c86431675f189e4df3982cba7a882cc2edcc77c629502688e331",
+      "samplesSha256": "dd9437b72ffe7832c1c771fee41a4d71eba3b70651f9808ef2df52c7398c0bc4",
+      "queueClockDomain": "device timestamp clock relative to first slot; async requires calibrated_timestamps",
+      "queueTimeline": [
+        {
+          "endNs": 2688.0,
+          "pass": "Indexed.ClearCounts",
+          "queue": "compute",
+          "startNs": 0.0
+        },
+        {
+          "endNs": 10880.0,
+          "pass": "Indexed.FrustumCulling",
+          "queue": "compute",
+          "startNs": 3584.0
+        },
+        {
+          "endNs": -91904.0,
+          "pass": "MainLight.Shadow",
+          "queue": "graphics",
+          "startNs": -92576.0
+        },
+        {
+          "endNs": 122112.0,
+          "pass": "Deferred.GBuffer",
+          "queue": "graphics",
+          "startNs": 105344.0
+        },
+        {
+          "endNs": 130208.0,
+          "pass": "Deferred.Lighting",
+          "queue": "graphics",
+          "startNs": 125248.0
+        },
+        {
+          "endNs": 133440.0,
+          "pass": "Display.ToneMapping",
+          "queue": "graphics",
+          "startNs": 130848.0
+        }
+      ],
+      "queueSubmissions": [
+        {
+          "action": "execute",
+          "queue": "graphics",
+          "range": 0,
+          "value": 1
+        },
+        {
+          "action": "signalGraphics",
+          "queue": "graphics",
+          "range": 0,
+          "value": 4245
+        },
+        {
+          "action": "waitGraphics",
+          "queue": "compute",
+          "range": 1,
+          "value": 4245
+        },
+        {
+          "action": "waitFrame",
+          "queue": "compute",
+          "range": 1,
+          "value": 1070
+        },
+        {
+          "action": "execute",
+          "queue": "compute",
+          "range": 1,
+          "value": 1
+        },
+        {
+          "action": "signalCompute",
+          "queue": "compute",
+          "range": 1,
+          "value": 4246
+        },
+        {
+          "action": "execute",
+          "queue": "graphics",
+          "range": 2,
+          "value": 1
+        },
+        {
+          "action": "signalGraphics",
+          "queue": "graphics",
+          "range": 2,
+          "value": 4247
+        },
+        {
+          "action": "waitCompute",
+          "queue": "graphics",
+          "range": 3,
+          "value": 4246
+        },
+        {
+          "action": "execute",
+          "queue": "graphics",
+          "range": 3,
+          "value": 1
+        },
+        {
+          "action": "signalGraphics",
+          "queue": "graphics",
+          "range": 3,
+          "value": 4248
+        },
+        {
+          "action": "waitCompute",
+          "queue": "graphics",
+          "range": null,
+          "value": 4246
+        },
+        {
+          "action": "signalFrame",
+          "queue": "graphics",
+          "range": null,
+          "value": 1071
+        }
+      ]
+    },
+    {
+      "id": "n64-t1-q2-02-dx12",
+      "case": "n64-t1-q2",
+      "backend": "dx12",
+      "repeat": 1,
+      "sampleCount": 1273,
+      "asyncCompute": true,
+      "recordingThreads": 1,
+      "recordingChunks": 4,
+      "candidates": 64,
+      "metricsMs": {
+        "cpuRenderMs": 1.1454627651217588,
+        "frameTimeMs": 1.5380489395129637,
+        "gpuPassSumMs": 0.04499672584446199,
+        "gpuQueueOverlapMs": 0.0007138004713275732,
+        "gpuQueueSpanMs": 0.11053441633935585,
+        "gpuWaitMs": 0.39258617439120147,
+        "graphCompileMs": 0.02206975648075414,
+        "graphPrepareMs": 0.004391516103692068,
+        "graphRecordMs": 0.11401877454831116
+      },
+      "captureSha256": "030c41f232650c232427ef9c9d6400b055ee899e72bac0cb1a66d0f8b4b02f6b",
+      "reportSha256": "05ee4d87681746bbf870390b194c418b8648f155d742724a3cfc35de08e71efa",
+      "samplesSha256": "d859c158ff8b1dd0ad6cea98883592efad24e9a15b2ee6a14b3f5d980e4bef72",
+      "queueClockDomain": "QPC calibrated per queue",
+      "queueTimeline": [
+        {
+          "endNs": 77263715456824.0,
+          "pass": "Indexed.ClearCounts",
+          "queue": "compute",
+          "startNs": 77263715449080.0
+        },
+        {
+          "endNs": 77263715465624.0,
+          "pass": "Indexed.FrustumCulling",
+          "queue": "compute",
+          "startNs": 77263715456952.0
+        },
+        {
+          "endNs": 77263715508332.0,
+          "pass": "MainLight.Shadow",
+          "queue": "graphics",
+          "startNs": 77263715505676.0
+        },
+        {
+          "endNs": 77263715580364.0,
+          "pass": "Deferred.GBuffer",
+          "queue": "graphics",
+          "startNs": 77263715557740.0
+        },
+        {
+          "endNs": 77263715585964.0,
+          "pass": "Deferred.Lighting",
+          "queue": "graphics",
+          "startNs": 77263715580364.0
+        },
+        {
+          "endNs": 77263715588524.0,
+          "pass": "Display.ToneMapping",
+          "queue": "graphics",
+          "startNs": 77263715585964.0
+        }
+      ],
+      "queueSubmissions": [
+        {
+          "action": "waitFrame",
+          "queue": "compute",
+          "range": null,
+          "value": 1285
+        },
+        {
+          "action": "execute",
+          "queue": "graphics",
+          "range": 0,
+          "value": 1
+        },
+        {
+          "action": "signalGraphics",
+          "queue": "graphics",
+          "range": 0,
+          "value": 5105
+        },
+        {
+          "action": "waitGraphics",
+          "queue": "compute",
+          "range": 1,
+          "value": 5105
+        },
+        {
+          "action": "execute",
+          "queue": "compute",
+          "range": 1,
+          "value": 1
+        },
+        {
+          "action": "signalCompute",
+          "queue": "compute",
+          "range": 1,
+          "value": 5106
+        },
+        {
+          "action": "execute",
+          "queue": "graphics",
+          "range": 2,
+          "value": 1
+        },
+        {
+          "action": "signalGraphics",
+          "queue": "graphics",
+          "range": 2,
+          "value": 5107
+        },
+        {
+          "action": "waitCompute",
+          "queue": "graphics",
+          "range": 3,
+          "value": 5106
+        },
+        {
+          "action": "execute",
+          "queue": "graphics",
+          "range": 3,
+          "value": 1
+        },
+        {
+          "action": "signalGraphics",
+          "queue": "graphics",
+          "range": 3,
+          "value": 5108
+        },
+        {
+          "action": "signalFrame",
+          "queue": "graphics",
+          "range": null,
+          "value": 1286
+        }
+      ]
+    },
+    {
+      "id": "n64-t4-q1-01-dx12",
+      "case": "n64-t4-q1",
+      "backend": "dx12",
+      "repeat": 0,
+      "sampleCount": 1578,
+      "asyncCompute": false,
+      "recordingThreads": 4,
+      "recordingChunks": 4,
+      "candidates": 64,
+      "metricsMs": {
+        "cpuRenderMs": 0.978288529784537,
+        "frameTimeMs": 1.239919708491765,
+        "gpuPassSumMs": 0.04308546514575418,
+        "gpuQueueOverlapMs": 0.0,
+        "gpuQueueSpanMs": 0.045137237008872046,
+        "gpuWaitMs": 0.26163117870722435,
+        "graphCompileMs": 0.023765082382762967,
+        "graphPrepareMs": 0.003960139416983528,
+        "graphRecordMs": 0.10536692015209133
+      },
+      "captureSha256": "030c41f232650c232427ef9c9d6400b055ee899e72bac0cb1a66d0f8b4b02f6b",
+      "reportSha256": "8f436748e8285d57b124542acbff6e75858e62b2c048a1a3b0910e77a1a93163",
+      "samplesSha256": "52fe6d492f776d59d9982507cff63e9a3e05971cee734cb687b16c540638b193",
+      "queueClockDomain": "QPC calibrated per queue",
+      "queueTimeline": [
+        {
+          "endNs": 77267071295024.0,
+          "pass": "Indexed.ClearCounts",
+          "queue": "graphics",
+          "startNs": 77267071290000.0
+        },
+        {
+          "endNs": 77267071303312.0,
+          "pass": "Indexed.FrustumCulling",
+          "queue": "graphics",
+          "startNs": 77267071295152.0
+        },
+        {
+          "endNs": 77267071309360.0,
+          "pass": "MainLight.Shadow",
+          "queue": "graphics",
+          "startNs": 77267071305136.0
+        },
+        {
+          "endNs": 77267071337200.0,
+          "pass": "Deferred.GBuffer",
+          "queue": "graphics",
+          "startNs": 77267071309488.0
+        },
+        {
+          "endNs": 77267071342960.0,
+          "pass": "Deferred.Lighting",
+          "queue": "graphics",
+          "startNs": 77267071337200.0
+        },
+        {
+          "endNs": 77267071345872.0,
+          "pass": "Display.ToneMapping",
+          "queue": "graphics",
+          "startNs": 77267071342960.0
+        }
+      ],
+      "queueSubmissions": [
+        {
+          "action": "execute",
+          "queue": "graphics",
+          "range": null,
+          "value": 4
+        },
+        {
+          "action": "signalFrame",
+          "queue": "graphics",
+          "range": null,
+          "value": 1591
+        }
+      ]
+    },
+    {
+      "id": "n64-t4-q1-01-vulkan",
+      "case": "n64-t4-q1",
+      "backend": "vulkan",
+      "repeat": 0,
+      "sampleCount": 1611,
+      "asyncCompute": false,
+      "recordingThreads": 4,
+      "recordingChunks": 4,
+      "candidates": 64,
+      "metricsMs": {
+        "cpuRenderMs": 0.8972567970204848,
+        "frameTimeMs": 1.2096659217877102,
+        "gpuPassSumMs": 0.035555754189944146,
+        "gpuQueueOverlapMs": 0.0,
+        "gpuQueueSpanMs": 0.04801448044692741,
+        "gpuWaitMs": 0.3124091247672265,
+        "graphCompileMs": 0.021792116697703274,
+        "graphPrepareMs": 0.003899130974549966,
+        "graphRecordMs": 0.11863320918684046
+      },
+      "captureSha256": "030c41f232650c232427ef9c9d6400b055ee899e72bac0cb1a66d0f8b4b02f6b",
+      "reportSha256": "66d4cfed4f0dc21d0a664c4a9f4b352fc58413f99d33c275efb5397b2d8675e3",
+      "samplesSha256": "374c6fffdbc9c29bf84a30b68bdaf7b1fabdd95656f1ab6a46f70ec63270e2fd",
+      "queueClockDomain": "device timestamp clock relative to first slot; async requires calibrated_timestamps",
+      "queueTimeline": [
+        {
+          "endNs": 7424.0,
+          "pass": "Indexed.ClearCounts",
+          "queue": "graphics",
+          "startNs": 0.0
+        },
+        {
+          "endNs": 22240.0,
+          "pass": "Indexed.FrustumCulling",
+          "queue": "graphics",
+          "startNs": 9600.0
+        },
+        {
+          "endNs": 27200.0,
+          "pass": "MainLight.Shadow",
+          "queue": "graphics",
+          "startNs": 25984.0
+        },
+        {
+          "endNs": 53024.0,
+          "pass": "Deferred.GBuffer",
+          "queue": "graphics",
+          "startNs": 32224.0
+        },
+        {
+          "endNs": 62208.0,
+          "pass": "Deferred.Lighting",
+          "queue": "graphics",
+          "startNs": 57536.0
+        },
+        {
+          "endNs": 65824.0,
+          "pass": "Display.ToneMapping",
+          "queue": "graphics",
+          "startNs": 62944.0
+        }
+      ],
+      "queueSubmissions": [
+        {
+          "action": "execute",
+          "queue": "graphics",
+          "range": null,
+          "value": 4
+        },
+        {
+          "action": "signalFrame",
+          "queue": "graphics",
+          "range": null,
+          "value": 1624
+        }
+      ]
+    },
+    {
+      "id": "n64-t4-q1-02-vulkan",
+      "case": "n64-t4-q1",
+      "backend": "vulkan",
+      "repeat": 1,
+      "sampleCount": 1726,
+      "asyncCompute": false,
+      "recordingThreads": 4,
+      "recordingChunks": 4,
+      "candidates": 64,
+      "metricsMs": {
+        "cpuRenderMs": 0.8298950173812294,
+        "frameTimeMs": 1.1292765932792612,
+        "gpuPassSumMs": 0.037116607184241,
+        "gpuQueueOverlapMs": 0.0,
+        "gpuQueueSpanMs": 0.049983147161066076,
+        "gpuWaitMs": 0.2993815758980305,
+        "graphCompileMs": 0.021122653534183015,
+        "graphPrepareMs": 0.00377827346465817,
+        "graphRecordMs": 0.11602016222479726
+      },
+      "captureSha256": "030c41f232650c232427ef9c9d6400b055ee899e72bac0cb1a66d0f8b4b02f6b",
+      "reportSha256": "3a30df43ba9966320713b093b9bcc17445f2c6a48fbc9d2ed5a61601c1f6095e",
+      "samplesSha256": "7669c0efb53dc52f2301fb6f617a744ed1f75bcff51374d9446170a67eaa994e",
+      "queueClockDomain": "device timestamp clock relative to first slot; async requires calibrated_timestamps",
+      "queueTimeline": [
+        {
+          "endNs": 4352.0,
+          "pass": "Indexed.ClearCounts",
+          "queue": "graphics",
+          "startNs": 0.0
+        },
+        {
+          "endNs": 12384.0,
+          "pass": "Indexed.FrustumCulling",
+          "queue": "graphics",
+          "startNs": 5248.0
+        },
+        {
+          "endNs": 15552.0,
+          "pass": "MainLight.Shadow",
+          "queue": "graphics",
+          "startNs": 14880.0
+        },
+        {
+          "endNs": 36320.0,
+          "pass": "Deferred.GBuffer",
+          "queue": "graphics",
+          "startNs": 19552.0
+        },
+        {
+          "endNs": 44384.0,
+          "pass": "Deferred.Lighting",
+          "queue": "graphics",
+          "startNs": 40128.0
+        },
+        {
+          "endNs": 47680.0,
+          "pass": "Display.ToneMapping",
+          "queue": "graphics",
+          "startNs": 45024.0
+        }
+      ],
+      "queueSubmissions": [
+        {
+          "action": "execute",
+          "queue": "graphics",
+          "range": null,
+          "value": 4
+        },
+        {
+          "action": "signalFrame",
+          "queue": "graphics",
+          "range": null,
+          "value": 1739
+        }
+      ]
+    },
+    {
+      "id": "n64-t4-q1-02-dx12",
+      "case": "n64-t4-q1",
+      "backend": "dx12",
+      "repeat": 1,
+      "sampleCount": 1585,
+      "asyncCompute": false,
+      "recordingThreads": 4,
+      "recordingChunks": 4,
+      "candidates": 64,
+      "metricsMs": {
+        "cpuRenderMs": 0.9914232176656157,
+        "frameTimeMs": 1.234236971608833,
+        "gpuPassSumMs": 0.04383051104100953,
+        "gpuQueueOverlapMs": 0.0,
+        "gpuQueueSpanMs": 0.045934374763406914,
+        "gpuWaitMs": 0.24281375394321766,
+        "graphCompileMs": 0.020145488958990525,
+        "graphPrepareMs": 0.0040913564668769754,
+        "graphRecordMs": 0.11091577287066252
+      },
+      "captureSha256": "030c41f232650c232427ef9c9d6400b055ee899e72bac0cb1a66d0f8b4b02f6b",
+      "reportSha256": "781ff09294284ef36e46c99142ff3f819ec226be504d1c56eae56cc2e3503797",
+      "samplesSha256": "c45f4d9aa147b2f512204c375539fc08458dda3822ceef0656eb64b1c552c8f0",
+      "queueClockDomain": "QPC calibrated per queue",
+      "queueTimeline": [
+        {
+          "endNs": 77278068980976.0,
+          "pass": "Indexed.ClearCounts",
+          "queue": "graphics",
+          "startNs": 77278068973840.0
+        },
+        {
+          "endNs": 77278068993488.0,
+          "pass": "Indexed.FrustumCulling",
+          "queue": "graphics",
+          "startNs": 77278068981136.0
+        },
+        {
+          "endNs": 77278069000976.0,
+          "pass": "MainLight.Shadow",
+          "queue": "graphics",
+          "startNs": 77278068996752.0
+        },
+        {
+          "endNs": 77278069033520.0,
+          "pass": "Deferred.GBuffer",
+          "queue": "graphics",
+          "startNs": 77278069001072.0
+        },
+        {
+          "endNs": 77278069039472.0,
+          "pass": "Deferred.Lighting",
+          "queue": "graphics",
+          "startNs": 77278069033552.0
+        },
+        {
+          "endNs": 77278069042288.0,
+          "pass": "Display.ToneMapping",
+          "queue": "graphics",
+          "startNs": 77278069039472.0
+        }
+      ],
+      "queueSubmissions": [
+        {
+          "action": "execute",
+          "queue": "graphics",
+          "range": null,
+          "value": 4
+        },
+        {
+          "action": "signalFrame",
+          "queue": "graphics",
+          "range": null,
+          "value": 1598
+        }
+      ]
+    },
+    {
+      "id": "n64-t4-q2-01-dx12",
+      "case": "n64-t4-q2",
+      "backend": "dx12",
+      "repeat": 0,
+      "sampleCount": 1371,
+      "asyncCompute": true,
+      "recordingThreads": 4,
+      "recordingChunks": 4,
+      "candidates": 64,
+      "metricsMs": {
+        "cpuRenderMs": 1.116308242159008,
+        "frameTimeMs": 1.431706564551423,
+        "gpuPassSumMs": 0.04629699781181613,
+        "gpuQueueOverlapMs": 0.0009351626549963532,
+        "gpuQueueSpanMs": 0.1141836061269147,
+        "gpuWaitMs": 0.3153983223924144,
+        "graphCompileMs": 0.021737490882567465,
+        "graphPrepareMs": 0.004187016776075867,
+        "graphRecordMs": 0.10662676878191098
+      },
+      "captureSha256": "030c41f232650c232427ef9c9d6400b055ee899e72bac0cb1a66d0f8b4b02f6b",
+      "reportSha256": "ad2f307fcbe7999b9b0a7b239d3be7f257cf917b890e1aa06a28f66e9d35dc7d",
+      "samplesSha256": "73e5bd7e470dafdcef533aac1d34ba2d1cf2523c8c24036c4ac74c8e812a9d36",
+      "queueClockDomain": "QPC calibrated per queue",
+      "queueTimeline": [
+        {
+          "endNs": 77281218493980.0,
+          "pass": "Indexed.ClearCounts",
+          "queue": "compute",
+          "startNs": 77281218486268.0
+        },
+        {
+          "endNs": 77281218505468.0,
+          "pass": "Indexed.FrustumCulling",
+          "queue": "compute",
+          "startNs": 77281218494140.0
+        },
+        {
+          "endNs": 77281218518232.0,
+          "pass": "MainLight.Shadow",
+          "queue": "graphics",
+          "startNs": 77281218514616.0
+        },
+        {
+          "endNs": 77281218586904.0,
+          "pass": "Deferred.GBuffer",
+          "queue": "graphics",
+          "startNs": 77281218563640.0
+        },
+        {
+          "endNs": 77281218592696.0,
+          "pass": "Deferred.Lighting",
+          "queue": "graphics",
+          "startNs": 77281218586936.0
+        },
+        {
+          "endNs": 77281218595160.0,
+          "pass": "Display.ToneMapping",
+          "queue": "graphics",
+          "startNs": 77281218592696.0
+        }
+      ],
+      "queueSubmissions": [
+        {
+          "action": "waitFrame",
+          "queue": "compute",
+          "range": null,
+          "value": 1383
+        },
+        {
+          "action": "execute",
+          "queue": "graphics",
+          "range": 0,
+          "value": 1
+        },
+        {
+          "action": "signalGraphics",
+          "queue": "graphics",
+          "range": 0,
+          "value": 5497
+        },
+        {
+          "action": "waitGraphics",
+          "queue": "compute",
+          "range": 1,
+          "value": 5497
+        },
+        {
+          "action": "execute",
+          "queue": "compute",
+          "range": 1,
+          "value": 1
+        },
+        {
+          "action": "signalCompute",
+          "queue": "compute",
+          "range": 1,
+          "value": 5498
+        },
+        {
+          "action": "execute",
+          "queue": "graphics",
+          "range": 2,
+          "value": 1
+        },
+        {
+          "action": "signalGraphics",
+          "queue": "graphics",
+          "range": 2,
+          "value": 5499
+        },
+        {
+          "action": "waitCompute",
+          "queue": "graphics",
+          "range": 3,
+          "value": 5498
+        },
+        {
+          "action": "execute",
+          "queue": "graphics",
+          "range": 3,
+          "value": 1
+        },
+        {
+          "action": "signalGraphics",
+          "queue": "graphics",
+          "range": 3,
+          "value": 5500
+        },
+        {
+          "action": "signalFrame",
+          "queue": "graphics",
+          "range": null,
+          "value": 1384
+        }
+      ]
+    },
+    {
+      "id": "n64-t4-q2-01-vulkan",
+      "case": "n64-t4-q2",
+      "backend": "vulkan",
+      "repeat": 0,
+      "sampleCount": 1328,
+      "asyncCompute": true,
+      "recordingThreads": 4,
+      "recordingChunks": 4,
+      "candidates": 64,
+      "metricsMs": {
+        "cpuRenderMs": 0.9625015813253008,
+        "frameTimeMs": 1.4752618222891567,
+        "gpuPassSumMs": 0.03508983132530118,
+        "gpuQueueOverlapMs": 0.0,
+        "gpuQueueSpanMs": 0.23842368674698802,
+        "gpuWaitMs": 0.5127602409638551,
+        "graphCompileMs": 0.022852710843373494,
+        "graphPrepareMs": 0.00398938253012048,
+        "graphRecordMs": 0.10422643072289149
+      },
+      "captureSha256": "030c41f232650c232427ef9c9d6400b055ee899e72bac0cb1a66d0f8b4b02f6b",
+      "reportSha256": "6ad6a80db958bdbaa4badd4d71df96b4e476260651438db8db5e3bd9a061f659",
+      "samplesSha256": "40e80647563f6528eabd182b0e18731bc68c1588ce04d94202688ce2e2f5d710",
+      "queueClockDomain": "device timestamp clock relative to first slot; async requires calibrated_timestamps",
+      "queueTimeline": [
+        {
+          "endNs": 3328.0,
+          "pass": "Indexed.ClearCounts",
+          "queue": "compute",
+          "startNs": 0.0
+        },
+        {
+          "endNs": 11488.0,
+          "pass": "Indexed.FrustumCulling",
+          "queue": "compute",
+          "startNs": 4192.0
+        },
+        {
+          "endNs": -102688.0,
+          "pass": "MainLight.Shadow",
+          "queue": "graphics",
+          "startNs": -104128.0
+        },
+        {
+          "endNs": 126624.0,
+          "pass": "Deferred.GBuffer",
+          "queue": "graphics",
+          "startNs": 109664.0
+        },
+        {
+          "endNs": 134784.0,
+          "pass": "Deferred.Lighting",
+          "queue": "graphics",
+          "startNs": 129888.0
+        },
+        {
+          "endNs": 138176.0,
+          "pass": "Display.ToneMapping",
+          "queue": "graphics",
+          "startNs": 135424.0
+        }
+      ],
+      "queueSubmissions": [
+        {
+          "action": "execute",
+          "queue": "graphics",
+          "range": 0,
+          "value": 1
+        },
+        {
+          "action": "signalGraphics",
+          "queue": "graphics",
+          "range": 0,
+          "value": 5325
+        },
+        {
+          "action": "waitGraphics",
+          "queue": "compute",
+          "range": 1,
+          "value": 5325
+        },
+        {
+          "action": "waitFrame",
+          "queue": "compute",
+          "range": 1,
+          "value": 1340
+        },
+        {
+          "action": "execute",
+          "queue": "compute",
+          "range": 1,
+          "value": 1
+        },
+        {
+          "action": "signalCompute",
+          "queue": "compute",
+          "range": 1,
+          "value": 5326
+        },
+        {
+          "action": "execute",
+          "queue": "graphics",
+          "range": 2,
+          "value": 1
+        },
+        {
+          "action": "signalGraphics",
+          "queue": "graphics",
+          "range": 2,
+          "value": 5327
+        },
+        {
+          "action": "waitCompute",
+          "queue": "graphics",
+          "range": 3,
+          "value": 5326
+        },
+        {
+          "action": "execute",
+          "queue": "graphics",
+          "range": 3,
+          "value": 1
+        },
+        {
+          "action": "signalGraphics",
+          "queue": "graphics",
+          "range": 3,
+          "value": 5328
+        },
+        {
+          "action": "waitCompute",
+          "queue": "graphics",
+          "range": null,
+          "value": 5326
+        },
+        {
+          "action": "signalFrame",
+          "queue": "graphics",
+          "range": null,
+          "value": 1341
+        }
+      ]
+    },
+    {
+      "id": "n64-t4-q2-02-vulkan",
+      "case": "n64-t4-q2",
+      "backend": "vulkan",
+      "repeat": 1,
+      "sampleCount": 1236,
+      "asyncCompute": true,
+      "recordingThreads": 4,
+      "recordingChunks": 4,
+      "candidates": 64,
+      "metricsMs": {
+        "cpuRenderMs": 0.9789420711974113,
+        "frameTimeMs": 1.5851368932038845,
+        "gpuPassSumMs": 0.035904207119741086,
+        "gpuQueueOverlapMs": 0.0,
+        "gpuQueueSpanMs": 0.25572440129449886,
+        "gpuWaitMs": 0.6061948220064726,
+        "graphCompileMs": 0.027889967637540435,
+        "graphPrepareMs": 0.004292961165048547,
+        "graphRecordMs": 0.11103017799352746
+      },
+      "captureSha256": "030c41f232650c232427ef9c9d6400b055ee899e72bac0cb1a66d0f8b4b02f6b",
+      "reportSha256": "a3ce527538fa46d1fb3951e2de25a121366912a920a77da41f7c0a8b5b968af1",
+      "samplesSha256": "b2d558f85e3978de4e06687b6eb9bef4447a69791acebee4a012e201e401511d",
+      "queueClockDomain": "device timestamp clock relative to first slot; async requires calibrated_timestamps",
+      "queueTimeline": [
+        {
+          "endNs": 3104.0,
+          "pass": "Indexed.ClearCounts",
+          "queue": "compute",
+          "startNs": 0.0
+        },
+        {
+          "endNs": 11296.0,
+          "pass": "Indexed.FrustumCulling",
+          "queue": "compute",
+          "startNs": 3968.0
+        },
+        {
+          "endNs": -108768.0,
+          "pass": "MainLight.Shadow",
+          "queue": "graphics",
+          "startNs": -109440.0
+        },
+        {
+          "endNs": 132160.0,
+          "pass": "Deferred.GBuffer",
+          "queue": "graphics",
+          "startNs": 115840.0
+        },
+        {
+          "endNs": 140384.0,
+          "pass": "Deferred.Lighting",
+          "queue": "graphics",
+          "startNs": 135392.0
+        },
+        {
+          "endNs": 143712.0,
+          "pass": "Display.ToneMapping",
+          "queue": "graphics",
+          "startNs": 141024.0
+        }
+      ],
+      "queueSubmissions": [
+        {
+          "action": "execute",
+          "queue": "graphics",
+          "range": 0,
+          "value": 1
+        },
+        {
+          "action": "signalGraphics",
+          "queue": "graphics",
+          "range": 0,
+          "value": 4957
+        },
+        {
+          "action": "waitGraphics",
+          "queue": "compute",
+          "range": 1,
+          "value": 4957
+        },
+        {
+          "action": "waitFrame",
+          "queue": "compute",
+          "range": 1,
+          "value": 1248
+        },
+        {
+          "action": "execute",
+          "queue": "compute",
+          "range": 1,
+          "value": 1
+        },
+        {
+          "action": "signalCompute",
+          "queue": "compute",
+          "range": 1,
+          "value": 4958
+        },
+        {
+          "action": "execute",
+          "queue": "graphics",
+          "range": 2,
+          "value": 1
+        },
+        {
+          "action": "signalGraphics",
+          "queue": "graphics",
+          "range": 2,
+          "value": 4959
+        },
+        {
+          "action": "waitCompute",
+          "queue": "graphics",
+          "range": 3,
+          "value": 4958
+        },
+        {
+          "action": "execute",
+          "queue": "graphics",
+          "range": 3,
+          "value": 1
+        },
+        {
+          "action": "signalGraphics",
+          "queue": "graphics",
+          "range": 3,
+          "value": 4960
+        },
+        {
+          "action": "waitCompute",
+          "queue": "graphics",
+          "range": null,
+          "value": 4958
+        },
+        {
+          "action": "signalFrame",
+          "queue": "graphics",
+          "range": null,
+          "value": 1249
+        }
+      ]
+    },
+    {
+      "id": "n64-t4-q2-02-dx12",
+      "case": "n64-t4-q2",
+      "backend": "dx12",
+      "repeat": 1,
+      "sampleCount": 1247,
+      "asyncCompute": true,
+      "recordingThreads": 4,
+      "recordingChunks": 4,
+      "candidates": 64,
+      "metricsMs": {
+        "cpuRenderMs": 1.208973215717722,
+        "frameTimeMs": 1.5720106655974333,
+        "gpuPassSumMs": 0.04547451483560543,
+        "gpuQueueOverlapMs": 0.0007632782678428226,
+        "gpuQueueSpanMs": 0.11680646672012822,
+        "gpuWaitMs": 0.36303744987971115,
+        "graphCompileMs": 0.028374498797113085,
+        "graphPrepareMs": 0.004516118684843621,
+        "graphRecordMs": 0.11348556535685639
+      },
+      "captureSha256": "030c41f232650c232427ef9c9d6400b055ee899e72bac0cb1a66d0f8b4b02f6b",
+      "reportSha256": "dfb03e325db18ff341079adb0846d6e16840c551ad00fd051c0ac2f06d092328",
+      "samplesSha256": "38670ecf19b849912421b38cca70a5b7cf78193fdc0c1edad7fc23e28dcc9deb",
+      "queueClockDomain": "QPC calibrated per queue",
+      "queueTimeline": [
+        {
+          "endNs": 77292671661612.0,
+          "pass": "Indexed.ClearCounts",
+          "queue": "compute",
+          "startNs": 77292671653932.0
+        },
+        {
+          "endNs": 77292671673132.0,
+          "pass": "Indexed.FrustumCulling",
+          "queue": "compute",
+          "startNs": 77292671661740.0
+        },
+        {
+          "endNs": 77292671688012.0,
+          "pass": "MainLight.Shadow",
+          "queue": "graphics",
+          "startNs": 77292671684364.0
+        },
+        {
+          "endNs": 77292671764044.0,
+          "pass": "Deferred.GBuffer",
+          "queue": "graphics",
+          "startNs": 77292671742060.0
+        },
+        {
+          "endNs": 77292671769708.0,
+          "pass": "Deferred.Lighting",
+          "queue": "graphics",
+          "startNs": 77292671764044.0
+        },
+        {
+          "endNs": 77292671772204.0,
+          "pass": "Display.ToneMapping",
+          "queue": "graphics",
+          "startNs": 77292671769708.0
+        }
+      ],
+      "queueSubmissions": [
+        {
+          "action": "waitFrame",
+          "queue": "compute",
+          "range": null,
+          "value": 1259
+        },
+        {
+          "action": "execute",
+          "queue": "graphics",
+          "range": 0,
+          "value": 1
+        },
+        {
+          "action": "signalGraphics",
+          "queue": "graphics",
+          "range": 0,
+          "value": 5001
+        },
+        {
+          "action": "waitGraphics",
+          "queue": "compute",
+          "range": 1,
+          "value": 5001
+        },
+        {
+          "action": "execute",
+          "queue": "compute",
+          "range": 1,
+          "value": 1
+        },
+        {
+          "action": "signalCompute",
+          "queue": "compute",
+          "range": 1,
+          "value": 5002
+        },
+        {
+          "action": "execute",
+          "queue": "graphics",
+          "range": 2,
+          "value": 1
+        },
+        {
+          "action": "signalGraphics",
+          "queue": "graphics",
+          "range": 2,
+          "value": 5003
+        },
+        {
+          "action": "waitCompute",
+          "queue": "graphics",
+          "range": 3,
+          "value": 5002
+        },
+        {
+          "action": "execute",
+          "queue": "graphics",
+          "range": 3,
+          "value": 1
+        },
+        {
+          "action": "signalGraphics",
+          "queue": "graphics",
+          "range": 3,
+          "value": 5004
+        },
+        {
+          "action": "signalFrame",
+          "queue": "graphics",
+          "range": null,
+          "value": 1260
+        }
+      ]
+    },
+    {
+      "id": "n4096-t1-q1-01-dx12",
+      "case": "n4096-t1-q1",
+      "backend": "dx12",
+      "repeat": 0,
+      "sampleCount": 77,
+      "asyncCompute": false,
+      "recordingThreads": 1,
+      "recordingChunks": 1,
+      "candidates": 4096,
+      "metricsMs": {
+        "cpuRenderMs": 25.624690909090912,
+        "frameTimeMs": 26.45567662337663,
+        "gpuPassSumMs": 0.9049795324675325,
+        "gpuQueueOverlapMs": 0.0,
+        "gpuQueueSpanMs": 0.9053485714285714,
+        "gpuWaitMs": 0.8309857142857142,
+        "graphCompileMs": 0.02578961038961039,
+        "graphPrepareMs": 0.006967532467532469,
+        "graphRecordMs": 0.14884675324675323
+      },
+      "captureSha256": "e0d20fa5792fcc07c35ef487a9248134439387fc932eda9e908e781a68a7f5e2",
+      "reportSha256": "cba7e2f8a10f6246aece9f45427b486cf6fa498dc8e2cb037e4773b381737619",
+      "samplesSha256": "d3cc16212339044b6985f8ac8b9ad901c3c7721b398b9fd46771579acf8fd2bb",
+      "queueClockDomain": "QPC calibrated per queue",
+      "queueTimeline": [
+        {
+          "endNs": 77296096804968.0,
+          "pass": "Indexed.ClearCounts",
+          "queue": "graphics",
+          "startNs": 77296096802184.0
+        },
+        {
+          "endNs": 77296096987560.0,
+          "pass": "Indexed.FrustumCulling",
+          "queue": "graphics",
+          "startNs": 77296096805032.0
+        },
+        {
+          "endNs": 77296096990248.0,
+          "pass": "MainLight.Shadow",
+          "queue": "graphics",
+          "startNs": 77296096987624.0
+        },
+        {
+          "endNs": 77296097685928.0,
+          "pass": "Deferred.GBuffer",
+          "queue": "graphics",
+          "startNs": 77296096990440.0
+        },
+        {
+          "endNs": 77296097696072.0,
+          "pass": "Deferred.Lighting",
+          "queue": "graphics",
+          "startNs": 77296097685928.0
+        },
+        {
+          "endNs": 77296097698600.0,
+          "pass": "Display.ToneMapping",
+          "queue": "graphics",
+          "startNs": 77296097696072.0
+        }
+      ],
+      "queueSubmissions": [
+        {
+          "action": "execute",
+          "queue": "graphics",
+          "range": null,
+          "value": 1
+        },
+        {
+          "action": "signalFrame",
+          "queue": "graphics",
+          "range": null,
+          "value": 90
+        }
+      ]
+    },
+    {
+      "id": "n4096-t1-q1-01-vulkan",
+      "case": "n4096-t1-q1",
+      "backend": "vulkan",
+      "repeat": 0,
+      "sampleCount": 81,
+      "asyncCompute": false,
+      "recordingThreads": 1,
+      "recordingChunks": 1,
+      "candidates": 4096,
+      "metricsMs": {
+        "cpuRenderMs": 22.947060493827163,
+        "frameTimeMs": 24.79959382716049,
+        "gpuPassSumMs": 1.0006893827160495,
+        "gpuQueueOverlapMs": 0.0,
+        "gpuQueueSpanMs": 1.0091219753086416,
+        "gpuWaitMs": 1.852533333333334,
+        "graphCompileMs": 0.02507901234567901,
+        "graphPrepareMs": 0.0055320987654321,
+        "graphRecordMs": 0.14466790123456788
+      },
+      "captureSha256": "e0d20fa5792fcc07c35ef487a9248134439387fc932eda9e908e781a68a7f5e2",
+      "reportSha256": "a045e266ee107976f5adfc442b5313bd2a4cf034375d49d65c61b6a9a1a6cca2",
+      "samplesSha256": "23d896725cfde7ace64f1fd4d528b959088f53a7040e304f16dee3f95990cd94",
+      "queueClockDomain": "device timestamp clock relative to first slot; async requires calibrated_timestamps",
+      "queueTimeline": [
+        {
+          "endNs": 5696.0,
+          "pass": "Indexed.ClearCounts",
+          "queue": "graphics",
+          "startNs": 0.0
+        },
+        {
+          "endNs": 259328.0,
+          "pass": "Indexed.FrustumCulling",
+          "queue": "graphics",
+          "startNs": 7968.0
+        },
+        {
+          "endNs": 261056.0,
+          "pass": "MainLight.Shadow",
+          "queue": "graphics",
+          "startNs": 259680.0
+        },
+        {
+          "endNs": 998560.0,
+          "pass": "Deferred.GBuffer",
+          "queue": "graphics",
+          "startNs": 264416.0
+        },
+        {
+          "endNs": 1010976.0,
+          "pass": "Deferred.Lighting",
+          "queue": "graphics",
+          "startNs": 1001792.0
+        },
+        {
+          "endNs": 1014336.0,
+          "pass": "Display.ToneMapping",
+          "queue": "graphics",
+          "startNs": 1011616.0
+        }
+      ],
+      "queueSubmissions": [
+        {
+          "action": "execute",
+          "queue": "graphics",
+          "range": null,
+          "value": 1
+        },
+        {
+          "action": "signalFrame",
+          "queue": "graphics",
+          "range": null,
+          "value": 94
+        }
+      ]
+    },
+    {
+      "id": "n4096-t1-q1-02-vulkan",
+      "case": "n4096-t1-q1",
+      "backend": "vulkan",
+      "repeat": 1,
+      "sampleCount": 96,
+      "asyncCompute": false,
+      "recordingThreads": 1,
+      "recordingChunks": 1,
+      "candidates": 4096,
+      "metricsMs": {
+        "cpuRenderMs": 20.417466666666655,
+        "frameTimeMs": 20.9456,
+        "gpuPassSumMs": 1.0000606666666665,
+        "gpuQueueOverlapMs": 0.0,
+        "gpuQueueSpanMs": 1.008545666666667,
+        "gpuWaitMs": 0.5281333333333332,
+        "graphCompileMs": 0.02516875,
+        "graphPrepareMs": 0.005583333333333333,
+        "graphRecordMs": 0.12363333333333332
+      },
+      "captureSha256": "e0d20fa5792fcc07c35ef487a9248134439387fc932eda9e908e781a68a7f5e2",
+      "reportSha256": "fa7f9c91b2f4ca1e8a8ba6e5bcd5db678d9b4303f8809f7b45523b046157d312",
+      "samplesSha256": "3e718ab69830d7f2b45fe672e8cd1b1018769e83995a6617effc25746dbf8e77",
+      "queueClockDomain": "device timestamp clock relative to first slot; async requires calibrated_timestamps",
+      "queueTimeline": [
+        {
+          "endNs": 2624.0,
+          "pass": "Indexed.ClearCounts",
+          "queue": "graphics",
+          "startNs": 0.0
+        },
+        {
+          "endNs": 242240.0,
+          "pass": "Indexed.FrustumCulling",
+          "queue": "graphics",
+          "startNs": 3552.0
+        },
+        {
+          "endNs": 244000.0,
+          "pass": "MainLight.Shadow",
+          "queue": "graphics",
+          "startNs": 242592.0
+        },
+        {
+          "endNs": 968960.0,
+          "pass": "Deferred.GBuffer",
+          "queue": "graphics",
+          "startNs": 247264.0
+        },
+        {
+          "endNs": 981184.0,
+          "pass": "Deferred.Lighting",
+          "queue": "graphics",
+          "startNs": 972128.0
+        },
+        {
+          "endNs": 984512.0,
+          "pass": "Display.ToneMapping",
+          "queue": "graphics",
+          "startNs": 981824.0
+        }
+      ],
+      "queueSubmissions": [
+        {
+          "action": "execute",
+          "queue": "graphics",
+          "range": null,
+          "value": 1
+        },
+        {
+          "action": "signalFrame",
+          "queue": "graphics",
+          "range": null,
+          "value": 109
+        }
+      ]
+    },
+    {
+      "id": "n4096-t1-q1-02-dx12",
+      "case": "n4096-t1-q1",
+      "backend": "dx12",
+      "repeat": 1,
+      "sampleCount": 113,
+      "asyncCompute": false,
+      "recordingThreads": 1,
+      "recordingChunks": 1,
+      "candidates": 4096,
+      "metricsMs": {
+        "cpuRenderMs": 17.296486725663716,
+        "frameTimeMs": 17.812813274336293,
+        "gpuPassSumMs": 0.8968404955752212,
+        "gpuQueueOverlapMs": 0.0,
+        "gpuQueueSpanMs": 0.898260672566372,
+        "gpuWaitMs": 0.5163265486725664,
+        "graphCompileMs": 0.022261061946902656,
+        "graphPrepareMs": 0.004715044247787611,
+        "graphRecordMs": 0.126433628318584
+      },
+      "captureSha256": "e0d20fa5792fcc07c35ef487a9248134439387fc932eda9e908e781a68a7f5e2",
+      "reportSha256": "43eb714df23ebdca40b38a263e889b5be1ada2f6115df1d4be73a6a0288f6184",
+      "samplesSha256": "9b5511ecb1eb4c97436470f405a017726adb83a624379c9564e6c64b99b98f57",
+      "queueClockDomain": "QPC calibrated per queue",
+      "queueTimeline": [
+        {
+          "endNs": 77307020247884.0,
+          "pass": "Indexed.ClearCounts",
+          "queue": "graphics",
+          "startNs": 77307020245196.0
+        },
+        {
+          "endNs": 77307020425676.0,
+          "pass": "Indexed.FrustumCulling",
+          "queue": "graphics",
+          "startNs": 77307020247948.0
+        },
+        {
+          "endNs": 77307020429196.0,
+          "pass": "MainLight.Shadow",
+          "queue": "graphics",
+          "startNs": 77307020425740.0
+        },
+        {
+          "endNs": 77307021124524.0,
+          "pass": "Deferred.GBuffer",
+          "queue": "graphics",
+          "startNs": 77307020429388.0
+        },
+        {
+          "endNs": 77307021134188.0,
+          "pass": "Deferred.Lighting",
+          "queue": "graphics",
+          "startNs": 77307021124524.0
+        },
+        {
+          "endNs": 77307021136652.0,
+          "pass": "Display.ToneMapping",
+          "queue": "graphics",
+          "startNs": 77307021134188.0
+        }
+      ],
+      "queueSubmissions": [
+        {
+          "action": "execute",
+          "queue": "graphics",
+          "range": null,
+          "value": 1
+        },
+        {
+          "action": "signalFrame",
+          "queue": "graphics",
+          "range": null,
+          "value": 126
+        }
+      ]
+    },
+    {
+      "id": "n4096-t1-q2-01-dx12",
+      "case": "n4096-t1-q2",
+      "backend": "dx12",
+      "repeat": 0,
+      "sampleCount": 109,
+      "asyncCompute": true,
+      "recordingThreads": 1,
+      "recordingChunks": 4,
+      "candidates": 4096,
+      "metricsMs": {
+        "cpuRenderMs": 17.8734633027523,
+        "frameTimeMs": 18.34617981651376,
+        "gpuPassSumMs": 0.9013721834862387,
+        "gpuQueueOverlapMs": 0.0029760000000000003,
+        "gpuQueueSpanMs": 0.9682835229357798,
+        "gpuWaitMs": 0.47271651376146806,
+        "graphCompileMs": 0.024831192660550467,
+        "graphPrepareMs": 0.0057880733944954115,
+        "graphRecordMs": 0.13134954128440363
+      },
+      "captureSha256": "e0d20fa5792fcc07c35ef487a9248134439387fc932eda9e908e781a68a7f5e2",
+      "reportSha256": "194e1cd5cec997aca03ec9016cf96488c35016840eda4826fc5228efff88a9b0",
+      "samplesSha256": "df25103faa9d9915d88b3408cd21d6e2a53356bc39dbed9f3304b43aef901a39",
+      "queueClockDomain": "QPC calibrated per queue",
+      "queueTimeline": [
+        {
+          "endNs": 77310200778032.0,
+          "pass": "Indexed.ClearCounts",
+          "queue": "compute",
+          "startNs": 77310200773744.0
+        },
+        {
+          "endNs": 77310200958032.0,
+          "pass": "Indexed.FrustumCulling",
+          "queue": "compute",
+          "startNs": 77310200778128.0
+        },
+        {
+          "endNs": 77310200776720.0,
+          "pass": "MainLight.Shadow",
+          "queue": "graphics",
+          "startNs": 77310200774000.0
+        },
+        {
+          "endNs": 77310201717008.0,
+          "pass": "Deferred.GBuffer",
+          "queue": "graphics",
+          "startNs": 77310201020784.0
+        },
+        {
+          "endNs": 77310201727024.0,
+          "pass": "Deferred.Lighting",
+          "queue": "graphics",
+          "startNs": 77310201717008.0
+        },
+        {
+          "endNs": 77310201729520.0,
+          "pass": "Display.ToneMapping",
+          "queue": "graphics",
+          "startNs": 77310201727056.0
+        }
+      ],
+      "queueSubmissions": [
+        {
+          "action": "waitFrame",
+          "queue": "compute",
+          "range": null,
+          "value": 121
+        },
+        {
+          "action": "execute",
+          "queue": "graphics",
+          "range": 0,
+          "value": 1
+        },
+        {
+          "action": "signalGraphics",
+          "queue": "graphics",
+          "range": 0,
+          "value": 449
+        },
+        {
+          "action": "waitGraphics",
+          "queue": "compute",
+          "range": 1,
+          "value": 449
+        },
+        {
+          "action": "execute",
+          "queue": "compute",
+          "range": 1,
+          "value": 1
+        },
+        {
+          "action": "signalCompute",
+          "queue": "compute",
+          "range": 1,
+          "value": 450
+        },
+        {
+          "action": "execute",
+          "queue": "graphics",
+          "range": 2,
+          "value": 1
+        },
+        {
+          "action": "signalGraphics",
+          "queue": "graphics",
+          "range": 2,
+          "value": 451
+        },
+        {
+          "action": "waitCompute",
+          "queue": "graphics",
+          "range": 3,
+          "value": 450
+        },
+        {
+          "action": "execute",
+          "queue": "graphics",
+          "range": 3,
+          "value": 1
+        },
+        {
+          "action": "signalGraphics",
+          "queue": "graphics",
+          "range": 3,
+          "value": 452
+        },
+        {
+          "action": "signalFrame",
+          "queue": "graphics",
+          "range": null,
+          "value": 122
+        }
+      ]
+    },
+    {
+      "id": "n4096-t1-q2-01-vulkan",
+      "case": "n4096-t1-q2",
+      "backend": "vulkan",
+      "repeat": 0,
+      "sampleCount": 112,
+      "asyncCompute": true,
+      "recordingThreads": 1,
+      "recordingChunks": 4,
+      "candidates": 4096,
+      "metricsMs": {
+        "cpuRenderMs": 17.088566071428584,
+        "frameTimeMs": 17.87547767857143,
+        "gpuPassSumMs": 0.9891797142857143,
+        "gpuQueueOverlapMs": 0.0,
+        "gpuQueueSpanMs": 1.2060397142857135,
+        "gpuWaitMs": 0.7869116071428572,
+        "graphCompileMs": 0.024579464285714288,
+        "graphPrepareMs": 0.005215178571428575,
+        "graphRecordMs": 0.11356071428571425
+      },
+      "captureSha256": "e0d20fa5792fcc07c35ef487a9248134439387fc932eda9e908e781a68a7f5e2",
+      "reportSha256": "ecc7e596c3aa59aca23474d0965f3689f372eb82343be8e5ac2591fa4c65fadc",
+      "samplesSha256": "af2ad6509ad6b8ff0c1eb5f5681d59bf1edb4bb9fd9f07bf85ed0c8986a826a4",
+      "queueClockDomain": "device timestamp clock relative to first slot; async requires calibrated_timestamps",
+      "queueTimeline": [
+        {
+          "endNs": 3456.0,
+          "pass": "Indexed.ClearCounts",
+          "queue": "compute",
+          "startNs": 0.0
+        },
+        {
+          "endNs": 251264.0,
+          "pass": "Indexed.FrustumCulling",
+          "queue": "compute",
+          "startNs": 4320.0
+        },
+        {
+          "endNs": -118432.0,
+          "pass": "MainLight.Shadow",
+          "queue": "graphics",
+          "startNs": -119136.0
+        },
+        {
+          "endNs": 1110016.0,
+          "pass": "Deferred.GBuffer",
+          "queue": "graphics",
+          "startNs": 359616.0
+        },
+        {
+          "endNs": 1123552.0,
+          "pass": "Deferred.Lighting",
+          "queue": "graphics",
+          "startNs": 1113152.0
+        },
+        {
+          "endNs": 1127104.0,
+          "pass": "Display.ToneMapping",
+          "queue": "graphics",
+          "startNs": 1124192.0
+        }
+      ],
+      "queueSubmissions": [
+        {
+          "action": "execute",
+          "queue": "graphics",
+          "range": 0,
+          "value": 1
+        },
+        {
+          "action": "signalGraphics",
+          "queue": "graphics",
+          "range": 0,
+          "value": 461
+        },
+        {
+          "action": "waitGraphics",
+          "queue": "compute",
+          "range": 1,
+          "value": 461
+        },
+        {
+          "action": "waitFrame",
+          "queue": "compute",
+          "range": 1,
+          "value": 124
+        },
+        {
+          "action": "execute",
+          "queue": "compute",
+          "range": 1,
+          "value": 1
+        },
+        {
+          "action": "signalCompute",
+          "queue": "compute",
+          "range": 1,
+          "value": 462
+        },
+        {
+          "action": "execute",
+          "queue": "graphics",
+          "range": 2,
+          "value": 1
+        },
+        {
+          "action": "signalGraphics",
+          "queue": "graphics",
+          "range": 2,
+          "value": 463
+        },
+        {
+          "action": "waitCompute",
+          "queue": "graphics",
+          "range": 3,
+          "value": 462
+        },
+        {
+          "action": "execute",
+          "queue": "graphics",
+          "range": 3,
+          "value": 1
+        },
+        {
+          "action": "signalGraphics",
+          "queue": "graphics",
+          "range": 3,
+          "value": 464
+        },
+        {
+          "action": "waitCompute",
+          "queue": "graphics",
+          "range": null,
+          "value": 462
+        },
+        {
+          "action": "signalFrame",
+          "queue": "graphics",
+          "range": null,
+          "value": 125
+        }
+      ]
+    },
+    {
+      "id": "n4096-t1-q2-02-vulkan",
+      "case": "n4096-t1-q2",
+      "backend": "vulkan",
+      "repeat": 1,
+      "sampleCount": 108,
+      "asyncCompute": true,
+      "recordingThreads": 1,
+      "recordingChunks": 4,
+      "candidates": 4096,
+      "metricsMs": {
+        "cpuRenderMs": 17.709067592592596,
+        "frameTimeMs": 18.505380555555547,
+        "gpuPassSumMs": 0.9960480000000002,
+        "gpuQueueOverlapMs": 0.0,
+        "gpuQueueSpanMs": 1.219147851851852,
+        "gpuWaitMs": 0.796312962962963,
+        "graphCompileMs": 0.024625925925925923,
+        "graphPrepareMs": 0.005208333333333334,
+        "graphRecordMs": 0.11558796296296296
+      },
+      "captureSha256": "e0d20fa5792fcc07c35ef487a9248134439387fc932eda9e908e781a68a7f5e2",
+      "reportSha256": "6b7688c98464c420ef267beed6745ebf82b04faa4cb76eaf7b087de67846db7f",
+      "samplesSha256": "4a16f430075846ff11e5362047496d4e9ca149045e9c09a096af4047fb28075e",
+      "queueClockDomain": "device timestamp clock relative to first slot; async requires calibrated_timestamps",
+      "queueTimeline": [
+        {
+          "endNs": 3296.0,
+          "pass": "Indexed.ClearCounts",
+          "queue": "compute",
+          "startNs": 0.0
+        },
+        {
+          "endNs": 240864.0,
+          "pass": "Indexed.FrustumCulling",
+          "queue": "compute",
+          "startNs": 4160.0
+        },
+        {
+          "endNs": -94400.0,
+          "pass": "MainLight.Shadow",
+          "queue": "graphics",
+          "startNs": -95104.0
+        },
+        {
+          "endNs": 1067808.0,
+          "pass": "Deferred.GBuffer",
+          "queue": "graphics",
+          "startNs": 338592.0
+        },
+        {
+          "endNs": 1080288.0,
+          "pass": "Deferred.Lighting",
+          "queue": "graphics",
+          "startNs": 1071040.0
+        },
+        {
+          "endNs": 1083648.0,
+          "pass": "Display.ToneMapping",
+          "queue": "graphics",
+          "startNs": 1080896.0
+        }
+      ],
+      "queueSubmissions": [
+        {
+          "action": "execute",
+          "queue": "graphics",
+          "range": 0,
+          "value": 1
+        },
+        {
+          "action": "signalGraphics",
+          "queue": "graphics",
+          "range": 0,
+          "value": 445
+        },
+        {
+          "action": "waitGraphics",
+          "queue": "compute",
+          "range": 1,
+          "value": 445
+        },
+        {
+          "action": "waitFrame",
+          "queue": "compute",
+          "range": 1,
+          "value": 120
+        },
+        {
+          "action": "execute",
+          "queue": "compute",
+          "range": 1,
+          "value": 1
+        },
+        {
+          "action": "signalCompute",
+          "queue": "compute",
+          "range": 1,
+          "value": 446
+        },
+        {
+          "action": "execute",
+          "queue": "graphics",
+          "range": 2,
+          "value": 1
+        },
+        {
+          "action": "signalGraphics",
+          "queue": "graphics",
+          "range": 2,
+          "value": 447
+        },
+        {
+          "action": "waitCompute",
+          "queue": "graphics",
+          "range": 3,
+          "value": 446
+        },
+        {
+          "action": "execute",
+          "queue": "graphics",
+          "range": 3,
+          "value": 1
+        },
+        {
+          "action": "signalGraphics",
+          "queue": "graphics",
+          "range": 3,
+          "value": 448
+        },
+        {
+          "action": "waitCompute",
+          "queue": "graphics",
+          "range": null,
+          "value": 446
+        },
+        {
+          "action": "signalFrame",
+          "queue": "graphics",
+          "range": null,
+          "value": 121
+        }
+      ]
+    },
+    {
+      "id": "n4096-t1-q2-02-dx12",
+      "case": "n4096-t1-q2",
+      "backend": "dx12",
+      "repeat": 1,
+      "sampleCount": 107,
+      "asyncCompute": true,
+      "recordingThreads": 1,
+      "recordingChunks": 4,
+      "candidates": 4096,
+      "metricsMs": {
+        "cpuRenderMs": 18.20511962616823,
+        "frameTimeMs": 18.67614205607476,
+        "gpuPassSumMs": 0.8980336448598131,
+        "gpuQueueOverlapMs": 0.0023641495327102803,
+        "gpuQueueSpanMs": 0.9565604859813088,
+        "gpuWaitMs": 0.47102242990654225,
+        "graphCompileMs": 0.025004672897196264,
+        "graphPrepareMs": 0.005183177570093457,
+        "graphRecordMs": 0.1286915887850467
+      },
+      "captureSha256": "e0d20fa5792fcc07c35ef487a9248134439387fc932eda9e908e781a68a7f5e2",
+      "reportSha256": "847c182924a091fa3a4ca202a697a6390a7be5872c7e0eb64d5be3b37b3ee7b0",
+      "samplesSha256": "47393469cad856ead0289dcb4eb52a4e7527521b1fce279b69399092de08303e",
+      "queueClockDomain": "QPC calibrated per queue",
+      "queueTimeline": [
+        {
+          "endNs": 77320479511180.0,
+          "pass": "Indexed.ClearCounts",
+          "queue": "compute",
+          "startNs": 77320479506092.0
+        },
+        {
+          "endNs": 77320479694636.0,
+          "pass": "Indexed.FrustumCulling",
+          "queue": "compute",
+          "startNs": 77320479511244.0
+        },
+        {
+          "endNs": 77320479540176.0,
+          "pass": "MainLight.Shadow",
+          "queue": "graphics",
+          "startNs": 77320479538288.0
+        },
+        {
+          "endNs": 77320480445296.0,
+          "pass": "Deferred.GBuffer",
+          "queue": "graphics",
+          "startNs": 77320479750256.0
+        },
+        {
+          "endNs": 77320480455056.0,
+          "pass": "Deferred.Lighting",
+          "queue": "graphics",
+          "startNs": 77320480445328.0
+        },
+        {
+          "endNs": 77320480457712.0,
+          "pass": "Display.ToneMapping",
+          "queue": "graphics",
+          "startNs": 77320480455056.0
+        }
+      ],
+      "queueSubmissions": [
+        {
+          "action": "waitFrame",
+          "queue": "compute",
+          "range": null,
+          "value": 119
+        },
+        {
+          "action": "execute",
+          "queue": "graphics",
+          "range": 0,
+          "value": 1
+        },
+        {
+          "action": "signalGraphics",
+          "queue": "graphics",
+          "range": 0,
+          "value": 441
+        },
+        {
+          "action": "waitGraphics",
+          "queue": "compute",
+          "range": 1,
+          "value": 441
+        },
+        {
+          "action": "execute",
+          "queue": "compute",
+          "range": 1,
+          "value": 1
+        },
+        {
+          "action": "signalCompute",
+          "queue": "compute",
+          "range": 1,
+          "value": 442
+        },
+        {
+          "action": "execute",
+          "queue": "graphics",
+          "range": 2,
+          "value": 1
+        },
+        {
+          "action": "signalGraphics",
+          "queue": "graphics",
+          "range": 2,
+          "value": 443
+        },
+        {
+          "action": "waitCompute",
+          "queue": "graphics",
+          "range": 3,
+          "value": 442
+        },
+        {
+          "action": "execute",
+          "queue": "graphics",
+          "range": 3,
+          "value": 1
+        },
+        {
+          "action": "signalGraphics",
+          "queue": "graphics",
+          "range": 3,
+          "value": 444
+        },
+        {
+          "action": "signalFrame",
+          "queue": "graphics",
+          "range": null,
+          "value": 120
+        }
+      ]
+    },
+    {
+      "id": "n4096-t4-q1-01-dx12",
+      "case": "n4096-t4-q1",
+      "backend": "dx12",
+      "repeat": 0,
+      "sampleCount": 113,
+      "asyncCompute": false,
+      "recordingThreads": 4,
+      "recordingChunks": 4,
+      "candidates": 4096,
+      "metricsMs": {
+        "cpuRenderMs": 17.2250424778761,
+        "frameTimeMs": 17.750600000000002,
+        "gpuPassSumMs": 0.895062371681416,
+        "gpuQueueOverlapMs": 0.0,
+        "gpuQueueSpanMs": 0.8969364955752211,
+        "gpuWaitMs": 0.525557522123894,
+        "graphCompileMs": 0.024018584070796455,
+        "graphPrepareMs": 0.004931858407079645,
+        "graphRecordMs": 0.12610530973451323
+      },
+      "captureSha256": "e0d20fa5792fcc07c35ef487a9248134439387fc932eda9e908e781a68a7f5e2",
+      "reportSha256": "673174236134345f32fe67987d3a6dc491cf10363134a9a4a6212cd122995ebd",
+      "samplesSha256": "0ae7e4639c61f098d8f3e18f52a96aabbd8572bcc13447597d5275ffdb78f05e",
+      "queueClockDomain": "QPC calibrated per queue",
+      "queueTimeline": [
+        {
+          "endNs": 77323656257328.0,
+          "pass": "Indexed.ClearCounts",
+          "queue": "graphics",
+          "startNs": 77323656254640.0
+        },
+        {
+          "endNs": 77323656435152.0,
+          "pass": "Indexed.FrustumCulling",
+          "queue": "graphics",
+          "startNs": 77323656257392.0
+        },
+        {
+          "endNs": 77323656438608.0,
+          "pass": "MainLight.Shadow",
+          "queue": "graphics",
+          "startNs": 77323656436432.0
+        },
+        {
+          "endNs": 77323657132752.0,
+          "pass": "Deferred.GBuffer",
+          "queue": "graphics",
+          "startNs": 77323656438608.0
+        },
+        {
+          "endNs": 77323657142320.0,
+          "pass": "Deferred.Lighting",
+          "queue": "graphics",
+          "startNs": 77323657132752.0
+        },
+        {
+          "endNs": 77323657144976.0,
+          "pass": "Display.ToneMapping",
+          "queue": "graphics",
+          "startNs": 77323657142320.0
+        }
+      ],
+      "queueSubmissions": [
+        {
+          "action": "execute",
+          "queue": "graphics",
+          "range": null,
+          "value": 4
+        },
+        {
+          "action": "signalFrame",
+          "queue": "graphics",
+          "range": null,
+          "value": 126
+        }
+      ]
+    },
+    {
+      "id": "n4096-t4-q1-01-vulkan",
+      "case": "n4096-t4-q1",
+      "backend": "vulkan",
+      "repeat": 0,
+      "sampleCount": 117,
+      "asyncCompute": false,
+      "recordingThreads": 4,
+      "recordingChunks": 4,
+      "candidates": 4096,
+      "metricsMs": {
+        "cpuRenderMs": 16.51347435897435,
+        "frameTimeMs": 17.19465299145298,
+        "gpuPassSumMs": 0.9971358632478632,
+        "gpuQueueOverlapMs": 0.0,
+        "gpuQueueSpanMs": 1.0093070769230763,
+        "gpuWaitMs": 0.6811786324786321,
+        "graphCompileMs": 0.023941025641025637,
+        "graphPrepareMs": 0.00508034188034188,
+        "graphRecordMs": 0.12668205128205126
+      },
+      "captureSha256": "e0d20fa5792fcc07c35ef487a9248134439387fc932eda9e908e781a68a7f5e2",
+      "reportSha256": "8e47eef16b305e123b3db0da71f481db1afbbf271110237354d6c2533bf1be3a",
+      "samplesSha256": "66e9f3dfdcfe971299c5e54736950235a32c1871bd4d462f42ca970a306bb6aa",
+      "queueClockDomain": "device timestamp clock relative to first slot; async requires calibrated_timestamps",
+      "queueTimeline": [
+        {
+          "endNs": 4000.0,
+          "pass": "Indexed.ClearCounts",
+          "queue": "graphics",
+          "startNs": 0.0
+        },
+        {
+          "endNs": 241536.0,
+          "pass": "Indexed.FrustumCulling",
+          "queue": "graphics",
+          "startNs": 4896.0
+        },
+        {
+          "endNs": 244960.0,
+          "pass": "MainLight.Shadow",
+          "queue": "graphics",
+          "startNs": 244256.0
+        },
+        {
+          "endNs": 1025824.0,
+          "pass": "Deferred.GBuffer",
+          "queue": "graphics",
+          "startNs": 248544.0
+        },
+        {
+          "endNs": 1038080.0,
+          "pass": "Deferred.Lighting",
+          "queue": "graphics",
+          "startNs": 1029760.0
+        },
+        {
+          "endNs": 1041312.0,
+          "pass": "Display.ToneMapping",
+          "queue": "graphics",
+          "startNs": 1038688.0
+        }
+      ],
+      "queueSubmissions": [
+        {
+          "action": "execute",
+          "queue": "graphics",
+          "range": null,
+          "value": 4
+        },
+        {
+          "action": "signalFrame",
+          "queue": "graphics",
+          "range": null,
+          "value": 130
+        }
+      ]
+    },
+    {
+      "id": "n4096-t4-q1-02-vulkan",
+      "case": "n4096-t4-q1",
+      "backend": "vulkan",
+      "repeat": 1,
+      "sampleCount": 106,
+      "asyncCompute": false,
+      "recordingThreads": 4,
+      "recordingChunks": 4,
+      "candidates": 4096,
+      "metricsMs": {
+        "cpuRenderMs": 18.427091509433964,
+        "frameTimeMs": 18.950356603773578,
+        "gpuPassSumMs": 0.9983864150943396,
+        "gpuQueueOverlapMs": 0.0,
+        "gpuQueueSpanMs": 1.0103206037735846,
+        "gpuWaitMs": 0.5232650943396225,
+        "graphCompileMs": 0.02696509433962264,
+        "graphPrepareMs": 0.005476415094339623,
+        "graphRecordMs": 0.1317320754716981
+      },
+      "captureSha256": "e0d20fa5792fcc07c35ef487a9248134439387fc932eda9e908e781a68a7f5e2",
+      "reportSha256": "e1f9cca82172eb368f869e6294e4a9b82c7482cd5effd3345609bf7fc9e62c21",
+      "samplesSha256": "b0d01dedc711ba971becfce7468299de12da5fc3c275506c38d2fd5a911d1c64",
+      "queueClockDomain": "device timestamp clock relative to first slot; async requires calibrated_timestamps",
+      "queueTimeline": [
+        {
+          "endNs": 4320.0,
+          "pass": "Indexed.ClearCounts",
+          "queue": "graphics",
+          "startNs": 0.0
+        },
+        {
+          "endNs": 245984.0,
+          "pass": "Indexed.FrustumCulling",
+          "queue": "graphics",
+          "startNs": 5216.0
+        },
+        {
+          "endNs": 249056.0,
+          "pass": "MainLight.Shadow",
+          "queue": "graphics",
+          "startNs": 248352.0
+        },
+        {
+          "endNs": 966368.0,
+          "pass": "Deferred.GBuffer",
+          "queue": "graphics",
+          "startNs": 252928.0
+        },
+        {
+          "endNs": 978944.0,
+          "pass": "Deferred.Lighting",
+          "queue": "graphics",
+          "startNs": 970272.0
+        },
+        {
+          "endNs": 982368.0,
+          "pass": "Display.ToneMapping",
+          "queue": "graphics",
+          "startNs": 979584.0
+        }
+      ],
+      "queueSubmissions": [
+        {
+          "action": "execute",
+          "queue": "graphics",
+          "range": null,
+          "value": 4
+        },
+        {
+          "action": "signalFrame",
+          "queue": "graphics",
+          "range": null,
+          "value": 119
+        }
+      ]
+    },
+    {
+      "id": "n4096-t4-q1-02-dx12",
+      "case": "n4096-t4-q1",
+      "backend": "dx12",
+      "repeat": 1,
+      "sampleCount": 106,
+      "asyncCompute": false,
+      "recordingThreads": 4,
+      "recordingChunks": 4,
+      "candidates": 4096,
+      "metricsMs": {
+        "cpuRenderMs": 18.492295283018866,
+        "frameTimeMs": 18.914816981132073,
+        "gpuPassSumMs": 0.898218566037736,
+        "gpuQueueOverlapMs": 0.0,
+        "gpuQueueSpanMs": 0.9036350188679245,
+        "gpuWaitMs": 0.4225216981132075,
+        "graphCompileMs": 0.02356603773584906,
+        "graphPrepareMs": 0.005423584905660375,
+        "graphRecordMs": 0.12699811320754714
+      },
+      "captureSha256": "e0d20fa5792fcc07c35ef487a9248134439387fc932eda9e908e781a68a7f5e2",
+      "reportSha256": "3d31c587f09fc4e67f1394bfd7b72fb45dd6ad4fffc1e31b43940446883d8b92",
+      "samplesSha256": "2341332d5a87e9f668bc9eea0c2ca9f78719cd506e3cbd08ed077463ce76e3a7",
+      "queueClockDomain": "QPC calibrated per queue",
+      "queueTimeline": [
+        {
+          "endNs": 77333954565580.0,
+          "pass": "Indexed.ClearCounts",
+          "queue": "graphics",
+          "startNs": 77333954562700.0
+        },
+        {
+          "endNs": 77333954746988.0,
+          "pass": "Indexed.FrustumCulling",
+          "queue": "graphics",
+          "startNs": 77333954565644.0
+        },
+        {
+          "endNs": 77333954750828.0,
+          "pass": "MainLight.Shadow",
+          "queue": "graphics",
+          "startNs": 77333954748652.0
+        },
+        {
+          "endNs": 77333955445580.0,
+          "pass": "Deferred.GBuffer",
+          "queue": "graphics",
+          "startNs": 77333954750828.0
+        },
+        {
+          "endNs": 77333955455788.0,
+          "pass": "Deferred.Lighting",
+          "queue": "graphics",
+          "startNs": 77333955445580.0
+        },
+        {
+          "endNs": 77333955458508.0,
+          "pass": "Display.ToneMapping",
+          "queue": "graphics",
+          "startNs": 77333955455788.0
+        }
+      ],
+      "queueSubmissions": [
+        {
+          "action": "execute",
+          "queue": "graphics",
+          "range": null,
+          "value": 4
+        },
+        {
+          "action": "signalFrame",
+          "queue": "graphics",
+          "range": null,
+          "value": 119
+        }
+      ]
+    },
+    {
+      "id": "n4096-t4-q2-01-dx12",
+      "case": "n4096-t4-q2",
+      "backend": "dx12",
+      "repeat": 0,
+      "sampleCount": 107,
+      "asyncCompute": true,
+      "recordingThreads": 4,
+      "recordingChunks": 4,
+      "candidates": 4096,
+      "metricsMs": {
+        "cpuRenderMs": 18.301162616822424,
+        "frameTimeMs": 18.728530841121497,
+        "gpuPassSumMs": 0.911128523364486,
+        "gpuQueueOverlapMs": 0.002706766355140186,
+        "gpuQueueSpanMs": 0.9719483738317758,
+        "gpuWaitMs": 0.4273682242990654,
+        "graphCompileMs": 0.02571682242990654,
+        "graphPrepareMs": 0.005919626168224301,
+        "graphRecordMs": 0.12670186915887852
+      },
+      "captureSha256": "e0d20fa5792fcc07c35ef487a9248134439387fc932eda9e908e781a68a7f5e2",
+      "reportSha256": "75236ec7ba78f61f39c56b5ece08ecfc8bf6a1bc597748fe5a4f10e2d267112b",
+      "samplesSha256": "c850eac9128bb0d385f4d95d83df85ec3092e171fe056a1a66750bd75c2381ac",
+      "queueClockDomain": "QPC calibrated per queue",
+      "queueTimeline": [
+        {
+          "endNs": 77337297202924.0,
+          "pass": "Indexed.ClearCounts",
+          "queue": "compute",
+          "startNs": 77337297199820.0
+        },
+        {
+          "endNs": 77337297391724.0,
+          "pass": "Indexed.FrustumCulling",
+          "queue": "compute",
+          "startNs": 77337297202988.0
+        },
+        {
+          "endNs": 77337297203692.0,
+          "pass": "MainLight.Shadow",
+          "queue": "graphics",
+          "startNs": 77337297200172.0
+        },
+        {
+          "endNs": 77337298144108.0,
+          "pass": "Deferred.GBuffer",
+          "queue": "graphics",
+          "startNs": 77337297446828.0
+        },
+        {
+          "endNs": 77337298153900.0,
+          "pass": "Deferred.Lighting",
+          "queue": "graphics",
+          "startNs": 77337298144140.0
+        },
+        {
+          "endNs": 77337298156524.0,
+          "pass": "Display.ToneMapping",
+          "queue": "graphics",
+          "startNs": 77337298153900.0
+        }
+      ],
+      "queueSubmissions": [
+        {
+          "action": "waitFrame",
+          "queue": "compute",
+          "range": null,
+          "value": 119
+        },
+        {
+          "action": "execute",
+          "queue": "graphics",
+          "range": 0,
+          "value": 1
+        },
+        {
+          "action": "signalGraphics",
+          "queue": "graphics",
+          "range": 0,
+          "value": 441
+        },
+        {
+          "action": "waitGraphics",
+          "queue": "compute",
+          "range": 1,
+          "value": 441
+        },
+        {
+          "action": "execute",
+          "queue": "compute",
+          "range": 1,
+          "value": 1
+        },
+        {
+          "action": "signalCompute",
+          "queue": "compute",
+          "range": 1,
+          "value": 442
+        },
+        {
+          "action": "execute",
+          "queue": "graphics",
+          "range": 2,
+          "value": 1
+        },
+        {
+          "action": "signalGraphics",
+          "queue": "graphics",
+          "range": 2,
+          "value": 443
+        },
+        {
+          "action": "waitCompute",
+          "queue": "graphics",
+          "range": 3,
+          "value": 442
+        },
+        {
+          "action": "execute",
+          "queue": "graphics",
+          "range": 3,
+          "value": 1
+        },
+        {
+          "action": "signalGraphics",
+          "queue": "graphics",
+          "range": 3,
+          "value": 444
+        },
+        {
+          "action": "signalFrame",
+          "queue": "graphics",
+          "range": null,
+          "value": 120
+        }
+      ]
+    },
+    {
+      "id": "n4096-t4-q2-01-vulkan",
+      "case": "n4096-t4-q2",
+      "backend": "vulkan",
+      "repeat": 0,
+      "sampleCount": 107,
+      "asyncCompute": true,
+      "recordingThreads": 4,
+      "recordingChunks": 4,
+      "candidates": 4096,
+      "metricsMs": {
+        "cpuRenderMs": 18.019223364485985,
+        "frameTimeMs": 18.713243925233645,
+        "gpuPassSumMs": 0.9893930467289722,
+        "gpuQueueOverlapMs": 0.0,
+        "gpuQueueSpanMs": 1.2111850467289718,
+        "gpuWaitMs": 0.6940205607476635,
+        "graphCompileMs": 0.027253271028037374,
+        "graphPrepareMs": 0.005385046728971965,
+        "graphRecordMs": 0.11811869158878502
+      },
+      "captureSha256": "e0d20fa5792fcc07c35ef487a9248134439387fc932eda9e908e781a68a7f5e2",
+      "reportSha256": "cd6778050c86e04d92a191a272e50620963bbdfd156ae60bfc0cd8a1d2246066",
+      "samplesSha256": "23ac51552b5a1435db42d6abe39605e3064ce51184e9569b82672d272db7e508",
+      "queueClockDomain": "device timestamp clock relative to first slot; async requires calibrated_timestamps",
+      "queueTimeline": [
+        {
+          "endNs": 2944.0,
+          "pass": "Indexed.ClearCounts",
+          "queue": "compute",
+          "startNs": 0.0
+        },
+        {
+          "endNs": 242528.0,
+          "pass": "Indexed.FrustumCulling",
+          "queue": "compute",
+          "startNs": 3808.0
+        },
+        {
+          "endNs": -109760.0,
+          "pass": "MainLight.Shadow",
+          "queue": "graphics",
+          "startNs": -110464.0
+        },
+        {
+          "endNs": 1073184.0,
+          "pass": "Deferred.GBuffer",
+          "queue": "graphics",
+          "startNs": 343840.0
+        },
+        {
+          "endNs": 1085888.0,
+          "pass": "Deferred.Lighting",
+          "queue": "graphics",
+          "startNs": 1076448.0
+        },
+        {
+          "endNs": 1089248.0,
+          "pass": "Display.ToneMapping",
+          "queue": "graphics",
+          "startNs": 1086528.0
+        }
+      ],
+      "queueSubmissions": [
+        {
+          "action": "execute",
+          "queue": "graphics",
+          "range": 0,
+          "value": 1
+        },
+        {
+          "action": "signalGraphics",
+          "queue": "graphics",
+          "range": 0,
+          "value": 441
+        },
+        {
+          "action": "waitGraphics",
+          "queue": "compute",
+          "range": 1,
+          "value": 441
+        },
+        {
+          "action": "waitFrame",
+          "queue": "compute",
+          "range": 1,
+          "value": 119
+        },
+        {
+          "action": "execute",
+          "queue": "compute",
+          "range": 1,
+          "value": 1
+        },
+        {
+          "action": "signalCompute",
+          "queue": "compute",
+          "range": 1,
+          "value": 442
+        },
+        {
+          "action": "execute",
+          "queue": "graphics",
+          "range": 2,
+          "value": 1
+        },
+        {
+          "action": "signalGraphics",
+          "queue": "graphics",
+          "range": 2,
+          "value": 443
+        },
+        {
+          "action": "waitCompute",
+          "queue": "graphics",
+          "range": 3,
+          "value": 442
+        },
+        {
+          "action": "execute",
+          "queue": "graphics",
+          "range": 3,
+          "value": 1
+        },
+        {
+          "action": "signalGraphics",
+          "queue": "graphics",
+          "range": 3,
+          "value": 444
+        },
+        {
+          "action": "waitCompute",
+          "queue": "graphics",
+          "range": null,
+          "value": 442
+        },
+        {
+          "action": "signalFrame",
+          "queue": "graphics",
+          "range": null,
+          "value": 120
+        }
+      ]
+    },
+    {
+      "id": "n4096-t4-q2-02-vulkan",
+      "case": "n4096-t4-q2",
+      "backend": "vulkan",
+      "repeat": 1,
+      "sampleCount": 105,
+      "asyncCompute": true,
+      "recordingThreads": 4,
+      "recordingChunks": 4,
+      "candidates": 4096,
+      "metricsMs": {
+        "cpuRenderMs": 18.32997904761905,
+        "frameTimeMs": 19.035174285714277,
+        "gpuPassSumMs": 0.9962980571428574,
+        "gpuQueueOverlapMs": 0.0,
+        "gpuQueueSpanMs": 1.2200810666666664,
+        "gpuWaitMs": 0.7051952380952381,
+        "graphCompileMs": 0.024848571428571425,
+        "graphPrepareMs": 0.005260952380952381,
+        "graphRecordMs": 0.11441047619047617
+      },
+      "captureSha256": "e0d20fa5792fcc07c35ef487a9248134439387fc932eda9e908e781a68a7f5e2",
+      "reportSha256": "1b7fee23ff2748731f327dc9f2c37a7845f04a5aee685bfe0b8338de4c04be7c",
+      "samplesSha256": "a0e64e0882619bb80053c4aa3789092f07e5f575928ea2fbd0111bb99739fe11",
+      "queueClockDomain": "device timestamp clock relative to first slot; async requires calibrated_timestamps",
+      "queueTimeline": [
+        {
+          "endNs": 2624.0,
+          "pass": "Indexed.ClearCounts",
+          "queue": "compute",
+          "startNs": 0.0
+        },
+        {
+          "endNs": 240192.0,
+          "pass": "Indexed.FrustumCulling",
+          "queue": "compute",
+          "startNs": 3520.0
+        },
+        {
+          "endNs": -106880.0,
+          "pass": "MainLight.Shadow",
+          "queue": "graphics",
+          "startNs": -109280.0
+        },
+        {
+          "endNs": 1122176.0,
+          "pass": "Deferred.GBuffer",
+          "queue": "graphics",
+          "startNs": 406624.0
+        },
+        {
+          "endNs": 1134592.0,
+          "pass": "Deferred.Lighting",
+          "queue": "graphics",
+          "startNs": 1125408.0
+        },
+        {
+          "endNs": 1137952.0,
+          "pass": "Display.ToneMapping",
+          "queue": "graphics",
+          "startNs": 1135232.0
+        }
+      ],
+      "queueSubmissions": [
+        {
+          "action": "execute",
+          "queue": "graphics",
+          "range": 0,
+          "value": 1
+        },
+        {
+          "action": "signalGraphics",
+          "queue": "graphics",
+          "range": 0,
+          "value": 433
+        },
+        {
+          "action": "waitGraphics",
+          "queue": "compute",
+          "range": 1,
+          "value": 433
+        },
+        {
+          "action": "waitFrame",
+          "queue": "compute",
+          "range": 1,
+          "value": 117
+        },
+        {
+          "action": "execute",
+          "queue": "compute",
+          "range": 1,
+          "value": 1
+        },
+        {
+          "action": "signalCompute",
+          "queue": "compute",
+          "range": 1,
+          "value": 434
+        },
+        {
+          "action": "execute",
+          "queue": "graphics",
+          "range": 2,
+          "value": 1
+        },
+        {
+          "action": "signalGraphics",
+          "queue": "graphics",
+          "range": 2,
+          "value": 435
+        },
+        {
+          "action": "waitCompute",
+          "queue": "graphics",
+          "range": 3,
+          "value": 434
+        },
+        {
+          "action": "execute",
+          "queue": "graphics",
+          "range": 3,
+          "value": 1
+        },
+        {
+          "action": "signalGraphics",
+          "queue": "graphics",
+          "range": 3,
+          "value": 436
+        },
+        {
+          "action": "waitCompute",
+          "queue": "graphics",
+          "range": null,
+          "value": 434
+        },
+        {
+          "action": "signalFrame",
+          "queue": "graphics",
+          "range": null,
+          "value": 118
+        }
+      ]
+    },
+    {
+      "id": "n4096-t4-q2-02-dx12",
+      "case": "n4096-t4-q2",
+      "backend": "dx12",
+      "repeat": 1,
+      "sampleCount": 107,
+      "asyncCompute": true,
+      "recordingThreads": 4,
+      "recordingChunks": 4,
+      "candidates": 4096,
+      "metricsMs": {
+        "cpuRenderMs": 18.2686663551402,
+        "frameTimeMs": 18.691819626168225,
+        "gpuPassSumMs": 0.9008523364485984,
+        "gpuQueueOverlapMs": 0.0026670654205607474,
+        "gpuQueueSpanMs": 0.9662042616822429,
+        "gpuWaitMs": 0.42315327102803735,
+        "graphCompileMs": 0.02598504672897196,
+        "graphPrepareMs": 0.006072897196261684,
+        "graphRecordMs": 0.12558224299065424
+      },
+      "captureSha256": "e0d20fa5792fcc07c35ef487a9248134439387fc932eda9e908e781a68a7f5e2",
+      "reportSha256": "362f55bc66fdd7ecde90734c792079d795747fe01f2caf9bba67f4b24d0544d6",
+      "samplesSha256": "58a3aa9c7f2b020cd009f3d9317303dcbf42692c692d7819544fd93865f9a92e",
+      "queueClockDomain": "QPC calibrated per queue",
+      "queueTimeline": [
+        {
+          "endNs": 77347701782168.0,
+          "pass": "Indexed.ClearCounts",
+          "queue": "compute",
+          "startNs": 77347701777752.0
+        },
+        {
+          "endNs": 77347701961880.0,
+          "pass": "Indexed.FrustumCulling",
+          "queue": "compute",
+          "startNs": 77347701782232.0
+        },
+        {
+          "endNs": 77347701780756.0,
+          "pass": "MainLight.Shadow",
+          "queue": "graphics",
+          "startNs": 77347701778804.0
+        },
+        {
+          "endNs": 77347702718036.0,
+          "pass": "Deferred.GBuffer",
+          "queue": "graphics",
+          "startNs": 77347702021940.0
+        },
+        {
+          "endNs": 77347702728436.0,
+          "pass": "Deferred.Lighting",
+          "queue": "graphics",
+          "startNs": 77347702718036.0
+        },
+        {
+          "endNs": 77347702730996.0,
+          "pass": "Display.ToneMapping",
+          "queue": "graphics",
+          "startNs": 77347702728436.0
+        }
+      ],
+      "queueSubmissions": [
+        {
+          "action": "waitFrame",
+          "queue": "compute",
+          "range": null,
+          "value": 119
+        },
+        {
+          "action": "execute",
+          "queue": "graphics",
+          "range": 0,
+          "value": 1
+        },
+        {
+          "action": "signalGraphics",
+          "queue": "graphics",
+          "range": 0,
+          "value": 441
+        },
+        {
+          "action": "waitGraphics",
+          "queue": "compute",
+          "range": 1,
+          "value": 441
+        },
+        {
+          "action": "execute",
+          "queue": "compute",
+          "range": 1,
+          "value": 1
+        },
+        {
+          "action": "signalCompute",
+          "queue": "compute",
+          "range": 1,
+          "value": 442
+        },
+        {
+          "action": "execute",
+          "queue": "graphics",
+          "range": 2,
+          "value": 1
+        },
+        {
+          "action": "signalGraphics",
+          "queue": "graphics",
+          "range": 2,
+          "value": 443
+        },
+        {
+          "action": "waitCompute",
+          "queue": "graphics",
+          "range": 3,
+          "value": 442
+        },
+        {
+          "action": "execute",
+          "queue": "graphics",
+          "range": 3,
+          "value": 1
+        },
+        {
+          "action": "signalGraphics",
+          "queue": "graphics",
+          "range": 3,
+          "value": 444
+        },
+        {
+          "action": "signalFrame",
+          "queue": "graphics",
+          "range": null,
+          "value": 120
+        }
+      ]
+    },
+    {
+      "id": "shadow128objects-t1-q1-01-dx12",
+      "case": "shadow128objects-t1-q1",
+      "backend": "dx12",
+      "repeat": 0,
+      "sampleCount": 320,
+      "asyncCompute": false,
+      "recordingThreads": 1,
+      "recordingChunks": 1,
+      "candidates": 127,
+      "metricsMs": {
+        "cpuRenderMs": 5.877226249999998,
+        "frameTimeMs": 6.219831562499999,
+        "gpuPassSumMs": 0.13067140000000008,
+        "gpuQueueOverlapMs": 0.0,
+        "gpuQueueSpanMs": 0.13084000000000004,
+        "gpuWaitMs": 0.34260531250000004,
+        "graphCompileMs": 0.02899437499999999,
+        "graphPrepareMs": 0.005097812500000002,
+        "graphRecordMs": 1.3099331249999993
+      },
+      "captureSha256": "631212c06059a44dceba1c1c9bbc7c62b410c9b77326025ed91b367c9cbc7cb9",
+      "reportSha256": "be470c953c1e70c9ec3165efd1b23dcda2da5c83547257a5368a5ccced81f005",
+      "samplesSha256": "f28498b973f2344098fdd549a3236327ae1b158e6d6cbdbee071581deec431e5",
+      "queueClockDomain": "QPC calibrated per queue",
+      "queueTimeline": [
+        {
+          "endNs": 77350389757428.0,
+          "pass": "Indexed.ClearCounts",
+          "queue": "graphics",
+          "startNs": 77350389754708.0
+        },
+        {
+          "endNs": 77350389764852.0,
+          "pass": "Indexed.FrustumCulling",
+          "queue": "graphics",
+          "startNs": 77350389757492.0
+        },
+        {
+          "endNs": 77350389812884.0,
+          "pass": "MainLight.Shadow",
+          "queue": "graphics",
+          "startNs": 77350389764948.0
+        },
+        {
+          "endNs": 77350389857460.0,
+          "pass": "Deferred.GBuffer",
+          "queue": "graphics",
+          "startNs": 77350389812884.0
+        },
+        {
+          "endNs": 77350389872052.0,
+          "pass": "Deferred.Lighting",
+          "queue": "graphics",
+          "startNs": 77350389857460.0
+        },
+        {
+          "endNs": 77350389877972.0,
+          "pass": "Forward.Transparent",
+          "queue": "graphics",
+          "startNs": 77350389872084.0
+        },
+        {
+          "endNs": 77350389880564.0,
+          "pass": "Display.ToneMapping",
+          "queue": "graphics",
+          "startNs": 77350389877972.0
+        }
+      ],
+      "queueSubmissions": [
+        {
+          "action": "execute",
+          "queue": "graphics",
+          "range": null,
+          "value": 1
+        },
+        {
+          "action": "signalFrame",
+          "queue": "graphics",
+          "range": null,
+          "value": 336
+        }
+      ]
+    },
+    {
+      "id": "shadow128objects-t1-q1-01-vulkan",
+      "case": "shadow128objects-t1-q1",
+      "backend": "vulkan",
+      "repeat": 0,
+      "sampleCount": 346,
+      "asyncCompute": false,
+      "recordingThreads": 1,
+      "recordingChunks": 1,
+      "candidates": 127,
+      "metricsMs": {
+        "cpuRenderMs": 5.343677167630055,
+        "frameTimeMs": 5.753712716763003,
+        "gpuPassSumMs": 0.12609572254335266,
+        "gpuQueueOverlapMs": 0.0,
+        "gpuQueueSpanMs": 0.13690386127167628,
+        "gpuWaitMs": 0.410035549132948,
+        "graphCompileMs": 0.026526011560693643,
+        "graphPrepareMs": 0.004600867052023123,
+        "graphRecordMs": 1.0449965317919079
+      },
+      "captureSha256": "51741d84b2f7ff53247fe14352b43d9d6b456749c19fe71e9667d2dbf5890e3a",
+      "reportSha256": "e845cefc5d2dc75eb9a7b48a18bf4dc8b045639ff00d3662b9c745fb0cbdd884",
+      "samplesSha256": "281a1e6fcb2a5118895901554a6d4ab9ffc5acd5c7190696d2117594e1cb84a9",
+      "queueClockDomain": "device timestamp clock relative to first slot; async requires calibrated_timestamps",
+      "queueTimeline": [
+        {
+          "endNs": 4672.0,
+          "pass": "Indexed.ClearCounts",
+          "queue": "graphics",
+          "startNs": 0.0
+        },
+        {
+          "endNs": 16960.0,
+          "pass": "Indexed.FrustumCulling",
+          "queue": "graphics",
+          "startNs": 5664.0
+        },
+        {
+          "endNs": 66720.0,
+          "pass": "MainLight.Shadow",
+          "queue": "graphics",
+          "startNs": 18528.0
+        },
+        {
+          "endNs": 111040.0,
+          "pass": "Deferred.GBuffer",
+          "queue": "graphics",
+          "startNs": 69792.0
+        },
+        {
+          "endNs": 126432.0,
+          "pass": "Deferred.Lighting",
+          "queue": "graphics",
+          "startNs": 114176.0
+        },
+        {
+          "endNs": 133088.0,
+          "pass": "Forward.Transparent",
+          "queue": "graphics",
+          "startNs": 127680.0
+        },
+        {
+          "endNs": 136352.0,
+          "pass": "Display.ToneMapping",
+          "queue": "graphics",
+          "startNs": 133696.0
+        }
+      ],
+      "queueSubmissions": [
+        {
+          "action": "execute",
+          "queue": "graphics",
+          "range": null,
+          "value": 1
+        },
+        {
+          "action": "signalFrame",
+          "queue": "graphics",
+          "range": null,
+          "value": 362
+        }
+      ]
+    },
+    {
+      "id": "shadow128objects-t1-q1-02-vulkan",
+      "case": "shadow128objects-t1-q1",
+      "backend": "vulkan",
+      "repeat": 1,
+      "sampleCount": 296,
+      "asyncCompute": false,
+      "recordingThreads": 1,
+      "recordingChunks": 1,
+      "candidates": 127,
+      "metricsMs": {
+        "cpuRenderMs": 6.24675168918919,
+        "frameTimeMs": 6.730684459459459,
+        "gpuPassSumMs": 0.12881556756756768,
+        "gpuQueueOverlapMs": 0.0,
+        "gpuQueueSpanMs": 0.13949362162162174,
+        "gpuWaitMs": 0.4839327702702703,
+        "graphCompileMs": 0.0314314189189189,
+        "graphPrepareMs": 0.0065986486486486464,
+        "graphRecordMs": 1.1796094594594593
+      },
+      "captureSha256": "51741d84b2f7ff53247fe14352b43d9d6b456749c19fe71e9667d2dbf5890e3a",
+      "reportSha256": "6461a58d38b9ce27347ec2fb5d6eca552f39ab3ba2519f81614be65a92725ff5",
+      "samplesSha256": "1065a8271a07f68b65e60d46a0f10e62f990ca023bc6a0ae48dd115e25f8afe5",
+      "queueClockDomain": "device timestamp clock relative to first slot; async requires calibrated_timestamps",
+      "queueTimeline": [
+        {
+          "endNs": 4704.0,
+          "pass": "Indexed.ClearCounts",
+          "queue": "graphics",
+          "startNs": 0.0
+        },
+        {
+          "endNs": 16960.0,
+          "pass": "Indexed.FrustumCulling",
+          "queue": "graphics",
+          "startNs": 5568.0
+        },
+        {
+          "endNs": 66656.0,
+          "pass": "MainLight.Shadow",
+          "queue": "graphics",
+          "startNs": 18400.0
+        },
+        {
+          "endNs": 114368.0,
+          "pass": "Deferred.GBuffer",
+          "queue": "graphics",
+          "startNs": 70048.0
+        },
+        {
+          "endNs": 131104.0,
+          "pass": "Deferred.Lighting",
+          "queue": "graphics",
+          "startNs": 117600.0
+        },
+        {
+          "endNs": 138016.0,
+          "pass": "Forward.Transparent",
+          "queue": "graphics",
+          "startNs": 132416.0
+        },
+        {
+          "endNs": 141440.0,
+          "pass": "Display.ToneMapping",
+          "queue": "graphics",
+          "startNs": 138688.0
+        }
+      ],
+      "queueSubmissions": [
+        {
+          "action": "execute",
+          "queue": "graphics",
+          "range": null,
+          "value": 1
+        },
+        {
+          "action": "signalFrame",
+          "queue": "graphics",
+          "range": null,
+          "value": 312
+        }
+      ]
+    },
+    {
+      "id": "shadow128objects-t1-q1-02-dx12",
+      "case": "shadow128objects-t1-q1",
+      "backend": "dx12",
+      "repeat": 1,
+      "sampleCount": 291,
+      "asyncCompute": false,
+      "recordingThreads": 1,
+      "recordingChunks": 1,
+      "candidates": 127,
+      "metricsMs": {
+        "cpuRenderMs": 6.497408247422679,
+        "frameTimeMs": 6.848104123711342,
+        "gpuPassSumMs": 0.13103406185567007,
+        "gpuQueueOverlapMs": 0.0,
+        "gpuQueueSpanMs": 0.1311997800687286,
+        "gpuWaitMs": 0.35069587628865995,
+        "graphCompileMs": 0.03235841924398628,
+        "graphPrepareMs": 0.0062326460481099575,
+        "graphRecordMs": 1.3870835051546395
+      },
+      "captureSha256": "631212c06059a44dceba1c1c9bbc7c62b410c9b77326025ed91b367c9cbc7cb9",
+      "reportSha256": "78335bca72be99670cb834366e2696595a25d536b3b392b487275c65f8916d09",
+      "samplesSha256": "84b1cf6bac51d3c938e648e6874063737988a752c0112e43ac57f8bbf1b45af7",
+      "queueClockDomain": "QPC calibrated per queue",
+      "queueTimeline": [
+        {
+          "endNs": 77359603593568.0,
+          "pass": "Indexed.ClearCounts",
+          "queue": "graphics",
+          "startNs": 77359603588480.0
+        },
+        {
+          "endNs": 77359603605632.0,
+          "pass": "Indexed.FrustumCulling",
+          "queue": "graphics",
+          "startNs": 77359603593696.0
+        },
+        {
+          "endNs": 77359603661664.0,
+          "pass": "MainLight.Shadow",
+          "queue": "graphics",
+          "startNs": 77359603605728.0
+        },
+        {
+          "endNs": 77359603708960.0,
+          "pass": "Deferred.GBuffer",
+          "queue": "graphics",
+          "startNs": 77359603661696.0
+        },
+        {
+          "endNs": 77359603723872.0,
+          "pass": "Deferred.Lighting",
+          "queue": "graphics",
+          "startNs": 77359603708960.0
+        },
+        {
+          "endNs": 77359603729632.0,
+          "pass": "Forward.Transparent",
+          "queue": "graphics",
+          "startNs": 77359603723872.0
+        },
+        {
+          "endNs": 77359603732128.0,
+          "pass": "Display.ToneMapping",
+          "queue": "graphics",
+          "startNs": 77359603729632.0
+        }
+      ],
+      "queueSubmissions": [
+        {
+          "action": "execute",
+          "queue": "graphics",
+          "range": null,
+          "value": 1
+        },
+        {
+          "action": "signalFrame",
+          "queue": "graphics",
+          "range": null,
+          "value": 307
+        }
+      ]
+    },
+    {
+      "id": "shadow128objects-t1-q2-01-dx12",
+      "case": "shadow128objects-t1-q2",
+      "backend": "dx12",
+      "repeat": 0,
+      "sampleCount": 281,
+      "asyncCompute": true,
+      "recordingThreads": 1,
+      "recordingChunks": 4,
+      "candidates": 127,
+      "metricsMs": {
+        "cpuRenderMs": 6.727477935943062,
+        "frameTimeMs": 7.08523345195729,
+        "gpuPassSumMs": 0.13725619928825625,
+        "gpuQueueOverlapMs": 0.009532185053380791,
+        "gpuQueueSpanMs": 0.18363601423487547,
+        "gpuWaitMs": 0.3577555160142352,
+        "graphCompileMs": 0.034270462633451966,
+        "graphPrepareMs": 0.007208896797153024,
+        "graphRecordMs": 1.4014021352313173
+      },
+      "captureSha256": "631212c06059a44dceba1c1c9bbc7c62b410c9b77326025ed91b367c9cbc7cb9",
+      "reportSha256": "f266e4950b10d570d23524e63d1d3b2da44b60e6ad6b0399d09b611eed72546f",
+      "samplesSha256": "8f059f577f1bc24ee0b9af471c4f01b6587808d75595d9e77a36d4860e1214ae",
+      "queueClockDomain": "QPC calibrated per queue",
+      "queueTimeline": [
+        {
+          "endNs": 77362314244364.0,
+          "pass": "Indexed.ClearCounts",
+          "queue": "compute",
+          "startNs": 77362314239340.0
+        },
+        {
+          "endNs": 77362314252652.0,
+          "pass": "Indexed.FrustumCulling",
+          "queue": "compute",
+          "startNs": 77362314244460.0
+        },
+        {
+          "endNs": 77362314288176.0,
+          "pass": "MainLight.Shadow",
+          "queue": "graphics",
+          "startNs": 77362314239504.0
+        },
+        {
+          "endNs": 77362314345200.0,
+          "pass": "Deferred.GBuffer",
+          "queue": "graphics",
+          "startNs": 77362314301008.0
+        },
+        {
+          "endNs": 77362314361520.0,
+          "pass": "Deferred.Lighting",
+          "queue": "graphics",
+          "startNs": 77362314345200.0
+        },
+        {
+          "endNs": 77362314367248.0,
+          "pass": "Forward.Transparent",
+          "queue": "graphics",
+          "startNs": 77362314361520.0
+        },
+        {
+          "endNs": 77362314369776.0,
+          "pass": "Display.ToneMapping",
+          "queue": "graphics",
+          "startNs": 77362314367248.0
+        }
+      ],
+      "queueSubmissions": [
+        {
+          "action": "waitFrame",
+          "queue": "compute",
+          "range": null,
+          "value": 296
+        },
+        {
+          "action": "execute",
+          "queue": "graphics",
+          "range": 0,
+          "value": 1
+        },
+        {
+          "action": "signalGraphics",
+          "queue": "graphics",
+          "range": 0,
+          "value": 1137
+        },
+        {
+          "action": "waitGraphics",
+          "queue": "compute",
+          "range": 1,
+          "value": 1137
+        },
+        {
+          "action": "execute",
+          "queue": "compute",
+          "range": 1,
+          "value": 1
+        },
+        {
+          "action": "signalCompute",
+          "queue": "compute",
+          "range": 1,
+          "value": 1138
+        },
+        {
+          "action": "execute",
+          "queue": "graphics",
+          "range": 2,
+          "value": 1
+        },
+        {
+          "action": "signalGraphics",
+          "queue": "graphics",
+          "range": 2,
+          "value": 1139
+        },
+        {
+          "action": "waitCompute",
+          "queue": "graphics",
+          "range": 3,
+          "value": 1138
+        },
+        {
+          "action": "execute",
+          "queue": "graphics",
+          "range": 3,
+          "value": 1
+        },
+        {
+          "action": "signalGraphics",
+          "queue": "graphics",
+          "range": 3,
+          "value": 1140
+        },
+        {
+          "action": "signalFrame",
+          "queue": "graphics",
+          "range": null,
+          "value": 297
+        }
+      ]
+    },
+    {
+      "id": "shadow128objects-t1-q2-01-vulkan",
+      "case": "shadow128objects-t1-q2",
+      "backend": "vulkan",
+      "repeat": 0,
+      "sampleCount": 322,
+      "asyncCompute": true,
+      "recordingThreads": 1,
+      "recordingChunks": 4,
+      "candidates": 127,
+      "metricsMs": {
+        "cpuRenderMs": 5.611218012422364,
+        "frameTimeMs": 6.179799068322981,
+        "gpuPassSumMs": 0.1261056397515529,
+        "gpuQueueOverlapMs": 0.0,
+        "gpuQueueSpanMs": 0.3154376149068325,
+        "gpuWaitMs": 0.568581055900621,
+        "graphCompileMs": 0.031434161490683225,
+        "graphPrepareMs": 0.0057304347826086935,
+        "graphRecordMs": 1.0882481366459635
+      },
+      "captureSha256": "51741d84b2f7ff53247fe14352b43d9d6b456749c19fe71e9667d2dbf5890e3a",
+      "reportSha256": "31935e63bca42cb0cf21671a43059c04e53914a70b6a93a45677bd91242f5559",
+      "samplesSha256": "bfd6c8dc1f5954cb40bd58ab3e037cb324d64a780871f91f92111a0e1b4c58c8",
+      "queueClockDomain": "device timestamp clock relative to first slot; async requires calibrated_timestamps",
+      "queueTimeline": [
+        {
+          "endNs": 3712.0,
+          "pass": "Indexed.ClearCounts",
+          "queue": "compute",
+          "startNs": 0.0
+        },
+        {
+          "endNs": 15968.0,
+          "pass": "Indexed.FrustumCulling",
+          "queue": "compute",
+          "startNs": 4576.0
+        },
+        {
+          "endNs": -70784.0,
+          "pass": "MainLight.Shadow",
+          "queue": "graphics",
+          "startNs": -117920.0
+        },
+        {
+          "endNs": 158464.0,
+          "pass": "Deferred.GBuffer",
+          "queue": "graphics",
+          "startNs": 112192.0
+        },
+        {
+          "endNs": 175264.0,
+          "pass": "Deferred.Lighting",
+          "queue": "graphics",
+          "startNs": 161632.0
+        },
+        {
+          "endNs": 181952.0,
+          "pass": "Forward.Transparent",
+          "queue": "graphics",
+          "startNs": 176544.0
+        },
+        {
+          "endNs": 185632.0,
+          "pass": "Display.ToneMapping",
+          "queue": "graphics",
+          "startNs": 182592.0
+        }
+      ],
+      "queueSubmissions": [
+        {
+          "action": "execute",
+          "queue": "graphics",
+          "range": 0,
+          "value": 1
+        },
+        {
+          "action": "signalGraphics",
+          "queue": "graphics",
+          "range": 0,
+          "value": 1301
+        },
+        {
+          "action": "waitGraphics",
+          "queue": "compute",
+          "range": 1,
+          "value": 1301
+        },
+        {
+          "action": "waitFrame",
+          "queue": "compute",
+          "range": 1,
+          "value": 337
+        },
+        {
+          "action": "execute",
+          "queue": "compute",
+          "range": 1,
+          "value": 1
+        },
+        {
+          "action": "signalCompute",
+          "queue": "compute",
+          "range": 1,
+          "value": 1302
+        },
+        {
+          "action": "execute",
+          "queue": "graphics",
+          "range": 2,
+          "value": 1
+        },
+        {
+          "action": "signalGraphics",
+          "queue": "graphics",
+          "range": 2,
+          "value": 1303
+        },
+        {
+          "action": "waitCompute",
+          "queue": "graphics",
+          "range": 3,
+          "value": 1302
+        },
+        {
+          "action": "execute",
+          "queue": "graphics",
+          "range": 3,
+          "value": 1
+        },
+        {
+          "action": "signalGraphics",
+          "queue": "graphics",
+          "range": 3,
+          "value": 1304
+        },
+        {
+          "action": "waitCompute",
+          "queue": "graphics",
+          "range": null,
+          "value": 1302
+        },
+        {
+          "action": "signalFrame",
+          "queue": "graphics",
+          "range": null,
+          "value": 338
+        }
+      ]
+    },
+    {
+      "id": "shadow128objects-t1-q2-02-vulkan",
+      "case": "shadow128objects-t1-q2",
+      "backend": "vulkan",
+      "repeat": 1,
+      "sampleCount": 328,
+      "asyncCompute": true,
+      "recordingThreads": 1,
+      "recordingChunks": 4,
+      "candidates": 127,
+      "metricsMs": {
+        "cpuRenderMs": 5.514392378048777,
+        "frameTimeMs": 6.070349085365857,
+        "gpuPassSumMs": 0.1282981463414633,
+        "gpuQueueOverlapMs": 0.0,
+        "gpuQueueSpanMs": 0.30885141463414634,
+        "gpuWaitMs": 0.5559567073170737,
+        "graphCompileMs": 0.029424999999999986,
+        "graphPrepareMs": 0.005252743902439025,
+        "graphRecordMs": 1.059534146341464
+      },
+      "captureSha256": "51741d84b2f7ff53247fe14352b43d9d6b456749c19fe71e9667d2dbf5890e3a",
+      "reportSha256": "6f55ed5088ab7c875210b026eea86085a68a19943dea124a1699297e6ca1aaa8",
+      "samplesSha256": "3cc43c62ea8bc34308b5c09d9020ecf9a46a5e75c0569f305243cc73794405b2",
+      "queueClockDomain": "device timestamp clock relative to first slot; async requires calibrated_timestamps",
+      "queueTimeline": [
+        {
+          "endNs": 3424.0,
+          "pass": "Indexed.ClearCounts",
+          "queue": "compute",
+          "startNs": 0.0
+        },
+        {
+          "endNs": 15712.0,
+          "pass": "Indexed.FrustumCulling",
+          "queue": "compute",
+          "startNs": 4288.0
+        },
+        {
+          "endNs": -66592.0,
+          "pass": "MainLight.Shadow",
+          "queue": "graphics",
+          "startNs": -112768.0
+        },
+        {
+          "endNs": 155872.0,
+          "pass": "Deferred.GBuffer",
+          "queue": "graphics",
+          "startNs": 112288.0
+        },
+        {
+          "endNs": 172128.0,
+          "pass": "Deferred.Lighting",
+          "queue": "graphics",
+          "startNs": 159040.0
+        },
+        {
+          "endNs": 178656.0,
+          "pass": "Forward.Transparent",
+          "queue": "graphics",
+          "startNs": 173376.0
+        },
+        {
+          "endNs": 181920.0,
+          "pass": "Display.ToneMapping",
+          "queue": "graphics",
+          "startNs": 179296.0
+        }
+      ],
+      "queueSubmissions": [
+        {
+          "action": "execute",
+          "queue": "graphics",
+          "range": 0,
+          "value": 1
+        },
+        {
+          "action": "signalGraphics",
+          "queue": "graphics",
+          "range": 0,
+          "value": 1325
+        },
+        {
+          "action": "waitGraphics",
+          "queue": "compute",
+          "range": 1,
+          "value": 1325
+        },
+        {
+          "action": "waitFrame",
+          "queue": "compute",
+          "range": 1,
+          "value": 343
+        },
+        {
+          "action": "execute",
+          "queue": "compute",
+          "range": 1,
+          "value": 1
+        },
+        {
+          "action": "signalCompute",
+          "queue": "compute",
+          "range": 1,
+          "value": 1326
+        },
+        {
+          "action": "execute",
+          "queue": "graphics",
+          "range": 2,
+          "value": 1
+        },
+        {
+          "action": "signalGraphics",
+          "queue": "graphics",
+          "range": 2,
+          "value": 1327
+        },
+        {
+          "action": "waitCompute",
+          "queue": "graphics",
+          "range": 3,
+          "value": 1326
+        },
+        {
+          "action": "execute",
+          "queue": "graphics",
+          "range": 3,
+          "value": 1
+        },
+        {
+          "action": "signalGraphics",
+          "queue": "graphics",
+          "range": 3,
+          "value": 1328
+        },
+        {
+          "action": "waitCompute",
+          "queue": "graphics",
+          "range": null,
+          "value": 1326
+        },
+        {
+          "action": "signalFrame",
+          "queue": "graphics",
+          "range": null,
+          "value": 344
+        }
+      ]
+    },
+    {
+      "id": "shadow128objects-t1-q2-02-dx12",
+      "case": "shadow128objects-t1-q2",
+      "backend": "dx12",
+      "repeat": 1,
+      "sampleCount": 307,
+      "asyncCompute": true,
+      "recordingThreads": 1,
+      "recordingChunks": 4,
+      "candidates": 127,
+      "metricsMs": {
+        "cpuRenderMs": 6.141039739413685,
+        "frameTimeMs": 6.485011400651466,
+        "gpuPassSumMs": 0.13576755700325732,
+        "gpuQueueOverlapMs": 0.006798775244299672,
+        "gpuQueueSpanMs": 0.17858931596091215,
+        "gpuWaitMs": 0.34397166123778505,
+        "graphCompileMs": 0.0316560260586319,
+        "graphPrepareMs": 0.005770032573289902,
+        "graphRecordMs": 1.3509462540716624
+      },
+      "captureSha256": "631212c06059a44dceba1c1c9bbc7c62b410c9b77326025ed91b367c9cbc7cb9",
+      "reportSha256": "e189f8b3e17928b143ad7091583502427fc14ec2989bf970f8a02f9bd4f56fad",
+      "samplesSha256": "037c7249f2cb99db49f5526fb84f4e4fa4f8ce79e1fc6281aa7ecc6ca3fcef0e",
+      "queueClockDomain": "QPC calibrated per queue",
+      "queueTimeline": [
+        {
+          "endNs": 77371120692492.0,
+          "pass": "Indexed.ClearCounts",
+          "queue": "compute",
+          "startNs": 77371120687628.0
+        },
+        {
+          "endNs": 77371120700556.0,
+          "pass": "Indexed.FrustumCulling",
+          "queue": "compute",
+          "startNs": 77371120692588.0
+        },
+        {
+          "endNs": 77371120737032.0,
+          "pass": "MainLight.Shadow",
+          "queue": "graphics",
+          "startNs": 77371120687784.0
+        },
+        {
+          "endNs": 77371120819784.0,
+          "pass": "Deferred.GBuffer",
+          "queue": "graphics",
+          "startNs": 77371120774184.0
+        },
+        {
+          "endNs": 77371120836456.0,
+          "pass": "Deferred.Lighting",
+          "queue": "graphics",
+          "startNs": 77371120819816.0
+        },
+        {
+          "endNs": 77371120842280.0,
+          "pass": "Forward.Transparent",
+          "queue": "graphics",
+          "startNs": 77371120836456.0
+        },
+        {
+          "endNs": 77371120844680.0,
+          "pass": "Display.ToneMapping",
+          "queue": "graphics",
+          "startNs": 77371120842280.0
+        }
+      ],
+      "queueSubmissions": [
+        {
+          "action": "waitFrame",
+          "queue": "compute",
+          "range": null,
+          "value": 322
+        },
+        {
+          "action": "execute",
+          "queue": "graphics",
+          "range": 0,
+          "value": 1
+        },
+        {
+          "action": "signalGraphics",
+          "queue": "graphics",
+          "range": 0,
+          "value": 1241
+        },
+        {
+          "action": "waitGraphics",
+          "queue": "compute",
+          "range": 1,
+          "value": 1241
+        },
+        {
+          "action": "execute",
+          "queue": "compute",
+          "range": 1,
+          "value": 1
+        },
+        {
+          "action": "signalCompute",
+          "queue": "compute",
+          "range": 1,
+          "value": 1242
+        },
+        {
+          "action": "execute",
+          "queue": "graphics",
+          "range": 2,
+          "value": 1
+        },
+        {
+          "action": "signalGraphics",
+          "queue": "graphics",
+          "range": 2,
+          "value": 1243
+        },
+        {
+          "action": "waitCompute",
+          "queue": "graphics",
+          "range": 3,
+          "value": 1242
+        },
+        {
+          "action": "execute",
+          "queue": "graphics",
+          "range": 3,
+          "value": 1
+        },
+        {
+          "action": "signalGraphics",
+          "queue": "graphics",
+          "range": 3,
+          "value": 1244
+        },
+        {
+          "action": "signalFrame",
+          "queue": "graphics",
+          "range": null,
+          "value": 323
+        }
+      ]
+    },
+    {
+      "id": "shadow128objects-t4-q1-01-dx12",
+      "case": "shadow128objects-t4-q1",
+      "backend": "dx12",
+      "repeat": 0,
+      "sampleCount": 318,
+      "asyncCompute": false,
+      "recordingThreads": 4,
+      "recordingChunks": 2,
+      "candidates": 127,
+      "metricsMs": {
+        "cpuRenderMs": 5.918014150943395,
+        "frameTimeMs": 6.267540566037736,
+        "gpuPassSumMs": 0.13378062893081752,
+        "gpuQueueOverlapMs": 0.0,
+        "gpuQueueSpanMs": 0.13395350943396203,
+        "gpuWaitMs": 0.3495264150943395,
+        "graphCompileMs": 0.028628301886792454,
+        "graphPrepareMs": 0.005376100628930822,
+        "graphRecordMs": 1.3247081761006287
+      },
+      "captureSha256": "631212c06059a44dceba1c1c9bbc7c62b410c9b77326025ed91b367c9cbc7cb9",
+      "reportSha256": "711cab5aef457531c3957f150c54a66c4e86dcac5512ff12363ff6b61040c040",
+      "samplesSha256": "b6c2cad4f6d2a200f326a963b80aed832b597c8b73dc573387d9bb64da5c5b42",
+      "queueClockDomain": "QPC calibrated per queue",
+      "queueTimeline": [
+        {
+          "endNs": 77373801107588.0,
+          "pass": "Indexed.ClearCounts",
+          "queue": "graphics",
+          "startNs": 77373801100804.0
+        },
+        {
+          "endNs": 77373801122852.0,
+          "pass": "Indexed.FrustumCulling",
+          "queue": "graphics",
+          "startNs": 77373801107716.0
+        },
+        {
+          "endNs": 77373801187972.0,
+          "pass": "MainLight.Shadow",
+          "queue": "graphics",
+          "startNs": 77373801123012.0
+        },
+        {
+          "endNs": 77373801234116.0,
+          "pass": "Deferred.GBuffer",
+          "queue": "graphics",
+          "startNs": 77373801187972.0
+        },
+        {
+          "endNs": 77373801250404.0,
+          "pass": "Deferred.Lighting",
+          "queue": "graphics",
+          "startNs": 77373801234116.0
+        },
+        {
+          "endNs": 77373801256164.0,
+          "pass": "Forward.Transparent",
+          "queue": "graphics",
+          "startNs": 77373801250404.0
+        },
+        {
+          "endNs": 77373801258692.0,
+          "pass": "Display.ToneMapping",
+          "queue": "graphics",
+          "startNs": 77373801256164.0
+        }
+      ],
+      "queueSubmissions": [
+        {
+          "action": "execute",
+          "queue": "graphics",
+          "range": null,
+          "value": 2
+        },
+        {
+          "action": "signalFrame",
+          "queue": "graphics",
+          "range": null,
+          "value": 334
+        }
+      ]
+    },
+    {
+      "id": "shadow128objects-t4-q1-01-vulkan",
+      "case": "shadow128objects-t4-q1",
+      "backend": "vulkan",
+      "repeat": 0,
+      "sampleCount": 341,
+      "asyncCompute": false,
+      "recordingThreads": 4,
+      "recordingChunks": 2,
+      "candidates": 127,
+      "metricsMs": {
+        "cpuRenderMs": 5.429790029325509,
+        "frameTimeMs": 5.84277126099707,
+        "gpuPassSumMs": 0.12690186510263937,
+        "gpuQueueOverlapMs": 0.0,
+        "gpuQueueSpanMs": 0.14066449266862166,
+        "gpuWaitMs": 0.4129812316715544,
+        "graphCompileMs": 0.027267741935483876,
+        "graphPrepareMs": 0.004828152492668623,
+        "graphRecordMs": 1.052538709677419
+      },
+      "captureSha256": "51741d84b2f7ff53247fe14352b43d9d6b456749c19fe71e9667d2dbf5890e3a",
+      "reportSha256": "fe3c7a9fb98c2d08eabf8832b5ecbe7f9ed4d46e64dd3709be9ee9090a8b0cdf",
+      "samplesSha256": "8ed27355437662dde16cac84e8f38d68a8f247d493db7130ca4906ce586716a0",
+      "queueClockDomain": "device timestamp clock relative to first slot; async requires calibrated_timestamps",
+      "queueTimeline": [
+        {
+          "endNs": 6784.0,
+          "pass": "Indexed.ClearCounts",
+          "queue": "graphics",
+          "startNs": 0.0
+        },
+        {
+          "endNs": 30304.0,
+          "pass": "Indexed.FrustumCulling",
+          "queue": "graphics",
+          "startNs": 9696.0
+        },
+        {
+          "endNs": 96288.0,
+          "pass": "MainLight.Shadow",
+          "queue": "graphics",
+          "startNs": 33248.0
+        },
+        {
+          "endNs": 144832.0,
+          "pass": "Deferred.GBuffer",
+          "queue": "graphics",
+          "startNs": 103904.0
+        },
+        {
+          "endNs": 160512.0,
+          "pass": "Deferred.Lighting",
+          "queue": "graphics",
+          "startNs": 148000.0
+        },
+        {
+          "endNs": 167232.0,
+          "pass": "Forward.Transparent",
+          "queue": "graphics",
+          "startNs": 161824.0
+        },
+        {
+          "endNs": 170496.0,
+          "pass": "Display.ToneMapping",
+          "queue": "graphics",
+          "startNs": 167872.0
+        }
+      ],
+      "queueSubmissions": [
+        {
+          "action": "execute",
+          "queue": "graphics",
+          "range": null,
+          "value": 2
+        },
+        {
+          "action": "signalFrame",
+          "queue": "graphics",
+          "range": null,
+          "value": 357
+        }
+      ]
+    },
+    {
+      "id": "shadow128objects-t4-q1-02-vulkan",
+      "case": "shadow128objects-t4-q1",
+      "backend": "vulkan",
+      "repeat": 1,
+      "sampleCount": 324,
+      "asyncCompute": false,
+      "recordingThreads": 4,
+      "recordingChunks": 2,
+      "candidates": 127,
+      "metricsMs": {
+        "cpuRenderMs": 5.719073148148146,
+        "frameTimeMs": 6.139369753086418,
+        "gpuPassSumMs": 0.12897540740740737,
+        "gpuQueueOverlapMs": 0.0,
+        "gpuQueueSpanMs": 0.14209659259259258,
+        "gpuWaitMs": 0.42029660493827153,
+        "graphCompileMs": 0.030041975308641968,
+        "graphPrepareMs": 0.005897222222222221,
+        "graphRecordMs": 1.0940858024691367
+      },
+      "captureSha256": "51741d84b2f7ff53247fe14352b43d9d6b456749c19fe71e9667d2dbf5890e3a",
+      "reportSha256": "e6509635eb1fbcda3ab3da28da2cff30316254ba3cbdef3f9eb50c10b06ed7e2",
+      "samplesSha256": "2eec21a63ee595cd258cdad535c7eef2dbc9cbb1eea34a74eba794ebd5f5a854",
+      "queueClockDomain": "device timestamp clock relative to first slot; async requires calibrated_timestamps",
+      "queueTimeline": [
+        {
+          "endNs": 4160.0,
+          "pass": "Indexed.ClearCounts",
+          "queue": "graphics",
+          "startNs": 0.0
+        },
+        {
+          "endNs": 16416.0,
+          "pass": "Indexed.FrustumCulling",
+          "queue": "graphics",
+          "startNs": 5056.0
+        },
+        {
+          "endNs": 64800.0,
+          "pass": "MainLight.Shadow",
+          "queue": "graphics",
+          "startNs": 17824.0
+        },
+        {
+          "endNs": 112416.0,
+          "pass": "Deferred.GBuffer",
+          "queue": "graphics",
+          "startNs": 70080.0
+        },
+        {
+          "endNs": 128128.0,
+          "pass": "Deferred.Lighting",
+          "queue": "graphics",
+          "startNs": 115680.0
+        },
+        {
+          "endNs": 134688.0,
+          "pass": "Forward.Transparent",
+          "queue": "graphics",
+          "startNs": 129376.0
+        },
+        {
+          "endNs": 138112.0,
+          "pass": "Display.ToneMapping",
+          "queue": "graphics",
+          "startNs": 135328.0
+        }
+      ],
+      "queueSubmissions": [
+        {
+          "action": "execute",
+          "queue": "graphics",
+          "range": null,
+          "value": 2
+        },
+        {
+          "action": "signalFrame",
+          "queue": "graphics",
+          "range": null,
+          "value": 340
+        }
+      ]
+    },
+    {
+      "id": "shadow128objects-t4-q1-02-dx12",
+      "case": "shadow128objects-t4-q1",
+      "backend": "dx12",
+      "repeat": 1,
+      "sampleCount": 302,
+      "asyncCompute": false,
+      "recordingThreads": 4,
+      "recordingChunks": 2,
+      "candidates": 127,
+      "metricsMs": {
+        "cpuRenderMs": 6.254726490066225,
+        "frameTimeMs": 6.591455298013246,
+        "gpuPassSumMs": 0.13181796026490059,
+        "gpuQueueOverlapMs": 0.0,
+        "gpuQueueSpanMs": 0.13199173509933768,
+        "gpuWaitMs": 0.3367288079470198,
+        "graphCompileMs": 0.028800662251655614,
+        "graphPrepareMs": 0.005537086092715231,
+        "graphRecordMs": 1.3327701986754974
+      },
+      "captureSha256": "631212c06059a44dceba1c1c9bbc7c62b410c9b77326025ed91b367c9cbc7cb9",
+      "reportSha256": "4aa67957b400bdad1b2204ba227410b632d4ed284ff4375318d0696497e184af",
+      "samplesSha256": "44c17c614695634a295483b79dcbf0e29431e82a0da53df17de69f03dddd05ab",
+      "queueClockDomain": "QPC calibrated per queue",
+      "queueTimeline": [
+        {
+          "endNs": 77382723476264.0,
+          "pass": "Indexed.ClearCounts",
+          "queue": "graphics",
+          "startNs": 77382723473480.0
+        },
+        {
+          "endNs": 77382723483752.0,
+          "pass": "Indexed.FrustumCulling",
+          "queue": "graphics",
+          "startNs": 77382723476328.0
+        },
+        {
+          "endNs": 77382723531784.0,
+          "pass": "MainLight.Shadow",
+          "queue": "graphics",
+          "startNs": 77382723483816.0
+        },
+        {
+          "endNs": 77382723578184.0,
+          "pass": "Deferred.GBuffer",
+          "queue": "graphics",
+          "startNs": 77382723531784.0
+        },
+        {
+          "endNs": 77382723592840.0,
+          "pass": "Deferred.Lighting",
+          "queue": "graphics",
+          "startNs": 77382723578216.0
+        },
+        {
+          "endNs": 77382723598536.0,
+          "pass": "Forward.Transparent",
+          "queue": "graphics",
+          "startNs": 77382723592872.0
+        },
+        {
+          "endNs": 77382723601192.0,
+          "pass": "Display.ToneMapping",
+          "queue": "graphics",
+          "startNs": 77382723598568.0
+        }
+      ],
+      "queueSubmissions": [
+        {
+          "action": "execute",
+          "queue": "graphics",
+          "range": null,
+          "value": 2
+        },
+        {
+          "action": "signalFrame",
+          "queue": "graphics",
+          "range": null,
+          "value": 318
+        }
+      ]
+    },
+    {
+      "id": "shadow128objects-t4-q2-01-dx12",
+      "case": "shadow128objects-t4-q2",
+      "backend": "dx12",
+      "repeat": 0,
+      "sampleCount": 290,
+      "asyncCompute": true,
+      "recordingThreads": 4,
+      "recordingChunks": 4,
+      "candidates": 127,
+      "metricsMs": {
+        "cpuRenderMs": 6.561755862068965,
+        "frameTimeMs": 6.878498620689654,
+        "gpuPassSumMs": 0.13510091034482768,
+        "gpuQueueOverlapMs": 0.006716041379310343,
+        "gpuQueueSpanMs": 0.17840198620689662,
+        "gpuWaitMs": 0.31674275862068973,
+        "graphCompileMs": 0.03651689655172415,
+        "graphPrepareMs": 0.0068986206896551735,
+        "graphRecordMs": 1.375725862068965
+      },
+      "captureSha256": "631212c06059a44dceba1c1c9bbc7c62b410c9b77326025ed91b367c9cbc7cb9",
+      "reportSha256": "24249c156d40cf30379f0a95aff5451fcec8dcfa7ba19051303dc150f2a2a890",
+      "samplesSha256": "e22f2f4a4595b0a579a4daf995fa8e7446214d920816b4965fce9060f2566e95",
+      "queueClockDomain": "QPC calibrated per queue",
+      "queueTimeline": [
+        {
+          "endNs": 77385429580160.0,
+          "pass": "Indexed.ClearCounts",
+          "queue": "compute",
+          "startNs": 77385429574240.0
+        },
+        {
+          "endNs": 77385429588640.0,
+          "pass": "Indexed.FrustumCulling",
+          "queue": "compute",
+          "startNs": 77385429580224.0
+        },
+        {
+          "endNs": 77385429624504.0,
+          "pass": "MainLight.Shadow",
+          "queue": "graphics",
+          "startNs": 77385429575608.0
+        },
+        {
+          "endNs": 77385429738872.0,
+          "pass": "Deferred.GBuffer",
+          "queue": "graphics",
+          "startNs": 77385429693240.0
+        },
+        {
+          "endNs": 77385429755672.0,
+          "pass": "Deferred.Lighting",
+          "queue": "graphics",
+          "startNs": 77385429738904.0
+        },
+        {
+          "endNs": 77385429761784.0,
+          "pass": "Forward.Transparent",
+          "queue": "graphics",
+          "startNs": 77385429755672.0
+        },
+        {
+          "endNs": 77385429764312.0,
+          "pass": "Display.ToneMapping",
+          "queue": "graphics",
+          "startNs": 77385429761784.0
+        }
+      ],
+      "queueSubmissions": [
+        {
+          "action": "waitFrame",
+          "queue": "compute",
+          "range": null,
+          "value": 305
+        },
+        {
+          "action": "execute",
+          "queue": "graphics",
+          "range": 0,
+          "value": 1
+        },
+        {
+          "action": "signalGraphics",
+          "queue": "graphics",
+          "range": 0,
+          "value": 1173
+        },
+        {
+          "action": "waitGraphics",
+          "queue": "compute",
+          "range": 1,
+          "value": 1173
+        },
+        {
+          "action": "execute",
+          "queue": "compute",
+          "range": 1,
+          "value": 1
+        },
+        {
+          "action": "signalCompute",
+          "queue": "compute",
+          "range": 1,
+          "value": 1174
+        },
+        {
+          "action": "execute",
+          "queue": "graphics",
+          "range": 2,
+          "value": 1
+        },
+        {
+          "action": "signalGraphics",
+          "queue": "graphics",
+          "range": 2,
+          "value": 1175
+        },
+        {
+          "action": "waitCompute",
+          "queue": "graphics",
+          "range": 3,
+          "value": 1174
+        },
+        {
+          "action": "execute",
+          "queue": "graphics",
+          "range": 3,
+          "value": 1
+        },
+        {
+          "action": "signalGraphics",
+          "queue": "graphics",
+          "range": 3,
+          "value": 1176
+        },
+        {
+          "action": "signalFrame",
+          "queue": "graphics",
+          "range": null,
+          "value": 306
+        }
+      ]
+    },
+    {
+      "id": "shadow128objects-t4-q2-01-vulkan",
+      "case": "shadow128objects-t4-q2",
+      "backend": "vulkan",
+      "repeat": 0,
+      "sampleCount": 326,
+      "asyncCompute": true,
+      "recordingThreads": 4,
+      "recordingChunks": 4,
+      "candidates": 127,
+      "metricsMs": {
+        "cpuRenderMs": 5.5891693251533745,
+        "frameTimeMs": 6.1076595092024535,
+        "gpuPassSumMs": 0.1269877791411043,
+        "gpuQueueOverlapMs": 0.0,
+        "gpuQueueSpanMs": 0.3052048098159509,
+        "gpuWaitMs": 0.51849018404908,
+        "graphCompileMs": 0.02930766871165645,
+        "graphPrepareMs": 0.00566717791411043,
+        "graphRecordMs": 1.0596981595092023
+      },
+      "captureSha256": "51741d84b2f7ff53247fe14352b43d9d6b456749c19fe71e9667d2dbf5890e3a",
+      "reportSha256": "3dce06b34af4bdf9de126eefaa8615025a320e0b58b680006bdffd7532e6de5f",
+      "samplesSha256": "10007d0b55227779e5bb8931918965b51046e8b4c12664e2e402c2412a723750",
+      "queueClockDomain": "device timestamp clock relative to first slot; async requires calibrated_timestamps",
+      "queueTimeline": [
+        {
+          "endNs": 3424.0,
+          "pass": "Indexed.ClearCounts",
+          "queue": "compute",
+          "startNs": 0.0
+        },
+        {
+          "endNs": 15680.0,
+          "pass": "Indexed.FrustumCulling",
+          "queue": "compute",
+          "startNs": 4288.0
+        },
+        {
+          "endNs": -66816.0,
+          "pass": "MainLight.Shadow",
+          "queue": "graphics",
+          "startNs": -112832.0
+        },
+        {
+          "endNs": 159840.0,
+          "pass": "Deferred.GBuffer",
+          "queue": "graphics",
+          "startNs": 118720.0
+        },
+        {
+          "endNs": 176160.0,
+          "pass": "Deferred.Lighting",
+          "queue": "graphics",
+          "startNs": 163072.0
+        },
+        {
+          "endNs": 182784.0,
+          "pass": "Forward.Transparent",
+          "queue": "graphics",
+          "startNs": 177440.0
+        },
+        {
+          "endNs": 186080.0,
+          "pass": "Display.ToneMapping",
+          "queue": "graphics",
+          "startNs": 183424.0
+        }
+      ],
+      "queueSubmissions": [
+        {
+          "action": "execute",
+          "queue": "graphics",
+          "range": 0,
+          "value": 1
+        },
+        {
+          "action": "signalGraphics",
+          "queue": "graphics",
+          "range": 0,
+          "value": 1317
+        },
+        {
+          "action": "waitGraphics",
+          "queue": "compute",
+          "range": 1,
+          "value": 1317
+        },
+        {
+          "action": "waitFrame",
+          "queue": "compute",
+          "range": 1,
+          "value": 341
+        },
+        {
+          "action": "execute",
+          "queue": "compute",
+          "range": 1,
+          "value": 1
+        },
+        {
+          "action": "signalCompute",
+          "queue": "compute",
+          "range": 1,
+          "value": 1318
+        },
+        {
+          "action": "execute",
+          "queue": "graphics",
+          "range": 2,
+          "value": 1
+        },
+        {
+          "action": "signalGraphics",
+          "queue": "graphics",
+          "range": 2,
+          "value": 1319
+        },
+        {
+          "action": "waitCompute",
+          "queue": "graphics",
+          "range": 3,
+          "value": 1318
+        },
+        {
+          "action": "execute",
+          "queue": "graphics",
+          "range": 3,
+          "value": 1
+        },
+        {
+          "action": "signalGraphics",
+          "queue": "graphics",
+          "range": 3,
+          "value": 1320
+        },
+        {
+          "action": "waitCompute",
+          "queue": "graphics",
+          "range": null,
+          "value": 1318
+        },
+        {
+          "action": "signalFrame",
+          "queue": "graphics",
+          "range": null,
+          "value": 342
+        }
+      ]
+    },
+    {
+      "id": "shadow128objects-t4-q2-02-vulkan",
+      "case": "shadow128objects-t4-q2",
+      "backend": "vulkan",
+      "repeat": 1,
+      "sampleCount": 320,
+      "asyncCompute": true,
+      "recordingThreads": 4,
+      "recordingChunks": 4,
+      "candidates": 127,
+      "metricsMs": {
+        "cpuRenderMs": 5.690293437499996,
+        "frameTimeMs": 6.225317812499996,
+        "gpuPassSumMs": 0.12584270000000006,
+        "gpuQueueOverlapMs": 0.0,
+        "gpuQueueSpanMs": 0.3104068999999996,
+        "gpuWaitMs": 0.5350243750000003,
+        "graphCompileMs": 0.030311874999999985,
+        "graphPrepareMs": 0.006178125,
+        "graphRecordMs": 1.1892593750000016
+      },
+      "captureSha256": "51741d84b2f7ff53247fe14352b43d9d6b456749c19fe71e9667d2dbf5890e3a",
+      "reportSha256": "aaee061c1f631dff41f3f1507248371407adfe71953ed7ab07be9e8074ec279d",
+      "samplesSha256": "c8aec86c1142e9ab2a13b0215307ee8f84695f7027d7759a05830642ade13a06",
+      "queueClockDomain": "device timestamp clock relative to first slot; async requires calibrated_timestamps",
+      "queueTimeline": [
+        {
+          "endNs": 2592.0,
+          "pass": "Indexed.ClearCounts",
+          "queue": "compute",
+          "startNs": 0.0
+        },
+        {
+          "endNs": 14880.0,
+          "pass": "Indexed.FrustumCulling",
+          "queue": "compute",
+          "startNs": 3456.0
+        },
+        {
+          "endNs": -68128.0,
+          "pass": "MainLight.Shadow",
+          "queue": "graphics",
+          "startNs": -118912.0
+        },
+        {
+          "endNs": 163552.0,
+          "pass": "Deferred.GBuffer",
+          "queue": "graphics",
+          "startNs": 123104.0
+        },
+        {
+          "endNs": 179648.0,
+          "pass": "Deferred.Lighting",
+          "queue": "graphics",
+          "startNs": 166816.0
+        },
+        {
+          "endNs": 186240.0,
+          "pass": "Forward.Transparent",
+          "queue": "graphics",
+          "startNs": 180960.0
+        },
+        {
+          "endNs": 189664.0,
+          "pass": "Display.ToneMapping",
+          "queue": "graphics",
+          "startNs": 186880.0
+        }
+      ],
+      "queueSubmissions": [
+        {
+          "action": "execute",
+          "queue": "graphics",
+          "range": 0,
+          "value": 1
+        },
+        {
+          "action": "signalGraphics",
+          "queue": "graphics",
+          "range": 0,
+          "value": 1293
+        },
+        {
+          "action": "waitGraphics",
+          "queue": "compute",
+          "range": 1,
+          "value": 1293
+        },
+        {
+          "action": "waitFrame",
+          "queue": "compute",
+          "range": 1,
+          "value": 335
+        },
+        {
+          "action": "execute",
+          "queue": "compute",
+          "range": 1,
+          "value": 1
+        },
+        {
+          "action": "signalCompute",
+          "queue": "compute",
+          "range": 1,
+          "value": 1294
+        },
+        {
+          "action": "execute",
+          "queue": "graphics",
+          "range": 2,
+          "value": 1
+        },
+        {
+          "action": "signalGraphics",
+          "queue": "graphics",
+          "range": 2,
+          "value": 1295
+        },
+        {
+          "action": "waitCompute",
+          "queue": "graphics",
+          "range": 3,
+          "value": 1294
+        },
+        {
+          "action": "execute",
+          "queue": "graphics",
+          "range": 3,
+          "value": 1
+        },
+        {
+          "action": "signalGraphics",
+          "queue": "graphics",
+          "range": 3,
+          "value": 1296
+        },
+        {
+          "action": "waitCompute",
+          "queue": "graphics",
+          "range": null,
+          "value": 1294
+        },
+        {
+          "action": "signalFrame",
+          "queue": "graphics",
+          "range": null,
+          "value": 336
+        }
+      ]
+    },
+    {
+      "id": "shadow128objects-t4-q2-02-dx12",
+      "case": "shadow128objects-t4-q2",
+      "backend": "dx12",
+      "repeat": 1,
+      "sampleCount": 297,
+      "asyncCompute": true,
+      "recordingThreads": 4,
+      "recordingChunks": 4,
+      "candidates": 127,
+      "metricsMs": {
+        "cpuRenderMs": 6.429081818181814,
+        "frameTimeMs": 6.708754545454548,
+        "gpuPassSumMs": 0.13580272053872053,
+        "gpuQueueOverlapMs": 0.002890006734006735,
+        "gpuQueueSpanMs": 0.16862347474747466,
+        "gpuWaitMs": 0.2796727272727273,
+        "graphCompileMs": 0.03275993265993262,
+        "graphPrepareMs": 0.006803367003367005,
+        "graphRecordMs": 1.3697191919191918
+      },
+      "captureSha256": "631212c06059a44dceba1c1c9bbc7c62b410c9b77326025ed91b367c9cbc7cb9",
+      "reportSha256": "c78438acd7b69cc545a0cf46ad4c1c835856d47664e97d5041f00cb685aea4fc",
+      "samplesSha256": "f209b1c7245b6f17cf45e309dc4ba58b16f16f7db1fb5e32f1f5c682eca2489f",
+      "queueClockDomain": "QPC calibrated per queue",
+      "queueTimeline": [
+        {
+          "endNs": 77394262407868.0,
+          "pass": "Indexed.ClearCounts",
+          "queue": "compute",
+          "startNs": 77394262404156.0
+        },
+        {
+          "endNs": 77394262416668.0,
+          "pass": "Indexed.FrustumCulling",
+          "queue": "compute",
+          "startNs": 77394262407964.0
+        },
+        {
+          "endNs": 77394262481892.0,
+          "pass": "MainLight.Shadow",
+          "queue": "graphics",
+          "startNs": 77394262431300.0
+        },
+        {
+          "endNs": 77394262538596.0,
+          "pass": "Deferred.GBuffer",
+          "queue": "graphics",
+          "startNs": 77394262492356.0
+        },
+        {
+          "endNs": 77394262554756.0,
+          "pass": "Deferred.Lighting",
+          "queue": "graphics",
+          "startNs": 77394262538596.0
+        },
+        {
+          "endNs": 77394262560548.0,
+          "pass": "Forward.Transparent",
+          "queue": "graphics",
+          "startNs": 77394262554852.0
+        },
+        {
+          "endNs": 77394262563012.0,
+          "pass": "Display.ToneMapping",
+          "queue": "graphics",
+          "startNs": 77394262560548.0
+        }
+      ],
+      "queueSubmissions": [
+        {
+          "action": "waitFrame",
+          "queue": "compute",
+          "range": null,
+          "value": 312
+        },
+        {
+          "action": "execute",
+          "queue": "graphics",
+          "range": 0,
+          "value": 1
+        },
+        {
+          "action": "signalGraphics",
+          "queue": "graphics",
+          "range": 0,
+          "value": 1201
+        },
+        {
+          "action": "waitGraphics",
+          "queue": "compute",
+          "range": 1,
+          "value": 1201
+        },
+        {
+          "action": "execute",
+          "queue": "compute",
+          "range": 1,
+          "value": 1
+        },
+        {
+          "action": "signalCompute",
+          "queue": "compute",
+          "range": 1,
+          "value": 1202
+        },
+        {
+          "action": "execute",
+          "queue": "graphics",
+          "range": 2,
+          "value": 1
+        },
+        {
+          "action": "signalGraphics",
+          "queue": "graphics",
+          "range": 2,
+          "value": 1203
+        },
+        {
+          "action": "waitCompute",
+          "queue": "graphics",
+          "range": 3,
+          "value": 1202
+        },
+        {
+          "action": "execute",
+          "queue": "graphics",
+          "range": 3,
+          "value": 1
+        },
+        {
+          "action": "signalGraphics",
+          "queue": "graphics",
+          "range": 3,
+          "value": 1204
+        },
+        {
+          "action": "signalFrame",
+          "queue": "graphics",
+          "range": null,
+          "value": 313
+        }
+      ]
+    }
+  ],
+  "comparisons": [
+    {
+      "backend": "dx12",
+      "case": "n4096",
+      "recordingThreads": 1,
+      "pixelsEqual": true,
+      "singleQueue": {
+        "samples": 190,
+        "recordingChunks": [
+          1
+        ],
+        "metricsMs": {
+          "cpuRenderMs": 21.460588817377314,
+          "frameTimeMs": 22.134244948856463,
+          "gpuPassSumMs": 0.9009100140213768,
+          "gpuQueueOverlapMs": 0.0,
+          "gpuQueueSpanMs": 0.9018046219974717,
+          "gpuWaitMs": 0.6736561314791403,
+          "graphCompileMs": 0.02402533616825652,
+          "graphPrepareMs": 0.00584128835766004,
+          "graphRecordMs": 0.13764019078266862
+        },
+        "frameP95MeanMs": 30.782200000000003
+      },
+      "asyncCompute": {
+        "samples": 216,
+        "recordingChunks": [
+          4
+        ],
+        "metricsMs": {
+          "cpuRenderMs": 18.039291464460263,
+          "frameTimeMs": 18.51116093629426,
+          "gpuPassSumMs": 0.899702914173026,
+          "gpuQueueOverlapMs": 0.0026700747663551405,
+          "gpuQueueSpanMs": 0.9624220044585443,
+          "gpuWaitMs": 0.4718694718340052,
+          "graphCompileMs": 0.024917932778873365,
+          "graphPrepareMs": 0.0054856254822944345,
+          "graphRecordMs": 0.13002056503472514
+        },
+        "frameP95MeanMs": 20.871305
+      }
+    },
+    {
+      "backend": "dx12",
+      "case": "n4096",
+      "recordingThreads": 4,
+      "pixelsEqual": true,
+      "singleQueue": {
+        "samples": 219,
+        "recordingChunks": [
+          4
+        ],
+        "metricsMs": {
+          "cpuRenderMs": 17.858668880447482,
+          "frameTimeMs": 18.332708490566038,
+          "gpuPassSumMs": 0.8966404688595759,
+          "gpuQueueOverlapMs": 0.0,
+          "gpuQueueSpanMs": 0.9002857572215728,
+          "gpuWaitMs": 0.4740396101185507,
+          "graphCompileMs": 0.023792310903322757,
+          "graphPrepareMs": 0.00517772165637001,
+          "graphRecordMs": 0.12655171147103017
+        },
+        "frameP95MeanMs": 19.746470000000002
+      },
+      "asyncCompute": {
+        "samples": 214,
+        "recordingChunks": [
+          4
+        ],
+        "metricsMs": {
+          "cpuRenderMs": 18.28491448598131,
+          "frameTimeMs": 18.71017523364486,
+          "gpuPassSumMs": 0.9059904299065422,
+          "gpuQueueOverlapMs": 0.0026869158878504665,
+          "gpuQueueSpanMs": 0.9690763177570094,
+          "gpuWaitMs": 0.4252607476635514,
+          "graphCompileMs": 0.025850934579439253,
+          "graphPrepareMs": 0.005996261682242992,
+          "graphRecordMs": 0.12614205607476636
+        },
+        "frameP95MeanMs": 19.997525
+      }
+    },
+    {
+      "backend": "dx12",
+      "case": "n64",
+      "recordingThreads": 1,
+      "pixelsEqual": true,
+      "singleQueue": {
+        "samples": 3898,
+        "recordingChunks": [
+          1
+        ],
+        "metricsMs": {
+          "cpuRenderMs": 0.802424060662245,
+          "frameTimeMs": 1.0034809976976653,
+          "gpuPassSumMs": 0.041487872469857634,
+          "gpuQueueOverlapMs": 0.0,
+          "gpuQueueSpanMs": 0.04187293645851795,
+          "gpuWaitMs": 0.20105693703541966,
+          "graphCompileMs": 0.019030274276288582,
+          "graphPrepareMs": 0.0037958567469056105,
+          "graphRecordMs": 0.10127005383012291
+        },
+        "frameP95MeanMs": 1.213925
+      },
+      "asyncCompute": {
+        "samples": 3053,
+        "recordingChunks": [
+          4
+        ],
+        "metricsMs": {
+          "cpuRenderMs": 1.0091701466058238,
+          "frameTimeMs": 1.3186470821160325,
+          "gpuPassSumMs": 0.04487569325930965,
+          "gpuQueueOverlapMs": 0.0008707530446525499,
+          "gpuQueueSpanMs": 0.10759988120338587,
+          "gpuWaitMs": 0.3094769355102075,
+          "graphCompileMs": 0.021087940038129888,
+          "graphPrepareMs": 0.004188847939486483,
+          "graphRecordMs": 0.10795758952134658
+        },
+        "frameP95MeanMs": 1.9526599999999967
+      }
+    },
+    {
+      "backend": "dx12",
+      "case": "n64",
+      "recordingThreads": 4,
+      "pixelsEqual": true,
+      "singleQueue": {
+        "samples": 3163,
+        "recordingChunks": [
+          4
+        ],
+        "metricsMs": {
+          "cpuRenderMs": 0.9848558737250763,
+          "frameTimeMs": 1.237078340050299,
+          "gpuPassSumMs": 0.04345798809338186,
+          "gpuQueueOverlapMs": 0.0,
+          "gpuQueueSpanMs": 0.04553580588613948,
+          "gpuWaitMs": 0.252222466325221,
+          "graphCompileMs": 0.021955285670876748,
+          "graphPrepareMs": 0.004025747941930252,
+          "graphRecordMs": 0.10814134651137693
+        },
+        "frameP95MeanMs": 1.459272499999999
+      },
+      "asyncCompute": {
+        "samples": 2618,
+        "recordingChunks": [
+          4
+        ],
+        "metricsMs": {
+          "cpuRenderMs": 1.162640728938365,
+          "frameTimeMs": 1.5018586150744282,
+          "gpuPassSumMs": 0.04588575632371078,
+          "gpuQueueOverlapMs": 0.0008492204614195879,
+          "gpuQueueSpanMs": 0.11549503642352146,
+          "gpuWaitMs": 0.33921788613606274,
+          "graphCompileMs": 0.025055994839840275,
+          "graphPrepareMs": 0.004351567730459744,
+          "graphRecordMs": 0.11005616706938368
+        },
+        "frameP95MeanMs": 2.53562
+      }
+    },
+    {
+      "backend": "dx12",
+      "case": "shadow128objects",
+      "recordingThreads": 1,
+      "pixelsEqual": true,
+      "singleQueue": {
+        "samples": 611,
+        "recordingChunks": [
+          1
+        ],
+        "metricsMs": {
+          "cpuRenderMs": 6.187317248711338,
+          "frameTimeMs": 6.53396784310567,
+          "gpuPassSumMs": 0.13085273092783506,
+          "gpuQueueOverlapMs": 0.0,
+          "gpuQueueSpanMs": 0.13101989003436432,
+          "gpuWaitMs": 0.34665059439433,
+          "graphCompileMs": 0.030676397121993135,
+          "graphPrepareMs": 0.005665229274054979,
+          "graphRecordMs": 1.3485083150773194
+        },
+        "frameP95MeanMs": 7.4193750000000005
+      },
+      "asyncCompute": {
+        "samples": 588,
+        "recordingChunks": [
+          4
+        ],
+        "metricsMs": {
+          "cpuRenderMs": 6.434258837678374,
+          "frameTimeMs": 6.785122426304378,
+          "gpuPassSumMs": 0.13651187814575677,
+          "gpuQueueOverlapMs": 0.008165480148840231,
+          "gpuQueueSpanMs": 0.1811126650978938,
+          "gpuWaitMs": 0.35086358862601014,
+          "graphCompileMs": 0.032963244346041934,
+          "graphPrepareMs": 0.006489464685221463,
+          "graphRecordMs": 1.3761741946514898
+        },
+        "frameP95MeanMs": 8.31338
+      }
+    },
+    {
+      "backend": "dx12",
+      "case": "shadow128objects",
+      "recordingThreads": 4,
+      "pixelsEqual": true,
+      "singleQueue": {
+        "samples": 620,
+        "recordingChunks": [
+          2
+        ],
+        "metricsMs": {
+          "cpuRenderMs": 6.08637032050481,
+          "frameTimeMs": 6.429497932025491,
+          "gpuPassSumMs": 0.13279929459785905,
+          "gpuQueueOverlapMs": 0.0,
+          "gpuQueueSpanMs": 0.13297262226664985,
+          "gpuWaitMs": 0.34312761152067967,
+          "graphCompileMs": 0.028714482069224036,
+          "graphPrepareMs": 0.005456593360823027,
+          "graphRecordMs": 1.328739187388063
+        },
+        "frameP95MeanMs": 6.969707499999999
+      },
+      "asyncCompute": {
+        "samples": 587,
+        "recordingChunks": [
+          4
+        ],
+        "metricsMs": {
+          "cpuRenderMs": 6.49541884012539,
+          "frameTimeMs": 6.7936265830721005,
+          "gpuPassSumMs": 0.1354518154417741,
+          "gpuQueueOverlapMs": 0.004803024056658539,
+          "gpuQueueSpanMs": 0.17351273047718563,
+          "gpuWaitMs": 0.2982077429467085,
+          "graphCompileMs": 0.03463841460582839,
+          "graphPrepareMs": 0.006850993846511089,
+          "graphRecordMs": 1.3727225269940784
+        },
+        "frameP95MeanMs": 7.35956
+      }
+    },
+    {
+      "backend": "vulkan",
+      "case": "n4096",
+      "recordingThreads": 1,
+      "pixelsEqual": true,
+      "singleQueue": {
+        "samples": 177,
+        "recordingChunks": [
+          1
+        ],
+        "metricsMs": {
+          "cpuRenderMs": 21.68226358024691,
+          "frameTimeMs": 22.872596913580246,
+          "gpuPassSumMs": 1.0003750246913579,
+          "gpuQueueOverlapMs": 0.0,
+          "gpuQueueSpanMs": 1.0088338209876544,
+          "gpuWaitMs": 1.1903333333333337,
+          "graphCompileMs": 0.025123881172839507,
+          "graphPrepareMs": 0.0055577160493827165,
+          "graphRecordMs": 0.1341506172839506
+        },
+        "frameP95MeanMs": 37.286725
+      },
+      "asyncCompute": {
+        "samples": 220,
+        "recordingChunks": [
+          4
+        ],
+        "metricsMs": {
+          "cpuRenderMs": 17.39881683201059,
+          "frameTimeMs": 18.190429117063488,
+          "gpuPassSumMs": 0.9926138571428572,
+          "gpuQueueOverlapMs": 0.0,
+          "gpuQueueSpanMs": 1.2125937830687827,
+          "gpuWaitMs": 0.7916122850529101,
+          "graphCompileMs": 0.024602695105820103,
+          "graphPrepareMs": 0.005211755952380954,
+          "graphRecordMs": 0.1145743386243386
+        },
+        "frameP95MeanMs": 19.3976075
+      }
+    },
+    {
+      "backend": "vulkan",
+      "case": "n4096",
+      "recordingThreads": 4,
+      "pixelsEqual": true,
+      "singleQueue": {
+        "samples": 223,
+        "recordingChunks": [
+          4
+        ],
+        "metricsMs": {
+          "cpuRenderMs": 17.470282934204157,
+          "frameTimeMs": 18.072504797613277,
+          "gpuPassSumMs": 0.9977611391711014,
+          "gpuQueueOverlapMs": 0.0,
+          "gpuQueueSpanMs": 1.0098138403483303,
+          "gpuWaitMs": 0.6022218634091273,
+          "graphCompileMs": 0.02545305999032414,
+          "graphPrepareMs": 0.005278378487340751,
+          "graphRecordMs": 0.12920706337687468
+        },
+        "frameP95MeanMs": 20.3688675
+      },
+      "asyncCompute": {
+        "samples": 212,
+        "recordingChunks": [
+          4
+        ],
+        "metricsMs": {
+          "cpuRenderMs": 18.174601206052518,
+          "frameTimeMs": 18.87420910547396,
+          "gpuPassSumMs": 0.9928455519359147,
+          "gpuQueueOverlapMs": 0.0,
+          "gpuQueueSpanMs": 1.215633056697819,
+          "gpuWaitMs": 0.6996078994214507,
+          "graphCompileMs": 0.0260509212283044,
+          "graphPrepareMs": 0.005322999554962174,
+          "graphRecordMs": 0.1162645838896306
+        },
+        "frameP95MeanMs": 20.89743
+      }
+    },
+    {
+      "backend": "vulkan",
+      "case": "n64",
+      "recordingThreads": 1,
+      "pixelsEqual": true,
+      "singleQueue": {
+        "samples": 4519,
+        "recordingChunks": [
+          1
+        ],
+        "metricsMs": {
+          "cpuRenderMs": 0.6295897142682525,
+          "frameTimeMs": 0.860152605447222,
+          "gpuPassSumMs": 0.036335563012515906,
+          "gpuQueueOverlapMs": 0.0,
+          "gpuQueueSpanMs": 0.04505221833077125,
+          "gpuWaitMs": 0.23056289117896855,
+          "graphCompileMs": 0.017821755323191545,
+          "graphPrepareMs": 0.0033810635727280847,
+          "graphRecordMs": 0.08937180691756347
+        },
+        "frameP95MeanMs": 0.9906675000000001
+      },
+      "asyncCompute": {
+        "samples": 2562,
+        "recordingChunks": [
+          4
+        ],
+        "metricsMs": {
+          "cpuRenderMs": 0.889932158478461,
+          "frameTimeMs": 1.578099762448216,
+          "gpuPassSumMs": 0.03520737724731529,
+          "gpuQueueOverlapMs": 0.0,
+          "gpuQueueSpanMs": 0.23886130376463005,
+          "gpuWaitMs": 0.6881676039697542,
+          "graphCompileMs": 0.023739958221051356,
+          "graphPrepareMs": 0.00411343719834694,
+          "graphRecordMs": 0.10791014063316978
+        },
+        "frameP95MeanMs": 2.4302899999999985
+      }
+    },
+    {
+      "backend": "vulkan",
+      "case": "n64",
+      "recordingThreads": 4,
+      "pixelsEqual": true,
+      "singleQueue": {
+        "samples": 3337,
+        "recordingChunks": [
+          4
+        ],
+        "metricsMs": {
+          "cpuRenderMs": 0.8635759072008571,
+          "frameTimeMs": 1.1694712575334858,
+          "gpuPassSumMs": 0.03633618068709257,
+          "gpuQueueOverlapMs": 0.0,
+          "gpuQueueSpanMs": 0.048998813803996746,
+          "gpuWaitMs": 0.3058953503326285,
+          "graphCompileMs": 0.021457385115943146,
+          "graphPrepareMs": 0.003838702219604068,
+          "graphRecordMs": 0.11732668570581886
+        },
+        "frameP95MeanMs": 1.6597499999999998
+      },
+      "asyncCompute": {
+        "samples": 2564,
+        "recordingChunks": [
+          4
+        ],
+        "metricsMs": {
+          "cpuRenderMs": 0.9707218262613561,
+          "frameTimeMs": 1.5301993577465205,
+          "gpuPassSumMs": 0.03549701922252113,
+          "gpuQueueOverlapMs": 0.0,
+          "gpuQueueSpanMs": 0.24707404402074346,
+          "gpuWaitMs": 0.5594775314851639,
+          "graphCompileMs": 0.025371339240456967,
+          "graphPrepareMs": 0.004141171847584514,
+          "graphRecordMs": 0.10762830435820947
+        },
+        "frameP95MeanMs": 2.6517024999999963
+      }
+    },
+    {
+      "backend": "vulkan",
+      "case": "shadow128objects",
+      "recordingThreads": 1,
+      "pixelsEqual": true,
+      "singleQueue": {
+        "samples": 642,
+        "recordingChunks": [
+          1
+        ],
+        "metricsMs": {
+          "cpuRenderMs": 5.795214428409622,
+          "frameTimeMs": 6.242198588111231,
+          "gpuPassSumMs": 0.12745564505546017,
+          "gpuQueueOverlapMs": 0.0,
+          "gpuQueueSpanMs": 0.138198741446649,
+          "gpuWaitMs": 0.44698415970160915,
+          "graphCompileMs": 0.028978715239806274,
+          "graphPrepareMs": 0.0055997578503358845,
+          "graphRecordMs": 1.1123029956256836
+        },
+        "frameP95MeanMs": 7.869375
+      },
+      "asyncCompute": {
+        "samples": 650,
+        "recordingChunks": [
+          4
+        ],
+        "metricsMs": {
+          "cpuRenderMs": 5.562805195235571,
+          "frameTimeMs": 6.1250740768444185,
+          "gpuPassSumMs": 0.12720189304650809,
+          "gpuQueueOverlapMs": 0.0,
+          "gpuQueueSpanMs": 0.31214451477048943,
+          "gpuWaitMs": 0.5622688816088474,
+          "graphCompileMs": 0.030429580745341606,
+          "graphPrepareMs": 0.00549158934252386,
+          "graphRecordMs": 1.0738911414937138
+        },
+        "frameP95MeanMs": 6.657864999999999
+      }
+    },
+    {
+      "backend": "vulkan",
+      "case": "shadow128objects",
+      "recordingThreads": 4,
+      "pixelsEqual": true,
+      "singleQueue": {
+        "samples": 665,
+        "recordingChunks": [
+          2
+        ],
+        "metricsMs": {
+          "cpuRenderMs": 5.574431588736827,
+          "frameTimeMs": 5.991070507041744,
+          "gpuPassSumMs": 0.12793863625502339,
+          "gpuQueueOverlapMs": 0.0,
+          "gpuQueueSpanMs": 0.14138054263060712,
+          "gpuWaitMs": 0.41663891830491295,
+          "graphCompileMs": 0.02865485862206292,
+          "graphPrepareMs": 0.005362687357445422,
+          "graphRecordMs": 1.0733122560732777
+        },
+        "frameP95MeanMs": 6.893314999999999
+      },
+      "asyncCompute": {
+        "samples": 646,
+        "recordingChunks": [
+          4
+        ],
+        "metricsMs": {
+          "cpuRenderMs": 5.639731381326685,
+          "frameTimeMs": 6.166488660851225,
+          "gpuPassSumMs": 0.12641523957055217,
+          "gpuQueueOverlapMs": 0.0,
+          "gpuQueueSpanMs": 0.30780585490797524,
+          "gpuWaitMs": 0.5267572795245401,
+          "graphCompileMs": 0.02980977185582822,
+          "graphPrepareMs": 0.005922651457055215,
+          "graphRecordMs": 1.124478767254602
+        },
+        "frameP95MeanMs": 6.6852374999999995
+      }
+    }
+  ],
+  "excludedSuite": {
+    "path": "out/m64-benchmark",
+    "manifestSha256": "975d4d968921001f56ba2dd2e70b1b1c82a73776b670e961d4ff461c109c2f94",
+    "reason": "Vulkan calibrated_timestamps was not yet enabled; cross-queue spans/overlap were not valid contractual evidence. Entire first suite excluded."
+  }
+}

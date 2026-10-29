@@ -1,6 +1,6 @@
 # Render Graph 与 Feature
 
-Graph 每帧构建，当前使用单 Graphics Queue；M6.3 支持可选的 CPU [并行原生命令录制](parallel-recording.md)，GPU 仍按计划顺序执行。资源依赖、剔除、屏障和提交属于 Graph；普通 Forward 的绘制与阶段组合属于 [Renderer](forward-pipeline.md)。Demo 使用空 Custom 组合注册 Feature，不使用 Forward 预设。
+Graph 每帧构建，默认使用单 Graphics Queue；M6.3 支持可选的 CPU [并行原生命令录制](parallel-recording.md)，M6.4 另支持显式校验的 [Buffer feeder Compute Queue](async-compute.md)。GPU 按依赖与真实队列等待执行。资源依赖、剔除、屏障和提交属于 Graph；普通 Forward 的绘制与阶段组合属于 [Renderer](forward-pipeline.md)。Demo 使用空 Custom 组合注册 Feature，不使用 Forward 预设。
 
 ## 资源与名称
 
@@ -123,7 +123,7 @@ GPU `gpu.{dx12,vulkan}.graph` 将六张图的输出与直接 RHI 基线及 CPU �
 | samples/graph/graph_features、graph_demo | Demo Feature 实例与 Custom 组合 |
 | samples/graph/graph_acceptance、graph_buffer_checks、forward_acceptance | GPU 行为验收 |
 
-当前仍是单视图、单 Graphics Queue、单 mip/layer、保守整 Buffer 依赖和固定 Store；M5 已扩展至最多八个颜色附件。名称表仅属于单张图，阶段枚举由 Renderer 提供。没有全局资源黑板、多队列、Alias、执行计划缓存或跨设备同步。M6.3 并行录制的独立原生上下文不改变资源同步计划。
+当前仍是单视图、单 mip/layer、保守整 Buffer 依赖和固定 Store；M5 已扩展至最多八个颜色附件。名称表仅属于单张图，阶段枚举由 Renderer 提供。没有全局资源黑板、Alias、执行计划缓存或跨设备同步。M6.3 的独立录制上下文不改变 GPU 依赖；M6.4 的多队列首版仅覆盖只读 Upload → 瞬态 Storage → Graphics 消费的 feeder 子图，整帧完成点覆盖两条队列。
 
 普通 Forward 验收另检查透明稳定排序、阶段顺序与剔除、回调输入所有权、双后端图像和独立阶段快照。实际配置见 [阶段计划](../design/phaseplan.md)。
 

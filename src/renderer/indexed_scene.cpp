@@ -363,6 +363,7 @@ void IndexedScene::Build(rendergraph::Graph& graph, const std::vector<IndexedDra
         auto counts =
             graph.CreateBuffer("Indexed.Count", {countBytes, rhi::Memory::Device, "", true});
         auto clear = graph.AddComputePass("Indexed.ClearCounts");
+        clear.AllowAsyncCompute();
         counts = clear.WriteBuffer(counts);
         clear.Execute(
             [pipeline = self.clearCounts, counts, countBytes,
@@ -373,6 +374,7 @@ void IndexedScene::Build(rendergraph::Graph& graph, const std::vector<IndexedDra
                 context.Dispatch(groups, 1);
             });
         auto pass = graph.AddComputePass("Indexed.FrustumCulling");
+        pass.AllowAsyncCompute();
         const auto objectsHandle =
             pass.ReadBuffer(objectBinding.buffer, Use::ShaderRead, objectBinding.range);
         const auto candidatesHandle =

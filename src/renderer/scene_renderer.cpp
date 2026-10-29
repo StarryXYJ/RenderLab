@@ -1872,7 +1872,9 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
         static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(
                                   std::chrono::steady_clock::now() - preparationStart)
                                   .count());
-    graph.Compile({.profile = options.profile, .recordingThreads = options.recordingThreads});
+    graph.Compile({.profile = options.profile,
+                   .recordingThreads = options.recordingThreads,
+                   .asyncCompute = options.asyncCompute});
     auto submitted = graph.Execute(self.pool, swapchain);
     if (indexed)
     {

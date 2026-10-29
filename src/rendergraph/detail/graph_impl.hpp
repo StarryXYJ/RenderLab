@@ -64,6 +64,7 @@ struct Pass
     std::string name, source;
     PassKind kind;
     bool sideEffect = false;
+    bool asyncEligible = false;
     std::vector<Access> accesses;
     std::vector<Attachment> colors;
     std::optional<Attachment> depth;
@@ -110,6 +111,7 @@ struct Graph::Impl
     detail::Resource& Resolve(uint32_t pass, uint64_t graph, uint32_t resource, uint32_t version,
                               bool texture, std::optional<Use> use = {});
     void Barriers();
+    void ScheduleQueues(bool enabled);
     void ValidateBindings(uint32_t pass, const rhi::BindingGroup& group);
     void CheckBufferRange(uint32_t pass, BufferHandle handle, uint64_t offset, uint64_t size);
 };

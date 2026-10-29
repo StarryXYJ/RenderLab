@@ -5,6 +5,12 @@
 
 namespace renderlab::rendergraph
 {
+void ComputePassBuilder::AllowAsyncCompute()
+{
+    auto& g = *graph_.impl_;
+    g.Builder(pass_);
+    g.passes[pass_].asyncEligible = true;
+}
 using detail::Require;
 namespace
 {

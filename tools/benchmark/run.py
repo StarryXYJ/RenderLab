@@ -58,7 +58,7 @@ def load_suite(config_path, args):
         raise ValueError("Backends must be distinct dx12/vulkan values")
     defaults = {"seconds": 10, "warmupSeconds": 2, "warmupFrames": 5, "width": 1280, "height": 720,
                 "quality": "medium", "view": "final", "validation": "off", "cpuProfiling": False,
-                "pipeline": "forward", "submission": "direct", "recordingThreads": 1}
+                "pipeline": "forward", "submission": "direct", "recordingThreads": 1, "asyncCompute": False}
     if set(config.get("defaults", {})) - set(defaults):
         raise ValueError("Unknown benchmark defaults")
     defaults.update(config.get("defaults", {}))
@@ -81,6 +81,8 @@ def load_suite(config_path, args):
             case["cpuProfiling"] = args.cpu_profile
         if not isinstance(case["cpuProfiling"], bool):
             raise ValueError("cpuProfiling requires a boolean")
+        if not isinstance(case["asyncCompute"], bool):
+            raise ValueError("asyncCompute requires a boolean")
         if case["pipeline"] not in ("forward", "deferred", "raytracing") or case["submission"] not in ("direct", "indexed-direct", "cpu-indirect", "gpu-culled"):
             raise ValueError("Invalid pipeline/submission")
         bounded(case["seconds"], .001, 3600, "seconds")
@@ -128,6 +130,8 @@ def validate_case(report, case, backend):
     expected.update(backend=backend, validation=case["validation"] == "on")
     if report.get("recordingThreads", 1) != case.get("recordingThreads", 1):
         raise ValueError("Recorded settings disagree with requested recordingThreads")
+    if report.get("asyncCompute", False) != case.get("asyncCompute", False):
+        raise ValueError("Recorded settings disagree with requested asyncCompute")
     budgets = {"requestedFrames": 0, "requestedSeconds": case["seconds"],
                "requestedWarmupFrames": case["warmupFrames"], "requestedWarmupSeconds": case["warmupSeconds"]}
     if (any(report[key] != value for key, value in expected.items()) or
@@ -170,6 +174,8 @@ def run_suite(config_path, output, args):
                            "--output", str(directory / "capture"), "--report", str(capability), "--log", str(directory / "player.log")]
                 if case["cpuProfiling"]:
                     command.append("--cpu-profile")
+                if case["asyncCompute"]:
+                    command.append("--async-compute")
                 item = {"id": run_id, "case": case["name"], "repeat": repeat, "backend": backend,
                         "sequence": len(manifest["runs"]), "command": command, "cwd": str(executable.parent),
                         "report": report.relative_to(output).as_posix(), "status": "running"}
