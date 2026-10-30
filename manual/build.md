@@ -100,6 +100,10 @@ python tools/benchmark/run.py sample/benchmark/foundation.json --output out/benc
 输出路径不得已存在。CPU 工具调用真实实现，结果含所有重复和二进制/源码身份；单线程 kernel、
 环境重新生成与稳定帧不是同一种成本。指标、探针开关和误差边界见 [Benchmark](../docs/benchmark.md#场景准备分解与-cpu-kernel)。
 
+环境预计算的独立原始算法对照为 `ctest --preset windows-release -R '^environment.contracts$'`，
+Debug 同名测试也需运行。CPU 报告的 `warmupMs` 包含首次构建固定表/LUT，`samples` 是暖调用；
+BRDF 暖调用返回独立副本而非重新积分，不能把该成本与旧版每次重新积分混为同一种 kernel。
+
 ## 运行 Sandbox
 
 ```powershell

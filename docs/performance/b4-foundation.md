@@ -108,3 +108,28 @@ Debug/Release 全目标构建成功，各 18 项 CPU/CLI 与 10 项双后端 GPU
 双后端固定 PBR/Shadow 与 17 spp 光追六对图像 hash 与 B4.2 相同，validation errors=0，
 既有警告保留。`out/b4/math/install` 实际安装了 Player 与 DirectXMath MIT 许可证，
 尚未将该安装检查描述为其他机器独立运行验收。未验证其他 CPU 或 ISA。
+
+## B4.4a 环境预计算
+
+沿用同机 Release、五次 CPU kernel 入口，数据见
+[precompute-cpu.json](b4-foundation/precompute-cpu.json)。改造前对照为 B4.3 的 math-cpu，
+均包含输出消费与分配/释放；cold 为本进程首次调用，不含 exe 启动，BRDF 的 cold 和环境表
+初始化相互独立。这是单轮短测，采样时另一个 Debug 构建仍在收尾，不能将全部时差归因于优化。
+
+| case | 改造前 cold / warm 均值 ms | 预计算 cold / warm 均值 ms |
+| --- | ---: | ---: |
+| environment.prefilter，32×16 输入 | 458.8981 / 458.4311 | 307.3955 / 310.1239 |
+| environment.brdf，64×64 输出 | 14.1717 / 14.1332 | 12.0811 / 0.00924 |
+
+sRGB 256 项、64×32 输出切线基和每层 128 个方向共享只读表；BRDF 半向量按行复用，
+完整固定 LUT 跨调用复用、返回独立副本。没有引入 SIMD 编译器或并行任务；常量表约 83 KiB、
+BRDF 像素 64 KiB 在进程内保留，不算 GPU 资源，也没有保存每个输入图像的缓存。
+冷/暖预滤波约减少 32%，不能将该生成成本当稳定帧 FPS 收益；BRDF 暖成本主要变为拷贝和校验。
+
+Debug/Release 全目标构建成功，各 19/19 CPU/CLI + 10/10 双后端 Alias/索引/反射/PBR/Scene 回归；
+环境参考逐元素相同（包括 BRDF、1×1、
+3×5、65×33、2×1 非均匀图和经纬接缝脉冲），恒定白色保持能量，并发首次初始化和编辑副本隔离通过。
+测试参考最初有一个位反转掩码抄写错误，修正为原版掩码后才作一致性结论；没有放宽误差阈值。
+双后端 PBR/Shadow 的 640×360 及光追的 257×193、固定 17 spp 六组图像 hash 与 B4.3 相同，
+validation errors=0，既有警告保留。原始证据 `out/b4/precompute`；误用 640×360 的首次光追
+捕获不参加 hash 配对，正确尺寸的证据为 `fixed-ray-257`。其他 CPU/ISA 和长期运行未验证。
