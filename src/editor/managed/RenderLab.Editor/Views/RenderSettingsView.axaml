@@ -2,6 +2,13 @@
  xmlns:vm="using:RenderLab.Editor.ViewModels" x:Class="RenderLab.Editor.Views.RenderSettingsView" x:DataType="vm:MainWindowViewModel">
  <ScrollViewer><StackPanel Margin="12" Spacing="10">
    <TextBlock Text="{Binding BackendName}" FontSize="18" />
+   <StackPanel Spacing="6" IsEnabled="{Binding DeviceControlsEnabled}">
+    <ComboBox ItemsSource="{Binding Backends}" SelectedIndex="{Binding SelectedBackendIndex}" HorizontalAlignment="Stretch" />
+    <CheckBox Content="GPU validation" IsChecked="{Binding SelectedValidation}" />
+    <Button Content="Apply API / Retry" Command="{Binding ApplyDeviceCommand}" />
+   </StackPanel>
+   <TextBlock Text="{Binding DeviceStatus}" TextWrapping="Wrap" />
+   <TextBlock Text="{Binding DeviceError}" TextWrapping="Wrap" Foreground="OrangeRed" />
    <TextBlock Text="{Binding Settings.Status}" TextWrapping="Wrap" />
    <TextBlock Text="{Binding Settings.AppliedSummary}" TextWrapping="Wrap" />
    <TextBlock Text="Controls below show requested values" FontStyle="Italic" />

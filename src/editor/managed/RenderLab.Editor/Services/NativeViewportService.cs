@@ -29,6 +29,11 @@ public sealed class NativeViewportService : IDisposable
     private ViewportConfig? savedConfiguration;
     private ulong requestSequence;
     private bool restoreConfiguration;
+    private bool retiring, viewportHidden;
+    private string? switchFailure;
+    private CancellationTokenSource? switchCancellation;
+    private DeviceSelection creatingDevice;
+    internal DeviceSwitchTransaction DeviceSwitch { get; }
     internal string UserSettingsPath => options.Smoke || options.BenchmarkSeconds > 0 ? options.Output :
         Path.Combine(Path.GetDirectoryName(options.Project)!, "UserSettings", "Editor");
     private readonly ViewportStats[] completedFrames = new ViewportStats[512];
@@ -49,6 +54,8 @@ public sealed class NativeViewportService : IDisposable
     public NativeViewportService(EditorOptions options)
     {
         this.options = options;
+        creatingDevice = new(options.Backend, options.Validation);
+        DeviceSwitch = new(creatingDevice);
         Pipeline = options.Pipeline;
     }
 
@@ -62,17 +69,18 @@ public sealed class NativeViewportService : IDisposable
             Close(Session);
         }
         AbiVersion = NativeMethods.AbiVersion();
-        if (AbiVersion != 6 || Marshal.SizeOf<ViewportStats>() != 256 || Marshal.SizeOf<CloseReport>() != 24 ||
+        if (AbiVersion != 7 || Marshal.SizeOf<ViewportStats>() != 256 || Marshal.SizeOf<CloseReport>() != 24 ||
             Marshal.SizeOf<ViewportConfig>() != 112 || Marshal.SizeOf<ViewportConfigState>() != 272)
         {
             throw new InvalidOperationException("Managed/native bridge ABI mismatch.");
         }
-        NativeMethods.Check(NativeMethods.Create(parent, options.Backend == "dx12" ? 0u : 1u,
-            options.Validation ? 1u : 0u, options.Profiling ? 1u : 0u,
+        NativeMethods.Check(NativeMethods.Create(parent, creatingDevice.Backend == "dx12" ? 0u : 1u,
+            creatingDevice.Validation ? 1u : 0u, options.Profiling ? 1u : 0u,
             options.TargetFps, options.BenchmarkSeconds > 0 ? 1u : 0u,
             options.Project, options.Shaders, Path.Combine(options.Output, $"native-{++logSequence}.log"),
             out var session, out var child));
         Session = session;
+        retiring = false;
         Configuration = default;
         Capabilities = "";
         restoreConfiguration = savedConfiguration is not null;
@@ -117,7 +125,9 @@ public sealed class NativeViewportService : IDisposable
     internal void Poll(bool hidden)
     {
         Dispatcher.UIThread.VerifyAccess();
-        NativeMethods.Check(NativeMethods.Update(Session, IsPaused || hidden ? 1u : 0u));
+        viewportHidden = hidden;
+        if (retiring) { return; }
+        NativeMethods.Check(NativeMethods.Update(Session, (IsPaused && !DeviceSwitch.Busy) || hidden ? 1u : 0u));
         NativeMethods.Check(NativeMethods.ReadFrames(Session, completedFrames, (uint)completedFrames.Length, out var count));
         for (var i = 0; i < count; ++i)
         {
@@ -144,6 +154,7 @@ public sealed class NativeViewportService : IDisposable
 
     internal void ReportFailure(Exception error)
     {
+        if (DeviceSwitch.Busy) { switchFailure = error.Message; return; }
         EditorDiagnostics.WriteError(options, error);
         Failed?.Invoke(error);
     }
@@ -174,6 +185,75 @@ public sealed class NativeViewportService : IDisposable
     }
 
     public void Dispose() => Close(Session);
+
+    internal void CancelSwitch() => switchCancellation?.Cancel();
+    internal async Task SwitchDeviceAsync(string backend, bool validation)
+    {
+        Dispatcher.UIThread.VerifyAccess();
+        if (backend is not ("dx12" or "vulkan")) { throw new ArgumentException("Unknown graphics API."); }
+        if (DeviceSwitch.Busy) { return; }
+        switchCancellation?.Dispose();
+        switchCancellation = new CancellationTokenSource();
+        var token = switchCancellation.Token;
+        ViewportConfig? preservedConfig = null;
+        float[]? preservedPose = null;
+        var captured = false;
+        await DeviceSwitch.RunAsync(new(backend, validation), async target =>
+        {
+            if (Session != 0)
+            {
+                retiring = true;
+                DeviceSwitch.Report("Retiring " + creatingDevice.Backend);
+                NativeMethods.ReleaseCapture();
+                NativeMethods.Check(NativeMethods.BeginStop(Session));
+                var retiringSession = Session;
+                while (true)
+                {
+                    token.ThrowIfCancellationRequested();
+                    if (Session != retiringSession) { throw new OperationCanceledException("Viewport was replaced during retirement."); }
+                    NativeMethods.Check(NativeMethods.IsRetired(retiringSession, out var retired));
+                    if (retired != 0) { break; }
+                    await Task.Delay(10, token);
+                }
+                Close(Session);
+            }
+            token.ThrowIfCancellationRequested();
+            if (!captured) { preservedConfig = savedConfiguration; preservedPose = savedCamera; captured = true; }
+            savedConfiguration = preservedConfig; savedCamera = preservedPose;
+            creatingDevice = target; switchFailure = null;
+            DeviceSwitch.Report("Creating " + target.Backend);
+            Program.Logging?.Logger.Information("Creating device {Backend} with validation {Validation}", target.Backend, target.Validation);
+            RecreateRequested?.Invoke();
+            var expectedSession = Session;
+            var activeWait = TimeSpan.Zero;
+            var previous = Stopwatch.GetTimestamp();
+            while (true)
+            {
+                await Task.Delay(10, token);
+                if (Session != expectedSession) { throw new OperationCanceledException("Viewport was replaced during device creation."); }
+                var now = Stopwatch.GetTimestamp();
+                if (!viewportHidden) { activeWait += Stopwatch.GetElapsedTime(previous, now); }
+                previous = now;
+                if (switchFailure is not null) { throw new InvalidOperationException(switchFailure); }
+                if (Configuration.Status == 3) { throw new InvalidOperationException(ConfigurationError); }
+                if (Session != 0 && !restoreConfiguration && Configuration.Status == 2 && Stats.Frames > 0) { break; }
+                if (activeWait > TimeSpan.FromSeconds(45)) { throw new TimeoutException("Waiting for the configured first frame."); }
+            }
+        }, token);
+        if (DeviceSwitch.Failed && Session != 0)
+        {
+            retiring = true;
+            NativeMethods.Check(NativeMethods.BeginStop(Session));
+            while (true)
+            {
+                NativeMethods.Check(NativeMethods.IsRetired(Session, out var retired));
+                if (retired != 0) { break; }
+                await Task.Delay(10, token);
+            }
+            Close(Session);
+        }
+        if (DeviceSwitch.Error.Length > 0) { Program.Logging?.Logger.Error("Device switch: {Error}", DeviceSwitch.Error); }
+    }
 
     internal ViewportConfig EditableConfig => Configuration.Status == 3 && Configuration.Applied.Size != 0 ? Configuration.Applied : Configuration.Requested;
     internal void Submit(ViewportConfig config)
@@ -265,7 +345,7 @@ public sealed class NativeViewportService : IDisposable
                 var logEvent = new LogEvent(DateTimeOffset.FromUnixTimeMilliseconds(entry.GetProperty("time").GetInt64()), level, null,
                     new MessageTemplateParser().Parse("{NativeMessage}"), [
                         new LogEventProperty("NativeMessage", new ScalarValue(entry.GetProperty("message").GetString())),
-                        new LogEventProperty("SourceContext", new ScalarValue("Native." + options.Backend)),
+                        new LogEventProperty("SourceContext", new ScalarValue("Native." + creatingDevice.Backend)),
                         new LogEventProperty("Origin", new ScalarValue("Native")),
                         new LogEventProperty("SessionGeneration", new ScalarValue(Session)),
                         new LogEventProperty("NativeSequence", new ScalarValue(sequence)),

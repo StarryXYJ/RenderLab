@@ -307,7 +307,7 @@ struct Session
     uint64_t paints = 0;
     std::mutex mutex;
     NativeHandle wake{CreateEventW(nullptr, FALSE, FALSE, nullptr)};
-    bool stop = false, ready = false;
+    bool stop = false, ready = false, retired = false;
     InputSnapshot input;
     uint32_t pipeline = 2;
     float exposure = 0;
@@ -811,6 +811,8 @@ struct Session
                             error = failure.what();
                     }
                 }
+                std::lock_guard lock(mutex);
+                retired = true;
             });
     }
     ~Session()
@@ -896,11 +898,18 @@ struct Session
         frameCount -= count;
         return static_cast<uint32_t>(count);
     }
+    void BeginStop()
+    {
+        closing = true;
+        {
+            std::lock_guard lock(mutex);
+            stop = true;
+        }
+        SetEvent(wake.value);
+    }
     rl_viewport_close_report Close()
     {
-        if (closing)
-            return closed;
-        closing = true;
+        BeginStop();
         if (worker.joinable())
         {
             {
@@ -973,7 +982,22 @@ template <class F> rl_status Guard(F&& operation)
 
 uint32_t RENDERLAB_EDITOR_CALL rl_editor_abi_version()
 {
-    return 6;
+    return 7;
+}
+rl_status RENDERLAB_EDITOR_CALL rl_viewport_begin_stop(rl_viewport_handle handle)
+{
+    return Guard([&] { Find(handle).BeginStop(); });
+}
+rl_status RENDERLAB_EDITOR_CALL rl_viewport_is_retired(rl_viewport_handle handle, uint32_t* retired)
+{
+    return Guard(
+        [&]
+        {
+            Require(retired != nullptr, "Retirement output is null");
+            auto& session = Find(handle);
+            std::lock_guard lock(session.mutex);
+            *retired = session.retired ? 1u : 0u;
+        });
 }
 rl_status RENDERLAB_EDITOR_CALL rl_viewport_configure_v2(rl_viewport_handle handle,
                                                          const rl_viewport_config* config)

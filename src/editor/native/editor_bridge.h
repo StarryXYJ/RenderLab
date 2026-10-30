@@ -75,6 +75,11 @@ extern "C"
     rl_viewport_step(rl_viewport_handle session);
 
     RENDERLAB_EDITOR_API uint32_t RENDERLAB_EDITOR_CALL rl_editor_abi_version(void);
+    /* Nonblocking retirement handshake. UI continues dispatching window messages while waiting. */
+    RENDERLAB_EDITOR_API rl_status RENDERLAB_EDITOR_CALL
+    rl_viewport_begin_stop(rl_viewport_handle session);
+    RENDERLAB_EDITOR_API rl_status RENDERLAB_EDITOR_CALL
+    rl_viewport_is_retired(rl_viewport_handle session, uint32_t* retired);
     /* UI-thread APIs. Stop retires GPU work but retains the session for final log drain. */
     RENDERLAB_EDITOR_API rl_status RENDERLAB_EDITOR_CALL
     rl_viewport_stop(rl_viewport_handle session, rl_viewport_close_report* report);

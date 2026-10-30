@@ -20,7 +20,9 @@ internal sealed class SmokeTest
     private readonly EditorOptions options;
     private readonly List<string> checks = [];
     private readonly Stopwatch elapsed = Stopwatch.StartNew();
-    private readonly DispatcherTimer watchdog = new() { Interval = TimeSpan.FromSeconds(120) };
+    private readonly DispatcherTimer watchdog = new() { Interval = TimeSpan.FromSeconds(300) };
+    private Task? switchTask;
+    private int deviceSwitches;
     private int stage, ticks, resizeBurstTicks;
     private int acknowledgedPauseStage = -1;
     private ulong oldHandle, savedFrames, savedResizes, savedPaused, savedInput;
@@ -70,7 +72,7 @@ internal sealed class SmokeTest
         }
         try
         {
-            Require(elapsed.Elapsed < TimeSpan.FromSeconds(120), "Viewport smoke timed out.");
+            Require(elapsed.Elapsed < TimeSpan.FromSeconds(300), "Viewport smoke timed out.");
             if (stage == 17 && resizeBurstTicks < 6)
             {
                 ++resizeBurstTicks;
@@ -427,7 +429,37 @@ internal sealed class SmokeTest
                     Require(window.ViewportService.Configuration.Applied.ShadowResolution == 256,
                         "Saved layout restore lost the runtime configuration.");
                     checks.Add("saved layout restored through the menu with mounted settings and preserved runtime configuration");
-                    Finish(stats);
+                    break;
+                case 31:
+                    if (deviceSwitches == 20)
+                    {
+                        window.ViewModel.IsPaused = false;
+                        checks.Add("ten DX12/Vulkan round trips, paused/minimized transitions, configuration and stale-session isolation");
+                        Finish(stats);
+                        break;
+                    }
+                    if (switchTask is null)
+                    {
+                        oldHandle = host.Session;
+                        window.ViewModel.IsPaused = deviceSwitches % 3 == 0;
+                        if (deviceSwitches % 4 == 1)
+                        {
+                            window.WindowState = WindowState.Minimized;
+                            DispatcherTimer.RunOnce(() => window.WindowState = WindowState.Normal, TimeSpan.FromMilliseconds(600));
+                        }
+                        var target = window.ViewportService.DeviceSwitch.Current.Backend == "dx12" ? "vulkan" : "dx12";
+                        switchTask = window.ViewportService.SwitchDeviceAsync(target, options.Validation);
+                    }
+                    if (!switchTask.IsCompleted) { --stage; break; }
+                    switchTask.GetAwaiter().GetResult();
+                    Require(!window.ViewportService.DeviceSwitch.Failed && window.ViewportService.DeviceSwitch.Error.Length == 0,
+                        "API switch failed or silently rolled back.");
+                    Require(host.Session != oldHandle && NativeMethods.GetStats(oldHandle, out _) == 2,
+                        "API switch retained a stale session.");
+                    Require(window.ViewportService.Configuration.Applied.ShadowResolution == 256,
+                        "API switch lost fixed-scene overrides.");
+                    ++deviceSwitches; switchTask = null;
+                    --stage;
                     break;
             }
         }

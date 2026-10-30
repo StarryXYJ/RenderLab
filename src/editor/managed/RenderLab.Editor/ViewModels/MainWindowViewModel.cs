@@ -13,8 +13,14 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     private readonly NativeViewportService viewport;
     private bool restoringSettings;
     private readonly RefreshGate refresh = new();
-    public string Title { get; }
-    public string BackendName { get; }
+    public string Title => $"RenderLab · {BackendName}";
+    public string BackendName => viewport.DeviceSwitch.Current.Backend == "dx12" ? "Direct3D 12" : "Vulkan";
+    [ObservableProperty] private int selectedBackendIndex;
+    [ObservableProperty] private bool selectedValidation;
+    public IReadOnlyList<string> Backends { get; } = ["Direct3D 12", "Vulkan"];
+    public bool DeviceControlsEnabled => !viewport.DeviceSwitch.Busy;
+    public string DeviceStatus => viewport.DeviceSwitch.Status;
+    public string DeviceError => viewport.DeviceSwitch.Error;
     public IReadOnlyList<string> Pipelines { get; } = ["Forward", "Deferred", "Ray Tracing"];
     public RenderSettingsViewModel Settings { get; }
     public string PauseLabel => IsPaused ? "Resume viewport" : "Pause viewport";
@@ -46,8 +52,9 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         this.viewport = viewport;
         Settings = settings;
         SelectedPipelineIndex = (int)options.Pipeline - 1;
-        Title = $"RenderLab · Avalonia Host · {options.Backend.ToUpperInvariant()}";
-        BackendName = options.Backend == "dx12" ? "Direct3D 12" : "Vulkan";
+        SelectedBackendIndex = options.Backend == "dx12" ? 0 : 1;
+        SelectedValidation = options.Validation;
+        viewport.DeviceSwitch.Changed += UpdateDevice;
         viewport.StatsUpdated += UpdateStats;
         viewport.Failed += ShowFailure;
         viewport.ConfigurationUpdated += ReflectConfiguration;
@@ -104,6 +111,18 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     [RelayCommand]
     private void RecreateViewport() => Execute(viewport.RequestRecreate);
     [RelayCommand] private void SingleStep() => Execute(viewport.SingleStep);
+    [RelayCommand]
+    private async Task ApplyDeviceAsync()
+    {
+        try { await viewport.SwitchDeviceAsync(SelectedBackendIndex == 0 ? "dx12" : "vulkan", SelectedValidation); }
+        catch (OperationCanceledException) { }
+        catch (Exception error) { ShowFailure(error); }
+    }
+    private void UpdateDevice()
+    {
+        OnPropertyChanged(nameof(Title)); OnPropertyChanged(nameof(BackendName));
+        OnPropertyChanged(nameof(DeviceControlsEnabled)); OnPropertyChanged(nameof(DeviceStatus)); OnPropertyChanged(nameof(DeviceError));
+    }
     private void ReflectConfiguration()
     {
         if (viewport.Configuration.Ready == 0) { StatusText = "Viewport closed / initializing"; return; }
@@ -153,5 +172,6 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         viewport.StatsUpdated -= UpdateStats;
         viewport.Failed -= ShowFailure;
         viewport.ConfigurationUpdated -= ReflectConfiguration;
+        viewport.DeviceSwitch.Changed -= UpdateDevice;
     }
 }

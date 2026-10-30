@@ -30,6 +30,10 @@ internal static class NativeMethods
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "rl_editor_abi_version")]
     internal static extern uint AbiVersion();
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "rl_viewport_begin_stop")]
+    internal static extern int BeginStop(ulong session);
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "rl_viewport_is_retired")]
+    internal static extern int IsRetired(ulong session, out uint retired);
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "rl_viewport_configure_v2")]
     internal static extern int ConfigureV2(ulong session, in ViewportConfig config);
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "rl_viewport_get_config")]

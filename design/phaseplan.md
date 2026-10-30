@@ -5,7 +5,7 @@
 ## 当前状态
 
 - 当前实施阶段：M7 固定场景渲染工作台；M6 核心 M6.1–M6.5、M0–M5、R1、B1–B3 DONE。可选 M6.0 Forward+ 仍为 DEFERRED。
-- 当前工作项：M7.2a–b 实现与本机自动验证 DONE；本轮授权范围已完成，后续 M7.2c 等待授权。M7.2c–f 未启动，M7.3–M7.6 本轮 DEFERRED。
+- 当前工作项：M7.2a–b DONE；用户授权实现到 M7.2f，M7.2c 已完成，当前 M7.2d Render Graph Viewer IN_PROGRESS，随后按 e/f 验证并分别提交。M7.3–M7.6 本轮 DEFERRED。
 - 用户约定：每个子阶段验收完成即提交 Git，无阻塞时在当前授权范围内继续推进。此前 M7 修改已进入 Git，本轮开始时工作区干净。
 
 | 阶段 | 目标 | 前置依赖 | 状态 |
@@ -63,251 +63,30 @@ R1 契约修订、B1 样例整理/Benchmark、B2 调查和 B3 资源复用已完
 - 未支持的 GPU 能力可以明确列为硬件阻塞或推迟，不能用其他后端的成功替代该项验收。
 - 阶段内发现接口不合理时，先修订最小设计再继续，不堆叠兼容分支维持尚未发布的旧接口。
 
-## M0 工程与设备基础
-
-状态：DONE，日期：2026 年 10 月 23 日。
-
-结果：C++20/CMake 固定依赖、日志/断言/原生窗口/参数，以及 DX12/Vulkan 设备与能力报告。
-
-验证：RTX 5060 上 Debug/Release 各 9/9，双后端 Validation 错误为 0；Intel 设备选择和窗口生命周期通过。光追当时仅查询能力，后续工具链修复见 M3。
-
-入口：[基础模块](../docs/m0-foundation.md)、[构建运行](../manual/build.md)、[工程约定](../manual/conventions.md)。
-
-## M1 最小双后端 RHI
-
-状态：DONE，日期：2026 年 10 月 23 日。
-
-结果：交换链与两帧上下文、完成点与录制保活、资源/上传/读回、不可变绑定与 PSO、光栅/Compute/间接绘制、Reversed-Z/sRGB、Marker/Timestamp。
-
-验证：RTX 5060 上 Debug/Release 各 13/13，双后端 Validation 错误为 0；固定参考、取消/退休、上传复用和窗口生命周期通过，后续全量回归见 B3。
-
-边界：单 Graphics Queue、单 mip/layer、单流顶点与有限格式；无 Alias、Bindless 或设备丢失恢复。入口：[RHI](../docs/m1-rhi.md)、[构建运行](../manual/build.md)。
-
-## M2 Shader 与材质数据链路
-
-状态：DONE，日期：2026 年 10 月 23 日。
-
-结果：Shader 声明、DXIL/SPIR-V 编译与缓存、固定布局/反射/Schema、材质保存与不可变 GPU 快照、有界 PSO 缓存及后台热重载/帧边界发布。
-
-验证：RTX 5060 上 Debug/Release 各 16/16，追加的双后端热重载专项通过，Validation 错误为 0；后续契约修订见 R1。
-
-边界：有限绑定/变体与数值布局，无编辑器/文件监视器或资源数组。入口：[Shader/材质](../docs/m2-shader-material.md)、[工具运行](../manual/build.md#shader-与材质工具)。
-
-## M3 单队列 Render Graph
-
-状态：DONE，日期：2026 年 10 月 24 日。
-
-结果：类型化资源版本、Builder/受限 Execute、依赖/剔除/屏障、Import/Export、有界池，以及 Feature/Create/Custom/Forward 组合与真实快照；标准构建依赖修复完成。
-
-验证：RTX 4060 Laptop GPU 上 Debug 完整 CTest 19/19，双后端图像/噪声/Buffer/快照和窗口启动通过，Validation 错误为 0；后续 RTX 5060 双配置全量回归见 B3。
-
-边界：单队列/线程/视图、单颜色附件，无 Alias、计划缓存或深度采样。入口：[Graph](../docs/m3-rendergraph.md)、[Feature/Forward](../docs/forward-pipeline.md)、[构建与恢复](../manual/build.md#render-graph-与-feature)。
-
-## M4 场景资源与基础 Renderer
-
-状态：DONE，日期：2026 年 10 月 26 日。
-
-结果：Project/UUID/资源缓存、静态 glTF/Scene/Material、层级变换/相机/方向光/CPU 剔除；Lit/Unlit PBR、HDR/ACES/IBL、阴影/Masked/排序透明，以及原生调试面板、纹理查看、GPU 计时和独立 Player。
-
-验证：RTX 5060 上 Debug/Release 各 37/37，双后端 Validation 错误为 0；参考像素、保存重载、窗口/COM、独立安装运行通过。用户确认原始 PBR Debug DX12 交互恢复；高分辨率后端差异见基线记录。
-
-边界：静态几何、单视图/mip/layer、低分辨率 CPU IBL/LDR 环境、单张阴影和排序透明；无级联/OIT，其他 GPU 与新面板手动操作未完整验收。
-
-入口：[场景](../docs/m4-scene.md)、[PBR](../docs/m4-forward-pbr.md)、[阴影/Alpha](../docs/m4-shadows-alpha.md)、[工具/Player](../docs/m4-tools.md)、[基线](../docs/performance/m4-rtx5060.md)。
-
-### 光栅阴影质量修复
-
-状态：DONE，日期：2026 年 10 月 29 日。
-
-结果：Editor 默认阴影由原型的 128² 提高到 1024²；Forward/Deferred 共用连续加权 PCF，16 次 Load 合并 3×3 双线性比较过滤，保留接收平面深度修正，完整亮/暗区域精确返回 1/0，防止浮点误差影响无阴影像素。
-
-验证：RTX 5060、Release、Validation On，`out/build/m5-release` 的 `surface.contracts`、`gpu.dx12.surface`、`gpu.vulkan.surface` 3/3 通过，GPU validation error 为 0、销毁后资源账本为 0；原生 Bridge/Player 与托管 Editor 构建成功，最新 DLL/Shader 已同步至托管 Release 输出。新增 64 个子 texel 采样的半平面解析比较和斜面自阴影检查，旧 PCF 负对照按预期失败。960×540 的 RayTracing 样例在 DX12 Forward/Deferred、Vulkan Deferred 的光栅截图通过；修改前后对照位于本机 `out/shadow-quality`。
-
-边界：过滤与分辨率增加 GPU/显存成本，1024² 阴影附件逻辑大小 20 MiB；仍为单张阴影图，大场景密度和具体几何的 bias 需另行调整。本轮未重跑交互窗口/DPI 验收，也未修改反射重投影算法。
-
-文档：[阴影与 Alpha](../docs/m4-shadows-alpha.md)、[Editor 宿主](../docs/editor-host.md)。
-
-## R1 Shader/Material 契约修订
-
-状态：DONE，日期：2026 年 10 月 26 日。
-
-结果：类型化 Pass/渲染状态、类型化属性与显式静态轴、Schema 生成 CPU/HLSL 参数契约、代际绑定、HLSL 显式传参，以及 Shader UUID/材质 v2/导入语义统一迁移。
-
-验证：RTX 5060 上 Debug/Release 各 40/40，双后端 Validation 错误为 0；真实状态/改名像素、生成契约、材质迁移/热重载、M4 和独立安装运行通过。
-
-边界：每 Pass 最多 64 个静态组合、固定 Material 布局；旧格式明确拒绝，无编辑器、深度模板采样或独立平面调度，其他 GPU 未完整验收。入口：[设计与接口索引](shader-material-v2.md)、[参数契约](../docs/shader-parameters.md)、[资产与迁移](../docs/shader-assets.md)。
-
-## B1 样例整理与可扩展 Benchmark
-
-状态：DONE，日期：2026 年 10 月 26 日。
-
-结果：清理一次性脚本并分类样例；固定场景按帧/时长测量、独立预热、流式 JSONL/版本化报告，以及 Python 配置批量运行、聚合与图表。
-
-验证：RTX 5060 上 Debug/Release 各 41/41，双后端 Validation 错误为 0，Python 12/12；双后端按时长测量、独立安装及六次 Release 基线通过。
-
-边界：串行 headless，不等同窗口流水吞吐；精确分位数分析加载样本，Matplotlib 可选。入口：[接口](../docs/benchmark.md)、[手册](../manual/build.md#benchmark-与双后端分析)、[实测](../docs/performance/b1-pbr-rtx5060.md)。
-
-## B2 双后端性能差异调查
-
-状态：DONE，日期：2026 年 10 月 26 日。
-
-结果：扩大 PBR 基线与诊断场景，增加可选 RHI CPU 计时/调用计数，定位主要差距为逐帧 Buffer、描述符创建及回收；优化由 B3 完成。
-
-验证：RTX 5060 上 Debug/Release 各 41/41，双后端 Validation 错误为 0，Python 13/13；40 次、60,624 帧测量保留全部样本并复现差距。
-
-边界：墙钟探针非完整 CPU profile，不能确定全部系统/驱动停顿原因或归因于 API 固有差异。入口：[定位证据](../docs/performance/b2-pbr-rtx5060.md)、[探针](../docs/benchmark.md#可选-rhi-cpu-分解)。
-
-## B3 逐帧资源复用优化
-
-状态：DONE，日期：2026 年 10 月 26 日。
-
-结果：帧上传页、不可变材质常量、双后端描述符、timestamp 读回和默认 View 有界复用；CPU 引用与完成点保护旧快照/在途资源，稳定 PBR 预热后目标原生创建归零。
-
-验证：RTX 5060 上 Debug/Release 各 41/41，双后端 Validation 错误为 0，Python 13/13；32 次配对长测共 360,600 帧，32 张同后端参考图逐字节一致。DX12/Vulkan 串行帧均值由 14.36/5.71ms 降至 1.04/0.93ms。
-
-边界：仍有偶发长尾，其他 GPU 与窗口性能未验收；不把串行延迟当窗口 FPS。入口：[设计](resource-reuse.md)、[接口](../docs/resource-reuse.md)、[结果与完整统计](../docs/performance/b3-resource-reuse.md)。
-
-## M5 Deferred 与光追基础
-
-状态：DONE，日期：2026 年 10 月 26 日。
-
-结果：双后端 MRT/可采样深度、PBR GBuffer 与 Deferred Lighting；BLAS/TLAS build/update、Graph AS 用途与静态 BLAS/不可变 TLAS 版本；Ray Query 阴影、原生 RayGen/Miss/通用 Hit Group/不可变 ShaderTable/TraceRays。一次 GGX specular 反射通过索引 Mesh/Instance/Material 与有限纹理图集求值，追踪、ViewID 静止历史累积和 IBL specular 替换独立成 Pass。样例面板/CLI 可选 Forward、Deferred、Ray Tracing，并查看原始/累积反射；不兼容材质选择给出诊断并恢复原管线。
-
-验证：MSVC Debug/Release NMake 构建。RTX 5060 上 Debug 所选 16 项通过（Core/Graph；双后端 AS/TraceRays、Ray Query Scene、反射参考、surface、deferred、rhi、tools_window），追加 ShaderTable 范围/尺寸边界后 Graph 与双后端 AS/反射 5/5。Release 双后端 AS/TraceRays 与反射专项 4/4；上述 GPU 验收 validation errors=0。独立窗口各 54 帧、10 次重建、10 次挂起，实际渲染三种菜单选择。反射覆盖确定性 raw、静止累积、相机/场景/材质/尺寸/照明失效、ViewID 隔离、空场景与在途版本。Release/validation off 的 1280×720 短测各预热 64 帧、测量 240 帧，保留两后端三管线成本和参考图；不是长测或窗口 FPS 结论。
-
-边界：静态不透明三角形；反射仅内置 Lit/Unlit，Masked 显式拒绝，透明走 Forward 且不进入 AS。三张 RGBA32F GBuffer 与浮点历史占用较高；有限图集为 64×64/显式 LOD 0，最多 62 个图像/色彩空间/文件版本；无动态几何/压缩、any-hit/callable、对象运动矢量、通用曲面反射重投影或自动光追 Shader 文件监视。自定义 Copper 需保留 Forward，原始资源不做隐式 PBR 映射。其他 GPU 未验证，WARP 探测未完成。Path Tracing 按 M8、Forward+ 按 M6 保留，未提前实施。
-
-入口：[Deferred](../docs/deferred-pipeline.md)、[光追接口/生命周期/ShaderTable 重建](../docs/raytracing.md)、[样例与运行](../manual/build.md#ray-tracing-组合与-ray-query)、[GPU 成本/参考图](../docs/performance/m5-reflections.md)。独立验证入口分别为 `--pipeline deferred`、`--as-test`（Ray Query 与 TraceRays 分别记录）、`--scene-test --pipeline raytracing`；每个子阶段按验收提交，过程由 Git 历史追溯。
-
-### M5 修复：反射收敛
-
-状态：DONE，日期：2026 年 10 月 27 日。
-
-结果：修正 64 帧后固定 1/64 EMA 的残留噪声，改为持续 1/N 平均；VNDF 与匹配 PDF 避免 GGX NDF 掠射角高权重，配合逐像素扰乱 Sobol 序列。达到 2^24 float 精确整数上限后保持结果，无提前回绕/EMA；面板和报告显示实际 spp/重置计数。保留 raw 单样本与原有历史失效规则，无光强/曝光削弱、亮度裁剪或降噪。
-
-验证：RTX 5060，MSVC Debug 所选 16/16、Release 光追专项 4/4；双后端窗口各 54 帧/10 次重建，validation errors=0。新增 GPU 六组视角/粗糙度共 24576 次有限有界权重/分层检查，真实 Accumulate Shader 验证 reset、1/128、1/2048 和最大计数；130 帧历史增长及相机移动后零输入保持通过。固定场景 256→2048 spp 对 8192 spp 的 sRGB MSE 在两后端约下降 95.5%，方向光从 3 提高至 12 后约下降 95.2%；不是独立真值或任意场景完全无噪声保证。入口：[原因、图像与数值](../docs/performance/m5-convergence.md)、[接口/历史规则](../docs/raytracing.md)。
-
-### M5 扩展：反射空间降噪
-
-状态：DONE，日期：2026 年 10 月 27 日。
-
-结果：Accumulate 后独立 5×5 空间降噪，主表面深度/法线/粗糙度/材质和本帧随机命中距离约束邻域；仅供显示、不回写历史。Final/HDR 默认开启，可由面板/CLI 切换，保留 Raw / History / Denoised。镜面旁路，高 spp 逐渐减弱至 2048 spp 完全旁路；开关/普通反射视图切换不重置有效历史。
-
-验证：MSVC Debug/Release Sandbox/Player 构建。RTX 5060 上 Debug 所选 16/16、Release 光追专项 4/4，双后端额外 RT 窗口各 54 帧/10 次重建，257×193 Player 降噪诊断通过，validation errors=0。真实 GPU 合约覆盖 9×7 尺寸、常量/alpha、孤立噪点、镜面/高 spp、背景/Unlit、深度/法线与命中距离；场景覆盖滤波与历史独立及开关/视图保持 spp。两后端、两光强的 2/16/64/256/2048 spp 对未滤波 8192 spp 图像比较：16 spp 原场景 MSE 约降 64.8%、强光约降 54.2%，2048 spp 开关 RGB 逐字节相同。1280×720、预热 32/测量 128 帧单次短测，降噪 GPU 均值 DX12/Vulkan 0.248/0.222ms，不作为窗口 FPS/长测结论。
-
-边界：有限空间邻域有低 spp 偏差与细节模糊，随机命中引导不能完整识别反射边界；本子阶段仅空间滤波，后续相机时间重投影见下；没有对象运动矢量或时间矩历史，其他 GPU 未验证。额外两张 RGBA32F 瞬态目标，关闭时仍写命中引导；未提前推进 M6/M8 其他能力。入口：[接口](../docs/raytracing.md#spatial-denoising)、[操作](../manual/build.md#ray-tracing-组合与-ray-query)、[图像、数值、成本与复现](../docs/performance/m5-denoise.md)。
-
-### M5 修复：高分辨率 RT 分配预算
-
-状态：DONE，日期：2026 年 10 月 27 日。
-
-原因与结果：用户报告后在 Vulkan 1920×1080 RT 窗口复现原 256 MiB ledger 上限失败；先前 640×360 窗口验收未覆盖高分辨率。场景宿主改为显式 2048 MiB tracked native 上限，CLI 可配置 64..16384 MiB；独立 RHI Demo 仍默认 256 MiB。SceneRenderer 缓存上限为预算的 3/4，为图外资源留余量；预算错误包含 requested/used/limit，拒绝零值、低于当前占用或非 owner-thread 修改。没有压缩图像或改变降噪 Shader。
-
-验证：MSVC Debug/Release Sandbox/Player 构建；Debug 所选 18/18、Release 光追/1080p 窗口 6/6，通过新增持续 1080p 16 帧回归和 CPU 预算合约。双后端另外在 1080p/1440p 各连续 32 帧（native 高水位约 365–872 MiB），原生 resize/minimize/三管线各 54 帧/10 次重建，Release Player 1080p 各 16 帧，validation errors=0，关闭后 ledger 归零。
-
-边界：限额不是显存预留或驱动实时预算；更大分辨率/场景仍可能达到显式上限或硬件容量，其他 GPU/4K 未验证。入口：[接口](../docs/m1-rhi.md)、[操作](../manual/build.md#ray-tracing-组合与-ray-query)、[复现/内存数据](../docs/performance/m5-denoise.md#高分辨率窗口预算修复)。
-
-### M5 扩展：反射重投影时间降噪
-
-状态：DONE，日期：2026 年 10 月 27 日。
-
-本条记录最初的主表面时间滤波；后续运动闪烁修复替换了其显示链路，当前契约与结果见下条修复。
-
-结果：独立 Temporal Pass 在空间滤波后以当前深度和前帧矩阵重投影静态主表面，逐 bilinear tap 用世界位置/法线/粗糙度验证，配合随机命中距离/视角置信度、3×3 邻域 RGB 裁剪和最多 16 的像素历史长度。场景/材质/光照/投影/尺寸/ViewID 或大幅相机跳转失效；仅活动 View 持有两套三张 RGBA32F 引导，提交成功才发布。未滤波 1/N 与 Raw 保持独立，2048 spp 时淡出滤波；同场景相机运动继续采样序列，Raw 仍固定样本零。面板/CLI 可单独切回空间基线，来源帧计数不表示 GPU 接受像素数。
-
-验证：MSVC Debug/Release Sandbox/Player 构建，DXIL/SPIR-V 编译。RTX 5060 上 Debug 18 项通过（1+17）、Release AS/反射/持续 1080p 窗口 6/6；补齐公共头显式 Include 后追加双后端 GPU AS/Temporal 2/2。真实 GPU 合约覆盖 9×7 尺寸、常量、噪声、源重置、整数/亚像素重投影、出屏/深度/法线/粗糙度拒绝、历史裁剪、长度上限与镜面/高 spp/背景/Unlit。两场景强光慢/快移动三模式终点对 2048 spp 参考；RayTracing 样例比仅空间滤波 MSE 再降约 21.5%/27.0%（不是全序列闪烁或任意拖影保证）。双后端 2048 spp 时间开关 RGB 逐字节一致。720p/validation off 短测 Temporal GPU 均值 DX12/Vulkan 0.219/0.133ms；1440p Player 各 32 帧 native 高水位约 1142/1141 MiB，257×193 诊断和窗口重建通过，validation errors=0，关闭后 ledger 归零。window smoke 渲染前会先变为 640/641×360，持续高分辨率由独立固定尺寸窗口验证。
-
-边界：首版静态相机重投影；没有对象运动矢量、反射虚拟位置、时间矩/自适应采样或完整 SVGF/NRD。主表面重投影不完整表达反射运动，仍可能残余噪声/拖影与 HDR 裁剪偏差。六张持久 RGBA32F 增加 96 字节/像素，尚未压缩；其他 GPU/4K 未验证。入口：[契约](../docs/temporal-reflections.md)、[图像/误差/成本/复现](../docs/performance/m5-temporal.md)。
-
-### M5 修复：运动反射白点闪烁
-
-状态：DONE，日期：2026 年 10 月 27 日。
-
-结果：参考 AMD 反射降噪、SVGF 和 NRD 输入契约，实现独立单帧去调制/稳定命中引导、接收表面与局部平面反射双候选重投影、时间亮度矩与最多 32 的有效历史长度、三尺度方差引导重建及材质 Resolve。逐像素诊断可选；普通帧仅用 1×1 诊断目标。两张版本化中间纹理显式交替，不增加通用内存 Alias。原始采样与 progressive 1/N 保持独立，高 spp、镜面等精确旁路；拒绝损失真实高光的输入亮度截断。
-
-验证：MSVC Debug/Release Sandbox/Player 构建。RTX 5060 / NVIDIA 591.74 上 Debug Core 与双后端场景/窗口/RHI 等 17/17，追加 RenderGraph/双后端 AS 与新增 shader 合约 3/3；Release 双后端 AS/反射完整序列/持续 1080p 6/6。包含独立虚拟 UV、部分 bilinear 支持归一化、矩统计、去调制往返及旁路检查。强光慢/快/显露轨迹各移动 16 帧、停止 8 帧，逐姿态参考与终点参考：Release 使用 256/2048 spp，默认 Debug 使用 32/128 spp；修改前完整序列基线为 DX12 慢/快。当前慢/快平均 RGB MSE 从约 8.40/8.18 降到 5.48/7.04，残差差分 MSE 从 6.85/7.90 降到 .295/2.440；同时记录有符号亮度误差与逐帧图。资源复用前后 586 张 BMP 逐字节一致。两后端 257×193 高 spp 时间开关截图相同（测量帧 2048、额外截图 2049；shader 合约直接检查 2048）。1440p Player 各固定 32 帧 native 高水位约 1312.5/1311.5 MiB，低于默认 2048 MiB。上述 GPU/窗口 validation errors=0，关闭后 ledger 归零。720p/validation off 新重建六个 GPU Pass 合计约 .992/.862ms，短测非窗口 FPS。
-
-边界：固定静态样例的运动稳定性改善，不保证任意场景消除闪烁。快速运动末段/停止后部分帧误差仍高于旧版，负亮度偏差有所增加；细节模糊、局部高光损失、反射遮挡与曲面拖影仍有取舍。没有动态对象运动矢量、完整 NRD/SVGF、辐射缓存或自适应采样。其他 GPU/4K 未验证。入口：[接口](../docs/temporal-reflections.md)、[设计依据](design-review.md#运动反射白点闪烁设计复查)、[完整序列/图像/指标/成本/复现](../docs/performance/m5-reflection-stability.md)。
-
-### M5 修复：静止显示收敛速度
-
-状态：DONE，日期：2026 年 10 月 27 日。
-
-结果：旧 Resolve 使有限 32 帧时间滤波长期主导静止显示。改为在 8–64 spp 平滑交接到持续 1/N 均值的独立 5×5 空间重建，以滤波后的时间亮度只引导邻域权重；原始采样、时间矩和历史不变，无新增 Pass/纹理或亮度截断。保留 2048 spp、镜面/背景/Unlit 精确旁路。
-
-验证：MSVC Debug/Release Sandbox/Player 构建，RTX 5060 / NVIDIA 591.74 上 Release 双后端 AS/反射完整序列/持续 1080p 6/6；三场景 × 两版本 × 双后端静止及长停止/再移动共 16 次独立采集，validation errors=0，退出 ledger=0。静止 2..2048 spp 对 8192 spp 参考，强光 128/256 spp RGB MSE 约下降 89%/94%；512 spp 已接近或优于原样例旧版 1800 spp 的误差，PBR 改善较小。双后端各场景 2048/8192 spp 版本间图像逐字节一致。长停止后恢复运动，Vulkan 32/32 帧与旧版相同，DX12 31/32 相同，其余一帧仅一分量差 1/255。720p/validation off 单次短测 Resolve GPU 增加约 .27/.30ms，native 高水位不变。
-
-边界：显示恢复改善，不改变原始积分器收敛率；固定空间半径有细节模糊与引导偏差，有限参考/共享序列不是真值，不能推广为任意场景固定 spp 无噪声。其他 GPU/4K 未验证。入口：[契约](../docs/temporal-reflections.md)、[对照/完整数值/成本/复现](../docs/performance/m5-stationary-reflections.md)。
-
-### M5 修复：按误差控制反射重建
-
-状态：DONE，日期：2026 年 10 月 27 日。
-
-结果：独立 Statistics Pass 维护匹配原始单帧与 progressive 计数的中心矩和稳定控制值；每缓存 View 双槽合计 16 字节/像素结构化缓冲，显示关闭时也维护。基于局部误差/样本支持连续结合均值与时间先验，限制先验偏差，三尺度优先减弱大尺度并传播近似方差；移除固定 8–64 spp 交接和后置空间核。不截断输入、不反馈原始均值/时间历史，保留镜面与 2048 spp 等精确旁路。
-
-验证：MSVC Debug/Release Sandbox/Player 构建；RTX 5060 / NVIDIA 591.74 上 Release 双后端反射完整序列/AS/持续窗口 6/6，Debug AS/Shader 合约 2/2。三场景 × 两版本 × 两后端静止及长停止/再移动共 16 次采集，保存前 128 帧和高 spp 检查点；强光 8..128 spp 正亮度误差 >4 的平均面积约降 82%，最大连通区域均值约降 17%；128/256 spp MSE 约降 35%/31%。全部 2048/8192 spp 版本间图像逐字节相同。两后端另完成 512 样本矩数值/控制速率探针、等像素数尺寸切换。窗口请求尺寸受桌面限制，已改为核对实际资源规模；补测真实 2560×1440 离屏目标、双在途帧各 32 帧，native 高水位约 1818.69/1817.75 MiB，保持原 2048 MiB 预算。上述 validation errors=0，退出 ledger=0。
-
-边界：显示重建仍有负偏差、细节模糊和单帧尖峰；PBR 64/128 spp MSE 约回退 16%/10%，gentle/fast 残差差分约增 2%/3%，未把面积下降当成全面无损改善。Sobol 下的误差是控制指标，不是校准置信区间；无完整 NRD/SVGF、额外射线或输入截断。真实 1440p 窗口展示、其他 GPU/4K 未验证。入口：[契约](../docs/temporal-reflections.md)、[动画/逐帧面积/峰值/误差/成本/复现](../docs/performance/m5-adaptive-reflections.md)。
-
-### M5 优化：光追场景与历史资源
-
-状态：DONE，日期：2026 年 10 月 27 日。
-
-- CastShadows 修复 DONE：有效实例 mask 进入两套历史签名；隔离材质开关/恢复均重置，首帧与新 Renderer 逐字节一致。MSVC Debug Sandbox、Release Sandbox/Player/Graph 构建；RTX 5060 上 Release Graph 与双后端反射 3/3，validation errors=0。契约见 [光追历史](../docs/raytracing.md#histories-and-invalidation)。
-- 静态场景准备优化 DONE：有序 Mesh/导入 key 缓存打包，同帧材质身份去重，变化表一次 staging/提交/等待；新增累计工作量与 headless 报告。MSVC Release Sandbox/Player 构建；双后端反射专项 2/2，静止/移动零重复打包上传、材质编辑一次合批、Caster 编辑零表上传，validation errors=0。586 张回归 BMP 与前版逐字节一致；13 万顶点隔离场景三次短测 CPU Render 均值 DX12 7.25→1.08ms、Vulkan 6.75→.85ms，六对截图相同，不推广为窗口 FPS。入口：[契约](../docs/raytracing.md)、[数据与复现](../docs/performance/m5-pipeline-opt.md)。
-- 引导/历史资源优化 DONE：R32F 保留命中距离精度，无引导 RayGen 省去未使用目标；progressive 最多四 View、native 预算 1/8 软目标和 LRU，非活动时间引导释放 CPU 引用，2048 spp 起省去六个显示重建 Pass。MSVC Debug Sandbox/Core/Graph 与 Release Sandbox/Player/Core/Graph 构建；RTX 5060 上 Release 所选 Core/Graph、双后端 AS/反射/持续窗口/RHI 共 10 项通过（8 项 + 修正空间分支名称冲突后反射 2 项），Debug Core/Graph 与双后端 AS/反射 6/6。常规 GPU 回归覆盖 R32F 奇数尺寸上传/采样、四 View LRU、2047→2048 旁路与恢复运动冷启动；586 张回归图及双后端 2048 Denoised/2177 Final 共四对图像与前版逐字节一致，validation errors=0。
-- 实测：真实 2560×1440 离屏目标、双在途槽各 32 帧，native 峰值 DX12/Vulkan 1818.69/1817.75→1728.75/1727.75 MiB；1080p 三 View 字节预算探针保留两 View、一次淘汰，退出 ledger=0。720p 高 spp 单次短测 GPU Pass 总和 1.686/1.337→.472/.403ms，不是窗口 FPS。数据、探针与复现见 [性能记录](../docs/performance/m5-pipeline-opt.md)，契约见 [光追](../docs/raytracing.md)、[重建](../docs/temporal-reflections.md)。FP32 均值、HDR 矩与世界位置保持不变；其他 GPU/4K 未验证。
-- 后续 DEFERRED：稳健偏移需要主表面几何法线/误差契约与尺度/薄片/大坐标验收；纹理 footprint 需要 mip/采样资源契约，未以固定 epsilon/经验 LOD 代替实现。评估理由见 [设计复查](design-review.md#光追资源与场景准备优化评估)，未推进 M6/M8。
-
-## M6 GPU Driven 与执行优化
-
-状态：DONE（核心 M6.1–M6.5），日期：2026 年 10 月 29 日。可选 M6.0 Forward+ 保持 DEFERRED，不计作已实现。
-
-结果：CPU 索引/间接基线、GPU 稳定视锥剔除、并行原生录制、受限 Compute feeder 多队列与瞬态附件 Alias 均有独立开关及双后端证据，共用同一执行器。RTX 5060 上最终 Debug/Release 全目标构建成功，所选 CPU/CLI 与双后端专项各 28/28，最终依赖补全后各追加 5/5；GPU validation errors=0、场景销毁后原生账本 0。具体测试范围、输入/二进制 hash、失败/排除记录与限制在下列说明中，不以本机通过代替其他硬件、设备丢失、人工画面或长期多视口验收。
-
-默认策略：Direct、1 个录制线程、asyncCompute=false、memoryAlias=false。CPU 准备复用有明显收益；GPU 剔除、并行录制、多队列和 Alias 的速度收益取决于场景，保留退化结果，不为增加收益重排无依赖工作或扩大既有容量预算。
+## 已完成阶段
+
+M0–M6 核心能力及 R1、B1–B3 已完成（2026 年 10 月 23–30 日）。下表保留结果、实际验证入口与限制；子阶段过程和逐轮数据通过 Git、链接文档追溯。
+
+| 阶段 | 完成结果与验证摘要 | 接口、结果和复现 |
+| --- | --- | --- |
+| M0 | 工程、窗口、设备/能力报告；双后端 Debug/Release 9/9 | [基础](../docs/m0-foundation.md) |
+| M1 | 双后端 RHI、同步、两帧上下文、资源/命令/计时；两配置 13/13 | [RHI](../docs/m1-rhi.md) |
+| M2 | Shader/材质编译、反射、Schema、缓存与热重载；两配置 16/16 | [Shader/材质](../docs/m2-shader-material.md) |
+| M3 | 声明式 Graph、依赖/剔除/屏障/池、Feature 组合；初验 19/19，后续回归见 M6 | [Graph](../docs/m3-rendergraph.md) |
+| M4 | 固定场景/资源、PBR/IBL/阴影/Alpha、Player；两配置 37/37，后续阴影修复双后端专项通过 | [场景](../docs/m4-scene.md)、[阴影](../docs/m4-shadows-alpha.md)、[工具](../docs/m4-tools.md) |
+| R1 | Shader/Material v2、参数 ABI、语义与迁移；两配置 40/40 | [契约](shader-material-v2.md)、[参数](../docs/shader-parameters.md) |
+| B1–B2 | 固定场景 Benchmark、流式样本与双后端差异定位；两配置 41/41 | [Benchmark](../docs/benchmark.md)、[调查](../docs/performance/b2-pbr-rtx5060.md) |
+| B3 | 上传/描述符/资源复用；两配置 41/41，360600 帧配对测量与参考图一致 | [复用](../docs/resource-reuse.md)、[实测](../docs/performance/b3-resource-reuse.md) |
+| M5 | Deferred、AS/Ray Query/TraceRays、反射累积/空间与时间重建、误差控制及资源优化；双后端原生/GPU/窗口回归通过 | [Deferred](../docs/deferred-pipeline.md)、[光追](../docs/raytracing.md)、[时间重建](../docs/temporal-reflections.md)、[实测](../docs/performance/m5-adaptive-reflections.md) |
+| M6.1–M6.5 | 索引/间接提交、GPU 剔除、并行录制、多队列与瞬态 Texture Alias；最终两配置各 28/28，补充回归各 5/5，双后端窗口错误/关闭账本为 0 | [GPU Driven](../docs/gpu-driven.md)、[Alias](../docs/memory-alias.md)、[实测](../docs/performance/m6-memory-alias.md) |
+
+验证设备主要为 RTX 5060，早期 M3 为 RTX 4060 Laptop。GPU 回归的 validation errors=0 不代表无警告或其他设备通过；未验证项不得由上述数量推断通过。完整命令见 [构建手册](../manual/build.md)。
+
+保留限制：静态场景/有限材质与纹理图集，单 mip/layer；无动态几何、完整设备丢失恢复、通用反射运动矢量或 4K/其他 GPU 完整验收。反射重建仍有模糊/亮度偏差/曲面拖影取舍，射线稳健偏移与 mip/footprint 延后。Alias 限同队列不重叠且首次完整 Clear 的兼容瞬态 Texture，不包括 Buffer/History；短测和串行延迟不能当窗口吞吐或普遍性能收益。
 
 ### M6.0 Forward+（可选组合）
 
-状态：DEFERRED。当前只有单方向光，待局部光源数据契约建立后再评估此可选组合。
-
-- [ ] 在普通 Forward 与场景光源数据基础上增加 Tiled/Clustered 光源分类 Compute Feature，声明深度、光源 Buffer、索引表和容量。
-- [ ] Opaque/Transparent 显式读取分类结果，保留普通 Forward 基线；处理空光源、溢出、透明覆盖与不同分辨率。
-- [ ] 相同场景比较图像、显存和 GPU 成本，不预设一定更快。
-
-### M6.1 可索引资源与间接提交
-
-状态：DONE。双后端索引/非索引多条间接与 Count 截断，固定最多 64 项不可变 sampled-image 数组，逐元素访问/保活；内置 Lit/Unlit 的对象/材质/纹理表与打包静态几何。Direct、IndexedDirect、CpuIndirect 独立于算法，透明/光栅阴影保留 CPU 路径；实例 helper 统一 DXIL/SPIR-V 语义，DX12 索引 Shader 要求 SM 6.8。索引实例上限 16384，非完整 Bindless。两配置初始专项各 19/19，间接/索引像素与容量/在途版本验证通过。
-
-入口：[GPU Driven 契约、布局与限制](../docs/gpu-driven.md)、[运行](../manual/build.md#shader-与材质工具)。细分提交见 Git 历史。
-
-### M6.2 GPU 剔除
-
-状态：DONE。Compute 视锥测试、64 线程分块稳定压缩、GPU Args/Count 与显式 Storage/Indirect 依赖；GPU 模式跳过 CPU 相机剔除，诊断读回独立于绘制。按帧冻结材质/策略，准备按材质/Pass/绕序复用。两配置各 24/24，1/64/65/1024/4096 候选可见 ID 逐项等于 CPU，覆盖空/全剔除、Masked/透明、镜像、容量与在途版本。
-
-实测：两轮 72 次共 21665 测量帧，最终 12 组不同提交截图一致；4096 实例约 135–148 → 18–22 ms，主要来自 CPU 准备复用。GPU 剔除另增约 .182/.244 ms（DX12/Vulkan），默认仍 Direct；Hi-Z/LOD 未实现。入口：[契约](../docs/gpu-driven.md)、[完整数据与复现](../docs/performance/m6-gpu-driven.md)。
-
-### M6.3 CPU 并行录制
-
-状态：DONE。owner 完成回调/分配/PSO/绑定并冻结命令包，闭合 Pass 分块；1..16 线程（含调用者）的持久池，各块独立 DX12 Allocator/List 或 Vulkan CommandPool/Buffer，原序提交。失败先 join 再丢弃，整帧完成点保活。两配置各 26/26，另验证四线程取消、TLAS + TraceRays；静态 BLAS 仍为独立同步构建。
-
-实测：32 次、26139 测量帧，八组截图一致。录制约 .03–.10 ms，多数并行持平或退化，默认 1 线程。4096 经典 Direct 触及既有描述符页上限，最终使用 IndexedDirect，失败记录保留。入口：[生命周期与分块](../docs/parallel-recording.md)、[数据与复现](../docs/performance/m6-parallel-recording.md)。
-
-### M6.4 GPU 多队列
-
-状态：DONE。可选 Buffer-only Compute feeder（清零/剔除），只读 Upload 与瞬态 Storage；Graphics prologue、消费者等待、尾部汇合保护真实整帧完成点与 History/上传/池退休。部分入队失败保活并 poison，真实排空后才释放。DX12 COMPUTE Queue；Vulkan 同族第二队列，各队列频率与共同时间域、提交事件与区间可查。无纹理/AS/导入 Device Buffer 异步、Graphics→Compute 前置依赖、Copy Queue 或跨族调度。
-
-验证：两配置各 26/26，时钟修正后各追加 6/6，Shadow128 双后端通过；覆盖全部线程/队列组合、在途版本、TLAS/TraceRays 与 progressive History。双后端窗口各 54 帧、10 次重建/挂起，错误 0；RenderDoc 解释原生等待/信号，未运行图形 Replay。最终 48 次、32394 测量帧，六组截图一致；GPU span 全部增加，Vulkan 已计时 Pass 无重叠，DX12 仅 .8–8.2 μs 交集，不宣称有效收益。未启用共同时间域的首轮套件整体排除，Shadow256 描述符容量失败保留。默认关闭。
-
-入口：[范围与失败事务](../docs/async-compute.md)、[数据、Capture、排除记录与复现](../docs/performance/m6-async-compute.md)。
-
-### M6.5 内存 Alias
-
-状态：DONE。仅同 Graphics Queue、不重叠、首次附件完整 Clear 的瞬态 Texture，同格式/attachment/storage 类，2..16 成员，排除 import/export/History 与 Buffer/跨队列。DX12 placed resources 共享 Heap，Vulkan ALIAS images 共享兼容 Memory；激活包含内存依赖和附件转换，Vulkan 从 UNDEFINED 丢弃旧内容/元数据。池整组保活/计费/退休，成功提交才发布状态与活动成员，准备/录制/提交失败不伪造状态。
-
-验证：最终两配置各 28/28、依赖补全后各追加 5/5，Python Benchmark 15/15。原生不同尺寸附件、D32/D32S8/Storage 类初始化、两个在途图/相机版本、缓存反复激活、取消/准备失败/部分入队失败、View 保活、按组容量淘汰及账本归零通过；场景全部线程/队列/Alias 组合像素一致。双后端窗口各 54 帧、10 次重建/挂起，错误 0；原生 Capture 证明 offset 0 共享、alias 屏障与 Clear，未运行图形 Replay。
-
-实测：48 次、74974 测量帧，六组各八张截图一致。Shadow 原生分配减少 .25–1 MiB；关闭阴影的 PBR 仍有 1×1 占位深度，节省 DX12 64 KiB、Vulkan 512 B，不能当作无候选负对照。耗时有升有降，默认关闭；不是驱动总驻留显存、窗口 FPS 或普遍速度收益。入口：[分配/激活/池契约](../docs/memory-alias.md)、[数据/hash、Capture、限制与复现](../docs/performance/m6-memory-alias.md)。
+状态：DEFERRED。不阻塞 M6 核心完成；需另行授权和建立灯光分块/剔除输入、正确性及性能对照，不能将现有 Forward 当作 Forward+。
 
 ## M7 C# 编辑器与完整项目工作流
 
@@ -315,77 +94,29 @@ R1 契约修订、B1 样例整理/Benchmark、B2 调查和 B3 资源复用已完
 
 ### M7.1 桥接与视口试验
 
-#### M7.1a 提前集成原型
-
-状态：DONE（最小自动集成验证），日期：2026 年 10 月 27 日。用户显式授权提前做最小可运行嵌入原型，M7 其他工作不提前展开。
-
-结果：Avalonia 12.0.5 / .NET SDK 10.0.401 窗口托管原生渲染子 HWND，复用 SceneRenderer；C ABI 提供代际 Handle、UTF-8、定宽统计、错误缓冲区与 owner-thread 检查，Windows manifest 显式支持 Windows 10 / PerMonitorV2。UI STA Timer 驱动两帧完成点，关闭顺序为等待 GPU/展示、释放渲染资源、销毁 HWND。协议见 [宿主契约](../docs/editor-host.md)，构建和 `--smoke` 见 [运行入口](../manual/build.md#avalonia-嵌入原型)。
-
-验证：原生 Release `/W4 /WX` 与托管 Release 零编译警告；构建脚本的锁定离线恢复通过。DX12/Vulkan 均通过窗口归属、96 DPI 像素布局、Resize、合成输入/焦点/捕获、最小化/恢复、隐藏/显示、三种管线 Present、曝光配置、销毁/新建与旧 Handle 拒绝。每后端两次关闭均账本剩余 0、验证错误 0；中文日志输出路径通过。原始证据：`out/m7/嵌入验证/dx12-manifest`、`out/m7/嵌入验证/vulkan`。DX12 optimized clear value 与 Vulkan 未消费顶点属性警告仍存在。
-
-限制：用户按 Esc 停止界面自动化，未完成人工可视检查，不以自动 Present 通过推断画面质量。仅当前 100% 显示缩放经过验证；跨屏/非 100% DPI、Docking、浮动窗口、多视口、覆盖层、长时间运行和 Debug 配置均未验证。重建不代表同一活跃视口跨父窗口重挂接通过；UI 线程阻塞限制见宿主契约。
-
-#### M7.1b 输入修复与 Editor 宿主骨架
-
-状态：DONE，日期：2026 年 10 月 27 日。用户要求此宿主后续直接复用为 Editor，并采用官方模板、DI 和 CommunityToolkit.Mvvm。
-
-结果：修复方向键和右键拖动的 pitch/yaw 符号，屏幕右/下正方向统一转换为 −Z 相机的旋转。以官方 Avalonia.Templates 12.0.5 `avalonia.mvvm` / CommunityToolkit 生成结果为基线整理 XAML、Views/ViewModels 和编译绑定；Toolkit 8.4.1 负责属性通知/命令，Microsoft DI 10.0.0 在 App 装配窗口、ViewModel 和视口服务。ViewModel 不持有 HWND、不调用 P/Invoke；控件适配挂载/Timer，服务拥有原生 Session 和关闭报告。重建保留配置，旧 Host 重复关闭不能销毁新 Session。长期职责和扩展边界见 [宿主契约](../docs/editor-host.md)。
-
-验证：`ctest -R '^editor.input$'` 在初始和已旋转朝向下检查四向视线与前进方向，原生 Release 通过。托管 Debug/Release 零编译警告，锁定离线恢复通过；DX12/Vulkan 均通过实际 XAML 控件双向绑定、Toolkit 重置/暂停/重建命令、配置失败回滚、暂停文字通知、重建后 RayTracing 保留及旧 Host 重复关闭回归，原有缩放/焦点/捕获/最小化等自动检查继续通过。每后端两次关闭均账本剩余 0、验证错误 0，最终报告为 `out/m7/mvvm-final/{dx12,vulkan}`。C# whitespace 与 UTF-8/LF 检查通过。
-
-限制：原生运行仍在 UI STA，GPU/编译等待可能阻塞界面；只有单窗口/单视口。原生 Debug 运行、人工可视检查、跨屏 DPI、Docking 和完整编辑器功能未验证，不将 M7.1 或 M7 整体标记完成。
-
-#### M7.1 后续集成验证
-
-M7.1c DONE（2026 年 10 月 27 日）：根 `RenderLab.slnx` 提供托管 IDE 入口，根 SDK/Directory.Build.props 统一规则和项目隔离输出；应用整理为 `src/editor/managed/RenderLab.Editor`，原生桥接为 `src/editor/native`，输入回归为 `tests/editor/native`。Configuration、Diagnostics、Interop 与既有 MVVM/服务目录使用对应命名空间，构建入口为 `tools/build-editor.ps1`。解决方案 list/locked restore/Release build、原生 Release 构建和 `editor.input` 通过，DX12/Vulkan 自动自检通过，证据 `out/m7/layout/{dx12,vulkan}`；长期目录和运行路径见架构及手册。没有将生成的 CMake vcxproj 纳入解决方案。
-
-M7.1d DONE（2026 年 10 月 27 日）：帧诊断、CPU 场景准备/GPU Pass/Fence/Acquire/Present 分段、FPS/P95、250 ms UI 发布与验证开关已完成。DX12 重复验证警告保留首条并汇总，错误不去重，既有 clear-value/顶点属性警告根因仍保留。原生 Release、托管 Debug/Release、5 项 NUnit、editor.input 通过；双后端 validation on/profile off 自检各两次关闭均账本 0、错误 0。双后端验证 on/off 的相同配置窗口基线已采集，表明 UI 回调间隔远高于 Native/GPU 工作时间；短测不用于推断验证模式的收益。契约见 [宿主](../docs/editor-host.md)，数据、环境和限制见 [调度测量](../docs/performance/editor-scheduling.md)。
-
-M7.1e DONE（2026 年 10 月 27 日）：专用 MTA 渲染线程创建、使用并销毁 Device/Runtime/SceneRenderer/Swapchain；UI 保留 HWND 与输入，通过最新值邮箱交换配置/状态，RHI owner-thread 检查保留。启动异步完成，配置在渲染帧边界应用；关闭停止线程、在原 owner 退休 GPU，再销毁 HWND，等待期间仅处理 Win32 sent messages，避免 DXGI 同步消息死锁。Release 构建零警告；双后端自动自检通过，证据 out/m7/thread/final-{dx12,vulkan}，各两次关闭均账本 0、验证错误 0。错误路径支持后续关闭；不将未运行的设备丢失/长期压力测试计为通过。
-
-M7.1f DONE（2026 年 10 月 27 日）：steady_clock + 高精度 waitable timer 按可配置目标帧率调度，默认 60；连续 Resize 等待 60 ms 稳定后合并，静态光栅按需刷新，光追依据 Renderer 的真实样本计数上限继续累积。UI 只更新输入/状态，固定 512 项完成帧队列供批量读取，FPS/P95 不受 UI 漏采影响；C ABI v4 Stats 232 字节，关闭报告区分 worker_failed。原生 Release、托管 Debug/Release、6 项 NUnit、editor.input 与格式/UTF-8/LF 检查通过。双后端 profile on/off 自检覆盖所有权、异步配置/暂停/Resize 确认、静态 Idle、曝光重绘、光追累积、六次连续尺寸更新至多两次重建、初始化中关闭；关闭账本/验证错误/线程失败均为 0。四组固定 Deferred 基准为 59.68–60.00 FPS、帧间隔 P95 17.67–18.27 ms，计时丢样为 0；30 FPS/profile off 对照为 29.99 FPS。证据 out/m7/scheduling/{verified-*,profile-off-*,highres-benchmark-*,target-30}，接口见 [宿主契约](../docs/editor-host.md)，环境、表格和测量限制见 [性能记录](../docs/performance/editor-scheduling.md)，运行入口见 [手册](../manual/build.md#avalonia-嵌入原型)。本轮未验证长时间运行、全累积上限、设备丢失或人工画面，不能宣称所有卡顿消除；M7.1/M7 仍未整体完成。
-
-M7.1g DONE（2026 年 10 月 27 日）：--target-fps 0 取消 CPU 调度上限和强制 VSync；默认仍为 60，静态光栅继续按需重绘。RHI CreateSwapchain 显式接收 vsync（默认 true），DX12 Present(0) 并按能力启用 tearing、Resize 保留标志；Vulkan 优先 Immediate，其次 Mailbox，均不支持时报错，不静默使用 FIFO。暂停/空闲/Resize 等待仍休眠，避免 0 周期忙转。原生 Release、托管 Debug/Release、6 项 NUnit、editor.input/rendergraph.contracts 通过；双后端 target 0/validation on 完整自检通过，含 Resize、暂停、静态 Idle 与启动关闭，账本/验证错误/worker_failed 均为 0。3 秒连续 Deferred 短测 DX12 186.96 FPS、Vulkan 225.72 FPS，无丢样；仅作无软件上限验证，不作稳定吞吐或后端优劣结论。证据 out/m7/uncapped，接口与命令见宿主及手册，性能限制见性能记录。
-
-- [x] 最小 C ABI、Handle 代际、字符串/缓冲区所有权和错误返回。
-- [x] Avalonia 原生视口托管，双后端 Present、当前 DPI 像素尺寸、resize、最小化和关闭的自动验证。
-- [ ] 真实鼠标键盘与画面可视检查、非 100%/跨屏 DPI、输入焦点与捕获在 Docking/浮动窗口中的行为、原生视口覆盖层。
-
-真实输入、Docking/浮动窗口与跨屏 DPI 的未完成项纳入 M7.2a/f 一并验证，不以已有自动 Present 代替。若宿主技术需调整，仅替换编辑器宿主，保持 C++ 服务接口。
+状态：M7.1a–g DONE（2026 年 10 月 27 日）。结果：Avalonia/MVVM/DI、代际 C ABI/UTF-8、子 HWND 与 MTA 渲染 owner、输入/关闭、帧诊断、按需刷新/Resize 合并及 0–240 FPS 调度。双后端自动自检、托管两配置和原生输入回归通过，关闭账本/验证错误为 0；运行证据 `out/m7/{mvvm-final,thread,scheduling,uncapped}`。接口与测量见 [宿主](../docs/editor-host.md)、[调度实测](../docs/performance/editor-scheduling.md)，构建见 [手册](../manual/build.md#avalonia-嵌入原型)。真实输入/人工画面、跨屏 DPI 和长期压力继续由 M7.2f 验收，已有自动 Present 不替代这些项目。
 
 ### M7.2 固定场景渲染工作台
 
-状态：IN_PROGRESS；2026 年 10 月 30 日用户授权实现至 M7.2b。设计与契约见 [工作台](../docs/editor-workbench.md)，取舍与参考见 [设计复查](design-review.md#固定场景渲染工作台设计复查)。每个子阶段实施并验证后分别提交，硬件/人工未验证项明确保留。
+状态：IN_PROGRESS；2026 年 10 月 30 日用户授权实现至 M7.2f。设计与契约见 [工作台](../docs/editor-workbench.md)，取舍与参考见 [设计复查](design-review.md#固定场景渲染工作台设计复查)。每个子阶段实施并验证后分别提交，硬件/人工未验证项明确保留。
 
-#### M7.2a Dock 骨架与视口生命周期
+#### M7.2a–b Dock/日志与运行配置
 
-状态：DONE，日期：2026 年 10 月 30 日。基础实现提交 779941e；M7.2b 集成复查发现的根导航与控件复用问题已修复，完整人工/跨屏验收仍保留 M7.2f，未计作通过。
+状态：DONE（2026 年 10 月 30 日），提交 `779941e`、`e594733`。结果：默认 Scene/Settings、菜单按需打开诊断面板、布局保存/恢复与浮动、Serilog/有界原生日志；v6 强类型运行覆盖、能力与请求/实际生效版本、暂停/单帧、预设及跨宿主保留。源 Scene/Material 只读。
 
-结果：Dock.Avalonia 12.0.0.2 + Fluent、固定面板 ID、两面板默认布局与菜单打开/激活、版本化布局保存/恢复；Scene 浮动和布局停回安全退休并重建 Session，保留相机与运行配置，拖放隐藏 HWND/释放输入。根导航指向完整工作区，各 presenter 新建 View 并共享模型/服务，避免设置面板缺失或 Control 重复挂载。Serilog/DI ILogger、UTC 结构化滚动文件、有界 Log 投影/筛选/复制/清空、原生有界 UTF-8 批量镜像与关闭 drain 已接入；当前桥接由 M7.2b 升为 v6。
+验证：RTX 5060/96 DPI，托管 Debug/Release 零警告构建、各 11/11；原生 Release 所选 11/11、Debug 所选 4/4。双配置 × 双后端 Avalonia 自检各 20 项，覆盖真实面板挂载/菜单恢复、三管线四提交、合并/非法配置、历史失效、预设与调度；各 8 次正常及初始化中关闭账本/错误/worker_failed 为 0，23 源文件 hash 不变。证据 `out/m72b/restored-{release,debug}-{dx12,vulkan}`、`out/m72b/tests`。
 
-验证：RTX 5060/96 DPI，托管 Debug/Release 零警告构建、各 11 项测试通过。双配置 × 双后端真实 Avalonia --smoke 通过，补充确认 Settings 进入顶层可视树、Log 实际显示 Native 行；浮动/停回、菜单单实例、输入/暂停/Resize、相机/配置保留、旧 Handle 拒绝与关闭账本一并检查。早期 M7.2a 的模型/Present 检查未覆盖面板真实挂载，已由本次检查补齐；最终证据入口见 M7.2b。
-
-限制：Graph 仍为说明面板，Profiler 仅显示已有宿主统计，完整诊断分别待 M7.2d/e；未验证真实鼠标取消拖放、跨屏/150% DPI、全套屏外浮窗恢复、日志文件轮转/磁盘故障与人工画面。内存日志洪峰、来源/异常/筛选/清空和损坏布局已由托管/原生行为测试覆盖；未执行项列入 M7.2f，不能当作本机通过。
-
-#### M7.2b 运行配置与生效确认
-
-状态：DONE，日期：2026 年 10 月 30 日。
-
-结果：强类型运行配置、原生能力快照与 C ABI v6；设置接入管线/提交、录制线程/异步/Alias、已有调试视图、光照/环境、阴影、反射、曝光、导航速度和调度。单调请求 ID、最新值合并、拒绝原因与实际配置独立展示；成功 Render/Present 才确认 Applied，暂停保持 Pending，Single frame 恰好执行一帧。本机 Defaults/预设与宿主重建保留完整配置；照明/环境/曝光只覆盖提取后 Snapshot，不修改源 Scene/Material。完成帧与 GPU 结果携带 Session/帧/配置身份，配置变化隔离旧统计。
-
-验证：RTX 5060、96 DPI（100%）、Validation On。原生 Release 全目标构建与所选 11/11 回归通过（Core/Input/Graph、双后端 Indexed Scene/PBR/窗口/Deferred）；Debug bridge/core/input/indexed_scene 构建及所选 4/4 通过。双后端 GPU 专项验证覆盖改变真实像素、移除覆盖逐字节恢复、源 Document 不变。托管 Debug/Release 零警告构建，各 11/11 测试通过；双配置 × 双后端实际 Avalonia 自检各 20 组检查通过，包含实际面板挂载、菜单恢复保存布局、受支持三管线 × 四提交、25 次连续请求、非法 ABI/数值、暂停/单帧、曝光保留/照明重置历史、预设/宿主重建保留、0↔60 FPS 与 Profiling。每次运行的 8 次会话关闭与初始化中关闭均原生账本/validation errors/worker_failed 为 0，23 个源文件 hash 不变。最终证据为本机 `out/m72b/restored-{release,debug}-{dx12,vulkan}`，托管测试为 `out/m72b/tests/complete-{Release,Debug}.trx`；C++ 格式、UTF-8/LF 与 diff 检查通过。
-
-文档：[宿主与 ABI](../docs/editor-host.md)、[工作台](../docs/editor-workbench.md)、[构建/自检入口](../manual/build.md#avalonia-嵌入原型)。
-
-限制：本轮未验证其他 GPU、人工画面/真实鼠标操作、跨屏/150% DPI、30 分钟压力与日志文件轮转/磁盘故障；这些项目继续留在 M7.2f。API/Validation 动态重建、完整 Render Graph Viewer、真实 draw/batch/instance 统计与性能面板分别待 M7.2c/d/e；当前只发布基础帧身份，未把面板骨架当作完整诊断能力，也未将 M7.2 或 M7 整体标记完成。
+入口：[工作台](../docs/editor-workbench.md)、[宿主/ABI](../docs/editor-host.md)、[构建自检](../manual/build.md#avalonia-嵌入原型)。限制：当时 Graph/Profiler 仅骨架/基础统计；API 切换待 c，完整诊断待 d/e，人工/跨屏/30 分钟及日志故障验收待 f，不能推断已经通过。
 
 #### M7.2c 图形 API 切换事务
 
-- [ ] 通过 UI/owner 协作异步停止、退休并重建视口，支持 DX12↔Vulkan；保留布局、相机和运行覆盖，重查能力并确认首帧。
-- [ ] 目标初始化/配置/首帧失败时清理目标并尝试重建原后端；回滚失败进入 Failed/Retry，不无限自动重试。
-- [ ] 至少 10 轮双向切换与暂停/最小化/Dock 交叉操作，旧结果代际拒绝、关闭账本/验证错误及错误路径记录。
+状态：DONE（2026 年 10 月 30 日）。结果：API/Validation 显式 Apply，v7 异步退休/首帧确认、完整配置/相机保留、重新查询能力与代际隔离；失败一次回滚，双重失败停止并提供 Retry，布局替换/关闭可取消过期事务。
+
+验证：原生 Debug/Release bridge 和托管两配置零警告构建；两配置各 14 项测试覆盖目标失败、回滚失败、显式重试与取消。Release/DX12、Debug/Vulkan 起始的实机自检各 21 项、10 轮双向 API 切换，穿插暂停/最小化；各 28 次正常与初始化中关闭账本/validation errors/worker_failed 为 0。证据 `out/m72c/final-{Release-dx12,Debug-vulkan}`、`out/m72c/tests`。失败状态机使用可控故障用例，未注入真实驱动/设备丢失；人工跨屏与长期验收仍待 f。接口和使用见 [宿主](../docs/editor-host.md)、[手册](../manual/build.md#avalonia-嵌入原型)。
 
 #### M7.2d Render Graph Viewer
+
+状态：IN_PROGRESS。
 
 - [ ] 从真实 Plan 发布有界值快照，补足类别/格式/尺寸/export/范围/录制块与关联身份，冻结快照不保活 GPU 资源。
 - [ ] Pass×Resource 读写矩阵、生产/消费依赖、版本/用途/队列/生命周期/Alias、剔除原因、搜索与 Freeze/Live/导出。

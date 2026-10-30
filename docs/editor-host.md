@@ -63,11 +63,13 @@ Close 首先停止 UI Timer，再通知渲染线程停止，等待其释放展�
 
 每个 Host 保存自己的 Session 代际。旧 Host 重复关闭不能销毁新 Session；重建保留已接受配置。服务不使用可能在 finalizer 线程执行 Destroy 的 SafeHandle。
 
-## C ABI v6、运行配置与诊断
+## C ABI v7、运行配置与诊断
+
+M7.2c 增加 BeginStop/IsRetired：UI 请求停止后继续分发消息，owner 完成 GPU/展示退休才报告 retired；随后 UI 收取最终配置/相机/日志并销毁 HWND。设备切换只保留一个活动 Device，确认恢复配置的首帧后发布实际后端。目标失败尝试一次原后端，回滚失败进入 Failed/Retry；关闭或布局替换取消过期事务，旧代不能操作新 Session。
 
 头文件为 src/editor/native/editor_bridge.h，托管声明为 Interop/NativeMethods.cs；DLL 和托管程序同版本发布。固定 Cdecl、UTF-8 借用字符串、代际 uint64 Handle、线程局部错误缓冲区。创建参数包含 backend、validation、profiling、target_fps 和 continuous。最多四个 Session 的句柄槽位仍是原型上限，多视口并发并未验收。M7.2a 升为 v5，新增 Stop（退休但保留 Session 以收取末尾日志）、批量 UTF-8 JSON 日志读取和相机 pose 值传递；原有 Stats/CloseReport 大小不变。日志容量查询钉住批次，成功复制后才消费，随后 Destroy 使旧 Session 失效。
 
-Dock.Avalonia 12.0.0.2 使用固定面板身份和受限版本化布局数据。默认只有 Scene/Render Settings，其他面板从 Window 菜单打开。根导航指向直接包含的完整工作区；Document.Context 保存面板 ID 与 View 工厂，每个 presenter 创建自己的控件，共享 ViewModel/服务，避免浮动或重建时复用已有可视父节点的 Control。新 Host 先退休仍活动的旧 Session，旧 Host 随后的关闭由代际校验拒绝。Scene 跨父窗口经过 NativeControlHost 的销毁/重建，保存相机 pose 与完整运行配置。布局切换和浮窗关闭沿用 owner-thread GPU 退休及受限 Win32 握手，仍可能短暂阻塞窗口线程；计划中的异步设备重建在 M7.2c，不以本轮浮动成功代表无停顿迁移。
+Dock.Avalonia 12.0.0.2 使用固定面板身份和受限版本化布局数据。默认只有 Scene/Render Settings，其他面板从 Window 菜单打开。根导航指向直接包含的完整工作区；Document.Context 保存面板 ID 与 View 工厂，每个 presenter 创建自己的控件，共享 ViewModel/服务，避免浮动或重建时复用已有可视父节点的 Control。新 Host 先退休仍活动的旧 Session，旧 Host 随后的关闭由代际校验拒绝。Scene 跨父窗口经过 NativeControlHost 的销毁/重建，保存相机 pose 与完整运行配置。布局切换和浮窗关闭沿用 owner-thread GPU 退休及受限 Win32 握手，仍可能短暂阻塞窗口线程；API 切换使用 v7 BeginStop/IsRetired 异步退休握手；Dock 强制卸载仍使用受限同步收尾，不承诺无停顿迁移。
 
 Editor 托管日志接入 Serilog 4.2.0、Extensions.Logging 9.0.0 和 File 7.0.0，输出目录的 logs 保存 UTC 结构化滚动日志。有界内存投影供 Log Dock 按级别/来源/文本查看；C++ Logger 可选有界镜像，UI 批量读取后以原时间/级别/Session/序号汇入。关闭面板继续记录，清空显示保留累计错误数，原生关闭后先 drain 再 Destroy。基础 Profiler 当前只展示既有宿主统计，Graph 数据查看仍待 M7.2d，不把面板骨架当作 Viewer 已完成。
 

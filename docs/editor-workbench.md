@@ -84,7 +84,7 @@ Scene 的工具栏、浮动标题和状态信息位于原生像素区域外。�
 | Camera/Display | 导航速度、曝光、重置相机、已有调试视图 | 相机/显示覆盖；曝光不无条件清空不受其影响的 HDR 历史 |
 | Scheduling | 目标帧率 0–240、按需/连续刷新、Profiling | 0 沿用无 CPU 限速且关闭强制 VSync 语义，可能需要重建 Swapchain |
 
-上述管线/提交/执行、光照/阴影/反射/曝光/调度与已有调试视图已通过 M7.2b 的 v6 配置桥接接入，具体布局与生效语义见 [宿主契约](editor-host.md#c-abi-v6运行配置与诊断)。API/Validation 创建参数的动态变更仍待 M7.2c；当前显示实际后端与验证状态。光照覆盖在 Renderer 提取后的值快照上应用，不让 C# 持有 Scene Document。
+上述管线/提交/执行、光照/阴影/反射/曝光/调度与已有调试视图已通过 M7.2b 的 v6 配置桥接接入，具体布局与生效语义见 [宿主契约](editor-host.md#c-abi-v7运行配置与诊断)。API/Validation 通过 Apply API / Retry 触发完整视口重建；实际后端在配置首帧成功后更新。光照覆盖在 Renderer 提取后的值快照上应用，不让 C# 持有 Scene Document。
 
 枚举和开关在校验后立即排队；滑动数值以有界最新值邮箱合并，不为每次鼠标消息做一次 GPU 等待。Device 组使用明确的 Apply 操作，合并 API/Validation 的重建请求。原生回报 `requestId`、`requestedRevision`、`appliedRevision` 与失败字段；成功提交首帧前保持 Applying。被更新请求替代的配置标记 Superseded，不伪装成功。
 
@@ -92,7 +92,7 @@ Scene 的工具栏、浮动标题和状态信息位于原生像素区域外。�
 
 ## 图形 API 动态切换
 
-可以支持编辑器运行中 DX12 ↔ Vulkan 切换。它的语义是保持编辑器进程和工作台状态，重建原生视口；不是给现有 Device 更换后端。现有服务从只读启动选项选择 Backend，尚无运行时切换入口。
+编辑器支持运行中 DX12 ↔ Vulkan 与 Validation 切换：Render Settings 选择目标后点击 Apply API / Retry。串行退休并重建原生视口，保留工作台、相机和完整配置；Device 本身的后端不可变。状态显示退休、创建、首帧或回滚；双重失败停止自动尝试，用户可显式重试。
 
 ```mermaid
 flowchart LR
@@ -190,7 +190,7 @@ flowchart TD
 
 保持单个托管应用项目。增加具体 Workbench ViewModel、DockFactory 与 RenderSettings/RenderGraph/Profiler/Log ViewModel；将图表或图绘制封装为控件。Dock Document 的 Context 保存稳定面板身份与 View 工厂，每个 presenter 新建控件，服务和模型共享；布局仅保存白名单值，不序列化控件、工厂或服务。Serilog 的文件/内存 sinks 在应用入口装配，Log ViewModel 只展示有界事件投影。NativeViewportService 继续负责 Session 生命周期，具体快照模型与统计窗口可分文件，不引入插件总线或另一份 GPU Scene。
 
-配置桥接已随同 DLL/托管程序集升至 v6，不兼容旧布局时启动明确拒绝；Stats 为 256 字节，Config/ConfigState 为带 size/version 的 112/272 字节定宽 POD。能力说明使用 schemaVersion=1 的 UTF-8 JSON。后续可变 Graph 快照/导出也使用有版本的 UTF-8 JSON，不能每帧把完整图序列化并跨边界。
+配置桥接已随同 DLL/托管程序集升至 v7，不兼容旧布局时启动明确拒绝；Stats 为 256 字节，Config/ConfigState 为带 size/version 的 112/272 字节定宽 POD。能力说明使用 schemaVersion=1 的 UTF-8 JSON。后续可变 Graph 快照/导出也使用有版本的 UTF-8 JSON，不能每帧把完整图序列化并跨边界。
 
 可变快照采用 AcquireLatest/Copy/Release 的不透明快照 ID，先钉住不可变 CPU 值数据，再查询长度并复制，防止两次调用之间图已更换；不跨 ABI 暴露 STL、指针或资源引用。每 Session 最多保留 latest 与一个 pinned 快照，单份初始上限 4 MiB；超限明确报告，不返回截断的半张图。完成帧队列沿用有界 512 项，UI 曲线最多保留 240 个活动样本，展示统计窗口时长/数量；基础 UI 250 ms 发布，关闭面板停止对应视图更新。
 

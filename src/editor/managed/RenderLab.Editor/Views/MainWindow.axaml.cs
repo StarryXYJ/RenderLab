@@ -89,6 +89,7 @@ public partial class MainWindow : Window
         Closing += (_, _) =>
         {
             closingWindow = true;
+            viewportService.CancelSwitch();
             try { Directory.CreateDirectory(Path.GetDirectoryName(layoutPath)!); File.WriteAllText(layoutPath, Docks.Serialize()); }
             catch (Exception error) { logger.LogWarning(error, "Saving layout failed"); }
             Viewport?.CloseViewport();
@@ -165,6 +166,7 @@ public partial class MainWindow : Window
     private void DiagnosticLayout(object? sender, RoutedEventArgs args) => ResetLayout(true);
     private void RestoreLayout(object? sender, RoutedEventArgs args)
     {
+        viewportService!.CancelSwitch();
         Viewport?.CloseViewport();
         Docks.CloseFloatingWindows();
         Workbench.Layout = null;
@@ -174,6 +176,7 @@ public partial class MainWindow : Window
     }
     internal void ResetLayout(bool diagnostics)
     {
+        viewportService!.CancelSwitch();
         Viewport?.CloseViewport();
         Docks.CloseFloatingWindows();
         Workbench.Layout = null;
