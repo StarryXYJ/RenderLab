@@ -87,6 +87,8 @@ Windows 编辑器使用 Avalonia 管理整个窗口和普通面板，NativeContr
 
 下一步 Editor 采用 [固定场景渲染工作台](../docs/editor-workbench.md) 的设计：Dock.Avalonia 管理 Scene、Render Settings、Render Graph、Profiler，Ursa 按实际控件需要选用。固定源场景与资源保持只读，照明/相机/渲染参数通过原生运行覆盖层改变；布局与预设保存于 UserSettings。图查看器消费真实 Plan 的值快照，性能面板消费带 Session/源帧/配置版本的计数与完成结果，不持有 GPU 资源或构造第二套依赖图。该设计尚不等于 Dock/快照桥接已经实现，实施状态只见阶段计划。
 
+工作台默认只打开 Scene 与 Render Settings；Render Graph、Profiler、Log 从顶部 Window 菜单按需打开，保留诊断预设及上次布局恢复。托管日志统一经 Serilog/DI ILogger 写结构化滚动文件和有界内存 sink；原生 Logger 保留独立文件与运行时所有权，通过可选有界镜像队列批量送入工作台日志，不在渲染/验证回调内调用托管 UI。关闭 Log 面板不停止记录，关闭程序先收取原生末尾日志再释放 Serilog。
+
 Dock 迁移优先保证原生窗口生命周期：跨父窗口时停止并退休旧 Session，销毁再创建，保持相机与运行配置；airspace 内的 Dock 拖放提示通过临时隐藏原生视口避免遮挡。DX12/Vulkan 切换沿用同一重建事务，目标失败后尝试重新创建原后端，回滚失败进入明确 Failed 状态。正常重建等待采用异步生命周期通知，UI STA 与渲染 MTA 的 HWND/Device 所有权保持不变。
 
 子 HWND 存在 airspace 限制，视口内 Gizmo 和调试覆盖由原生编辑器渲染层绘制；普通 Avalonia 控件安排在视口周边。独立 Sandbox 使用自己的原生窗口。视口宿主明确窗口所有权和销毁协议，避免窗口销毁后仍提交渲染。

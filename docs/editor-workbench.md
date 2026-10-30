@@ -8,7 +8,7 @@
 
 - 启动时确定项目/场景；显示场景名称、来源与只读状态。允许导航相机与临时光照覆盖，不增删对象、不修改 Transform/材质/资源引用、不切换或编辑场景文件。
 - 配置属于本次运行的覆盖层。Reset 恢复载入值；可保存本机工作台预设，不写回 Scene、Material 或 ProjectSettings。Library/Shader 缓存仍可正常生成，不把缓存写入误判为资产修改。
-- 四个核心 Dock 为 Scene、Render Settings、Render Graph、Profiler；另提供可关闭的 Console 标签。没有占位 Hierarchy、Project 或材质 Inspector。
+- Dock 包括 Scene、Render Settings、Render Graph、Profiler、Log；默认只显示 Scene 与 Render Settings，其余从顶部 Window 菜单按需打开。没有占位 Hierarchy、Project 或材质 Inspector。
 - 单个活动原生视口与一套 Runtime；普通面板可浮动。Scene 浮动通过销毁/重建宿主实现，不承诺活跃 Swapchain 原地跨父窗口迁移。
 - 每个子阶段完成验证后独立提交。设计文件更新不计作实现完成。
 
@@ -28,28 +28,33 @@
 
 首选 `Dock.Avalonia`、`Dock.Model.Mvvm` 及对应 Fluent 主题，继续使用现有 Fluent 基础。Ursa 按复杂数值编辑/属性布局的实际需要引入；若采用 Semi/Ursa 主题则整体统一，避免叠加两套全局控件主题。本轮不复制参考项目的扩展注册框架、项目工作流或复杂 Inspector 系统。若实施时直接复用 MIT 源码，保留其许可与版权声明；本次只参考结构。
 
+托管日志采用 Serilog，通过 `Serilog.Extensions.Logging` 接入 DI 中的 `ILogger<T>`，使用 File sink 保存结构化滚动日志，并增加有界内存 sink 供 Log Dock 展示。具体依赖版本在 M7.2a 恢复/构建时固定到锁文件，不在设计中假定未核对的版本已经兼容。
+
 ## 默认布局与交互
 
-建议初始窗口 1440×900 DIP，最小 1000×680 DIP；尺寸不足时由 Dock 标签组和滚动属性面板容纳内容。布局初始比例约为主区 74%、右侧设置 26%；主区上下约 64%/36%。
+建议初始窗口 1440×900 DIP，最小 1000×680 DIP；尺寸不足时由 Dock 标签组和滚动属性面板容纳内容。默认布局主区约 74%、右侧设置约 26%，Scene 占满主区高度，没有预留的空白底部 Dock。
 
 ```text
 ┌─────────────────────────────────────────────────────────────────────┐
-│ RenderLab  固定场景名称     运行/暂停  单帧  重置相机   布局 ▼        │
+│ RenderLab  Window ▼  Layout ▼   固定场景名称  运行/暂停  单帧         │
 ├─────────────────────────────────────────────┬───────────────────────┤
 │ Scene                                       │ Render Settings       │
 │ 最终画面/已有调试视图  尺寸  渲染状态        │ 设备与图形 API        │
 │                                             │ 管线/提交/执行        │
 │             原生渲染视口                    │ 阴影/反射/曝光        │
 │                                             │ 相机/照明临时覆盖     │
-├─────────────────────────────────────────────┤                       │
-│ Render Graph │ Profiler │ Console            │ 请求值 → 实际生效值   │
-│ Pass × Resource 读写矩阵 / 依赖关系 / 时间线 │ 配置状态与失败原因    │
+│                                             │ 请求值 → 实际生效值   │
+│                                             │ 配置状态与失败原因    │
 ├─────────────────────────────────────────────┴───────────────────────┤
 │ DX12 · Deferred · Direct    Ready/Idle/Paused   验证消息 · 源帧号     │
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
-支持拖动停靠、标签合并、拆分、面板最大化、浮动、关闭后从 Window 菜单恢复；提供默认布局和诊断布局（Graph 与 Profiler 并列）。默认四个核心面板都存在，下方 Graph/Profiler 共用标签不代表只能开一个。布局与设置保存到项目 `UserSettings/Editor/`，写入失败时保留内存配置并报告；不改变项目源数据。
+支持拖动停靠、标签合并、拆分、面板最大化、浮动和关闭恢复。顶部 Window 菜单列出 Scene、Render Settings、Render Graph、Profiler、Log，显示打开状态；已打开时激活/定位原面板，隐藏时重新显示，同一面板 ID 不重复创建多个实例。Render Graph、Profiler、Log 首次打开默认停靠在 Scene 下方的标签区，不挤占右侧设置面板；可自行拆分并列或浮动。
+
+Layout 菜单提供 Default（只显示 Scene/Render Settings）、Diagnostics（同时打开 Graph、Profiler、Log，Graph 与 Profiler 可并列）与恢复上次布局。首次启动、重置默认或布局损坏恢复都采用两面板布局；正常重启恢复用户最后保存的面板可见性、位置和比例。布局与设置保存到项目 `UserSettings/Editor/`，写入失败时保留内存配置并报告；不改变项目源数据。
+
+面板关闭不等同于暂停场景。Graph 关闭后停止该面板的快照订阅/自动刷新，Profiler 关闭后停止图表发布；显式采样请求或已开启的 Profiling 配置按其独立状态继续，关闭 Dock 不静默修改渲染设置。Log 关闭后停止列表更新，后台日志记录与有界缓存继续，重新打开可查看缓存内的既有消息。
 
 Scene 的工具栏、浮动标题和状态信息位于原生像素区域外。子 HWND 存在 airspace 限制，Dock 拖放提示与菜单不能假设能覆盖它。Scene 拖移、Dock 全局拖放提示可能覆盖视口时，暂停并隐藏原生子窗口，完成或取消后恢复；若布局导致 NativeControlHost 分离/换父窗口，则先停渲染并退休 GPU，再销毁/重建 Session。禁止直接给活动交换链做 SetParent。普通面板拖动不需要重建设备，但可能需要临时隐藏视口。
 
@@ -106,7 +111,7 @@ flowchart LR
 
 - UI 保持布局、配置副本、相机导航状态与源场景路径；清空旧输入增量。GPU 表、PSO、描述符、BLAS/TLAS、历史纹理和帧完成点全部重建，不能跨 API 迁移。
 - 首轮串行销毁再创建，避免两个完整设备场景并存的显存峰值。新后端不支持请求组合时明确失败并尝试恢复旧配置，不悄悄改成另一条管线。
-- 回滚也要重新创建旧设备，不承诺一定成功；若回滚失败，工作台进入 Failed，Console 保留两个错误，提供 Retry，禁止无限自动重试。计划内切换不等同于设备丢失恢复。
+- 回滚也要重新创建旧设备，不承诺一定成功；若回滚失败，工作台进入 Failed，Log 保留两个错误，提供 Retry，禁止无限自动重试。计划内切换不等同于设备丢失恢复。
 - 设备资源的创建/销毁继续在专用 MTA owner，HWND 在 UI STA；新增 Stop/Retired 完成通知，让正常重建等待异步进行，不在 UI 调用中长时间阻塞 GPU。HWND 卸载可按既有受限 Win32 握手收尾，不能从任意后台线程调用旧 Destroy。
 - 每次重建递增 Session 代际，丢弃旧回调、GPU 计时与 Graph 结果，保留带后端标签的历史导出但不连接不同后端的活动曲线。布局恢复不自动触发多个重复 Session。
 - 编译/上传期间显示 Switching 与实际阶段，不承诺无停顿。保持当前单活动视口，重建后确认首帧成功再显示 Ready；未确认前没有虚假的活动 FPS。
@@ -130,7 +135,7 @@ flowchart LR
 
 ## Profiler Dock
 
-常驻概览为帧时间曲线、CPU 分段与绘制统计；选中完成帧后联动 Graph 的相同源帧/拓扑。提供 Live、Freeze、采样清空、连续采样模式与导出。所有未知、未开启、超出计时上限或尚未完成的数值显示 N/A/Pending，而不是 0。
+从 Window 菜单打开后，概览显示帧时间曲线、CPU 分段与绘制统计；选中完成帧后联动 Graph 的相同源帧/拓扑。提供 Live、Freeze、采样清空、连续采样模式与导出。所有未知、未开启、超出计时上限或尚未完成的数值显示 N/A/Pending，而不是 0。
 
 | 指标 | 定义与来源 |
 | --- | --- |
@@ -151,6 +156,22 @@ flowchart LR
 
 数据分层：基础整数计数；可选 CPU/GPU timing；显式 GPU 可见性读回。关闭 timing 时保留低成本计数，关闭读回时不创建 Count 诊断资源。基准导出记录所有诊断开关、分辨率、后端、管线、提交方式与场景标识，方便与独立 Player 对照。
 
+## Serilog 与 Log Dock
+
+Log 是默认隐藏、可从 `Window > Log` 打开的工具面板。状态栏持续显示本次运行的 Warning/Error 数，点击可打开 Log 并定位相应级别；新错误不会自动弹出或抢走 Scene 焦点。配置失败仍在设置面板保留就地说明，完整异常和上下文进入日志。
+
+面板使用虚拟化列表，显示时间、级别、来源、消息；支持按级别/来源筛选、文本搜索、自动滚动开关、清空当前列表、复制和打开日志目录。选中项展开异常堆栈与结构化属性。清空列表不删除磁盘日志、不重置真实 GPU 验证计数；关闭面板不关闭日志系统。
+
+托管层在应用启动早期创建 Serilog，DI 服务通过 `ILogger<T>` 记录结构化消息；进程退出在所有原生 Session 关闭、末尾日志取完后刷新并释放 logger。正常路径写配置接受/应用/拒绝、Session 创建/销毁、API 切换/回滚、Dock 生命周期与可恢复错误；默认 Info，诊断时才启用 Debug/Verbose。不将逐帧性能样本或每条 Draw 写成文本日志，Profiler 仍走原有数值采样通道。
+
+事件字段至少包括 UTC 时间、Level、SourceContext、MessageTemplate/渲染消息和 Exception（若有）；可关联时附 EditorRunId、SessionGeneration、Backend、RequestId/ConfigRevision、FrameId、NativeSequence。界面可按本机时区显示时间，磁盘保留 UTC。File sink 输出滚动结构化日志到已配置输出目录的 `logs/`，初始按天/单文件 16 MiB 滚动、保留最多 10 个文件；打开面板不会创建另一份重复的应用日志。
+
+原生 C++ 保留独立 Logger 与现有逐 Session 日志，Sandbox/Player 不依赖 Serilog。为 Editor 添加可选有界日志镜像队列，通过 UI 侧 C ABI 批量取出 UTF-8 值事件，再送入托管 Serilog；禁止原生渲染/驱动验证回调直接调用 C# sink 或 Dispatcher。容量不足时返回所需空间而不消费消息，按 Session/NativeSequence 避免重试导致重复。原生日志进面板时使用原事件的时间、级别、来源与序号，不能重新盖成拉取时间；汇入后的应用日志带 `Origin=Native`，保留原生日志文件用于完整诊断，不再同时 tail 文件重复采集。设备关闭后的末尾事件仍按原 Session 展示，不套用新后端标签。
+
+日志镜像/内存 sink 必须有界且异常隔离：原生队列和托管待发布队列初始各最多 4096 条且各最多 8 MiB，Log 可见缓存最多 10000 条且合计最多 8 MiB。面板事件单条最多 16 KiB，超长消息标记截断并指向原始文件；原始日志不因面板限制而截断。超限按明确规则丢弃较早的镜像事件并累计 dropped 数，通过独立状态显示，不能递归写入同一个已满 sink。默认每 250 ms 有界批量发布到 UI，不逐事件触发 Dispatcher；面板隐藏时缓存仍按预算轮转。
+
+日志系统自身的写入/序列化/sink 异常走隔离的 stderr/备用错误文件与可见状态，不再次进入同一 Serilog 管线，不能让 Log 面板故障终止 GPU 录制。关闭时 drain 原生末尾日志并报告未排空/丢弃计数，不能声称有界内存队列保证零丢失。托管未处理异常尽力写 Fatal/flush，但不把不可恢复异常吞掉或声称所有原生崩溃均可捕获。
+
 ## 数据、线程与桥接
 
 ```mermaid
@@ -167,7 +188,7 @@ flowchart TD
     Service --> Panels
 ```
 
-保持单个托管应用项目。增加具体 Workbench ViewModel、DockFactory 与 RenderSettings/RenderGraph/Profiler ViewModel；将图表或图绘制封装为控件。NativeViewportService 继续负责 Session 生命周期，具体快照模型与统计窗口可分文件，不引入插件总线或另一份 GPU Scene。
+保持单个托管应用项目。增加具体 Workbench ViewModel、DockFactory 与 RenderSettings/RenderGraph/Profiler/Log ViewModel；将图表或图绘制封装为控件。Serilog 的文件/内存 sinks 在应用入口装配，Log ViewModel 只展示有界事件投影。NativeViewportService 继续负责 Session 生命周期，具体快照模型与统计窗口可分文件，不引入插件总线或另一份 GPU Scene。
 
 拟议 C ABI 随同 DLL/托管程序集一起升版，不兼容旧布局时启动明确拒绝；不直接把 v4 的 232 字节 Stats 尾部偷偷扩展。配置和基础帧统计使用带 size/version 的定宽 POD；可变 Graph 快照/能力说明/导出使用有 schemaVersion 的 UTF-8 JSON。JSON 只用于低频快照，不能每帧把完整图序列化并跨边界。
 
@@ -181,12 +202,13 @@ flowchart TD
 
 | 范围 | 必须证明的行为 |
 | --- | --- |
-| Dock/原生宿主 | 四个面板可停靠、关闭恢复、浮动与重置布局；Scene 拖出/停回、取消拖放、主窗最小化恢复、跨屏 100%/150% DPI 下无黑屏、输入残留或失效 HWND |
+| Dock/原生宿主 | 首次/默认布局只显示 Scene 与 Render Settings；其余三个面板从顶部菜单打开且不重复创建，关闭无空白占位，重启恢复布局，诊断布局可一键打开；所有面板可停靠/浮动，Scene 拖出/停回、取消拖放、主窗最小化恢复、跨屏 100%/150% DPI 下无黑屏、输入残留或失效 HWND |
 | 固定数据 | 操作配置与保存预设前后 Scene/Material/ProjectSettings 源文件 hash 一致；重新载入可恢复给定场景，缓存变化单独排除 |
 | 配置 | 双后端 Forward/Deferred/RayTracing 及支持的提交/线程/队列/Alias 组合生效可见；非法配置保留实际值并解释拒绝原因；快速拖动/多次请求只应用一致版本 |
 | API 切换 | DX12→Vulkan→DX12 至少 10 轮，含暂停、最小化、恢复、Dock 迁移；相机/覆盖/布局保留，历史按规则重置，旧设备关闭账本为 0；目标失败和回滚失败均有确定状态 |
 | Graph | 已知小图对比 Plan 的 Pass/版本/读写/边/队列/Alias；Forward/Deferred/光追/GPU 剔除切换产生相符拓扑；Freeze、剔除项、失败图与源帧晚到均不串帧；仅打开 Viewer 不增添渲染 Pass 或读回 |
 | Profiler | 已知 direct/indirect/多实例/透明/阴影/全屏/Compute/TraceRays 工作量核对计数；GPU 未读回时显示未知；Idle/Pause 不显示假 FPS，多队列重叠不重复算成帧延迟 |
+| Log | 托管异常与原生验证消息的级别/来源/时间正确，批量拉取不重复，API 切换保留旧 Session 标签；筛选/暂停滚动/清空/重开可用；消息洪峰、超长消息、滚动文件、sink 失败与关闭 drain 都有确定行为，GPU 验证错误数不因 UI 操作清零 |
 | 持续运行 | 双后端分别至少 30 分钟交互/连续采样，记录内存高水位、快照和队列有界性、丢样数、验证错误、关闭账本；不把未运行的硬件/DPI/设备丢失用例记作通过 |
 | 观察成本 | 相同场景/尺寸/配置下对照面板关闭、基础计数、Timing、GPU 可见性读回四档，记录 CPU/GPU/内存差异；没有测量不宣称面板零开销 |
 
