@@ -136,6 +136,7 @@ struct AccessInfo
     Use use;
     bool read, write;
     BufferRange bufferRange;
+    TextureRange textureRange;
 };
 struct PassInfo
 {
@@ -143,6 +144,8 @@ struct PassInfo
     PassKind kind;
     bool live = false;
     std::vector<AccessInfo> accesses;
+    uint32_t recordingChunk = UINT32_MAX;
+    uint64_t firstCommand = 0, lastCommand = 0;
 };
 struct ResourceInfo
 {
@@ -153,6 +156,10 @@ struct ResourceInfo
     uint32_t versions = 0;
     rhi::State initial = rhi::State::Undefined, final = rhi::State::Undefined;
     uint32_t aliasGroup = UINT32_MAX;
+    bool texture = false, exported = false;
+    uint32_t width = 0, height = 0;
+    rhi::Format format = rhi::Format::Rgba8;
+    uint64_t bufferBytes = 0;
 };
 struct Plan
 {

@@ -75,6 +75,15 @@ extern "C"
     rl_viewport_step(rl_viewport_handle session);
 
     RENDERLAB_EDITOR_API uint32_t RENDERLAB_EDITOR_CALL rl_editor_abi_version(void);
+    /* Request a metadata snapshot. Acquire pins CPU values; Copy never consumes; Release unpins. */
+    RENDERLAB_EDITOR_API rl_status RENDERLAB_EDITOR_CALL
+    rl_viewport_request_snapshot(rl_viewport_handle session);
+    RENDERLAB_EDITOR_API rl_status RENDERLAB_EDITOR_CALL rl_viewport_acquire_snapshot(
+        rl_viewport_handle session, uint64_t* snapshot, uint32_t* required);
+    RENDERLAB_EDITOR_API rl_status RENDERLAB_EDITOR_CALL rl_viewport_copy_snapshot(
+        rl_viewport_handle session, uint64_t snapshot, char* output, uint32_t capacity);
+    RENDERLAB_EDITOR_API rl_status RENDERLAB_EDITOR_CALL
+    rl_viewport_release_snapshot(rl_viewport_handle session, uint64_t snapshot);
     /* Nonblocking retirement handshake. UI continues dispatching window messages while waiting. */
     RENDERLAB_EDITOR_API rl_status RENDERLAB_EDITOR_CALL
     rl_viewport_begin_stop(rl_viewport_handle session);

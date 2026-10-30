@@ -35,8 +35,27 @@ const Plan& Graph::Compile(CompileOptions options)
                     {a.resource, a.input, a.output, a.use, a.read, a.write, a.bufferRange});
         }
         for (auto& r : g.resources)
+        {
             plan.resources.push_back(
                 {r.Name(), r.imported, UINT32_MAX, 0, detail::EstimatedBytes(r)});
+            auto& info = plan.resources.back();
+            info.texture = r.isTexture;
+            info.exported = r.exported.has_value();
+            info.width = r.isTexture ? r.textureDesc.width : 0;
+            info.height = r.isTexture ? r.textureDesc.height : 0;
+            info.format = r.textureDesc.format;
+            info.bufferBytes = r.isTexture ? 0 : r.bufferDesc.size;
+        }
+        for (auto& pass : plan.passes)
+            for (auto& access : pass.accesses)
+            {
+                const auto& resource = plan.resources[access.resource];
+                if (resource.texture)
+                    access.textureRange.aspect =
+                        rhi::HasStencil(resource.format)      ? Aspect::DepthStencil
+                        : rhi::IsDepthFormat(resource.format) ? Aspect::Depth
+                                                              : Aspect::Color;
+            }
         std::function<void(uint32_t, const std::string&)> retain;
         const auto requireInput =
             [&](uint32_t resource, uint32_t version, const std::string& consumer)

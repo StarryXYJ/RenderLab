@@ -1,0 +1,20 @@
+<UserControl xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+ xmlns:vm="using:RenderLab.Editor.ViewModels" xmlns:controls="using:RenderLab.Editor.Controls"
+ x:Class="RenderLab.Editor.Views.RenderGraphView" x:DataType="vm:RenderGraphViewModel">
+ <Grid RowDefinitions="Auto,Auto,*,Auto" Margin="8" RowSpacing="6">
+  <WrapPanel>
+   <TextBox Width="190" PlaceholderText="Search pass / resource" Text="{Binding Search}" />
+   <CheckBox Content="Freeze" IsChecked="{Binding Frozen}" Margin="8,0" />
+   <CheckBox Content="Culled passes" IsChecked="{Binding ShowCulled}" Margin="8,0" />
+   <Button Content="Refresh" Command="{Binding RefreshNowCommand}" />
+   <Button Content="Export JSON" Command="{Binding ExportCommand}" />
+   <Slider Width="100" Minimum="0.5" Maximum="2" Value="{Binding Zoom}" />
+  </WrapPanel>
+  <TextBlock Grid.Row="1" Text="{Binding Status}" TextWrapping="Wrap" />
+  <Grid Grid.Row="2" ColumnDefinitions="3*,2*" ColumnSpacing="8">
+   <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto"><controls:GraphMatrixControl x:Name="Matrix" /></ScrollViewer>
+   <ScrollViewer Grid.Column="1"><TextBlock Text="{Binding Details}" TextWrapping="Wrap" /></ScrollViewer>
+  </Grid>
+  <TextBlock Grid.Row="3" Text="{Binding ExportPath}" TextWrapping="Wrap" />
+ </Grid>
+</UserControl>

@@ -84,7 +84,7 @@ Scene 的工具栏、浮动标题和状态信息位于原生像素区域外。�
 | Camera/Display | 导航速度、曝光、重置相机、已有调试视图 | 相机/显示覆盖；曝光不无条件清空不受其影响的 HDR 历史 |
 | Scheduling | 目标帧率 0–240、按需/连续刷新、Profiling | 0 沿用无 CPU 限速且关闭强制 VSync 语义，可能需要重建 Swapchain |
 
-上述管线/提交/执行、光照/阴影/反射/曝光/调度与已有调试视图已通过 M7.2b 的 v6 配置桥接接入，具体布局与生效语义见 [宿主契约](editor-host.md#c-abi-v7运行配置与诊断)。API/Validation 通过 Apply API / Retry 触发完整视口重建；实际后端在配置首帧成功后更新。光照覆盖在 Renderer 提取后的值快照上应用，不让 C# 持有 Scene Document。
+上述管线/提交/执行、光照/阴影/反射/曝光/调度与已有调试视图已通过 M7.2b 的 v6 配置桥接接入，具体布局与生效语义见 [宿主契约](editor-host.md#c-abi-v8运行配置与诊断)。API/Validation 通过 Apply API / Retry 触发完整视口重建；实际后端在配置首帧成功后更新。光照覆盖在 Renderer 提取后的值快照上应用，不让 C# 持有 Scene Document。
 
 枚举和开关在校验后立即排队；滑动数值以有界最新值邮箱合并，不为每次鼠标消息做一次 GPU 等待。Device 组使用明确的 Apply 操作，合并 API/Validation 的重建请求。原生回报 `requestId`、`requestedRevision`、`appliedRevision` 与失败字段；成功提交首帧前保持 Applying。被更新请求替代的配置标记 Superseded，不伪装成功。
 
@@ -127,9 +127,9 @@ flowchart LR
 - Dependency：实际 Plan 的 RAW/WAR/WAW/显式顺序原因和队列等待；资源内容依赖、顺序依赖与 Alias 内存复用采用不同线型/标签。Alias 共用内存不代表共享逻辑内容。
 - 支持搜索 Pass/Resource、定位上下游、缩放/平移、Freeze/Live、手动刷新和导出快照。Freeze 只冻结观察帧；不暂停渲染。真正暂停或单帧由 Scene 工具栏控制。
 
-数据以 `Graph::GetPlan()` / `Plan::ToJson()` 的编译结果为权威。现有结构已提供 accesses、版本、edges、schedule、barriers、aliasGroups 和生命周期；类型/格式/尺寸、export、完整范围、录制块与可关联的 Pass ID 需要补入诊断快照，不能声称现有 JSON 已完整提供。
+数据以 `Graph::GetPlan()` / `Plan::ToJson()` 的编译结果为权威。现有结构已提供 accesses、版本、edges、schedule、barriers、aliasGroups 和生命周期；类型/格式/尺寸、export、完整范围、录制块与可关联的 Pass ID 已补入诊断快照；纹理范围按当前单 mip/layer 能力规范化，Buffer 保留字节区间。
 
-只在图成功提交后发布常规快照，标记 Session、配置版本、帧号、拓扑版本与执行状态。编译或提交失败可发布独立 Failed 诊断，不能替换为“本帧已执行”。拓扑数据按签名变化更新，Live 至多每 500 ms 复制一次最新拓扑；Freeze 可钉住一个有界快照，不保活整个 Graph 或 GPU 对象。GPU Timing 单独带源帧关联，尚未完成显示 Pending，不把旧帧耗时贴到新拓扑。
+矩阵、选中 Pass 的上下游依赖、生命周期/Alias 条、搜索/缩放/滚动、剔除开关与 Freeze/Live/导出已接入。只在图成功提交后发布常规快照，标记 Session、配置版本、帧号、拓扑版本与执行状态。编译或提交失败可发布独立 Failed 诊断，不能替换为“本帧已执行”。拓扑数据按签名变化更新，Live 至多每 500 ms 请求/复制一次最新计划；Freeze 可钉住一个有界快照，不保活整个 Graph 或 GPU 对象。GPU Timing 单独带源帧关联，尚未完成显示 Pending，不把旧帧耗时贴到新拓扑。
 
 **默认只观察元数据，不为查看面板插入读回或改变图根。**旧版本 handle 不保存旧图像，Alias 可能已覆盖内容。后续若加入选定 RT 像素检查，必须在指定版本最后有效处插入显式 Copy/转换并按完成点读回，标记诊断模式和增加的 Pass/内存成本；不为所有 Pass 持续复制 RT。
 
@@ -190,7 +190,7 @@ flowchart TD
 
 保持单个托管应用项目。增加具体 Workbench ViewModel、DockFactory 与 RenderSettings/RenderGraph/Profiler/Log ViewModel；将图表或图绘制封装为控件。Dock Document 的 Context 保存稳定面板身份与 View 工厂，每个 presenter 新建控件，服务和模型共享；布局仅保存白名单值，不序列化控件、工厂或服务。Serilog 的文件/内存 sinks 在应用入口装配，Log ViewModel 只展示有界事件投影。NativeViewportService 继续负责 Session 生命周期，具体快照模型与统计窗口可分文件，不引入插件总线或另一份 GPU Scene。
 
-配置桥接已随同 DLL/托管程序集升至 v7，不兼容旧布局时启动明确拒绝；Stats 为 256 字节，Config/ConfigState 为带 size/version 的 112/272 字节定宽 POD。能力说明使用 schemaVersion=1 的 UTF-8 JSON。后续可变 Graph 快照/导出也使用有版本的 UTF-8 JSON，不能每帧把完整图序列化并跨边界。
+配置桥接已随同 DLL/托管程序集升至 v8，不兼容旧布局时启动明确拒绝；Stats 为 256 字节，Config/ConfigState 为带 size/version 的 112/272 字节定宽 POD。能力说明使用 schemaVersion=1 的 UTF-8 JSON。后续可变 Graph 快照/导出也使用有版本的 UTF-8 JSON，不能每帧把完整图序列化并跨边界。
 
 可变快照采用 AcquireLatest/Copy/Release 的不透明快照 ID，先钉住不可变 CPU 值数据，再查询长度并复制，防止两次调用之间图已更换；不跨 ABI 暴露 STL、指针或资源引用。每 Session 最多保留 latest 与一个 pinned 快照，单份初始上限 4 MiB；超限明确报告，不返回截断的半张图。完成帧队列沿用有界 512 项，UI 曲线最多保留 240 个活动样本，展示统计窗口时长/数量；基础 UI 250 ms 发布，关闭面板停止对应视图更新。
 

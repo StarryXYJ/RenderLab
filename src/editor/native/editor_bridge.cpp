@@ -1,6 +1,7 @@
 #include "editor/native/editor_bridge.h"
 
 #include "editor/native/camera_input.hpp"
+#include "editor/native/snapshot_store.hpp"
 #include "editor/native/viewport_config.hpp"
 
 #include "core/log.hpp"
@@ -126,6 +127,7 @@ struct RenderState
     std::array<uint64_t, 2> profileFrames{};
     std::array<uint64_t, 2> profileConfigs{};
     uint64_t configRevision = 0;
+    std::shared_ptr<const rendergraph::Plan> capturedPlan;
     std::vector<bool> initialized;
     std::array<bool, 256> keys{};
     rl_viewport_stats stats{};
@@ -268,6 +270,7 @@ struct RenderState
         stats.native_bytes = runtime->GetMemoryStats().used;
         stats.peak_bytes = runtime->GetMemoryStats().highWater;
         stats.tick_ns = ElapsedNs(tickStart);
+        capturedPlan = std::move(result.graphSnapshot);
     }
     rl_viewport_close_report Close()
     {
@@ -313,6 +316,8 @@ struct Session
     float exposure = 0;
     uint64_t revision = 1, resets = 0;
     uint64_t steps = 0;
+    uint64_t snapshotRequests = 0;
+    editor::SnapshotStore snapshots;
     rl_viewport_config configuration{}, defaults{};
     rl_viewport_config_state configurationState{sizeof(rl_viewport_config_state), 1};
     std::string configurationError, capabilities;
@@ -502,6 +507,8 @@ struct Session
                         camera = render.initialCamera;
                     }
                     uint64_t prepared = 0, appliedResets = 0, completedSteps = 0;
+                    uint64_t snapshotsServed = 0, topologyRevision = 0;
+                    std::string previousTopology;
                     auto previous = Clock::now();
                     auto period =
                         std::chrono::nanoseconds(targetFps ? 1'000'000'000 / targetFps : 0);
@@ -531,6 +538,7 @@ struct Session
                         uint32_t selected;
                         rl_viewport_config selectedConfig;
                         uint64_t selectedRevision, selectedResets, selectedSteps;
+                        uint64_t selectedSnapshot;
                         {
                             std::lock_guard lock(mutex);
                             if (stop)
@@ -549,6 +557,7 @@ struct Session
                             selectedRevision = configuration.request_id;
                             selectedResets = resets;
                             selectedSteps = steps;
+                            selectedSnapshot = snapshotRequests;
                         }
                         if (selectedRevision != prepared)
                         {
@@ -625,6 +634,9 @@ struct Session
                             prepared = selectedRevision;
                         }
                         selected = activeConfig.pipeline;
+                        render.options.captureGraph = selectedSnapshot != snapshotsServed;
+                        if (render.options.captureGraph)
+                            dirty = true;
                         if (selectedResets != appliedResets)
                         {
                             render.scene->Document()
@@ -751,9 +763,60 @@ struct Session
                         render.stats.session_generation = identity;
                         render.stats.render_thread_id = GetCurrentThreadId();
                         render.stats.activity = paused ? 3 : resizePending ? 4 : needsFrame ? 1 : 2;
+                        std::string graphSnapshot;
+                        if (draw && render.capturedPlan)
+                        {
+                            try
+                            {
+                                auto plan = nlohmann::json::parse(render.capturedPlan->ToJson());
+                                auto topology = plan;
+                                topology.erase("cpuNs");
+                                for (auto& pass : topology["passes"])
+                                    pass.erase("commandRange");
+                                for (auto& resource : topology["resources"])
+                                {
+                                    resource.erase("initial");
+                                    resource.erase("final");
+                                }
+                                topology.erase("prologueBarriers");
+                                topology.erase("finalBarriers");
+                                for (auto& scheduled : topology["schedule"])
+                                    scheduled.erase("barriers");
+                                const auto signature = topology.dump();
+                                if (signature != previousTopology)
+                                {
+                                    previousTopology = signature;
+                                    ++topologyRevision;
+                                }
+                                graphSnapshot =
+                                    nlohmann::json{{"schemaVersion", 1},
+                                                   {"sessionGeneration", identity},
+                                                   {"frameId", render.stats.frames},
+                                                   {"configRevision", render.stats.config_revision},
+                                                   {"topologyRevision", topologyRevision},
+                                                   {"backend", backend == 0 ? "dx12" : "vulkan"},
+                                                   {"status", "submitted"},
+                                                   {"plan", std::move(plan)}}
+                                        .dump();
+                            }
+                            catch (const std::exception& failure)
+                            {
+                                logger.Write(LogLevel::Warning,
+                                             std::string("Graph snapshot failed: ") +
+                                                 failure.what());
+                            }
+                        }
                         {
                             std::lock_guard lock(mutex);
                             const bool framePublished = draw && render.stats.frames != stats.frames;
+                            if (framePublished && !graphSnapshot.empty())
+                            {
+                                if (!snapshots.Publish(std::move(graphSnapshot)))
+                                    snapshots.Publish(
+                                        "{\"schemaVersion\":1,\"status\":\"unavailable\",\"error\":"
+                                        "\"Snapshot exceeds 4 MiB budget\"}");
+                                snapshotsServed = selectedSnapshot;
+                            }
                             if (draw && render.stats.frames != stats.frames)
                             {
                                 if (frameCount == completedFrames.size())
@@ -982,7 +1045,58 @@ template <class F> rl_status Guard(F&& operation)
 
 uint32_t RENDERLAB_EDITOR_CALL rl_editor_abi_version()
 {
-    return 7;
+    return 8;
+}
+rl_status RENDERLAB_EDITOR_CALL rl_viewport_request_snapshot(rl_viewport_handle handle)
+{
+    return Guard(
+        [&]
+        {
+            auto& session = Find(handle);
+            std::lock_guard lock(session.mutex);
+            ++session.snapshotRequests;
+            SetEvent(session.wake.value);
+        });
+}
+rl_status RENDERLAB_EDITOR_CALL rl_viewport_acquire_snapshot(rl_viewport_handle handle,
+                                                             uint64_t* snapshot, uint32_t* required)
+{
+    return Guard(
+        [&]
+        {
+            Require(snapshot && required, "Snapshot outputs are null");
+            auto& session = Find(handle);
+            std::lock_guard lock(session.mutex);
+            const auto value = session.snapshots.Acquire();
+            *snapshot = value.first;
+            *required = value.second;
+        });
+}
+rl_status RENDERLAB_EDITOR_CALL rl_viewport_copy_snapshot(rl_viewport_handle handle,
+                                                          uint64_t snapshot, char* output,
+                                                          uint32_t capacity)
+{
+    return Guard(
+        [&]
+        {
+            auto& session = Find(handle);
+            std::lock_guard lock(session.mutex);
+            Require(session.snapshots.pin == snapshot && snapshot != 0,
+                    "Snapshot identity is stale");
+            if (!session.snapshots.Copy(snapshot, output, capacity))
+                throw Failure(RL_BUFFER_TOO_SMALL, "Snapshot output is too small");
+        });
+}
+rl_status RENDERLAB_EDITOR_CALL rl_viewport_release_snapshot(rl_viewport_handle handle,
+                                                             uint64_t snapshot)
+{
+    return Guard(
+        [&]
+        {
+            auto& session = Find(handle);
+            std::lock_guard lock(session.mutex);
+            Require(session.snapshots.Release(snapshot), "Snapshot identity is stale");
+        });
 }
 rl_status RENDERLAB_EDITOR_CALL rl_viewport_begin_stop(rl_viewport_handle handle)
 {

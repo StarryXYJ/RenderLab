@@ -122,6 +122,7 @@ void Graph::Record()
         uint32_t timestamp = 0;
         for (const auto& scheduled : g.plan.schedule)
         {
+            g.plan.passes[scheduled.pass].firstCommand = g.commands->GetCommands().size();
             g.commands->SelectQueue(scheduled.queue, scheduled.waitCompute);
             for (const auto& b : scheduled.barriers)
                 barrier(b);
@@ -169,6 +170,7 @@ void Graph::Record()
                 g.commands->WriteTimestamp(timestamp++);
             g.commands->EndMarker();
             g.commands->RecordingBoundary();
+            g.plan.passes[scheduled.pass].lastCommand = g.commands->GetCommands().size();
             ++position;
         }
         g.commands->SelectQueue(rhi::QueueType::Graphics, g.plan.asyncCompute);
@@ -183,6 +185,13 @@ void Graph::Record()
         g.active = UINT32_MAX;
         g.phase = detail::Phase::Recorded;
         g.plan.recordingChunks = static_cast<uint32_t>(g.commands->RecordingRanges().size());
+        const auto ranges = g.commands->RecordingRanges();
+        for (auto& pass : g.plan.passes)
+            if (pass.live)
+                for (uint32_t index = 0; index < ranges.size(); ++index)
+                    if (pass.firstCommand >= ranges[index].first &&
+                        pass.lastCommand <= ranges[index].last)
+                        pass.recordingChunk = index;
         g.plan.recordNs = std::chrono::duration_cast<std::chrono::nanoseconds>(
                               std::chrono::steady_clock::now() - started)
                               .count();

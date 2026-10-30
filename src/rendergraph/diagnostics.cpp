@@ -76,10 +76,15 @@ std::string Plan::ToJson() const
     output["resources"] = Json::array();
     output["edges"] = Json::array();
     output["schedule"] = Json::array();
-    for (const auto& p : passes)
+    for (uint32_t id = 0; id < passes.size(); ++id)
     {
+        const auto& p = passes[id];
         Json info{{"name", p.name}, {"kind", Name(p.kind)}, {"source", p.source},
                   {"live", p.live}, {"reason", p.reason},   {"accesses", Json::array()}};
+        info["id"] = id;
+        info["recordingChunk"] =
+            p.recordingChunk == UINT32_MAX ? Json(nullptr) : Json(p.recordingChunk);
+        info["commandRange"] = {p.firstCommand, p.lastCommand};
         for (auto& a : p.accesses)
             info["accesses"].push_back({{"resource", a.resource},
                                         {"inputVersion", a.inputVersion},
@@ -88,13 +93,30 @@ std::string Plan::ToJson() const
                                         {"read", a.read},
                                         {"write", a.write},
                                         {"bufferOffset", a.bufferRange.offset},
-                                        {"bufferSize", a.bufferRange.size}});
+                                        {"bufferSize", a.bufferRange.size},
+                                        {"textureRange",
+                                         {{"firstMip", a.textureRange.firstMip},
+                                          {"mipCount", a.textureRange.mipCount},
+                                          {"firstLayer", a.textureRange.firstLayer},
+                                          {"layerCount", a.textureRange.layerCount},
+                                          {"aspect", int(a.textureRange.aspect)}}}});
         output["passes"].push_back(std::move(info));
     }
     output["cpuNs"] = {{"compile", compileNs}, {"prepare", prepareNs}, {"record", recordNs}};
-    for (const auto& r : resources)
+    for (uint32_t id = 0; id < resources.size(); ++id)
+    {
+        const auto& r = resources[id];
+        static constexpr const char* formats[] = {"Rgba8",       "Bgra8", "Rgba8Srgb", "Bgra8Srgb",
+                                                  "Rgba32Float", "D32",   "D32S8",     "R32Float"};
         output["resources"].push_back(
-            {{"name", r.name},
+            {{"id", id},
+             {"name", r.name},
+             {"kind", r.texture ? "Texture" : "Buffer"},
+             {"exported", r.exported},
+             {"width", r.width},
+             {"height", r.height},
+             {"format", r.texture ? Json(formats[static_cast<size_t>(r.format)]) : Json(nullptr)},
+             {"bufferBytes", r.bufferBytes},
              {"imported", r.imported},
              {"aliasGroup", r.aliasGroup == UINT32_MAX ? Json(nullptr) : Json(r.aliasGroup)},
              {"first", r.first == UINT32_MAX ? Json(nullptr) : Json(r.first)},
@@ -103,6 +125,7 @@ std::string Plan::ToJson() const
              {"versions", r.versions},
              {"initial", Name(r.initial)},
              {"final", Name(r.final)}});
+    }
     for (const auto& e : edges)
         output["edges"].push_back({{"before", e.before}, {"after", e.after}, {"reason", e.reason}});
     const auto barriers = [](const auto& list)

@@ -50,6 +50,8 @@ struct SceneRenderOptions
     bool cullingDiagnostics = false;
     SceneView view = SceneView::Final;
     bool profile = false;
+    /// Copy CPU plan values only for an explicit diagnostic request; no GPU readback.
+    bool captureGraph = false;
     /// Zero preserves the scene setting; otherwise a power of two in [128,2048].
     uint32_t shadowResolution = 0;
     bool reflections = true;
@@ -69,6 +71,7 @@ struct SceneRenderOptions
 /// @brief Submission completion point and optional pixels; wait before mapping the readback buffer.
 struct SceneReadback
 {
+    std::shared_ptr<const rendergraph::Plan> graphSnapshot;
     uint64_t completion = 0;
     std::shared_ptr<rhi::Buffer> pixels;
     rendergraph::Submission::GpuProfile profile;

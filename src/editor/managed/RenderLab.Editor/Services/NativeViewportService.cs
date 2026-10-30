@@ -69,7 +69,7 @@ public sealed class NativeViewportService : IDisposable
             Close(Session);
         }
         AbiVersion = NativeMethods.AbiVersion();
-        if (AbiVersion != 7 || Marshal.SizeOf<ViewportStats>() != 256 || Marshal.SizeOf<CloseReport>() != 24 ||
+        if (AbiVersion != 8 || Marshal.SizeOf<ViewportStats>() != 256 || Marshal.SizeOf<CloseReport>() != 24 ||
             Marshal.SizeOf<ViewportConfig>() != 112 || Marshal.SizeOf<ViewportConfigState>() != 272)
         {
             throw new InvalidOperationException("Managed/native bridge ABI mismatch.");
@@ -187,6 +187,32 @@ public sealed class NativeViewportService : IDisposable
     public void Dispose() => Close(Session);
 
     internal void CancelSwitch() => switchCancellation?.Cancel();
+    internal void RequestSnapshot()
+    {
+        if (Session != 0 && !retiring) { NativeMethods.Check(NativeMethods.RequestSnapshot(Session)); }
+    }
+    internal string? ReadSnapshot()
+    {
+        if (Session == 0 || retiring) { return null; }
+        NativeMethods.Check(NativeMethods.AcquireSnapshot(Session, out var snapshot, out var size));
+        if (snapshot == 0) { return null; }
+        try
+        {
+            if (size > 4 * 1024 * 1024 || size == 0) { throw new InvalidDataException("Snapshot exceeds budget."); }
+            var bytes = new byte[size];
+            NativeMethods.Check(NativeMethods.CopySnapshot(Session, snapshot, bytes, size));
+            return Encoding.UTF8.GetString(bytes, 0, (int)size - 1);
+        }
+        finally { NativeMethods.Check(NativeMethods.ReleaseSnapshot(Session, snapshot)); }
+    }
+    internal string ExportSnapshot(string name, string json)
+    {
+        var directory = Path.Combine(options.Output, "snapshots");
+        Directory.CreateDirectory(directory);
+        var path = Path.Combine(directory, name + ".json");
+        File.WriteAllText(path, json + "\n");
+        return path;
+    }
     internal async Task SwitchDeviceAsync(string backend, bool validation)
     {
         Dispatcher.UIThread.VerifyAccess();
@@ -232,7 +258,7 @@ public sealed class NativeViewportService : IDisposable
                 await Task.Delay(10, token);
                 if (Session != expectedSession) { throw new OperationCanceledException("Viewport was replaced during device creation."); }
                 var now = Stopwatch.GetTimestamp();
-                if (!viewportHidden) { activeWait += Stopwatch.GetElapsedTime(previous, now); }
+                if (!viewportHidden && Stats.Activity is not (3 or 4)) { activeWait += Stopwatch.GetElapsedTime(previous, now); }
                 previous = now;
                 if (switchFailure is not null) { throw new InvalidOperationException(switchFailure); }
                 if (Configuration.Status == 3) { throw new InvalidOperationException(ConfigurationError); }

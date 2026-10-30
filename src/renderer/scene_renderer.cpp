@@ -2022,6 +2022,8 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
     result.compileNs = graph.GetPlan().compileNs;
     result.prepareNs = graph.GetPlan().prepareNs;
     result.recordNs = graph.GetPlan().recordNs;
+    if (options.captureGraph)
+        result.graphSnapshot = std::make_shared<const rendergraph::Plan>(graph.GetPlan());
     if (!dump.empty())
     {
         const auto json = graph.GetPlan().ToJson();

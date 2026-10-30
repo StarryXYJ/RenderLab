@@ -5,7 +5,7 @@
 ## 当前状态
 
 - 当前实施阶段：M7 固定场景渲染工作台；M6 核心 M6.1–M6.5、M0–M5、R1、B1–B3 DONE。可选 M6.0 Forward+ 仍为 DEFERRED。
-- 当前工作项：M7.2a–b DONE；用户授权实现到 M7.2f，M7.2c 已完成，当前 M7.2d Render Graph Viewer IN_PROGRESS，随后按 e/f 验证并分别提交。M7.3–M7.6 本轮 DEFERRED。
+- 当前工作项：M7.2a–b DONE；用户授权实现到 M7.2f，M7.2c–d 已完成，当前 M7.2e Profiler 与真实计数 IN_PROGRESS，随后按 f 验证并提交。M7.3–M7.6 本轮 DEFERRED。
 - 用户约定：每个子阶段验收完成即提交 Git，无阻塞时在当前授权范围内继续推进。此前 M7 修改已进入 Git，本轮开始时工作区干净。
 
 | 阶段 | 目标 | 前置依赖 | 状态 |
@@ -116,13 +116,13 @@ M0–M6 核心能力及 R1、B1–B3 已完成（2026 年 10 月 23–30 日）�
 
 #### M7.2d Render Graph Viewer
 
-状态：IN_PROGRESS。
+状态：DONE（2026 年 10 月 30 日）。结果：成功提交的真实 Plan、有界 CPU 值快照与 v8 Acquire/Copy/Release；资源类别/尺寸/格式/export/范围、队列/实际录制块、版本/依赖/屏障/Alias 与剔除原因。矩阵、选中依赖与生命周期条、搜索/缩放/滚动、Freeze/Live/手动刷新及 JSON 导出已接入；默认不读回 RT 像素。
 
-- [ ] 从真实 Plan 发布有界值快照，补足类别/格式/尺寸/export/范围/录制块与关联身份，冻结快照不保活 GPU 资源。
-- [ ] Pass×Resource 读写矩阵、生产/消费依赖、版本/用途/队列/生命周期/Alias、剔除原因、搜索与 Freeze/Live/导出。
-- [ ] 已知小图逐项对比编译结果，覆盖切管线、异步/Alias、失败/晚到结果和刷新上限；默认查看不改变图或插入读回。
+验证：两配置原生 Input/Graph 各 2/2，托管各 16/16、零警告构建；已知小图逐项检查资源/范围/录制块，快照容量、钉住/短缓冲重试/重复 Acquire/释放身份与非法引用用例通过。Release/DX12、Debug/Vulkan 自检各 22 项，覆盖实际面板、来源身份、独立 Freeze/Live/导出与既有 API/配置交叉；各 29 次关闭及初始化中关闭账本/验证错误/worker_failed 为 0。证据 `out/m72d/{release-dx12,debug-vulkan,tests}`。接口见 [宿主](../docs/editor-host.md)，操作见 [手册](../manual/build.md#avalonia-嵌入原型)；人工画面与跨屏仍待 f。超大图完整快照有 4 MiB 上限，矩阵每视图显示至多 128 × 256 项并提示搜索；不是像素调试器。
 
 #### M7.2e Profiler 与真实计数
+
+状态：IN_PROGRESS。
 
 - [ ] 实际命令处统计 direct/indirect API 调用、几何 batch/instance、dispatch/TraceRays，按 Pass/类别区分；并行局部合并且失败不计入成功帧。
 - [ ] 完成帧曲线、CPU 分段、GPU Pass/队列/span、提交完成观测延迟、内存/上传/描述符，明确来源、重叠、未知与丢样。

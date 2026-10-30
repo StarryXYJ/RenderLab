@@ -63,9 +63,11 @@ Close 首先停止 UI Timer，再通知渲染线程停止，等待其释放展�
 
 每个 Host 保存自己的 Session 代际。旧 Host 重复关闭不能销毁新 Session；重建保留已接受配置。服务不使用可能在 finalizer 线程执行 Destroy 的 SafeHandle。
 
-## C ABI v7、运行配置与诊断
+## C ABI v8、运行配置与诊断
 
 M7.2c 增加 BeginStop/IsRetired：UI 请求停止后继续分发消息，owner 完成 GPU/展示退休才报告 retired；随后 UI 收取最终配置/相机/日志并销毁 HWND。设备切换只保留一个活动 Device，确认恢复配置的首帧后发布实际后端。目标失败尝试一次原后端，回滚失败进入 Failed/Retry；关闭或布局替换取消过期事务，旧代不能操作新 Session。
+
+M7.2d 的 v8 增加 Request/Acquire/Copy/Release snapshot。显式请求在下一次可展示帧复制成功提交的 Plan 值，不插入 RT 读回；暂停时等待恢复/单步，静态场景可能产生一次额外重绘。每 Session 保留 latest 与一个 pinned UTF-8 快照，单份上限 4 MiB；容量不足不消费，重复 Acquire 保持当前 pin，Release/Session 退休后旧 ID 无效。JSON schemaVersion=1，携带后端、Session/源帧/配置/拓扑身份、真实访问/依赖/队列/屏障/Alias，以及资源描述和实际录制块。超限明确 unavailable，不发布截断图。UI 最快 500 ms 拉取，关闭停止该面板请求；Freeze 仅保留托管值副本，不持有 Plan/GPU 对象。
 
 头文件为 src/editor/native/editor_bridge.h，托管声明为 Interop/NativeMethods.cs；DLL 和托管程序同版本发布。固定 Cdecl、UTF-8 借用字符串、代际 uint64 Handle、线程局部错误缓冲区。创建参数包含 backend、validation、profiling、target_fps 和 continuous。最多四个 Session 的句柄槽位仍是原型上限，多视口并发并未验收。M7.2a 升为 v5，新增 Stop（退休但保留 Session 以收取末尾日志）、批量 UTF-8 JSON 日志读取和相机 pose 值传递；原有 Stats/CloseReport 大小不变。日志容量查询钉住批次，成功复制后才消费，随后 Destroy 使旧 Session 失效。
 

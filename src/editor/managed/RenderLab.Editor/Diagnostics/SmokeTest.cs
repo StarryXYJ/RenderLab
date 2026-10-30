@@ -435,7 +435,8 @@ internal sealed class SmokeTest
                     {
                         window.ViewModel.IsPaused = false;
                         checks.Add("ten DX12/Vulkan round trips, paused/minimized transitions, configuration and stale-session isolation");
-                        Finish(stats);
+                        window.Docks.Show("Render Graph");
+                        window.ViewportService.RequestSnapshot();
                         break;
                     }
                     if (switchTask is null)
@@ -460,6 +461,32 @@ internal sealed class SmokeTest
                         "API switch lost fixed-scene overrides.");
                     ++deviceSwitches; switchTask = null;
                     --stage;
+                    break;
+                case 32:
+                    if (window.GraphModel.Snapshot is not { } graph) { --stage; break; }
+                    Require(window.GetVisualDescendants().OfType<RenderGraphView>().Any(), "Graph viewer did not mount.");
+                    Require(graph.Session == host.Session && graph.Config == stats.ConfigRevision && graph.Frame > 0 &&
+                        graph.Passes.Any(p => p.Live) && graph.Resources.Any(r => r.Exported) && graph.Edges.Length > 0,
+                        "Graph viewer does not reflect the submitted plan identity/dependencies.");
+                    savedFrames = graph.Frame;
+                    window.GraphModel.Frozen = true;
+                    window.ViewModel.Exposure += .1;
+                    break;
+                case 33:
+                    if (window.ViewportService.Configuration.Status != 2) { --stage; break; }
+                    Require(window.GraphModel.Snapshot!.Frame == savedFrames && stats.Frames > savedFrames,
+                        "Freezing graph either changed the snapshot or paused rendering.");
+                    window.GraphModel.ExportCommand.Execute(null);
+                    Require(File.Exists(window.GraphModel.ExportPath), "Graph export was not written.");
+                    window.GraphModel.Frozen = false;
+                    window.GraphModel.RefreshNowCommand.Execute(null);
+                    break;
+                case 34:
+                    if (window.GraphModel.Snapshot is not { } latest || latest.Config != stats.ConfigRevision || latest.Frame <= savedFrames)
+                    { --stage; break; }
+                    window.Docks.CloseDockable(window.Docks.Panel("Render Graph"));
+                    checks.Add("mounted actual-plan matrix, submitted identities/dependencies, independent freeze/live and JSON export");
+                    Finish(stats);
                     break;
             }
         }

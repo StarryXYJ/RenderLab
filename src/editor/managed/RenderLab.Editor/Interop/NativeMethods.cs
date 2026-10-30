@@ -30,6 +30,14 @@ internal static class NativeMethods
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "rl_editor_abi_version")]
     internal static extern uint AbiVersion();
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "rl_viewport_request_snapshot")]
+    internal static extern int RequestSnapshot(ulong session);
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "rl_viewport_acquire_snapshot")]
+    internal static extern int AcquireSnapshot(ulong session, out ulong snapshot, out uint required);
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "rl_viewport_copy_snapshot")]
+    internal static extern int CopySnapshot(ulong session, ulong snapshot, [Out] byte[] buffer, uint capacity);
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "rl_viewport_release_snapshot")]
+    internal static extern int ReleaseSnapshot(ulong session, ulong snapshot);
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "rl_viewport_begin_stop")]
     internal static extern int BeginStop(ulong session);
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "rl_viewport_is_retired")]

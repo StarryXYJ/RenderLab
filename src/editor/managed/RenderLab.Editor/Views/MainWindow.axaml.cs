@@ -29,6 +29,7 @@ public partial class MainWindow : Window
     private IDisposable? dragWatch;
     private readonly DispatcherTimer logStatusTimer = new() { Interval = TimeSpan.FromMilliseconds(250) };
     internal WorkbenchDockFactory Docks { get; private set; } = null!;
+    internal RenderGraphViewModel GraphModel { get; private set; } = null!;
     internal NativeViewportService ViewportService => viewportService!;
     internal RenderViewportHost Viewport { get; private set; } = null!;
     internal MainWindowViewModel ViewModel => (MainWindowViewModel)DataContext!;
@@ -52,13 +53,14 @@ public partial class MainWindow : Window
         this.viewportService = viewportService;
         this.options = options;
         this.logger = logger;
+        GraphModel = new RenderGraphViewModel(viewportService);
         logStatusTimer.Tick += (_, _) => UpdateLogStatus();
         Opened += (_, _) => logStatusTimer.Start();
         Docks = new WorkbenchDockFactory(new()
         {
             ["Scene"] = CreateSceneView,
             ["Settings"] = () => settings = new RenderSettingsView { DataContext = viewModel },
-            ["Render Graph"] = () => new TextBlock { Text = "Render Graph snapshots are not available in this build.", Margin = new Thickness(16), TextWrapping = Avalonia.Media.TextWrapping.Wrap },
+            ["Render Graph"] = () => new RenderGraphView { DataContext = GraphModel },
             ["Profiler"] = () =>
             {
                 var view = new TextBlock { Margin = new Thickness(16), TextWrapping = Avalonia.Media.TextWrapping.Wrap, DataContext = viewModel };

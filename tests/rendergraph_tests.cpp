@@ -1282,6 +1282,30 @@ int main()
     try
     {
         Dependencies();
+        {
+            FakeRuntime runtime;
+            Pool pool(runtime);
+            Graph graph;
+            auto target =
+                graph.CreateTexture("Diagnostic.Target", {17, 11, rhi::Format::Rgba8, false, true});
+            auto pass = graph.AddRasterPass("Diagnostic.Pass");
+            target = pass.ColorTarget(target);
+            pass.Execute([](RasterContext&) {});
+            graph.Export(target, rhi::State::CopySource);
+            const auto& plan = graph.Compile();
+            graph.Execute(pool);
+            const auto& resource = plan.resources.front();
+            Require(resource.texture && resource.exported && resource.width == 17 &&
+                        resource.height == 11,
+                    "Plan diagnostics lost resource descriptors or export roots");
+            Require(plan.passes.front().recordingChunk == 0 &&
+                        plan.passes.front().lastCommand > plan.passes.front().firstCommand &&
+                        plan.passes.front().accesses.front().textureRange.aspect == Aspect::Color,
+                    "Plan diagnostics lost actual recording ranges or texture aspects");
+            Require(plan.ToJson().find("Diagnostic.Target") != std::string::npos &&
+                        plan.ToJson().find("textureRange") != std::string::npos,
+                    "Plan JSON lost diagnostic metadata");
+        }
         AliasContracts();
         NamesAndBuilders();
         AccessValidation();
