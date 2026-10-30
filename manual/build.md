@@ -70,9 +70,9 @@ cmake --build --preset windows-release --parallel 4
 ctest --preset windows-release
 ```
 
-输出分别在 `out/build/windows-debug` 和 `out/build/windows-release`。默认注册 14 项不需要创建设备的测试，包含实际 DXC 双目标编译的 `shader.contracts`、生成 C++ 契约的 `parameters.contracts` 和流式计时数据的 `benchmark.contracts`。预设与依赖版本纳入 Git，本机设置使用被忽略的 `CMakeUserPresets.json`。
+输出分别在 `out/build/windows-debug` 和 `out/build/windows-release`。默认注册不需要创建设备的测试，包含实际 DXC 双目标编译的 `shader.contracts`、生成 C++ 契约的 `parameters.contracts`、流式计时数据的 `benchmark.contracts` 和 `cpu_benchmark.contracts`；实际清单以 `ctest --preset windows-debug -N` 为准。预设与依赖版本纳入 Git，本机设置使用被忽略的 `CMakeUserPresets.json`。
 
-完整验收启用 GPU 测试，当前共 58 项（14 项 CPU/CLI、44 项 GPU）。GPU 测试要求验证层和桌面会话，会短暂打开原生窗口：
+完整验收启用 GPU 测试；配置后的实际清单以 `ctest --preset windows-debug -N` 为准。GPU 测试要求验证层和桌面会话，会短暂打开原生窗口：
 
 ```powershell
 cmake --preset windows-debug -DRENDERLAB_GPU_TESTS=ON
@@ -85,6 +85,19 @@ ctest --preset windows-release
 ```
 
 GPU 测试使用 `--validation on`，层不可用时失败，不静默降级。仅运行基础测试可使用 `ctest --preset windows-debug -LE gpu`，但这不能替代设备验收。
+
+## CPU 与基础优化基线
+
+构建正常目标后可运行独立 CPU 测量，不需要 GPU/桌面：
+
+```powershell
+./out/build/windows-release/renderlab_cpu_benchmark.exe out/benchmarks/cpu-baseline.json 5
+ctest --preset windows-debug -R 'cpu_benchmark.contracts|content.contracts|pbr.contracts'
+python tools/benchmark/run.py sample/benchmark/foundation.json --output out/benchmarks/foundation
+```
+
+输出路径不得已存在。CPU 工具调用真实实现，结果含所有重复和二进制/源码身份；单线程 kernel、
+环境重新生成与稳定帧不是同一种成本。指标、探针开关和误差边界见 [Benchmark](../docs/benchmark.md#场景准备分解与-cpu-kernel)。
 
 ## 运行 Sandbox
 

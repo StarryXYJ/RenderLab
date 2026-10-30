@@ -998,10 +998,16 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
             self.engineShaders.at(std::string(builtin::Lit)).parent_path(),
             self.package->interfaces.front());
     auto uploads = self.uploadPool.Begin();
+    const auto assetStart = options.cpuDiagnostics ? std::chrono::steady_clock::now()
+                                                   : std::chrono::steady_clock::time_point{};
     self.EnsureModels();
+    const auto extractStart = options.cpuDiagnostics ? std::chrono::steady_clock::now()
+                                                     : std::chrono::steady_clock::time_point{};
     self.snapshot = self.extractor.Extract(
         self.document, float(target->desc.width) / float(target->desc.height), self.models,
         options.submission != GeometrySubmission::GpuCulled);
+    const auto extractEnd = options.cpuDiagnostics ? std::chrono::steady_clock::now()
+                                                   : std::chrono::steady_clock::time_point{};
     if (options.lightOverride)
     {
         self.snapshot.light = *options.lightOverride;
@@ -1023,7 +1029,11 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
             throw std::invalid_argument("Invalid render shadow resolution");
         self.snapshot.light.shadowResolution = size;
     }
+    const auto environmentStart = options.cpuDiagnostics ? std::chrono::steady_clock::now()
+                                                         : std::chrono::steady_clock::time_point{};
     self.UpdateEnvironment();
+    const auto environmentEnd = options.cpuDiagnostics ? std::chrono::steady_clock::now()
+                                                       : std::chrono::steady_clock::time_point{};
     self.shadowMatrix = FitDirectionalShadow(self.snapshot);
     std::map<std::string, Impl::MaterialInput> frameMaterials;
     std::map<const Impl::MaterialInput*, material::RenderPolicy> framePolicies;
@@ -1971,6 +1981,18 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
         static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(
                                   std::chrono::steady_clock::now() - preparationStart)
                                   .count());
+    result.cpuDiagnostics = options.cpuDiagnostics;
+    if (options.cpuDiagnostics)
+    {
+        const auto ns = [](auto duration)
+        {
+            return static_cast<uint64_t>(
+                std::chrono::duration_cast<std::chrono::nanoseconds>(duration).count());
+        };
+        result.assetUpdateNs = ns(extractStart - assetStart);
+        result.sceneExtractNs = ns(extractEnd - extractStart);
+        result.environmentUpdateNs = ns(environmentEnd - environmentStart);
+    }
     graph.Compile({.profile = options.profile,
                    .recordingThreads = options.recordingThreads,
                    .asyncCompute = options.asyncCompute,

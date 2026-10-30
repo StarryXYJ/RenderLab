@@ -31,6 +31,7 @@ renderer::SceneRenderOptions RenderOptions(const Options& options)
                                                  : renderer::GeometrySubmission::Direct;
     render.reflectionTemporal = options.reflectionTemporal;
     render.profile = options.debugPanel || !options.profilePath.empty() || options.Benchmark();
+    render.cpuDiagnostics = options.cpuProfile;
     if (options.quality != "scene")
         render.shadowResolution = options.quality == "low"      ? 128u
                                   : options.quality == "medium" ? 512u
@@ -87,9 +88,20 @@ void Statistics::Add(const renderer::SceneReadback& frame, const rhi::Runtime& r
     if (sample)
     {
         sample->metricsMs.insert({{"cpuRenderMs", cpuMs},
+                                  {"scenePrepareMs", double(frame.scenePrepareNs) / 1e6},
                                   {"graphCompileMs", double(frame.compileNs) / 1e6},
                                   {"graphPrepareMs", double(frame.prepareNs) / 1e6},
                                   {"graphRecordMs", double(frame.recordNs) / 1e6}});
+        if (frame.cpuDiagnostics)
+        {
+            sample->metricsMs.insert(
+                {{"assetUpdateMs", double(frame.assetUpdateNs) / 1e6},
+                 {"sceneExtractMs", double(frame.sceneExtractNs) / 1e6},
+                 {"environmentUpdateMs", double(frame.environmentUpdateNs) / 1e6},
+                 {"scenePrepareOtherMs", double(frame.scenePrepareNs - frame.assetUpdateNs -
+                                                frame.sceneExtractNs - frame.environmentUpdateNs) /
+                                             1e6}});
+        }
         double gpuSumMs = 0;
         for (const auto& [name, ms] : sample->gpuPassesMs)
             gpuSumMs += ms;

@@ -87,6 +87,12 @@ add_library(renderlab_sandbox_options STATIC src/apps/sandbox/options.cpp)
 target_include_directories(renderlab_sandbox_options PUBLIC src)
 target_link_libraries(renderlab_sandbox_options PRIVATE renderlab_options)
 
+add_executable(renderlab_cpu_benchmark src/tools/cpu_benchmark/main.cpp)
+target_link_libraries(renderlab_cpu_benchmark PRIVATE renderlab_options renderlab_renderer
+    renderlab_content renderlab_core nlohmann_json::nlohmann_json)
+target_compile_definitions(renderlab_cpu_benchmark PRIVATE
+    RENDERLAB_SOURCE_ROOT="${CMAKE_SOURCE_DIR}")
+
 add_library(renderlab_benchmark STATIC src/benchmark/recording.cpp)
 target_include_directories(renderlab_benchmark PUBLIC src)
 target_link_libraries(renderlab_benchmark PUBLIC nlohmann_json::nlohmann_json
@@ -218,6 +224,8 @@ install(DIRECTORY sample/m4/Assets DESTINATION project)
 install(FILES sample/m4/RenderLab.rlproject sample/m4/Pbr.rlproject sample/m4/Shadow.rlproject DESTINATION project)
 
 if(BUILD_TESTING)
+    add_test(NAME cpu_benchmark.contracts COMMAND renderlab_cpu_benchmark --verify)
+    set_tests_properties(cpu_benchmark.contracts PROPERTIES TIMEOUT 180)
     add_executable(renderlab_recording_tests tests/recording_tests.cpp)
     target_link_libraries(renderlab_recording_tests PRIVATE renderlab_options renderlab_rhi)
     add_test(NAME recording.contracts COMMAND renderlab_recording_tests)

@@ -51,6 +51,8 @@ struct SceneRenderOptions
     bool cullingDiagnostics = false;
     SceneView view = SceneView::Final;
     bool profile = false;
+    /// Optional owner-thread CPU phase clocks, separate from GPU profiling.
+    bool cpuDiagnostics = false;
     /// Copy CPU plan values only for an explicit diagnostic request; no GPU readback.
     bool captureGraph = false;
     /// Zero preserves the scene setting; otherwise a power of two in [128,2048].
@@ -88,6 +90,9 @@ struct SceneReadback
     uint64_t compileNs = 0, prepareNs = 0, recordNs = 0;
     /// CPU scene/material preparation and graph construction, before graph compilation.
     uint64_t scenePrepareNs = 0;
+    /// Optional subsets of scenePrepareNs; zero/unavailable when cpuDiagnostics is false.
+    bool cpuDiagnostics = false;
+    uint64_t assetUpdateNs = 0, sceneExtractNs = 0, environmentUpdateNs = 0;
     IndexedSceneStatistics indexedScene;
     IndexedCullDiagnostics culling;
     uint64_t sceneUploadBytes = 0;

@@ -8,6 +8,7 @@ Sandbox/Player 共用 CaptureScene 的固定场景路径。`--benchmark N` 按�
 | --- | --- |
 | frameTimeMs | 毫秒；SceneRenderer.Render 开始到该帧 GPU 完成点等待结束，含 CPU 准备/录制/提交与剩余 GPU 等待 |
 | cpuRenderMs | 毫秒；Render 调用的同步 CPU 时间，含场景提取、材质、Graph 与提交，不含之后的完成点等待 |
+| scenePrepareMs | 毫秒；Render 内开始准备至 Graph Compile 前，包含场景/材质与建图；是 cpuRenderMs 的子区间 |
 | gpuWaitMs | 毫秒；提交返回后 runtime.Wait 的 CPU 阻塞时间，不能解释成 GPU 执行时间 |
 | graphCompileMs / graphPrepareMs / graphRecordMs | 毫秒；Render 内的子区间，与 cpuRenderMs 重叠，不能相加为帧时间 |
 | gpuPassesMs | 毫秒；Graph 实际存活 Pass 的 GPU timestamp 范围 |
@@ -53,6 +54,27 @@ B3.4 的默认 View 缓存命中不进入 `rhiViewCreateMs`，该项计数表示
 CPU 区间不覆盖所有对象析构，例如被 Graph 剔除的资源可能在 Render 返回前释放；它们不能作为完整线程 CPU profile。分析器核对各项 totalMs 与逐帧增量之和，并在报告/可选图表中展示操作时间和 calls/frame。扩展样本与实际定位见 [B2 记录](performance/b2-pbr-rtx5060.md)。
 
 `sample/benchmark/pbr-diagnostics.json` 提供完整 PBR 720p、低分辨率 257×193、BRDF 查看和较小的原始 RenderLab 场景。BRDF 查看仍经过场景参数/材质准备，但无消费者的场景绘制在 Graph 编译时剔除，可以用实际调用计数区分准备开销和 Draw/描述符开销。原始场景用于对照较少 Draw 的创建计数；CPU 探针不改变资源分配与帧提交策略。
+
+### 场景准备分解与 CPU kernel
+
+`--cpu-profile` 同时启用 SceneRenderOptions.cpuDiagnostics，增加 assetUpdateMs（EnsureModels）、
+sceneExtractMs（Extractor.Extract）、environmentUpdateMs（环境检查及必要时同步烘焙/上传）与
+scenePrepareOtherMs（scenePrepareMs 去除上述三个互不重叠子区间）。材质准备、阴影、索引/光追投影、
+建图及准备阶段析构仍在 Other 中，不把它解释为独立材质耗时。关闭探针不读取这些额外时钟，
+也不输出这些细分指标；scenePrepareMs 使用原有计时。计时只覆盖本次调用，构造期不在稳定帧区间。
+
+`renderlab_cpu_benchmark OUTPUT.json [SAMPLES]` 直接链接当前 math、scene、environment 实现，
+提供矩阵乘法/求逆、Bounds 变换/剔除、64/1024/4096 实例 CPU/GPU 提交准备及非均匀环境预滤波、
+BRDF LUT 测量。CPU/GPU 提交准备指是否 CPU 视锥测试，工具不创建设备或执行 GPU 工作。
+各 case 先执行一次带校验的预热，再保留所有重复的单次平均 ms 与 checksum；
+固定单线程，计时含结果消费/校验、内存分配与释放，不能视为纯指令延迟或窗口 FPS。
+环境预计算 case 测的是重新生成，不是当前 Renderer 已缓存环境的每帧成本。
+
+报告保留构建配置、MSVC 版本、逻辑核数、真实 exe SHA-256 和运行时源码哈希；源码哈希不冒充编译时身份，
+不得在构建/运行中改源码后宣称配对来源一致。报告拒绝覆盖。`--verify` 运行小规模确定性 fixture
+和环境输出检查，CTest 入口为 cpu_benchmark.contracts。它不代替 math 随机参考与 GPU 画面回归。
+`sample/benchmark/foundation.json` 分别保存关闭探针的正式 case 和启用探针的 PBR 诊断 case，
+沿用已有顺序运行、源 hash 核对及逐帧流式数据，不把两类结果混合。
 
 ## 批量执行与聚合
 
