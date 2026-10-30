@@ -225,6 +225,7 @@ int wmain(int argc, wchar_t** argv)
                     {"sourceIdentity", "runtime source hashes; executable hash identifies binary"},
                     {"compiler", _MSC_FULL_VER},
                     {"samplesPerCase", samples}};
+        report["environmentImplementation"] = RENDERLAB_ENVIRONMENT_SIMD ? "ispc" : "cpp";
 #ifdef NDEBUG
         report["configuration"] = "Release";
 #else
@@ -240,7 +241,8 @@ int wmain(int argc, wchar_t** argv)
         for (const auto* source :
              {"src/math/math.cpp", "src/math/math.hpp", "src/scene/scene.cpp",
               "src/scene/scene.hpp", "src/renderer/environment.cpp", "src/renderer/environment.hpp",
-              "src/tools/cpu_benchmark/main.cpp", "CMakeLists.txt", "cmake/Dependencies.cmake"})
+              "src/tools/cpu_benchmark/main.cpp", "src/renderer/environment.ispc", "CMakeLists.txt",
+              "cmake/Dependencies.cmake", "cmake/EnvironmentSimd.cmake"})
             report["sourceSha256"][source] =
                 Sha256(assets::detail::Read(std::filesystem::path(RENDERLAB_SOURCE_ROOT) / source));
         Run(report, static_cast<uint32_t>(samples), verify);

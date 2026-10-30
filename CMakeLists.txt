@@ -83,6 +83,7 @@ add_library(renderlab_renderer STATIC src/renderer/forward.cpp src/renderer/defe
 target_include_directories(renderlab_renderer PUBLIC src)
 target_link_libraries(renderlab_renderer PRIVATE renderlab_options renderlab_rendergraph renderlab_rhi
     renderlab_content renderlab_material nlohmann_json::nlohmann_json)
+include(cmake/EnvironmentSimd.cmake)
 
 add_library(renderlab_sandbox_options STATIC src/apps/sandbox/options.cpp)
 target_include_directories(renderlab_sandbox_options PUBLIC src)
@@ -92,7 +93,8 @@ add_executable(renderlab_cpu_benchmark src/tools/cpu_benchmark/main.cpp)
 target_link_libraries(renderlab_cpu_benchmark PRIVATE renderlab_options renderlab_renderer
     renderlab_content renderlab_core nlohmann_json::nlohmann_json)
 target_compile_definitions(renderlab_cpu_benchmark PRIVATE
-    RENDERLAB_SOURCE_ROOT="${CMAKE_SOURCE_DIR}")
+    RENDERLAB_SOURCE_ROOT="${CMAKE_SOURCE_DIR}"
+    RENDERLAB_ENVIRONMENT_SIMD=$<BOOL:${RENDERLAB_ENVIRONMENT_SIMD}>)
 
 add_library(renderlab_benchmark STATIC src/benchmark/recording.cpp)
 target_include_directories(renderlab_benchmark PUBLIC src)
@@ -230,6 +232,11 @@ if(BUILD_TESTING)
     add_executable(renderlab_environment_tests tests/environment_tests.cpp tests/reference/environment.cpp)
     target_include_directories(renderlab_environment_tests PRIVATE tests)
     target_link_libraries(renderlab_environment_tests PRIVATE renderlab_options renderlab_renderer)
+    if(RENDERLAB_ENVIRONMENT_SIMD)
+        add_dependencies(renderlab_environment_tests renderlab_environment_simd)
+        target_include_directories(renderlab_environment_tests PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/generated/ispc")
+        target_compile_definitions(renderlab_environment_tests PRIVATE RENDERLAB_ENVIRONMENT_SIMD=1)
+    endif()
     add_test(NAME environment.contracts COMMAND renderlab_environment_tests)
     set_tests_properties(environment.contracts PROPERTIES TIMEOUT 180)
     add_executable(renderlab_math_tests tests/math_tests.cpp)

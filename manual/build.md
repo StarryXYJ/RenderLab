@@ -52,6 +52,7 @@ cmake --build --preset windows-debug --clean-first
 | SPIRV-Reflect | `e55086b044225f9b511ae44dbf9b079d3625943f` | SPIR-V 绑定与常量反射 |
 | nlohmann/json | `65ee68451d8eb2b5f3a30b410476ab83deb3289b`（v3.12.0） | 缓存、Schema 与材质序列化 |
 | DirectXMath | `93e6399d6d15e1e57f80b5cea04d5a8eb892d693`（3.21 / June 2026） | 两后端共用的 CPU SIMD 数学实现 |
+| ISPC（可选） | Windows x64 1.28.2；包与 exe SHA-256 见下文 | 默认关闭的环境卷积 SIMD 编译器 |
 
 Vulkan-Headers、volk 和 SPIRV-Reflect 对应 Vulkan SDK 1.4.321.0 源码版本，实际运行最低要求 Vulkan 1.3。首次配置需要 Git 和 GitHub 网络访问。依赖来源与授权说明位于各依赖源码的 LICENSE 文件，不在引擎源码中复制或修改它们。
 
@@ -103,6 +104,37 @@ python tools/benchmark/run.py sample/benchmark/foundation.json --output out/benc
 环境预计算的独立原始算法对照为 `ctest --preset windows-release -R '^environment.contracts$'`，
 Debug 同名测试也需运行。CPU 报告的 `warmupMs` 包含首次构建固定表/LUT，`samples` 是暖调用；
 BRDF 暖调用返回独立副本而非重新积分，不能把该成本与旧版每次重新积分混为同一种 kernel。
+
+### 可选环境 SIMD
+
+默认 `RENDERLAB_ENVIRONMENT_SIMD=OFF`，不要求 ISPC。可选路径固定官方 Windows x64
+ISPC 1.28.2；从 [官方发布](https://github.com/ispc/ispc/releases/tag/v1.28.2) 下载
+`ispc-v1.28.2-windows.zip`，SHA-256 为
+`25966868d97a6f9bc38501b864883558994189446476584e5e491476d540de17`。
+解压到忽略的 `out/tools` 等本机目录，不将编译器提交到仓库。
+CMake 再检查 `bin/ispc.exe` 的 SHA-256
+`886c7b3c82164dbcce02479a5a9e5880cd7f91b543c551eff561c57007b1f28d`；
+路径不匹配、内容不同或未安装会明确失败，不静默假装使用 SIMD。
+
+```powershell
+cmake --preset windows-release -DRENDERLAB_ENVIRONMENT_SIMD=ON -DRENDERLAB_ISPC="<解压目录>/bin/ispc.exe"
+cmake --build --preset windows-release
+ctest --preset windows-release -R '^environment.contracts$' --output-on-failure
+./out/build/windows-release/renderlab_cpu_benchmark.exe out/benchmarks/cpu-simd.json 5
+```
+
+默认生成 SSE2/AVX2 的运行时分派，不全局启用 AVX。验证 SSE2 实现时追加
+`-DRENDERLAB_ISPC_TARGETS=sse2-i32x4`；恢复分派时使用
+`"-DRENDERLAB_ISPC_TARGETS=sse2-i32x4;avx2-i32x8"`。只接受这两种组合，不支持强制 AVX2-only
+后悄悄在旧 CPU 上执行。Debug 同样可启用并运行测试；关闭时重新配置
+`-DRENDERLAB_ENVIRONMENT_SIMD=OFF`，不删除普通 C++ 路径。
+
+这是具有浮点误差的可选卷积实现，不是逐位等价替代；未滤波图块保持 C++。
+无 task/Job System、fast-math、FMA 或独立 SIMD 运行库，使用系统数学函数。
+ISPC 的 gather/scatter 性能提示保留；`cmake --install` 复制 ISPC 许可证和第三方声明。
+误差、CPU/ISA 与收益限制见 [基础优化实测](../docs/performance/b4-foundation.md)。
+本轮实际完整验证使用 NMake 构建树 `out/build/m5-{nmake,release}`；新 Ninja 构建目录的
+编译器探针受沙箱影响未完成，不将上述预设示例本身当作 Ninja 验收证据。
 
 ## 运行 Sandbox
 

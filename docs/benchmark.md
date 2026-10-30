@@ -68,7 +68,10 @@ scenePrepareOtherMs（scenePrepareMs 去除上述三个互不重叠子区间）�
 BRDF LUT 测量。CPU/GPU 提交准备指是否 CPU 视锥测试，工具不创建设备或执行 GPU 工作。
 各 case 先执行一次带校验的预热，再保留所有重复的单次平均 ms 与 checksum；
 固定单线程，计时含结果消费/校验、内存分配与释放，不能视为纯指令延迟或窗口 FPS。
-环境预计算 case 测的是重新生成，不是当前 Renderer 已缓存环境的每帧成本。
+环境预滤波 case 每次重新生成，不是当前 Renderer 已缓存环境的每帧成本。固定 BRDF LUT
+首次构造之后返回独立副本，故 `warmupMs` 反映 cold，重复样本反映 warm/copy，不再是重复积分。
+`environmentImplementation` 明确记录 `cpp` 或可选 `ispc`；实际 ISA 构建组合由对应测量说明和
+exe hash 区分，不把运行时源码哈希当作编译器或 ISA 身份。
 
 报告保留构建配置、MSVC 版本、逻辑核数、真实 exe SHA-256 和运行时源码哈希；源码哈希不冒充编译时身份，
 不得在构建/运行中改源码后宣称配对来源一致。报告拒绝覆盖。`--verify` 运行小规模确定性 fixture

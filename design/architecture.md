@@ -473,6 +473,11 @@ Assets 和元数据、ProjectSettings、Source、项目文件纳入版本管理�
 
 CPU math 保持轻量存储类型和显式上传布局，内部复用固定版本 DirectXMath 的已验证运算，不将 SIMD 寄存器类型或额外对齐泄漏至 Vertex、Scene 或 C ABI。TRS/投影、一般求逆的拒绝语义仍由项目契约约束；库的行向量辅助函数不改变上层列向量约定。具体采用范围见 [数学契约](../docs/m4-scene.md#场景与变换)。
 
+环境 CPU 烘焙复用只读方向/切线基/sRGB 表和固定 BRDF LUT，返回值保持独立所有权且不持有
+GPU 对象。卷积有默认关闭的固定版本 ISPC 选项，SSE2/AVX2 分派只在此内核发生，不扩展为
+通用 Job System 或全局 fast-math；未滤波层保留 C++ 精确采样，数值误差与实测边界见
+[环境光](../docs/m4-forward-pbr.md#环境光)。普通构建不依赖 SIMD 编译器。
+
 投影、Viewport Y、屏幕 UV 和正面绕序统一在平台适配规则中处理，上层不分散添加 Vulkan 或 DX12 修正。纹理上传、渲染附件和屏幕采样的原点转换用测试图验证。深度重建、阴影和 Hi-Z 都遵守相同约定。
 
 光照在统一的线性工作空间计算，颜色纹理按声明进行 sRGB 解码，法线和普通数据纹理使用线性数据。M4.2 先用 Blinn–Phong/sRGB LDR 验证场景，M4.3 改为 Shader/Material 驱动的 Lit/Unlit 与 RGBA32F HDR；View/Object/Lighting/Shadow 从 .params 生成 CPU/HLSL 数据，Core/Lighting 等库接受显式参数，不重复手写 cbuffer。Surface/BRDF 与光栅采样上下文分开，环境采用 CPU 准备的低分辨率 2D 预滤波图集和 split-sum LUT。HDR 中间结果在输出阶段执行曝光、ACES fitted Tone Mapping，最后由 sRGB 附件编码。此阶段环境输入是 sRGB 图像加线性强度，原生 HDR 图像、cubemap/mip 和高级 IBL 后置。

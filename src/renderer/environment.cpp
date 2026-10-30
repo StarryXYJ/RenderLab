@@ -1,5 +1,9 @@
 #include "renderer/environment.hpp"
 
+#ifdef RENDERLAB_ENVIRONMENT_SIMD
+#include "environment_ispc.h"
+#endif
+
 #include <algorithm>
 #include <array>
 #include <cmath>
@@ -12,6 +16,11 @@ namespace
 {
 constexpr float Pi = std::numbers::pi_v<float>;
 constexpr uint32_t Samples = 128;
+#ifdef RENDERLAB_ENVIRONMENT_SIMD
+static_assert(EnvironmentWidth == 64 && EnvironmentHeight == 32 && EnvironmentLevels == 6 &&
+                  Samples == 128,
+              "Update the fixed ISPC atlas ABI together with the C++ constants");
+#endif
 float RadicalInverse(uint32_t bits)
 {
     bits = (bits << 16) | (bits >> 16);
@@ -26,7 +35,9 @@ struct Frame
     math::Vec3 normal, tangent, bitangent;
     math::Vec3 Transform(math::Vec3 local) const
     {
-        return tangent * local.x + bitangent * local.y + normal * local.z;
+        return {tangent.x * local.x + bitangent.x * local.y + normal.x * local.z,
+                tangent.y * local.x + bitangent.y * local.y + normal.y * local.z,
+                tangent.z * local.x + bitangent.z * local.y + normal.z * local.z};
     }
 };
 math::Vec3 ImportanceGgx(uint32_t i, float roughness)
@@ -47,6 +58,10 @@ struct Tables
     std::array<float, 256> linear;
     std::array<Frame, EnvironmentWidth * EnvironmentHeight> frames;
     std::array<std::array<math::Vec3, Samples>, EnvironmentLevels + 1> directions;
+#ifdef RENDERLAB_ENVIRONMENT_SIMD
+    std::array<ispc::EnvironmentFrame, EnvironmentWidth * EnvironmentHeight> simdFrames;
+    std::array<ispc::EnvironmentDirection, (EnvironmentLevels + 1) * Samples> simdDirections;
+#endif
     Tables()
     {
         for (size_t i = 0; i < linear.size(); ++i)
@@ -73,6 +88,20 @@ struct Tables
                 }
                 else
                     directions[tile][i] = ImportanceGgx(i, float(tile) / (EnvironmentLevels - 1));
+#ifdef RENDERLAB_ENVIRONMENT_SIMD
+        for (size_t i = 0; i < frames.size(); ++i)
+        {
+            const auto& f = frames[i];
+            simdFrames[i] = {f.normal.x,  f.normal.y,    f.normal.z,    f.tangent.x,  f.tangent.y,
+                             f.tangent.z, f.bitangent.x, f.bitangent.y, f.bitangent.z};
+        }
+        for (size_t tile = 0; tile < directions.size(); ++tile)
+            for (size_t i = 0; i < Samples; ++i)
+            {
+                const auto d = directions[tile][i];
+                simdDirections[tile * Samples + i] = {d.x, d.y, d.z};
+            }
+#endif
     }
 };
 const Tables& GetTables()
@@ -88,7 +117,9 @@ math::Vec3 Sample(const assets::Image& source, const Tables& tables, math::Vec3 
     const auto ix = int(std::floor(x)), iy = int(std::floor(y));
     const auto fetch = [&](int px, int py)
     {
-        px = (px % int(source.width) + int(source.width)) % int(source.width);
+        // atan2 restricts bilinear taps to [-1,width], including the longitude seam.
+        px = px < 0 ? px + int(source.width) : px;
+        px = px >= int(source.width) ? px - int(source.width) : px;
         py = std::clamp(py, 0, int(source.height) - 1);
         const auto offset = (size_t(py) * source.width + px) * 4;
         return math::Vec3{tables.linear[source.rgba[offset]],
@@ -96,8 +127,12 @@ math::Vec3 Sample(const assets::Image& source, const Tables& tables, math::Vec3 
                           tables.linear[source.rgba[offset + 2]]};
     };
     const auto fx = x - std::floor(x), fy = y - std::floor(y);
-    return (fetch(ix, iy) * (1 - fx) + fetch(ix + 1, iy) * fx) * (1 - fy) +
-           (fetch(ix, iy + 1) * (1 - fx) + fetch(ix + 1, iy + 1) * fx) * fy;
+    const auto a = fetch(ix, iy), b = fetch(ix + 1, iy);
+    const auto c = fetch(ix, iy + 1), d = fetch(ix + 1, iy + 1);
+    const auto interpolate = [&](float v0, float v1, float v2, float v3)
+    { return (v0 * (1 - fx) + v1 * fx) * (1 - fy) + (v2 * (1 - fx) + v3 * fx) * fy; };
+    return {interpolate(a.x, b.x, c.x, d.x), interpolate(a.y, b.y, c.y, d.y),
+            interpolate(a.z, b.z, c.z, d.z)};
 }
 void Store(EnvironmentImage& image, uint32_t x, uint32_t y, math::Vec3 value)
 {
@@ -127,6 +162,18 @@ EnvironmentImage PrefilterEnvironment(const assets::Image* source, math::Vec3 fa
         return result;
     }
     const auto& tables = GetTables();
+#ifdef RENDERLAB_ENVIRONMENT_SIMD
+    // Keep the unfiltered tile on the exact scalar sampling path at source-resolution seams.
+    for (uint32_t y = 0; y < EnvironmentHeight; ++y)
+        for (uint32_t x = 0; x < EnvironmentWidth; ++x)
+            Store(result, x, y,
+                  Sample(*source, tables, tables.frames[size_t(y) * EnvironmentWidth + x].normal));
+    ispc::FilterEnvironment(
+        source->rgba.data(), static_cast<int32_t>(source->width),
+        static_cast<int32_t>(source->height), tables.linear.data(), tables.simdFrames.data(),
+        tables.simdDirections.data(), static_cast<int32_t>(EnvironmentWidth * EnvironmentHeight),
+        static_cast<int32_t>(result.width * result.height), result.pixels.data());
+#else
     for (uint32_t tile = 0; tile <= EnvironmentLevels; ++tile)
         for (uint32_t y = 0; y < EnvironmentHeight; ++y)
             for (uint32_t x = 0; x < EnvironmentWidth; ++x)
@@ -153,14 +200,21 @@ EnvironmentImage PrefilterEnvironment(const assets::Image* source, math::Vec3 fa
                         else
                         {
                             const auto h = frame.Transform(tables.directions[tile][i]);
-                            l = h * (2 * math::Dot(n, h)) - n;
-                            w = std::max(0.f, math::Dot(n, l));
+                            const auto nh2 = 2 * (n.x * h.x + n.y * h.y + n.z * h.z);
+                            l = {h.x * nh2 - n.x, h.y * nh2 - n.y, h.z * nh2 - n.z};
+                            w = std::max(0.f, n.x * l.x + n.y * l.y + n.z * l.z);
                         }
-                        sum = sum + Sample(*source, tables, l) * w;
+                        const auto sampled = Sample(*source, tables, l);
+                        sum.x += sampled.x * w;
+                        sum.y += sampled.y * w;
+                        sum.z += sampled.z * w;
                         weight += w;
                     }
-                Store(result, x, tile * EnvironmentHeight + y, sum * (1 / std::max(weight, 1e-6f)));
+                const auto inverseWeight = 1 / std::max(weight, 1e-6f);
+                Store(result, x, tile * EnvironmentHeight + y,
+                      {sum.x * inverseWeight, sum.y * inverseWeight, sum.z * inverseWeight});
             }
+#endif
     return result;
 }
 namespace
