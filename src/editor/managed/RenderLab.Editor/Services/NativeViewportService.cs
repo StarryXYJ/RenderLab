@@ -29,6 +29,7 @@ public sealed class NativeViewportService : IDisposable
     private ViewportConfig? savedConfiguration;
     private ulong requestSequence;
     private bool restoreConfiguration;
+    private bool observationConfigured;
     private bool retiring, viewportHidden;
     private string? switchFailure;
     private CancellationTokenSource? switchCancellation;
@@ -69,7 +70,7 @@ public sealed class NativeViewportService : IDisposable
             Close(Session);
         }
         AbiVersion = NativeMethods.AbiVersion();
-        if (AbiVersion != 8 || Marshal.SizeOf<ViewportStats>() != 256 || Marshal.SizeOf<CloseReport>() != 24 ||
+        if (AbiVersion != 9 || Marshal.SizeOf<ViewportStats>() != 256 || Marshal.SizeOf<CloseReport>() != 24 ||
             Marshal.SizeOf<ViewportConfig>() != 112 || Marshal.SizeOf<ViewportConfigState>() != 272)
         {
             throw new InvalidOperationException("Managed/native bridge ABI mismatch.");
@@ -80,6 +81,7 @@ public sealed class NativeViewportService : IDisposable
             options.Project, options.Shaders, Path.Combine(options.Output, $"native-{++logSequence}.log"),
             out var session, out var child));
         Session = session;
+        observationConfigured = false;
         retiring = false;
         Configuration = default;
         Capabilities = "";
@@ -194,6 +196,7 @@ public sealed class NativeViewportService : IDisposable
     internal string? ReadSnapshot()
     {
         if (Session == 0 || retiring) { return null; }
+        if (Configuration.Status is not (2 or 3) || Configuration.AppliedId != Stats.ConfigRevision) { return null; }
         NativeMethods.Check(NativeMethods.AcquireSnapshot(Session, out var snapshot, out var size));
         if (snapshot == 0) { return null; }
         try
@@ -262,7 +265,8 @@ public sealed class NativeViewportService : IDisposable
                 previous = now;
                 if (switchFailure is not null) { throw new InvalidOperationException(switchFailure); }
                 if (Configuration.Status == 3) { throw new InvalidOperationException(ConfigurationError); }
-                if (Session != 0 && !restoreConfiguration && Configuration.Status == 2 && Stats.Frames > 0) { break; }
+                if (Session != 0 && !restoreConfiguration && Configuration.Status == 2 && Stats.Frames > 0 &&
+                    Stats.SessionGeneration == Session && Stats.ConfigRevision == Configuration.AppliedId) { break; }
                 if (activeWait > TimeSpan.FromSeconds(45)) { throw new TimeoutException("Waiting for the configured first frame."); }
             }
         }, token);
@@ -340,6 +344,16 @@ public sealed class NativeViewportService : IDisposable
         {
             restoreConfiguration = false;
             Submit(savedConfiguration!.Value);
+            return;
+        }
+        if (!observationConfigured && state.Ready != 0 && options.Observation != "normal")
+        {
+            observationConfigured = true;
+            var config = EditableConfig;
+            config.Submission = 3;
+            config.Profiling = options.Profiling ? 1u : 0u;
+            config.Flags = options.Observation == "readback" ? config.Flags | 32u : config.Flags & ~32u;
+            Submit(config);
             return;
         }
         if (changed)

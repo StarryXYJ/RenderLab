@@ -19,6 +19,7 @@ internal sealed class FrameTimingWindow(int capacity = 240)
     private double? previousTime;
     private ulong sessionGeneration, configRevision;
     internal FrameSample? Latest { get; private set; }
+    internal FrameSample[] Snapshot() => samples.ToArray();
 
     internal void Reset()
     {

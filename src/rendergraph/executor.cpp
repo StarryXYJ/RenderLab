@@ -188,10 +188,16 @@ void Graph::Record()
         const auto ranges = g.commands->RecordingRanges();
         for (auto& pass : g.plan.passes)
             if (pass.live)
+            {
+                pass.commands = CountCommands(
+                    std::span(g.commands->GetCommands())
+                        .subspan(static_cast<size_t>(pass.firstCommand),
+                                 static_cast<size_t>(pass.lastCommand - pass.firstCommand)));
                 for (uint32_t index = 0; index < ranges.size(); ++index)
                     if (pass.firstCommand >= ranges[index].first &&
                         pass.lastCommand <= ranges[index].last)
                         pass.recordingChunk = index;
+            }
         g.plan.recordNs = std::chrono::duration_cast<std::chrono::nanoseconds>(
                               std::chrono::steady_clock::now() - started)
                               .count();

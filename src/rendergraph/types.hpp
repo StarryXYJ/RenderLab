@@ -1,5 +1,6 @@
 #pragma once
 
+#include "rendergraph/command_statistics.hpp"
 #include "rhi/resources.hpp"
 
 #include <array>
@@ -41,6 +42,14 @@ enum class PassKind
     Compute,
     Copy,
     RayTracing
+};
+enum class PassCategory
+{
+    Other,
+    Opaque,
+    Shadow,
+    Transparent,
+    Fullscreen
 };
 enum class Use
 {
@@ -146,6 +155,8 @@ struct PassInfo
     std::vector<AccessInfo> accesses;
     uint32_t recordingChunk = UINT32_MAX;
     uint64_t firstCommand = 0, lastCommand = 0;
+    PassCategory category = PassCategory::Other;
+    CommandStatistics commands;
 };
 struct ResourceInfo
 {
@@ -176,6 +187,7 @@ struct Plan
     bool memoryAlias = false;
     std::vector<std::vector<uint32_t>> aliasGroups;
     uint64_t aliasBackingBytes = 0;
+    std::string profilingReason;
     std::string ToJson() const;
 };
 struct ExportedResource

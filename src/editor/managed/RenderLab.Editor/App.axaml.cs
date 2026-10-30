@@ -26,6 +26,7 @@ public partial class App : Application
         DataTemplates.Add(new FuncDataTemplate<DockPanelContent>((content, _) => content!.CreateView(), supportsRecycling: false));
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
+            desktop.ShutdownMode = Avalonia.Controls.ShutdownMode.OnMainWindowClose;
             services = new ServiceCollection()
                 .AddSingleton(Program.Options)
                 .AddSingleton(Program.Logging!.Buffer)

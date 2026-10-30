@@ -28,8 +28,10 @@ public partial class MainWindow : Window
     private bool closingWindow;
     private IDisposable? dragWatch;
     private readonly DispatcherTimer logStatusTimer = new() { Interval = TimeSpan.FromMilliseconds(250) };
+    private readonly DispatcherTimer observationTimer = new() { Interval = TimeSpan.FromMilliseconds(500) };
     internal WorkbenchDockFactory Docks { get; private set; } = null!;
     internal RenderGraphViewModel GraphModel { get; private set; } = null!;
+    internal ProfilerViewModel ProfilerModel { get; private set; } = null!;
     internal NativeViewportService ViewportService => viewportService!;
     internal RenderViewportHost Viewport { get; private set; } = null!;
     internal MainWindowViewModel ViewModel => (MainWindowViewModel)DataContext!;
@@ -54,22 +56,24 @@ public partial class MainWindow : Window
         this.options = options;
         this.logger = logger;
         GraphModel = new RenderGraphViewModel(viewportService);
+        ProfilerModel = new ProfilerViewModel(viewportService, GraphModel);
         logStatusTimer.Tick += (_, _) => UpdateLogStatus();
         Opened += (_, _) => logStatusTimer.Start();
+        if (options.Observation is "graph" or "readback")
+        {
+            observationTimer.Tick += (_, _) => { if (options.Observation == "graph") { GraphModel.Refresh(); } else { ProfilerModel.Refresh(); } };
+            Opened += (_, _) => observationTimer.Start();
+        }
         Docks = new WorkbenchDockFactory(new()
         {
             ["Scene"] = CreateSceneView,
             ["Settings"] = () => settings = new RenderSettingsView { DataContext = viewModel },
             ["Render Graph"] = () => new RenderGraphView { DataContext = GraphModel },
-            ["Profiler"] = () =>
-            {
-                var view = new TextBlock { Margin = new Thickness(16), TextWrapping = Avalonia.Media.TextWrapping.Wrap, DataContext = viewModel };
-                view.Bind(TextBlock.TextProperty, new Binding(nameof(MainWindowViewModel.PerformanceText)));
-                return view;
-            },
+            ["Profiler"] = () => new ProfilerView { DataContext = ProfilerModel },
             ["Log"] = () => new LogView { DataContext = logModel }
         }, logger);
         Workbench.Factory = Docks;
+        ProfilerModel.GraphRequested += () => Docks.Show("Render Graph");
         Workbench.InitializeFactory = false;
         Workbench.InitializeLayout = false;
         var settingsRoot = options.Smoke || options.BenchmarkSeconds > 0 ? options.Output : Path.Combine(Path.GetDirectoryName(options.Project)!, "UserSettings", "Editor");
@@ -101,6 +105,7 @@ public partial class MainWindow : Window
         {
             dragWatch?.Dispose();
             logStatusTimer.Stop();
+            observationTimer.Stop();
             viewportService.RecreateRequested -= RecreateViewport;
             viewportService.StatsUpdated -= ForwardStats;
             viewportService.Failed -= OnViewportFailure;

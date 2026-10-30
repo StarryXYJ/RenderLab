@@ -58,6 +58,7 @@ public:
     BufferHandle ReadWriteBuffer(BufferHandle handle, Use use, BufferRange range = {});
     BufferHandle ReadWriteBuffer(std::string_view name, Use use, BufferRange range = {});
     void SideEffect();
+    void Category(PassCategory category);
     PassHandle Handle() const;
 
 protected:

@@ -72,6 +72,7 @@ std::string Plan::ToJson() const
     output["aliasBackingBytes"] = aliasBackingBytes;
     output["asyncCompute"] = asyncCompute;
     output["asyncResources"] = asyncResources;
+    output["gpuTimingReason"] = profilingReason;
     output["passes"] = Json::array();
     output["resources"] = Json::array();
     output["edges"] = Json::array();
@@ -85,6 +86,26 @@ std::string Plan::ToJson() const
         info["recordingChunk"] =
             p.recordingChunk == UINT32_MAX ? Json(nullptr) : Json(p.recordingChunk);
         info["commandRange"] = {p.firstCommand, p.lastCommand};
+        static constexpr const char* categories[] = {"Other", "Opaque", "Shadow", "Transparent",
+                                                     "Fullscreen"};
+        info["category"] = categories[static_cast<size_t>(p.category)];
+        const auto& c = p.commands;
+        info["commands"] = {{"direct", c.direct},
+                            {"indexed", c.indexed},
+                            {"indirect", c.indirect},
+                            {"indirectCapacity", c.indirectCapacity},
+                            {"batches", c.batches},
+                            {"directInstances", c.directInstances},
+                            {"indirectInstancesUnknown", c.indirectInstancesUnknown},
+                            {"dispatch", c.dispatch},
+                            {"threadGroups", c.threadGroups},
+                            {"traceRays", c.traceRays},
+                            {"rays", c.rays},
+                            {"asBuilds", c.asBuilds},
+                            {"asUpdates", c.asUpdates},
+                            {"lastDispatch", c.lastDispatch},
+                            {"lastTrace", c.lastTrace},
+                            {"copyBytes", c.copyBytes}};
         for (auto& a : p.accesses)
             info["accesses"].push_back({{"resource", a.resource},
                                         {"inputVersion", a.inputVersion},

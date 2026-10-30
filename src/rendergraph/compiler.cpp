@@ -30,6 +30,7 @@ const Plan& Graph::Compile(CompileOptions options)
                     "Raster pass needs a color attachment: " + pass.name + " (" + pass.source +
                         ")");
             plan.passes.push_back({pass.name, pass.source, "unused output", pass.kind, false});
+            plan.passes.back().category = pass.category;
             for (const auto& a : pass.accesses)
                 plan.passes.back().accesses.push_back(
                     {a.resource, a.input, a.output, a.use, a.read, a.write, a.bufferRange});
@@ -156,6 +157,13 @@ const Plan& Graph::Compile(CompileOptions options)
                 cycle += " " + g.passes[p].name + " (" + g.passes[p].source + ")";
         Require(cycle.empty(), "Dependency/order cycle:" + cycle);
         g.ScheduleQueues(options.asyncCompute);
+        if (g.profiling && plan.schedule.size() > rhi::MaxTimestampSlots / 2)
+        {
+            g.profiling = false;
+            plan.profilingReason = "GPU timing unavailable: more than 32 live passes";
+        }
+        else if (!g.profiling)
+            plan.profilingReason = "GPU timing disabled";
         for (uint32_t i = 0; i < plan.schedule.size(); ++i)
             for (auto& a : g.passes[plan.schedule[i].pass].accesses)
             {

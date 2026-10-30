@@ -5,7 +5,7 @@
 ## 当前状态
 
 - 当前实施阶段：M7 固定场景渲染工作台；M6 核心 M6.1–M6.5、M0–M5、R1、B1–B3 DONE。可选 M6.0 Forward+ 仍为 DEFERRED。
-- 当前工作项：M7.2a–b DONE；用户授权实现到 M7.2f，M7.2c–d 已完成，当前 M7.2e Profiler 与真实计数 IN_PROGRESS，随后按 f 验证并提交。M7.3–M7.6 本轮 DEFERRED。
+- 当前工作项：M7.2a–b DONE；用户授权实现到 M7.2f，M7.2c–d 已完成，M7.2e 已完成，当前 M7.2f 固定场景集成验收 IN_PROGRESS。M7.3–M7.6 本轮 DEFERRED。
 - 用户约定：每个子阶段验收完成即提交 Git，无阻塞时在当前授权范围内继续推进。此前 M7 修改已进入 Git，本轮开始时工作区干净。
 
 | 阶段 | 目标 | 前置依赖 | 状态 |
@@ -21,7 +21,7 @@
 | B3 | 逐帧资源复用优化 | B2 | DONE |
 | M5 | Deferred 与光追基础 | M4 | DONE |
 | M6 | GPU Driven 与执行优化 | M4；光追调度测试另需 M5 | DONE（M6.1–M6.5；可选 M6.0 延期） |
-| M7 | C# 编辑器与完整项目工作流 | M4；默认在 M5、M6 的核心目标后开展 | IN_PROGRESS（M7.1a–g、M7.2a–b 已完成；M7.2c–f 待实施） |
+| M7 | C# 编辑器与完整项目工作流 | M4；默认在 M5、M6 的核心目标后开展 | IN_PROGRESS（M7.1a–g、M7.2a–e 已完成；M7.2f 集成验收进行中） |
 | M8 | 一个深入的渲染专题与作品交付 | 所选专题依赖已满足 | NOT_STARTED |
 
 默认顺序为 M0 到 M8。M5 和 M6 在 M4 后可以独立推进；单阶段内按下列子阶段顺序执行，不同时建设多个高级系统。完整编辑器后置，M4 只实现运行内容所需的最小项目与资源能力。
@@ -122,13 +122,13 @@ M0–M6 核心能力及 R1、B1–B3 已完成（2026 年 10 月 23–30 日）�
 
 #### M7.2e Profiler 与真实计数
 
-状态：IN_PROGRESS。
+状态：DONE（2026 年 10 月 30 日）。结果：按 Pass/类别从实际命令包统计 Draw/Indirect/容量、绑定/状态连续批次、direct instances、Dispatch/TraceRays/AS/Copy；计数仅随成功提交的帧发布。v9 完成点非阻塞确认后发布 CPU/RHI/GPU Pass/队列/span、观测完成延迟、native/pool/upload/descriptor；默认 GPU 可见数未知，显式读回后带源帧显示。曲线、量化分位数、Freeze/记录帧选择、配对 Graph/导出与有界历史已接入，关闭 timing/读回不复用旧数值；超过 32 Pass 计时预算仍保留渲染。
 
-- [ ] 实际命令处统计 direct/indirect API 调用、几何 batch/instance、dispatch/TraceRays，按 Pass/类别区分；并行局部合并且失败不计入成功帧。
-- [ ] 完成帧曲线、CPU 分段、GPU Pass/队列/span、提交完成观测延迟、内存/上传/描述符，明确来源、重叠、未知与丢样。
-- [ ] GPU 可见数仅在显式诊断读回后显示；关闭 timing/读回不会强制同步。已知工作量验证与四档观察成本对照。
+验证：两配置零警告构建、托管各 19/19，原生 Input/Graph/双后端 Indexed Scene 各 4/4；覆盖已知命令/实例与实际 GPU 路径、空视锥、计时预算与曲线来源/历史边界。Release/DX12 与 Debug/Vulkan 自检各 23 项、各 30 次正常关闭及初始化中关闭账本/错误/worker_failed 为 0，包含 opt-in GPU 计数、禁用后 N/A、冻结不暂停及同帧 Graph。四档同分辨率观察短测各 8 秒无丢样，保留全部源帧和真实开关；单次测量不推断固定性能收益。证据 `out/m72e/{accepted-Release-dx12,accepted-Debug-vulkan,tests,cost-*}`；[接口](../docs/editor-host.md)、[操作](../manual/build.md#avalonia-嵌入原型)、[成本与限制](../docs/performance/editor-workbench.md)。人工/跨屏/长期与日志故障验收仍待 f。
 
 #### M7.2f 固定场景集成验收
+
+状态：IN_PROGRESS。
 
 - [ ] 双后端固定场景人工画面/真实输入、配置和 API 切换、Dock 浮动/跨屏 DPI、Graph/Profiler 源帧联动；默认/诊断/恢复布局与菜单开关，以及托管/原生日志、文件滚动/末尾 drain 和消息洪峰。
 - [ ] 每后端至少 30 分钟运行记录有界内存/快照/丢样/错误；源文件 hash 不变，关闭原生账本为 0。

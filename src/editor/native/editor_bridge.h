@@ -43,7 +43,8 @@ extern "C"
         uint64_t remaining_bytes, peak_bytes;
         uint32_t validation_errors, worker_failed;
     } rl_viewport_close_report;
-    /* Version 1, 112 bytes. Flags: reflections/history/denoise/temporal/shadows = 1/2/4/8/16. */
+    /* Version 1, 112 bytes. Flags: reflections/history/denoise/temporal/shadows/readback =
+     * 1/2/4/8/16/32. */
     typedef struct rl_viewport_config
     {
         uint32_t size, version;

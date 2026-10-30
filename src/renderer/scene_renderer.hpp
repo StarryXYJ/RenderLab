@@ -2,6 +2,7 @@
 
 #include "renderer/indexed_scene.hpp"
 #include "renderer/pipeline.hpp"
+#include "rendergraph/pool.hpp"
 #include "rendergraph/types.hpp"
 #include "rhi/resources.hpp"
 #include "rhi/upload.hpp"
@@ -89,6 +90,7 @@ struct SceneReadback
     uint64_t scenePrepareNs = 0;
     IndexedSceneStatistics indexedScene;
     IndexedCullDiagnostics culling;
+    uint64_t sceneUploadBytes = 0;
 };
 /// Cumulative ray-surface preparation work; no timing overhead.
 struct RaySceneStatistics
@@ -115,6 +117,7 @@ public:
     const scene::Snapshot& LastSnapshot() const;
     const std::map<std::string, assets::Model>& Models() const;
     rhi::UploadPool::Statistics UploadStatistics() const;
+    rendergraph::PoolStats PoolStatistics() const;
     RaySceneStatistics RayStatistics() const;
     /** @brief Extracts scene values and submits the existing Forward/Graph composition.
      * initial must match the target state; output is Present for a swapchain, otherwise CopySource.

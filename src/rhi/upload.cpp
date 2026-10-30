@@ -59,6 +59,7 @@ UploadArena::Slice UploadPool::Batch::Write(std::span<const std::byte> bytes, ui
         const auto previous = arena.Used();
         auto slice = arena.Write(bytes, alignment);
         used_ += arena.Used() - previous;
+        written_ += bytes.size();
         pool_.highWater_ = std::max(pool_.highWater_, used_);
         return slice;
     }
@@ -83,6 +84,7 @@ UploadArena::Slice UploadPool::Batch::Write(std::span<const std::byte> bytes, ui
     page.active = true;
     auto slice = page.arena.Write(bytes, alignment);
     used_ += page.arena.Used();
+    written_ += bytes.size();
     pool_.highWater_ = std::max(pool_.highWater_, used_);
     return slice;
 }

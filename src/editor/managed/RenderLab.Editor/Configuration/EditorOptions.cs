@@ -2,7 +2,7 @@ namespace RenderLab.Editor.Configuration;
 
 public sealed record EditorOptions(string Backend, string Project, string Shaders, string Output, bool Smoke,
     bool Validation, bool Profiling, uint Pipeline, double BenchmarkSeconds, double WarmupSeconds,
-    uint TargetFps = 60)
+    uint TargetFps = 60, string Observation = "normal")
 {
     internal static EditorOptions Parse(string[] args)
     {
@@ -20,6 +20,7 @@ public sealed record EditorOptions(string Backend, string Project, string Shader
         var profiling = true;
         uint pipeline = 2;
         uint targetFps = 60;
+        var observation = "normal";
         double benchmarkSeconds = 0, warmupSeconds = 2;
         for (var i = 0; i < args.Length; ++i)
         {
@@ -42,6 +43,7 @@ public sealed record EditorOptions(string Backend, string Project, string Shader
                 case "--validation": validation = ParseSwitch(args[i]); break;
                 case "--profile": profiling = ParseSwitch(args[i]); break;
                 case "--target-fps": targetFps = uint.Parse(args[i], System.Globalization.CultureInfo.InvariantCulture); break;
+                case "--observation": observation = args[i]; break;
                 case "--pipeline":
                     pipeline = args[i] switch
                     {
@@ -58,18 +60,19 @@ public sealed record EditorOptions(string Backend, string Project, string Shader
         if (backend is not ("dx12" or "vulkan") || !File.Exists(project) || !Directory.Exists(shaders) ||
             !double.IsFinite(benchmarkSeconds) || benchmarkSeconds < 0 || benchmarkSeconds > 120 ||
             !double.IsFinite(warmupSeconds) || warmupSeconds < 0 || warmupSeconds > 30 ||
-            (smoke && benchmarkSeconds > 0) || targetFps > 240)
+            (smoke && benchmarkSeconds > 0) || targetFps > 240 || observation is not ("normal" or "basic" or "timing" or "graph" or "readback"))
         {
             throw new ArgumentException("Select dx12/vulkan and existing project/shader paths.");
         }
         output ??= Path.Combine(root?.FullName ?? Environment.CurrentDirectory, "out/m7", backend);
+        if (observation != "normal") { profiling = observation != "basic"; }
 #if DEBUG
         validation ??= true;
 #else
         validation ??= smoke;
 #endif
         return new EditorOptions(backend, Path.GetFullPath(project), Path.GetFullPath(shaders), Path.GetFullPath(output), smoke,
-            validation.Value, profiling, pipeline, benchmarkSeconds, warmupSeconds, targetFps);
+            validation.Value, profiling, pipeline, benchmarkSeconds, warmupSeconds, targetFps, observation);
     }
 
     private static bool ParseSwitch(string value) => value switch

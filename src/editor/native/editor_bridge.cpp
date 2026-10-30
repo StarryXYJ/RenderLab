@@ -45,6 +45,31 @@ uint64_t ElapsedNs(Clock::time_point start)
     return static_cast<uint64_t>(
         std::chrono::duration_cast<std::chrono::nanoseconds>(Clock::now() - start).count());
 }
+nlohmann::json ConfigurationJson(const rl_viewport_config& c)
+{
+    return {{"version", c.version},
+            {"requestId", c.request_id},
+            {"pipeline", c.pipeline},
+            {"submission", c.submission},
+            {"recordingThreads", c.recording_threads},
+            {"asyncCompute", c.async_compute},
+            {"memoryAlias", c.memory_alias},
+            {"view", c.view},
+            {"profiling", c.profiling},
+            {"targetFps", c.target_fps},
+            {"continuous", c.continuous},
+            {"flags", c.flags},
+            {"shadowResolution", c.shadow_resolution},
+            {"exposure", c.exposure},
+            {"cameraSpeed", c.camera_speed},
+            {"lightDirection", {c.light_x, c.light_y, c.light_z}},
+            {"lightColor", {c.light_r, c.light_g, c.light_b}},
+            {"lightIntensity", c.light_intensity},
+            {"shadowBias", c.shadow_bias},
+            {"shadowNormalBias", c.shadow_normal_bias},
+            {"environmentIntensity", c.environment_intensity},
+            {"environmentRotation", c.environment_rotation}};
+}
 struct Failure : std::runtime_error
 {
     Failure(rl_status status, const char* message) : std::runtime_error(message), status(status) {}
@@ -128,6 +153,17 @@ struct RenderState
     std::array<uint64_t, 2> profileConfigs{};
     uint64_t configRevision = 0;
     std::shared_ptr<const rendergraph::Plan> capturedPlan;
+    struct Observation
+    {
+        uint64_t frame = 0, config = 0;
+        Clock::time_point submitted;
+        bool complete = false;
+        nlohmann::json data, envelope;
+        renderer::IndexedCullDiagnostics culling;
+    };
+    std::array<Observation, 2> observations;
+    uint64_t lastSnapshotFrame = 0;
+    std::string completedSnapshot;
     std::vector<bool> initialized;
     std::array<bool, 256> keys{};
     rl_viewport_stats stats{};
@@ -173,6 +209,98 @@ struct RenderState
         {
         }
     }
+    void RetireObservation(size_t slot)
+    {
+        auto& observation = observations[slot];
+        if (!observation.frame || observation.complete || completions[slot] > runtime->Completed())
+            return;
+        auto timings = profiles[slot].Read(*runtime);
+        if (!timings.empty() && observation.frame > stats.gpu_frame)
+        {
+            double ns = 0;
+            for (const auto& timing : timings)
+                ns += timing.nanoseconds;
+            stats.gpu_ns = static_cast<uint64_t>(std::max(0.0, ns));
+            stats.gpu_frame = observation.frame;
+            stats.gpu_config_revision = observation.config;
+        }
+        profiles[slot] = {};
+        observation.complete = true;
+        if (!observation.data.is_null())
+        {
+            observation.data["completionObservationNs"] = ElapsedNs(observation.submitted);
+            auto gpu = nlohmann::json::array();
+            double first = 0, last = 0, sum = 0, graphics = 0, compute = 0;
+            for (const auto& timing : timings)
+            {
+                if (gpu.empty())
+                {
+                    first = timing.startNanoseconds;
+                    last = timing.endNanoseconds;
+                }
+                first = std::min(first, timing.startNanoseconds);
+                last = std::max(last, timing.endNanoseconds);
+                sum += timing.nanoseconds;
+                (timing.queue == rhi::QueueType::Compute ? compute : graphics) +=
+                    timing.nanoseconds;
+                gpu.push_back(
+                    {{"name", timing.name},
+                     {"ns", timing.nanoseconds},
+                     {"startNs", timing.startNanoseconds},
+                     {"endNs", timing.endNanoseconds},
+                     {"queue", timing.queue == rhi::QueueType::Compute ? "compute" : "graphics"}});
+            }
+            observation.data["gpuPasses"] = std::move(gpu);
+            observation.data["gpuSumNs"] =
+                timings.empty() ? nlohmann::json(nullptr) : nlohmann::json(sum);
+            observation.data["gpuSpanNs"] =
+                timings.empty() ? nlohmann::json(nullptr) : nlohmann::json(last - first);
+            observation.data["gpuGraphicsNs"] =
+                timings.empty() ? nlohmann::json(nullptr) : nlohmann::json(graphics);
+            observation.data["gpuComputeNs"] =
+                timings.empty() ? nlohmann::json(nullptr) : nlohmann::json(compute);
+            observation.data["gpuVisible"] = nullptr;
+            if (observation.culling.readback)
+            {
+                const auto bytes = observation.culling.readback->Map();
+                uint64_t visible = 0;
+                for (size_t batch = 0; batch < observation.culling.batchCapacities.size(); ++batch)
+                {
+                    if ((batch + 1) * 4 > bytes.size())
+                        throw std::runtime_error("Culling diagnostic buffer is truncated");
+                    uint32_t count = 0;
+                    std::memcpy(&count, bytes.data() + batch * 4, 4);
+                    if (count > observation.culling.batchCapacities[batch])
+                        throw std::runtime_error("Culling diagnostic count exceeds capacity");
+                    visible += count;
+                }
+                observation.data["gpuVisible"] = visible;
+            }
+        }
+        observation.culling = {};
+        if (!observation.envelope.is_null() && observation.frame > lastSnapshotFrame)
+        {
+            observation.envelope["profile"] = observation.data;
+            completedSnapshot = observation.envelope.dump();
+            lastSnapshotFrame = observation.frame;
+        }
+    }
+    std::string TakeCompletedSnapshot()
+    {
+        Observation* selected = nullptr;
+        for (auto& observation : observations)
+            if (observation.complete && !observation.envelope.is_null() &&
+                observation.frame > lastSnapshotFrame &&
+                (!selected || observation.frame > selected->frame))
+                selected = &observation;
+        if (selected)
+        {
+            selected->envelope["profile"] = selected->data;
+            lastSnapshotFrame = selected->frame;
+            completedSnapshot = selected->envelope.dump();
+        }
+        return std::exchange(completedSnapshot, {});
+    }
     void Tick(float dt, const InputSnapshot& input)
     {
         const auto tickStart = Clock::now();
@@ -210,16 +338,7 @@ struct RenderState
         start = Clock::now();
         runtime->Wait(completion);
         stats.fence_wait_ns = ElapsedNs(start);
-        if (profiles[slot].ticks)
-        {
-            double nanoseconds = 0;
-            for (const auto& timing : profiles[slot].Read(*runtime))
-                nanoseconds += timing.nanoseconds;
-            stats.gpu_ns = static_cast<uint64_t>(std::max(0.0, nanoseconds));
-            stats.gpu_frame = profileFrames[slot];
-            stats.gpu_config_revision = profileConfigs[slot];
-            profiles[slot] = {};
-        }
+        RetireObservation(slot);
         start = Clock::now();
         const auto acquired = swapchain->Acquire();
         stats.acquire_ns = ElapsedNs(start);
@@ -248,9 +367,55 @@ struct RenderState
             scene->Document().MoveCamera(motion, rotation);
         }
         yaw = pitch = 0;
+        runtime->SetCpuProfiling(options.profile);
+        const auto cpuBefore = runtime->GetCpuProfile();
         start = Clock::now();
         auto result = scene->Render(acquired.texture, initial, swapchain.get(), false, {}, options);
         stats.render_ns = ElapsedNs(start);
+        auto& observation = observations[slot];
+        observation = {};
+        observation.frame = stats.frames + 1;
+        observation.config = configRevision;
+        observation.submitted = Clock::now();
+        if (options.captureGraph)
+        {
+            const auto& snapshot = scene->LastSnapshot();
+            const auto upload = scene->UploadStatistics();
+            const auto descriptors = runtime->GetDescriptorStats();
+            const auto pool = scene->PoolStatistics();
+            const auto cpu = rhi::Difference(runtime->GetCpuProfile(), cpuBefore);
+            observation.data = {
+                {"candidates", snapshot.allInstances.size()},
+                {"cpuVisible", snapshot.cpuVisibilityKnown
+                                   ? nlohmann::json(snapshot.instances.size())
+                                   : nlohmann::json(nullptr)},
+                {"nativeBytes", runtime->GetMemoryStats().used},
+                {"peakBytes", runtime->GetMemoryStats().highWater},
+                {"uploadPages", upload.pages},
+                {"uploadReservedBytes", upload.reservedBytes},
+                {"sceneUploadBytes", result.sceneUploadBytes},
+                {"poolCached", pool.cached},
+                {"poolEstimatedBytes", pool.estimatedBytes},
+                {"nativeRecordNs",
+                 options.profile
+                     ? nlohmann::json(
+                           cpu[static_cast<size_t>(rhi::CpuOperation::NativeRecord)].nanoseconds)
+                     : nlohmann::json(nullptr)},
+                {"nativeSubmitNs",
+                 options.profile
+                     ? nlohmann::json(
+                           cpu[static_cast<size_t>(rhi::CpuOperation::NativeSubmit)].nanoseconds)
+                     : nlohmann::json(nullptr)},
+                {"descriptorSlots", descriptors.inUse},
+                {"descriptorCapacity", descriptors.capacity},
+                {"submission", static_cast<uint32_t>(options.submission)},
+                {"timingEnabled", options.profile},
+                {"readbackEnabled", options.cullingDiagnostics},
+                {"width", width},
+                {"height", height},
+                {"activeCamera", scene->Document().activeCamera}};
+            observation.culling = std::move(result.culling);
+        }
         stats.scene_prepare_ns = result.scenePrepareNs;
         stats.graph_compile_ns = result.compileNs;
         stats.graph_prepare_ns = result.prepareNs;
@@ -270,6 +435,18 @@ struct RenderState
         stats.native_bytes = runtime->GetMemoryStats().used;
         stats.peak_bytes = runtime->GetMemoryStats().highWater;
         stats.tick_ns = ElapsedNs(tickStart);
+        if (!observation.data.is_null())
+            observation.data["cpuNs"] = {{"frame", stats.tick_ns},
+                                         {"fence", stats.fence_wait_ns},
+                                         {"acquire", stats.acquire_ns},
+                                         {"scene", stats.scene_prepare_ns},
+                                         {"compile", stats.graph_compile_ns},
+                                         {"prepare", stats.graph_prepare_ns},
+                                         {"record", stats.graph_record_ns},
+                                         {"render", stats.render_ns},
+                                         {"present", stats.present_ns},
+                                         {"resize", stats.resize_ns},
+                                         {"diagnostics", stats.diagnostics_ns}};
         capturedPlan = std::move(result.graphSnapshot);
     }
     rl_viewport_close_report Close()
@@ -278,6 +455,8 @@ struct RenderState
         {
             runtime->WaitIdle();
             profiles = {};
+            observations = {};
+            capturedPlan.reset();
             swapchain.reset();
             scene.reset();
             runtime->WaitIdle();
@@ -735,25 +914,8 @@ struct Session
                         render.stats.dpi = snapshot.dpi;
                         // Retire profiles even after a one-shot static redraw. Completion is
                         // queried without adding a GPU wait or keeping the viewport rendering.
-                        const auto completedPoint = render.runtime->Completed();
                         for (size_t slot = 0; slot < render.profiles.size(); ++slot)
-                        {
-                            if (render.profiles[slot].ticks &&
-                                render.completions[slot] <= completedPoint)
-                            {
-                                double ns = 0;
-                                for (const auto& timing :
-                                     render.profiles[slot].Read(*render.runtime))
-                                    ns += timing.nanoseconds;
-                                if (render.profileFrames[slot] > render.stats.gpu_frame)
-                                {
-                                    render.stats.gpu_ns = static_cast<uint64_t>(std::max(0.0, ns));
-                                    render.stats.gpu_frame = render.profileFrames[slot];
-                                    render.stats.gpu_config_revision = render.profileConfigs[slot];
-                                }
-                                render.profiles[slot] = {};
-                            }
-                        }
+                            render.RetireObservation(slot);
                         render.stats.focused = snapshot.focused;
                         render.stats.captured = snapshot.captured;
                         render.stats.pressed_keys = static_cast<uint32_t>(
@@ -764,7 +926,7 @@ struct Session
                         render.stats.render_thread_id = GetCurrentThreadId();
                         render.stats.activity = paused ? 3 : resizePending ? 4 : needsFrame ? 1 : 2;
                         std::string graphSnapshot;
-                        if (draw && render.capturedPlan)
+                        if (draw && render.stats.frames != stats.frames && render.capturedPlan)
                         {
                             try
                             {
@@ -772,7 +934,10 @@ struct Session
                                 auto topology = plan;
                                 topology.erase("cpuNs");
                                 for (auto& pass : topology["passes"])
+                                {
                                     pass.erase("commandRange");
+                                    pass.erase("commands");
+                                }
                                 for (auto& resource : topology["resources"])
                                 {
                                     resource.erase("initial");
@@ -788,16 +953,21 @@ struct Session
                                     previousTopology = signature;
                                     ++topologyRevision;
                                 }
-                                graphSnapshot =
-                                    nlohmann::json{{"schemaVersion", 1},
-                                                   {"sessionGeneration", identity},
-                                                   {"frameId", render.stats.frames},
-                                                   {"configRevision", render.stats.config_revision},
-                                                   {"topologyRevision", topologyRevision},
-                                                   {"backend", backend == 0 ? "dx12" : "vulkan"},
-                                                   {"status", "submitted"},
-                                                   {"plan", std::move(plan)}}
-                                        .dump();
+                                render
+                                    .observations[(render.stats.frames - 1) %
+                                                  render.observations.size()]
+                                    .envelope = nlohmann::json{
+                                    {"schemaVersion", 1},
+                                    {"sessionGeneration", identity},
+                                    {"frameId", render.stats.frames},
+                                    {"configRevision", render.stats.config_revision},
+                                    {"configuration", ConfigurationJson(activeConfig)},
+                                    {"topologyRevision", topologyRevision},
+                                    {"backend", backend == 0 ? "dx12" : "vulkan"},
+                                    {"project", platform::WideToUtf8(project.wstring())},
+                                    {"status", "submitted"},
+                                    {"plan", std::move(plan)}};
+                                snapshotsServed = selectedSnapshot;
                             }
                             catch (const std::exception& failure)
                             {
@@ -806,16 +976,16 @@ struct Session
                                                  failure.what());
                             }
                         }
+                        graphSnapshot = render.TakeCompletedSnapshot();
                         {
                             std::lock_guard lock(mutex);
                             const bool framePublished = draw && render.stats.frames != stats.frames;
-                            if (framePublished && !graphSnapshot.empty())
+                            if (!graphSnapshot.empty())
                             {
                                 if (!snapshots.Publish(std::move(graphSnapshot)))
                                     snapshots.Publish(
                                         "{\"schemaVersion\":1,\"status\":\"unavailable\",\"error\":"
                                         "\"Snapshot exceeds 4 MiB budget\"}");
-                                snapshotsServed = selectedSnapshot;
                             }
                             if (draw && render.stats.frames != stats.frames)
                             {
@@ -1045,7 +1215,7 @@ template <class F> rl_status Guard(F&& operation)
 
 uint32_t RENDERLAB_EDITOR_CALL rl_editor_abi_version()
 {
-    return 8;
+    return 9;
 }
 rl_status RENDERLAB_EDITOR_CALL rl_viewport_request_snapshot(rl_viewport_handle handle)
 {

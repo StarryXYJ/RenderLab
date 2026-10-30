@@ -6,7 +6,7 @@ namespace RenderLab.Editor.Tests;
 
 public class GraphSnapshotTests
 {
-    private const string Fixture = """
+    internal const string Fixture = """
         {"schemaVersion":1,"sessionGeneration":42,"frameId":7,"configRevision":3,"topologyRevision":2,"backend":"dx12","status":"submitted",
          "plan":{"schedule":[{"pass":1,"queue":"compute"},{"pass":0,"queue":"graphics"}],
           "passes":[

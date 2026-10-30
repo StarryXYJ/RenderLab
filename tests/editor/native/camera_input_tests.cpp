@@ -92,7 +92,7 @@ int main()
             if (variant == 2)
                 candidate.shadow_resolution = 192;
             if (variant == 3)
-                candidate.flags = 32;
+                candidate.flags = 64;
             if (variant == 4)
                 candidate.light_x = candidate.light_y = candidate.light_z = 0;
             if (variant == 5)

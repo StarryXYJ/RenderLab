@@ -106,6 +106,7 @@ void ShadowFeature::Build(rendergraph::Graph& graph, const RenderFrame& frame)
     graph.CreateTexture("MainLightShadow", {size, size, rhi::Format::Rgba32Float, false, true});
     graph.CreateTexture("MainLightShadowDepth", {size, size, frame.shadowDepthFormat, false, true});
     auto pass = graph.AddRasterPass("MainLight.Shadow");
+    pass.Category(PassCategory::Shadow);
     pass.ColorTarget("MainLightShadow", rhi::LoadOp::Clear, {0, 0, 0, 0});
     pass.DepthTarget("MainLightShadowDepth");
     std::vector<ResolvedDraw> draws;
@@ -127,6 +128,7 @@ void OpaqueFeature::Build(rendergraph::Graph& graph, const RenderFrame& frame)
                 color.height == depth.height,
             "Forward requires matching color and depth/stencil attachments");
     auto pass = graph.AddRasterPass("Forward.Opaque");
+    pass.Category(PassCategory::Opaque);
     pass.ColorTarget("CameraColor", rhi::LoadOp::Clear, frame.clearColor);
     pass.DepthTarget("CameraDepth");
     std::vector<ResolvedDraw> draws;
@@ -156,6 +158,7 @@ void TransparentFeature::Build(rendergraph::Graph& graph, const RenderFrame& fra
     std::stable_sort(input.begin(), input.end(), [](const auto& a, const auto& b)
                      { return a.queue == b.queue ? a.distance > b.distance : a.queue < b.queue; });
     auto pass = graph.AddRasterPass("Forward.Transparent");
+    pass.Category(PassCategory::Transparent);
     pass.ColorTarget("CameraColor", rhi::LoadOp::Load);
     const auto depthAccess =
         std::ranges::any_of(input, [](const auto& draw)

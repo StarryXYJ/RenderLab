@@ -1,0 +1,37 @@
+<UserControl xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+ xmlns:vm="using:RenderLab.Editor.ViewModels" xmlns:d="using:RenderLab.Editor.Diagnostics" xmlns:controls="using:RenderLab.Editor.Controls"
+ x:Class="RenderLab.Editor.Views.ProfilerView" x:DataType="vm:ProfilerViewModel">
+ <Grid RowDefinitions="Auto,Auto,100,*,Auto" Margin="8" RowSpacing="6">
+  <WrapPanel>
+   <CheckBox Content="Freeze" IsChecked="{Binding Frozen}" Margin="6,0" />
+   <CheckBox Content="Continuous redraw" IsChecked="{Binding Continuous}" Margin="6,0" />
+   <CheckBox Content="GPU visible readback (adds copy)" IsChecked="{Binding GpuReadback}" Margin="6,0" />
+   <Button Content="Clear" Command="{Binding ClearCommand}" />
+   <Button Content="Inspect graph" Command="{Binding ShowGraphCommand}" />
+   <Button Content="Export JSON" Command="{Binding ExportCommand}" />
+   <ComboBox Width="220" ItemsSource="{Binding FrameChoices}" SelectedIndex="{Binding SelectedFrame}" ToolTip.Tip="Freeze first, then select a recorded diagnostic frame" />
+  </WrapPanel>
+  <StackPanel Grid.Row="1"><TextBlock Text="{Binding Statistics}" TextWrapping="Wrap" /><TextBlock Text="{Binding Summary}" TextWrapping="Wrap" /></StackPanel>
+  <controls:FrameTimelineControl Grid.Row="2" x:Name="Timeline" />
+  <ScrollViewer Grid.Row="3" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto">
+   <StackPanel MinWidth="1350">
+    <Grid ColumnDefinitions="230,100,85,65,70,80,70,240,70,70,110">
+     <TextBlock Text="Pass" /><TextBlock Grid.Column="1" Text="Category" /><TextBlock Grid.Column="2" Text="Queue" />
+     <TextBlock Grid.Column="3" Text="Draw API" /><TextBlock Grid.Column="4" Text="Indirect" /><TextBlock Grid.Column="5" Text="Capacity" />
+     <TextBlock Grid.Column="6" Text="Batches" /><TextBlock Grid.Column="7" Text="Submitted instances" />
+     <TextBlock Grid.Column="8" Text="Dispatch" /><TextBlock Grid.Column="9" Text="TraceRays" /><TextBlock Grid.Column="10" Text="GPU" />
+    </Grid>
+    <ItemsControl ItemsSource="{Binding Passes}"><ItemsControl.ItemTemplate><DataTemplate x:DataType="d:ProfilerPassRow">
+     <Grid ColumnDefinitions="230,100,85,65,70,80,70,240,70,70,110" Margin="0,3">
+      <TextBlock Text="{Binding Pass}" /><TextBlock Grid.Column="1" Text="{Binding Category}" /><TextBlock Grid.Column="2" Text="{Binding Queue}" />
+      <TextBlock Grid.Column="3" Text="{Binding Direct}" /><TextBlock Grid.Column="4" Text="{Binding Indirect}" /><TextBlock Grid.Column="5" Text="{Binding Capacity}" />
+      <TextBlock Grid.Column="6" Text="{Binding Batches}" /><TextBlock Grid.Column="7" Text="{Binding Instances}" />
+      <TextBlock Grid.Column="8" Text="{Binding Dispatch}" /><TextBlock Grid.Column="9" Text="{Binding TraceRays}" /><TextBlock Grid.Column="10" Text="{Binding Gpu}" />
+     </Grid>
+    </DataTemplate></ItemsControl.ItemTemplate></ItemsControl>
+   </StackPanel>
+  </ScrollViewer>
+  <StackPanel Grid.Row="4"><Expander Header="CPU / memory / GPU intervals and definitions"><ScrollViewer MaxHeight="260"><TextBlock Text="{Binding Details}" TextWrapping="Wrap" /></ScrollViewer></Expander>
+   <TextBlock Text="{Binding ExportPath}" TextWrapping="Wrap" /></StackPanel>
+ </Grid>
+</UserControl>

@@ -959,6 +959,10 @@ rhi::UploadPool::Statistics SceneRenderer::UploadStatistics() const
 {
     return impl_->uploadPool.Stats();
 }
+rendergraph::PoolStats SceneRenderer::PoolStatistics() const
+{
+    return impl_->pool.Stats();
+}
 RaySceneStatistics SceneRenderer::RayStatistics() const
 {
     auto result = impl_->rayStatistics;
@@ -1894,6 +1898,7 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
                 binding, importBuffer(binding.buffer, "Display.Constants", rhi::State::HostWrite));
     auto displayPass = graph.AddRasterPass(
         options.view == SceneView::Final ? "Display.ToneMapping" : "Debug.TextureViewer");
+    displayPass.Category(rendergraph::PassCategory::Fullscreen);
     displayPass.ColorTarget("DisplayColor", rhi::LoadOp::Clear, {.02f, .02f, .02f, 1});
     const auto hdr = displayPass.ReadTexture(displaySource);
     const auto vertices = displayPass.ReadBuffer(fullscreen, rendergraph::Use::Vertex);
@@ -2015,6 +2020,7 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
     if (preparedAcceleration)
         self.accelerationScene.Commit(std::move(*preparedAcceleration), submitted.completion);
     uploads.Seal(submitted.completion);
+    result.sceneUploadBytes = uploads.BytesWritten();
     result.reflectionSamples = reflectionHistory ? reflectionHistory->samples : 0;
     result.reflectionHistoryReset = reflectionHistory && reflectionSamples == 0;
     result.completion = submitted.completion;

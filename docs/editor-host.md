@@ -63,7 +63,7 @@ Close 首先停止 UI Timer，再通知渲染线程停止，等待其释放展�
 
 每个 Host 保存自己的 Session 代际。旧 Host 重复关闭不能销毁新 Session；重建保留已接受配置。服务不使用可能在 finalizer 线程执行 Destroy 的 SafeHandle。
 
-## C ABI v8、运行配置与诊断
+## C ABI v9、运行配置与诊断
 
 M7.2c 增加 BeginStop/IsRetired：UI 请求停止后继续分发消息，owner 完成 GPU/展示退休才报告 retired；随后 UI 收取最终配置/相机/日志并销毁 HWND。设备切换只保留一个活动 Device，确认恢复配置的首帧后发布实际后端。目标失败尝试一次原后端，回滚失败进入 Failed/Retry；关闭或布局替换取消过期事务，旧代不能操作新 Session。
 
@@ -90,6 +90,16 @@ ReadFrames 批量排空固定 512 项完成帧队列；满时丢最旧项并增�
 托管侧最多保留 240 帧活动样本，每 250 ms 发布状态；重建清空历史。GPU 计时仅在真实提交完成后读回，包含源帧号；静态单次重绘后也无等待地收集已完成结果。GPU Pass 总时间不等于整个设备利用率。Release 默认关闭验证，Debug/默认 smoke 开启，--validation on|off 和 --profile on|off 显式覆盖。DX12 验证警告按消息 ID 记录首条并在关闭汇总重复数；错误逐条输出，既有警告根因不因此视为修复。
 
 性能基线、对照环境和限制见 [调度测量](performance/editor-scheduling.md)，运行命令见 [构建说明](../manual/build.md#avalonia-嵌入原型)。
+
+## Profiler 完成帧与计数
+
+v9 配置 flags 的 32 位启用显式 GPU 可见数诊断；默认关闭，不创建 Count 读回。完成点经非阻塞查询确认后才映射，结果与该帧 Plan 一起发布；单份快照仍为 schemaVersion=1 / 4 MiB，新增 profile 值字段。GPU 未完成/关闭/超出 32 Pass 预算时显示 Pending/N/A；超预算关闭该图 timing，保留渲染和计数。
+
+Graph 在实际命令包边界按 Pass 计数，成功提交/Present 后才能进入诊断快照。Direct 包含 Draw/DrawIndexed（另列 indexed 子集），Indirect 为 API 调用次数，capacity 为最大命令容量；batch 是共享 pipeline/bindings/geometry/stencil 的连续 draw run，不是线程块或队列提交数。每 Pass 有 Opaque/Shadow/Transparent/Fullscreen 分类，direct instances 是该 Pass 实际调用实例数，间接实例默认未知；场景 candidates、CPU visible 与可选 GPU opaque visible 单独显示。Dispatch/TraceRays 的调用/工作量/最后尺寸、AS build/update 和 Copy payload 也分别记录。
+
+CPU 诊断区分 viewport Tick、Render 内嵌套的场景准备/Graph compile/prepare/packet record、可选 RHI native record/submit，以及 Fence/Acquire/Present；嵌套值不相加。GPU Pass 和/每队列时间与共同时间域 span 分开。提交返回到 CPU 观测完成的时间包含队列等待和查询分辨率，不是精确 GPU 执行时间或扫描/输入延迟；Tick 也不包括完整调度等待和外部快照 JSON 序列化。
+
+Profiler 保存最多 240 个数值曲线样本、64 份且 raw JSON UTF-16 投影预算 8 MiB 的诊断帧（解析值另有固定节点/快照上限）。Live 在配置/Session 变化时清理活动历史，Freeze 保留完整来源身份；关闭面板停止其 UI 拉取，已启用的 timing/readback 配置保持独立。GPU 曲线按 gpu_frame 对齐，选中冻结诊断帧可打开同一帧/配置/拓扑的 Graph；导出包含完整配置来源和观察开关。
 
 ## 自检与限制
 

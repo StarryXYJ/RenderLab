@@ -111,6 +111,16 @@ internal sealed class SmokeTest
                 return;
             }
             ticks = 0;
+            File.WriteAllText(Path.Combine(options.Output, "smoke-progress.json"), JsonSerializer.Serialize(new
+            {
+                stage,
+                stats.Frames,
+                stats.ConfigRevision,
+                applied = window.ViewportService.Configuration.AppliedId,
+                graph = window.GraphModel.Status,
+                profiler = window.ProfilerModel.Summary,
+                details = window.ProfilerModel.Details
+            }, EditorDiagnostics.JsonOptions));
             var host = window.Viewport;
             var root = window.TryGetPlatformHandle()!.Handle;
             switch (stage++)
@@ -486,6 +496,48 @@ internal sealed class SmokeTest
                     { --stage; break; }
                     window.Docks.CloseDockable(window.Docks.Panel("Render Graph"));
                     checks.Add("mounted actual-plan matrix, submitted identities/dependencies, independent freeze/live and JSON export");
+                    window.Docks.Show("Profiler");
+                    var profileConfig = window.ViewportService.EditableConfig;
+                    profileConfig.Submission = 3; profileConfig.Pipeline = 2; profileConfig.Continuous = 1;
+                    profileConfig.Profiling = 1; profileConfig.Flags &= ~32u;
+                    window.ViewportService.Submit(profileConfig);
+                    break;
+                case 35:
+                    if (window.ViewportService.Configuration.Status != 2 || window.ViewportService.Configuration.Applied.Submission != 3 ||
+                        window.ProfilerModel.Current is not { } profile || profile.Graph.Config != stats.ConfigRevision ||
+                        profile.Graph.Config != window.ViewportService.Configuration.AppliedId) { --stage; break; }
+                    Require(window.GetVisualDescendants().OfType<ProfilerView>().Any() && profile.Passes.Any(p => p.Indirect > 0) && profile.GpuVisible is null,
+                        "Profiler did not mount actual indirect counts or fabricated GPU visibility.");
+                    window.ProfilerModel.GpuReadback = true;
+                    break;
+                case 36:
+                    if (window.ProfilerModel.Current is not { GpuVisible: not null } readback || readback.Graph.Config != stats.ConfigRevision) { --stage; break; }
+                    Require(readback.ReadbackEnabled && readback.TimingEnabled, "Explicit readback/timing switches were lost.");
+                    savedFrames = readback.Graph.Frame;
+                    window.ProfilerModel.Frozen = true;
+                    var noTiming = window.ViewportService.EditableConfig;
+                    noTiming.Profiling = 0; noTiming.Flags &= ~32u;
+                    window.ViewportService.Submit(noTiming);
+                    break;
+                case 37:
+                    if (window.ViewportService.Configuration.Status != 2 || stats.Frames <= savedFrames) { --stage; break; }
+                    Require(window.ProfilerModel.Current!.Graph.Frame == savedFrames, "Frozen profiler changed its source frame.");
+                    window.ProfilerModel.ExportCommand.Execute(null);
+                    Require(File.Exists(window.ProfilerModel.ExportPath), "Profiler export was not written.");
+                    window.ProfilerModel.ShowGraphCommand.Execute(null);
+                    Require(window.GraphModel.Frozen && window.GraphModel.Snapshot!.Frame == savedFrames,
+                        "Profiler and Graph did not select the same source frame.");
+                    window.Docks.Show("Profiler");
+                    window.ProfilerModel.Frozen = false;
+                    window.ViewportService.RequestSnapshot();
+                    break;
+                case 38:
+                    if (window.ProfilerModel.Current is not { } disabled || disabled.Graph.Config != stats.ConfigRevision || disabled.TimingEnabled) { --stage; break; }
+                    Require(!disabled.ReadbackEnabled && disabled.GpuVisible is null && disabled.Passes.All(p => p.Gpu == "N/A"),
+                        "Disabled diagnostics displayed old GPU timing/counts.");
+                    window.Docks.CloseDockable(window.Docks.Panel("Profiler"));
+                    window.Docks.CloseDockable(window.Docks.Panel("Render Graph"));
+                    checks.Add("completed profiler counts/timing, explicit GPU visibility, freeze/export and same-frame Graph linkage");
                     Finish(stats);
                     break;
             }

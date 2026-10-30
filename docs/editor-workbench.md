@@ -84,7 +84,7 @@ Scene 的工具栏、浮动标题和状态信息位于原生像素区域外。�
 | Camera/Display | 导航速度、曝光、重置相机、已有调试视图 | 相机/显示覆盖；曝光不无条件清空不受其影响的 HDR 历史 |
 | Scheduling | 目标帧率 0–240、按需/连续刷新、Profiling | 0 沿用无 CPU 限速且关闭强制 VSync 语义，可能需要重建 Swapchain |
 
-上述管线/提交/执行、光照/阴影/反射/曝光/调度与已有调试视图已通过 M7.2b 的 v6 配置桥接接入，具体布局与生效语义见 [宿主契约](editor-host.md#c-abi-v8运行配置与诊断)。API/Validation 通过 Apply API / Retry 触发完整视口重建；实际后端在配置首帧成功后更新。光照覆盖在 Renderer 提取后的值快照上应用，不让 C# 持有 Scene Document。
+上述管线/提交/执行、光照/阴影/反射/曝光/调度与已有调试视图已通过 M7.2b 的 v6 配置桥接接入，具体布局与生效语义见 [宿主契约](editor-host.md#c-abi-v9运行配置与诊断)。API/Validation 通过 Apply API / Retry 触发完整视口重建；实际后端在配置首帧成功后更新。光照覆盖在 Renderer 提取后的值快照上应用，不让 C# 持有 Scene Document。
 
 枚举和开关在校验后立即排队；滑动数值以有界最新值邮箱合并，不为每次鼠标消息做一次 GPU 等待。Device 组使用明确的 Apply 操作，合并 API/Validation 的重建请求。原生回报 `requestId`、`requestedRevision`、`appliedRevision` 与失败字段；成功提交首帧前保持 Applying。被更新请求替代的配置标记 Superseded，不伪装成功。
 
@@ -152,7 +152,7 @@ flowchart LR
 
 统计在 Renderer 或实际命令发射处产生，并附 Pass/类别标签。并行录制用每块局部计数，成功录制/提交后合并，取消和失败不会冒充已提交帧；不增加每 Draw 共享锁。CPU 记录的 API 调用数不依赖 GPU 可见数量读回。
 
-当前桥接已有部分 CPU 分段、GPU Pass 总和、帧间隔和 native 内存；Draw/Indirect/Batch/Instances、每 Pass 数据、GPU span 与完成延迟需要补充。现有 GPU profiling 单图最多 32 个 Pass；工作台应在请求计时前检查预算，超出时关闭该图的 GPU timing 并说明原因，保留画面与基础计数。此降级也是待实现行为，不能假定现有 Graph 已支持任意数量的部分计时。扩展计时预算需要独立测量，不能为面板无条件提高预算或强制同步。
+桥接已接入 CPU 分段、按 Pass 的实际 Draw/Indirect/Batch、实例来源、Dispatch/TraceRays/AS、GPU Pass/队列/span 与完成点观测延迟，以及 native/Graph pool/upload/descriptor 信息。现有 GPU profiling 单图最多 32 个 Pass；工作台应在请求计时前检查预算，超出时关闭该图的 GPU timing 并说明原因，保留画面与基础计数。超预算时现已关闭该图 timing 并明确说明，不使用任意部分计时伪装完整结果。扩展计时预算需要独立测量，不能为面板无条件提高预算或强制同步。
 
 数据分层：基础整数计数；可选 CPU/GPU timing；显式 GPU 可见性读回。关闭 timing 时保留低成本计数，关闭读回时不创建 Count 诊断资源。基准导出记录所有诊断开关、分辨率、后端、管线、提交方式与场景标识，方便与独立 Player 对照。
 
@@ -190,7 +190,7 @@ flowchart TD
 
 保持单个托管应用项目。增加具体 Workbench ViewModel、DockFactory 与 RenderSettings/RenderGraph/Profiler/Log ViewModel；将图表或图绘制封装为控件。Dock Document 的 Context 保存稳定面板身份与 View 工厂，每个 presenter 新建控件，服务和模型共享；布局仅保存白名单值，不序列化控件、工厂或服务。Serilog 的文件/内存 sinks 在应用入口装配，Log ViewModel 只展示有界事件投影。NativeViewportService 继续负责 Session 生命周期，具体快照模型与统计窗口可分文件，不引入插件总线或另一份 GPU Scene。
 
-配置桥接已随同 DLL/托管程序集升至 v8，不兼容旧布局时启动明确拒绝；Stats 为 256 字节，Config/ConfigState 为带 size/version 的 112/272 字节定宽 POD。能力说明使用 schemaVersion=1 的 UTF-8 JSON。后续可变 Graph 快照/导出也使用有版本的 UTF-8 JSON，不能每帧把完整图序列化并跨边界。
+配置桥接已随同 DLL/托管程序集升至 v9，不兼容旧布局时启动明确拒绝；Stats 为 256 字节，Config/ConfigState 为带 size/version 的 112/272 字节定宽 POD。能力说明使用 schemaVersion=1 的 UTF-8 JSON。后续可变 Graph 快照/导出也使用有版本的 UTF-8 JSON，不能每帧把完整图序列化并跨边界。
 
 可变快照采用 AcquireLatest/Copy/Release 的不透明快照 ID，先钉住不可变 CPU 值数据，再查询长度并复制，防止两次调用之间图已更换；不跨 ABI 暴露 STL、指针或资源引用。每 Session 最多保留 latest 与一个 pinned 快照，单份初始上限 4 MiB；超限明确报告，不返回截断的半张图。完成帧队列沿用有界 512 项，UI 曲线最多保留 240 个活动样本，展示统计窗口时长/数量；基础 UI 250 ms 发布，关闭面板停止对应视图更新。
 

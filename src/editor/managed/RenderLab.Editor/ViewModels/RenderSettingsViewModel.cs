@@ -55,7 +55,7 @@ public sealed partial class RenderSettingsViewModel : ObservableObject, IDisposa
         c.Submission = (uint)Submission; c.View = (uint)View; c.RecordingThreads = (uint)RecordingThreads;
         c.AsyncCompute = AsyncCompute ? 1u : 0; c.MemoryAlias = MemoryAlias ? 1u : 0;
         c.Profiling = Profiling ? 1u : 0; c.TargetFps = (uint)TargetFps; c.Continuous = Continuous ? 1u : 0;
-        c.Flags = (Reflections ? 1u : 0) | (History ? 2u : 0) | (Denoise ? 4u : 0) | (Temporal ? 8u : 0) | (Shadows ? 16u : 0);
+        c.Flags = (c.Flags & 32u) | (Reflections ? 1u : 0) | (History ? 2u : 0) | (Denoise ? 4u : 0) | (Temporal ? 8u : 0) | (Shadows ? 16u : 0);
         c.ShadowResolution = (uint)ShadowResolution; c.CameraSpeed = (float)CameraSpeed;
         c.LightX = (float)LightX; c.LightY = (float)LightY; c.LightZ = (float)LightZ;
         c.LightR = (float)LightR; c.LightG = (float)LightG; c.LightB = (float)LightB; c.LightIntensity = (float)LightIntensity;

@@ -72,6 +72,7 @@ struct Pass
     bool depthReadOnly = false, stencilReadOnly = false;
     rhi::LoadOp stencilLoad = rhi::LoadOp::Clear;
     uint32_t clearStencil = 0;
+    PassCategory category = PassCategory::Other;
 };
 inline void Require(bool condition, const std::string& message)
 {

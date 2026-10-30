@@ -70,6 +70,7 @@ void Scene(rhi::Runtime& runtime, shader::Target target, const std::filesystem::
         options.reflectionDenoise = false;
         options.reflectionTemporal = false;
         options.reflections = false;
+        options.captureGraph = true;
         const auto reference =
             renderer.Render(color, rhi::State::Undefined, nullptr, true, {}, options);
         const auto direct = Pixels(runtime, reference, width, height);
@@ -82,6 +83,13 @@ void Scene(rhi::Runtime& runtime, shader::Target target, const std::filesystem::
             renderer.Render(color, rhi::State::CopySource, nullptr, true,
                             output / (std::to_string(sequence++) + ".json"), options);
         const auto indirect = Pixels(runtime, indirectFrame, width, height);
+        uint64_t directCalls = 0, indirectCalls = 0;
+        for (const auto& pass : reference.graphSnapshot->passes)
+            directCalls += pass.commands.direct;
+        for (const auto& pass : indirectFrame.graphSnapshot->passes)
+            indirectCalls += pass.commands.indirect;
+        Require(directCalls > 0 && (indirectFrame.indexedScene.visible == 0 || indirectCalls > 0),
+                "Scene command counters did not follow actual direct and indirect paths");
         Require(indexed == indirect, "Indexed direct and CPU indirect pixels differ");
         options.submission = GeometrySubmission::GpuCulled;
         options.cullingDiagnostics = true;

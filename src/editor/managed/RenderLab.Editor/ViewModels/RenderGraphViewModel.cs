@@ -28,6 +28,12 @@ public sealed partial class RenderGraphViewModel(NativeViewportService service) 
     [ObservableProperty] private string exportPath = "";
     internal int SelectedPass { get; private set; } = -1;
     internal event Action? CanvasChanged;
+    internal void Inspect(GraphSnapshot snapshot)
+    {
+        Frozen = true; Snapshot = snapshot;
+        Status = $"Frozen from Profiler · {snapshot.Backend} · session {snapshot.Session} · frame {snapshot.Frame} · config {snapshot.Config} · topology {snapshot.Topology}";
+        CanvasChanged?.Invoke();
+    }
     internal void Refresh(bool request = true)
     {
         if (Frozen && !manualPending && request) { return; }

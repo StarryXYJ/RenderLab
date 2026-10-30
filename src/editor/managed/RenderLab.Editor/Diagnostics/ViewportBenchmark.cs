@@ -20,6 +20,7 @@ internal sealed class ViewportBenchmark
     private bool finished;
     private ulong previousFrame;
     private ulong? firstFrameTime;
+    private ulong sourceSession, sourceConfig;
 
     internal ViewportBenchmark(MainWindow window, NativeViewportService viewport, EditorOptions options)
     {
@@ -35,6 +36,11 @@ internal sealed class ViewportBenchmark
 
     private void Update(ViewportStats stats)
     {
+        if (sourceSession != stats.SessionGeneration || sourceConfig != stats.ConfigRevision)
+        {
+            sourceSession = stats.SessionGeneration; sourceConfig = stats.ConfigRevision;
+            previousFrame = 0; firstFrameTime = null; samples.Clear();
+        }
         if (finished || stats.Frames == previousFrame)
         {
             return;
@@ -67,6 +73,7 @@ internal sealed class ViewportBenchmark
         {
             options,
             stats,
+            configuration = viewport.Configuration.Applied,
             summary = FrameTimingWindow.Summarize(samples),
             viewport.CloseReports,
             scope = "Native Present-return intervals from a bounded frame queue; GPU is the sum of completed Graph pass timings, not scanout latency."
