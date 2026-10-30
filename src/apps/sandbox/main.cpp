@@ -119,6 +119,7 @@ int Run(const sandbox::Options& options, const std::filesystem::path& shaderRoot
                      std::format("Tracked RHI allocation limit: {} MiB", budgetMiB));
         sandbox::RunRendering(window.get(), *device, *runtime, options, shaderRoot, logger);
         runtime->WaitIdle();
+        runtime->TrimMemory();
         const auto memory = runtime->GetMemoryStats();
         logger.Write(LogLevel::Info,
                      std::format("Tracked memory at shutdown: allocated={}, reserved={}, "

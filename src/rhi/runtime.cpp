@@ -86,6 +86,12 @@ void Runtime::SetAllocationBudget(uint64_t bytes)
             "backing");
     ledger_->stats.budget = bytes;
 }
+void Runtime::TrimMemory()
+{
+    if (std::this_thread::get_id() != ownerThread_)
+        throw std::logic_error("Memory trim requires runtime owner thread");
+    TrimMemoryNative();
+}
 
 void Runtime::CheckOwner(const std::shared_ptr<Object>& object) const
 {

@@ -1,4 +1,5 @@
 #include "platform/text.hpp"
+#include "rhi/dx12/dx12_memory.hpp"
 #include "rhi/dx12/dx12_objects.hpp"
 #include "rhi/dx12/dx12_runtime.hpp"
 
@@ -27,10 +28,9 @@ std::shared_ptr<Buffer> DxRuntime::CreateBuffer(const BufferDesc& desc)
     auto cpuTimer = ProfileCpu(CpuOperation::BufferCreate);
     Validate(desc);
     auto buffer = std::make_shared<DxBuffer>(this, desc);
-    D3D12_HEAP_PROPERTIES heap{};
-    heap.Type = desc.memory == Memory::Upload     ? D3D12_HEAP_TYPE_UPLOAD
-                : desc.memory == Memory::Readback ? D3D12_HEAP_TYPE_READBACK
-                                                  : D3D12_HEAP_TYPE_DEFAULT;
+    const auto heap = desc.memory == Memory::Upload     ? D3D12_HEAP_TYPE_UPLOAD
+                      : desc.memory == Memory::Readback ? D3D12_HEAP_TYPE_READBACK
+                                                        : D3D12_HEAP_TYPE_DEFAULT;
     D3D12_RESOURCE_DESC resource{};
     resource.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
     resource.Width = desc.size;
@@ -41,16 +41,23 @@ std::shared_ptr<Buffer> DxRuntime::CreateBuffer(const BufferDesc& desc)
     resource.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
     if (desc.storage || desc.accelerationStructureStorage)
         resource.Flags = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
-    buffer->allocation.Set(ledger_,
-                           device_->GetResourceAllocationInfo(0, 1, &resource).SizeInBytes);
     const auto initial = desc.accelerationStructureStorage
                              ? D3D12_RESOURCE_STATE_RAYTRACING_ACCELERATION_STRUCTURE
                          : desc.memory == Memory::Upload   ? D3D12_RESOURCE_STATE_GENERIC_READ
                          : desc.memory == Memory::Readback ? D3D12_RESOURCE_STATE_COPY_DEST
                                                            : D3D12_RESOURCE_STATE_COMMON;
-    Check(device_->CreateCommittedResource(&heap, D3D12_HEAP_FLAG_NONE, &resource, initial, nullptr,
-                                           IID_PPV_ARGS(&buffer->native)),
+#ifdef RENDERLAB_DX12_MEMORY_ALLOCATOR
+    buffer->allocation.managed =
+        AllocateResource(*memoryAllocator_, resource, heap, initial, nullptr, buffer->native);
+#else
+    D3D12_HEAP_PROPERTIES properties{};
+    properties.Type = heap;
+    buffer->allocation.Set(ledger_,
+                           device_->GetResourceAllocationInfo(0, 1, &resource).SizeInBytes);
+    Check(device_->CreateCommittedResource(&properties, D3D12_HEAP_FLAG_NONE, &resource, initial,
+                                           nullptr, IID_PPV_ARGS(&buffer->native)),
           "CreateBuffer");
+#endif
     Check(buffer->native->SetName(platform::Utf8ToWide(desc.name).c_str()), "Buffer SetName");
     return buffer;
 }
@@ -193,15 +200,21 @@ std::shared_ptr<Texture> DxRuntime::CreateTexture(const TextureDesc& desc)
 {
     const auto resource = TextureDescription(desc);
     auto texture = std::make_shared<DxTexture>(this, desc);
-    D3D12_HEAP_PROPERTIES heap{};
-    heap.Type = D3D12_HEAP_TYPE_DEFAULT;
+    const auto clear = TextureClearValue(desc);
+#ifdef RENDERLAB_DX12_MEMORY_ALLOCATOR
+    texture->allocation.managed = AllocateResource(
+        *memoryAllocator_, resource, D3D12_HEAP_TYPE_DEFAULT, D3D12_RESOURCE_STATE_COMMON,
+        desc.attachment ? &clear : nullptr, texture->native);
+#else
+    D3D12_HEAP_PROPERTIES properties{};
+    properties.Type = D3D12_HEAP_TYPE_DEFAULT;
     texture->allocation.Set(ledger_,
                             device_->GetResourceAllocationInfo(0, 1, &resource).SizeInBytes);
-    const auto clear = TextureClearValue(desc);
     Check(device_->CreateCommittedResource(
-              &heap, D3D12_HEAP_FLAG_NONE, &resource, D3D12_RESOURCE_STATE_COMMON,
+              &properties, D3D12_HEAP_FLAG_NONE, &resource, D3D12_RESOURCE_STATE_COMMON,
               desc.attachment ? &clear : nullptr, IID_PPV_ARGS(&texture->native)),
           "CreateTexture");
+#endif
     Check(texture->native->SetName(platform::Utf8ToWide(desc.name).c_str()), "Texture SetName");
     return texture;
 }
@@ -224,6 +237,8 @@ std::vector<std::shared_ptr<Texture>>
 DxRuntime::CreateAliasedTextures(std::span<const TextureDesc> descs)
 {
     const auto bytes = QueryAliasedTextureBytes(descs);
+    if (bytes > ledger_->stats.budget - ledger_->stats.reserved)
+        TrimMemoryNative();
     struct Backing
     {
         Allocation allocation;

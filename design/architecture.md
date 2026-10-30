@@ -190,6 +190,12 @@ Alias backing 不逐成员重复计费，空闲保留块不因 used 为零而隐
 驱动 usage/budget 按原生 segment/heap 显式查询，进程 working set/private commit 另计，
 不在每帧账本读取中调用 OS/driver。计数、拒绝、释放和导出口径见 [GPU 内存](../docs/gpu-memory.md)。
 
+DX12 的 D3D12MA 适配器当前保留为默认关闭的试验选项
+`RENDERLAB_DX12_MEMORY_ALLOCATOR`，不作为其它阶段的前置；正式默认仍 committed，
+Vulkan 仍 dedicated。具体 pool/allocation 仅在后端内拥有，不把库类型扩散到 RHI 公共数据或
+材质/场景。显式 `TrimMemory()` 只回收完全空闲池，不引入逐帧 DeviceIdle、搬迁或第二套状态机。
+是否启用及实际验收以阶段计划为准，存在实现不表示阶段完成。
+
 B2 实测发现常量、描述符与读回存在逐帧原生分配。[B3 复用方案](resource-reuse.md) 按帧数据、不可变材质和结果持有期分别管理。帧上传使用有界 UploadPool，以 CPU Buffer 引用、活动批次和实际提交完成共同保护整页复用；材质在包代际内有界缓存不可变常量版本。DX12 描述符从持久 heap 页分配不可变区间，Vulkan 复用无外部引用的同布局 pool/set 块；逻辑组与命令保活分配，缓存页/块不持有场景资源，容量与高水位独立统计。Timestamp 读回进入现有 Graph Pool，CPU profiling 结果继续保活读回；默认 View 由 Texture 弱缓存、物理分配/宿主/交换链分别持有，交换链在 resize 前清除自己的 View。接口见 [资源复用](../docs/resource-reuse.md)，实际验收与性能以阶段计划和测量结果为准。
 
 ## 场景数据与 GPU Driven

@@ -1000,8 +1000,12 @@ void ProfilingContracts()
         budget.Charge(1024);
         Require(budget.GetMemoryStats().used == 1536 && budget.GetMemoryStats().budget == 2048,
                 "Configured budget must cover tracked allocations");
-        std::thread worker([&]
-                           { Fails([&] { budget.SetAllocationBudget(4096); }, "owner thread"); });
+        std::thread worker(
+            [&]
+            {
+                Fails([&] { budget.SetAllocationBudget(4096); }, "owner thread");
+                Fails([&] { budget.TrimMemory(); }, "owner thread");
+            });
         worker.join();
         budget.Release(1024);
         budget.Release(512);

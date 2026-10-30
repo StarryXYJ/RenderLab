@@ -53,6 +53,7 @@ cmake --build --preset windows-debug --clean-first
 | nlohmann/json | `65ee68451d8eb2b5f3a30b410476ab83deb3289b`（v3.12.0） | 缓存、Schema 与材质序列化 |
 | DirectXMath | `93e6399d6d15e1e57f80b5cea04d5a8eb892d693`（3.21 / June 2026） | 两后端共用的 CPU SIMD 数学实现 |
 | ISPC（可选） | Windows x64 1.28.2；包与 exe SHA-256 见下文 | 默认关闭的环境卷积 SIMD 编译器 |
+| D3D12MA（试验，可选） | `0fa62ed3a0a69b73230a8ec1faa752d4061c8dc8`（3.1.0） | B4.5b 试验开关开启时才获取/链接 |
 
 Vulkan-Headers、volk 和 SPIRV-Reflect 对应 Vulkan SDK 1.4.321.0 源码版本，实际运行最低要求 Vulkan 1.3。首次配置需要 Git 和 GitHub 网络访问。依赖来源与授权说明位于各依赖源码的 LICENSE 文件，不在引擎源码中复制或修改它们。
 
@@ -156,6 +157,34 @@ ctest --test-dir out/build/m5-release -R 'gpu\.(dx12|vulkan)\.(alias|rhi)$' --ou
 关闭日志应核对 allocated、reserved、allocations、blocks，而非仅检查第一个零值。
 当前普通路径仍 committed/dedicated，二者通常相等；统计契约本身不是 D3D12MA/VMA 集成。
 字段与生命周期、预算边界见 [GPU 内存计费](../docs/gpu-memory.md)，实际验收只见阶段计划。
+
+### DX12 分配器试验入口
+
+`RENDERLAB_DX12_MEMORY_ALLOCATOR=OFF` 为默认值。其它阶段保持 OFF，不需要 D3D12MA；
+正常 DX12/Vulkan 分配仍分别是 committed/dedicated，原生 Alias 路径不变。
+当前 ON 代码是未完成验收的检查点，不作为正式性能或稳定性结论；恢复清单在阶段计划。
+先初始化本章的 MSVC 开发环境，建议在独立目录开启，不覆盖其它任务正在使用的默认构建：
+
+```powershell
+cmake -S . -B out/build/b4-allocator-release -G "NMake Makefiles" -DCMAKE_BUILD_TYPE=Release -DRENDERLAB_GPU_TESTS=ON -DRENDERLAB_DX12_MEMORY_ALLOCATOR=ON
+cmake --build out/build/b4-allocator-release
+ctest --test-dir out/build/b4-allocator-release -R 'memory.contracts|rendergraph.contracts|gpu.dx12.memory|gpu\.(dx12|vulkan)\.(alias|rhi)$' --output-on-failure
+./out/build/b4-allocator-release/renderlab_gpu_memory_tests.exe dx12 out/b4/dx12ma/measure-new --measure
+```
+
+另建 Debug 目录复验；随后仍需完整 GPU、窗口、编辑器和实际安装检查。
+可用本机忽略目录的源码缓存追加 `-DFETCHCONTENT_SOURCE_DIR_D3D12MA=<本机路径>`，
+但必须核对其 Git HEAD 是上述固定提交且没有本地改动；该缓存不是共享构建的必需条件。
+
+独立测量工具默认关闭验证层（`--measure`），区分每个新 Runtime 的初始化、首轮与五次暖
+资源创建/释放，输出实际 exe/source hash、allocated/reserved 和块数。它没有记录渲染命令，
+不是 GPU 执行时间、完整场景加载或 FPS。输出目录需使用新路径；没有成对运行前不宣称加速。
+普通 OFF 构建也可以运行该工具的 `--measure` 作为 committed 对照，allocator 合约用例只在 ON 注册。
+从历史源码 `36f6275` 构建同一测量文件时，只添加该测试目标并定义 `RENDERLAB_MEASURE_ONLY=1`；
+不将这些忽略的测量快照当作当前引擎源码，也不在主 checkout 回退其它人的变更。
+
+回到日常工作时在对应目录重新配置 `-DRENDERLAB_DX12_MEMORY_ALLOCATOR=OFF` 并重建。
+库的 MIT 许可证与 NOTICES 安装规则仅在 ON 时加入，尚需下次实际验证。
 
 ## 运行 Sandbox
 

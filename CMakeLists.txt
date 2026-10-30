@@ -11,6 +11,7 @@ endif()
 
 include(cmake/MsvcIncludes.cmake)
 include(CTest)
+option(RENDERLAB_DX12_MEMORY_ALLOCATOR "Enable experimental B4.5b D3D12MA allocation" OFF)
 include(cmake/Dependencies.cmake)
 include(cmake/Shaders.cmake)
 option(RENDERLAB_GPU_TESTS "Register tests requiring a GPU, validation layers and desktop session" OFF)
@@ -67,6 +68,11 @@ target_include_directories(renderlab_rhi PUBLIC src)
 target_link_libraries(renderlab_rhi PRIVATE renderlab_options renderlab_core renderlab_platform
     d3d12 dxgi dxguid volk renderlab_pix)
 target_compile_definitions(renderlab_rhi PRIVATE USE_PIX)
+if(RENDERLAB_DX12_MEMORY_ALLOCATOR)
+    target_sources(renderlab_rhi PRIVATE src/rhi/dx12/dx12_memory.cpp)
+    target_link_libraries(renderlab_rhi PRIVATE D3D12MemoryAllocator)
+    target_compile_definitions(renderlab_rhi PRIVATE RENDERLAB_DX12_MEMORY_ALLOCATOR=1)
+endif()
 
 add_library(renderlab_rendergraph STATIC
     src/rendergraph/graph.cpp src/rendergraph/builder.cpp src/rendergraph/validation.cpp
@@ -225,10 +231,22 @@ install(FILES "${directxmath_SOURCE_DIR}/LICENSE" DESTINATION licenses
     RENAME DirectXMath-LICENSE.txt)
 install(FILES $<TARGET_FILE:renderlab_dxc> $<TARGET_FILE:renderlab_pix> DESTINATION .)
 install(DIRECTORY shaders/RenderLab DESTINATION shaders)
+if(RENDERLAB_DX12_MEMORY_ALLOCATOR)
+    install(FILES "${d3d12ma_SOURCE_DIR}/LICENSE.txt" DESTINATION licenses RENAME D3D12MA-LICENSE.txt)
+    install(FILES "${d3d12ma_SOURCE_DIR}/NOTICES.txt" DESTINATION licenses RENAME D3D12MA-NOTICES.txt)
+endif()
 install(DIRECTORY sample/m4/Assets DESTINATION project)
 install(FILES sample/m4/RenderLab.rlproject sample/m4/Pbr.rlproject sample/m4/Shadow.rlproject DESTINATION project)
 
 if(BUILD_TESTING)
+    add_executable(renderlab_gpu_memory_tests tests/gpu_memory_tests.cpp)
+    target_link_libraries(renderlab_gpu_memory_tests PRIVATE renderlab_options renderlab_rhi renderlab_core nlohmann_json::nlohmann_json)
+    target_compile_definitions(renderlab_gpu_memory_tests PRIVATE RENDERLAB_SOURCE_ROOT="${CMAKE_SOURCE_DIR}")
+    target_compile_definitions(renderlab_gpu_memory_tests PRIVATE
+        RENDERLAB_DX12_MEMORY_ALLOCATOR=$<BOOL:${RENDERLAB_DX12_MEMORY_ALLOCATOR}>)
+    add_custom_command(TARGET renderlab_gpu_memory_tests POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_FILE:renderlab_pix>
+            $<TARGET_FILE_DIR:renderlab_gpu_memory_tests> VERBATIM)
     add_executable(renderlab_memory_tests tests/memory_tests.cpp)
     target_link_libraries(renderlab_memory_tests PRIVATE renderlab_options renderlab_rhi)
     add_test(NAME memory.contracts COMMAND renderlab_memory_tests)
@@ -372,6 +390,10 @@ if(BUILD_TESTING)
     set_tests_properties(cli.invalid_backend cli.invalid_adapter cli.unknown_option
         PROPERTIES WILL_FAIL TRUE)
     if(RENDERLAB_GPU_TESTS)
+        if(RENDERLAB_DX12_MEMORY_ALLOCATOR)
+            add_test(NAME gpu.dx12.memory COMMAND renderlab_gpu_memory_tests dx12 ${CMAKE_BINARY_DIR}/memory/dx12)
+            set_tests_properties(gpu.dx12.memory PROPERTIES LABELS gpu RUN_SERIAL TRUE TIMEOUT 90)
+        endif()
         foreach(backend IN ITEMS dx12 vulkan)
             add_test(NAME gpu.${backend}.alias COMMAND renderlab_alias_tests ${backend}
                 ${CMAKE_BINARY_DIR}/alias/${backend})

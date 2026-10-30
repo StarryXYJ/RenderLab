@@ -39,7 +39,23 @@ Renderer/Graph 的缓存目标继续使用此应用配置，估算字节不能�
 
 未来子分配器应分别计范围和块，空闲块仍可观察。关闭检查必须同时观察 allocated、reserved、
 allocation count 和 block count，不能只因资源范围归零就宣称已释放全部 backing。
-本次计费基础不等于已接入 D3D12MA/VMA，也未实现缓存块回收、defragmentation 或资源搬迁。
+计费基础不等于已完成 D3D12MA/VMA 验收。没有 defragmentation 或资源搬迁。
+
+`Runtime::TrimMemory()` 是 owner-thread 显式入口，不等待 GPU，不移动资源，只请求回收完全
+空闲的 backing 池；默认 committed/dedicated 路径无此类缓存，调用为空操作。
+录制或在途对象仍保有范围，不可因请求 Trim 被退休。后台复用的上传/描述符/Graph 池不因此
+被当成无引用，也不改变它们自己的回收条件。
+
+### 可选 DX12 试验
+
+`RENDERLAB_DX12_MEMORY_ALLOCATOR` 默认关闭，正常构建不获取或链接该依赖。
+开启时使用固定 D3D12MA 3.1.0，具体适配器位于 `src/rhi/dx12/dx12_memory.cpp/.hpp`。
+代码为 B4.5b 检查点，其验收和暂停状态只见阶段计划，不将已有实现写成正式完成能力。
+试验设计采用按 heap/用途分开的 16 MiB 固定池、先申请已有块、增长前账本准入、
+小预算/大资源 committed 路径以及只回收完全空闲池。tight alignment 与小 Buffer 的 committed
+偏好在试验中关闭，以保留当前 RHI 对齐和共享块目标；线程边界仍是既有 owner-thread。
+它不替代上传/描述符分配器或原生 Graph Alias 分配。
+未完成 ON 的两配置整体验收、真实失败/关闭回归、成对测量和安装检查前，不默认启用。
 
 ## 驱动与进程采样
 

@@ -106,6 +106,8 @@ public:
     /// Owner-thread application limit for tracked native allocations; does not reserve VRAM.
     /// Rejects zero or a limit below reserved backing. Configure before creating renderer pools.
     void SetAllocationBudget(uint64_t bytes);
+    /// Release wholly idle backing pools without waiting, moving resources or inventing completion.
+    void TrimMemory();
     DescriptorStats GetDescriptorStats() const
     {
         return *descriptorStats_;
@@ -134,6 +136,7 @@ public:
     }
 
 protected:
+    virtual void TrimMemoryNative() {}
     struct Submission;
     Runtime();
     void RecordNative(size_t count, const std::function<void(size_t)>& job, uint32_t threads = 16);

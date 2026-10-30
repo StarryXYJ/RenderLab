@@ -465,6 +465,7 @@ struct RenderState
             swapchain.reset();
             scene.reset();
             runtime->WaitIdle();
+            runtime->TrimMemory();
             closed.remaining_bytes = runtime->GetMemoryStats().used;
             closed.peak_bytes = runtime->GetMemoryStats().highWater;
             const auto memory = runtime->GetMemoryStats();

@@ -12,6 +12,7 @@ namespace renderlab::rhi::dx12
 {
 struct DxDescriptorPage;
 struct DxDescriptorRange;
+struct DxMemoryAllocator;
 /** @brief Backend device services; owns queue completion and native command contexts. */
 class DxRuntime final : public Runtime
 {
@@ -63,6 +64,7 @@ public:
                                                uint32_t height, bool vsync = true) override;
 
 protected:
+    void TrimMemoryNative() override;
     std::shared_ptr<ShaderTable> CreateShaderTableNative(std::shared_ptr<Pipeline>) override;
     std::shared_ptr<Pipeline> CreatePipelineNative(PipelineDesc desc) override;
     AccelerationStructureSizes
@@ -87,6 +89,7 @@ private:
     std::shared_ptr<DxDescriptorRange> AllocateDescriptors(D3D12_DESCRIPTOR_HEAP_TYPE type,
                                                            uint32_t count);
     std::vector<std::shared_ptr<DxDescriptorPage>> descriptorPages_;
+    std::shared_ptr<DxMemoryAllocator> memoryAllocator_;
     ID3D12Device* device_;
     ID3D12CommandQueue* queue_;
     IDXGIFactory6* factory_;

@@ -83,8 +83,8 @@ void CheckLifetime(Runtime& runtime)
     const auto sameLiveMemory = [&]
     {
         const auto stats = runtime.GetMemoryStats();
-        return stats.used == baseline.used && stats.reserved == baseline.reserved &&
-               stats.allocations == baseline.allocations && stats.blocks == baseline.blocks;
+        return stats.used == baseline.used && stats.allocations == baseline.allocations &&
+               stats.reserved >= stats.used && (stats.blocks > 0 || stats.reserved == 0);
     };
     auto buffer = runtime.CreateBuffer({512, Memory::Device, "Lifetime.Cancel"});
     std::weak_ptr<Buffer> weak = buffer;

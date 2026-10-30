@@ -38,6 +38,15 @@ FetchContent_Declare(directxmath
     SYSTEM EXCLUDE_FROM_ALL)
 FetchContent_MakeAvailable(directxmath)
 
+if(RENDERLAB_DX12_MEMORY_ALLOCATOR)
+    FetchContent_Declare(d3d12ma
+        GIT_REPOSITORY https://github.com/GPUOpen-LibrariesAndSDKs/D3D12MemoryAllocator.git
+        GIT_TAG 0fa62ed3a0a69b73230a8ec1faa752d4061c8dc8
+        SYSTEM EXCLUDE_FROM_ALL)
+    set(D3D12MA_BUILD_SAMPLE OFF CACHE BOOL "Disable dependency sample" FORCE)
+    FetchContent_MakeAvailable(d3d12ma)
+endif()
+
 FetchContent_Declare(winpix
     URL https://www.nuget.org/api/v2/package/WinPixEventRuntime/1.0.240308001
     URL_HASH SHA256=726acc93d6968e2146261a1e415521747d50ad69894c2b42b5d0d4c29fd66ec4
