@@ -12,6 +12,7 @@
 #include <filesystem>
 #include <map>
 #include <memory>
+#include <optional>
 
 namespace renderlab::rhi
 {
@@ -61,6 +62,9 @@ struct SceneRenderOptions
     /// Read back per-pixel history weight, history length, reprojection path and stable hit
     /// distance.
     bool reflectionDiagnostics = false;
+    /// Per-view values applied to extraction results; never written to Scene/Material assets.
+    std::optional<scene::MainLight> lightOverride;
+    std::optional<float> environmentIntensity, environmentRotation, exposure;
 };
 /// @brief Submission completion point and optional pixels; wait before mapping the readback buffer.
 struct SceneReadback
@@ -103,6 +107,8 @@ public:
     scene::Scene& Document();
     /// Validate composition/material compatibility before changing an interactive selection.
     void ValidatePipeline(PipelineType pipeline);
+    /// Owner-thread preflight for an interactive configuration before changing the active view.
+    void ValidateOptions(const SceneRenderOptions& options);
     const scene::Snapshot& LastSnapshot() const;
     const std::map<std::string, assets::Model>& Models() const;
     rhi::UploadPool::Statistics UploadStatistics() const;

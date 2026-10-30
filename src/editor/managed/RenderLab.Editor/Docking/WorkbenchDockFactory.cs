@@ -12,20 +12,22 @@ using System.Text.Json;
 
 namespace RenderLab.Editor.Docking;
 
+internal sealed record DockPanelContent(string Id, Func<Control> CreateView);
+
 /// <summary>Owns fixed panel identities and persists whitelisted layout values.</summary>
 internal sealed class WorkbenchDockFactory : Factory
 {
     private readonly Dictionary<string, Document> panels;
     private readonly ILogger logger;
     internal IRootDock Root { get; private set; } = null!;
-    internal WorkbenchDockFactory(Dictionary<string, Control> views, ILogger logger)
+    internal WorkbenchDockFactory(Dictionary<string, Func<Control>> views, ILogger logger)
     {
         this.logger = logger;
         panels = views.ToDictionary(p => p.Key, p => new Document
         {
             Id = p.Key,
             Title = p.Key == "Settings" ? "Render Settings" : p.Key,
-            Context = p.Value,
+            Context = new DockPanelContent(p.Key, p.Value),
             CanClose = true,
             CanFloat = true
         });
@@ -50,7 +52,7 @@ internal sealed class WorkbenchDockFactory : Factory
             Id = "Root",
             VisibleDockables = CreateList<IDockable>(body),
             ActiveDockable = body,
-            DefaultDockable = scene
+            DefaultDockable = body
         };
     }
     private DocumentDock Group(string id, params string[] ids) => new()
@@ -73,7 +75,22 @@ internal sealed class WorkbenchDockFactory : Factory
             {
                 group = Group("DiagnosticsGroup");
                 group.Proportion = .36;
-                if (Root.VisibleDockables is not { Count: > 0 })
+                var sceneGroup = Walk(Root).OfType<DocumentDock>().FirstOrDefault(dock => dock.Id == "SceneGroup");
+                var sceneOwner = sceneGroup is null ? null : Walk(Root).OfType<IDock>().FirstOrDefault(dock => dock.VisibleDockables?.Contains(sceneGroup) == true);
+                if (sceneGroup is not null && sceneOwner?.VisibleDockables is { } siblings)
+                {
+                    var position = siblings.IndexOf(sceneGroup);
+                    var proportion = sceneGroup.Proportion;
+                    sceneGroup.Proportion = .64;
+                    siblings[position] = new ProportionalDock
+                    {
+                        Id = "SceneWorkspace",
+                        Orientation = Orientation.Vertical,
+                        Proportion = proportion,
+                        VisibleDockables = CreateList<IDockable>(sceneGroup, new ProportionalDockSplitter(), group)
+                    };
+                }
+                else if (Root.VisibleDockables is not { Count: > 0 })
                 {
                     Root.VisibleDockables = CreateList<IDockable>(group);
                 }
@@ -87,6 +104,8 @@ internal sealed class WorkbenchDockFactory : Factory
                         VisibleDockables = CreateList<IDockable>(body, new ProportionalDockSplitter(), group)
                     };
                 }
+                Root.DefaultDockable = Root.VisibleDockables![0];
+                Root.ActiveDockable = Root.DefaultDockable;
                 InitLayout(Root);
             }
             AddDockable(group, panel);

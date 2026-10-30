@@ -14,6 +14,7 @@ internal struct ViewportStats
     public ulong ScenePrepareNs;
     public ulong FrameIntervalNs, FrameTimeNs, DroppedSamples;
     public uint Activity, Ready, UiThreadId, RenderThreadId;
+    public ulong ConfigRevision, GpuConfigRevision, SessionGeneration;
 }
 
 [StructLayout(LayoutKind.Sequential)]
@@ -29,6 +30,14 @@ internal static class NativeMethods
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "rl_editor_abi_version")]
     internal static extern uint AbiVersion();
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "rl_viewport_configure_v2")]
+    internal static extern int ConfigureV2(ulong session, in ViewportConfig config);
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "rl_viewport_get_config")]
+    internal static extern int GetConfig(ulong session, out ViewportConfigState state, out ViewportConfig defaults);
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "rl_viewport_config_text")]
+    internal static extern int ConfigText(ulong session, uint kind, [Out] byte[]? buffer, uint capacity, out uint required);
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "rl_viewport_step")]
+    internal static extern int Step(ulong session);
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "rl_viewport_stop")]
     internal static extern int Stop(ulong session, out CloseReport report);
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "rl_viewport_read_logs")]

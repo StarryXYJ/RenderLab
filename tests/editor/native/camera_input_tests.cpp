@@ -1,4 +1,5 @@
 #include "editor/native/camera_input.hpp"
+#include "editor/native/viewport_config.hpp"
 #include "scene/scene.hpp"
 
 #include <cmath>
@@ -53,6 +54,48 @@ int main()
     {
         LookContracts({});
         LookContracts({20, 40, 0});
+        scene::Snapshot source;
+        source.light.direction = {0, 1, 0};
+        source.light.color = {1, .5f, .25f};
+        source.light.intensity = 2;
+        const auto defaults = editor::DefaultConfig(source, 60, false, true);
+        editor::ValidateConfig(defaults);
+        auto candidate = defaults;
+        candidate.light_intensity = 3;
+        candidate.flags |= 16;
+        const auto options = editor::RenderOptions(candidate, source.light);
+        Require(source.light.intensity == 2 && options.lightOverride->intensity == 3 &&
+                    options.lightOverride->shadows,
+                "Runtime overrides modified source lighting");
+        for (uint32_t variant = 0; variant < 6; ++variant)
+        {
+            candidate = defaults;
+            if (variant == 0)
+                candidate.size = 1;
+            if (variant == 1)
+                candidate.recording_threads = 17;
+            if (variant == 2)
+                candidate.shadow_resolution = 192;
+            if (variant == 3)
+                candidate.flags = 32;
+            if (variant == 4)
+                candidate.light_x = candidate.light_y = candidate.light_z = 0;
+            if (variant == 5)
+            {
+                candidate.pipeline = 1;
+                candidate.view = 7;
+            }
+            bool rejected = false;
+            try
+            {
+                editor::ValidateConfig(candidate);
+            }
+            catch (const std::invalid_argument&)
+            {
+                rejected = true;
+            }
+            Require(rejected, "Invalid runtime configuration was accepted");
+        }
         std::cout << "Editor camera look contracts passed\n";
         return 0;
     }

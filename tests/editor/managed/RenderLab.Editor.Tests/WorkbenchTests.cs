@@ -23,11 +23,11 @@ public class WorkbenchTests
     {
         var factory = new WorkbenchDockFactory(new()
         {
-            ["Scene"] = new TextBlock(),
-            ["Settings"] = new TextBlock(),
-            ["Render Graph"] = new TextBlock(),
-            ["Profiler"] = new TextBlock(),
-            ["Log"] = new TextBlock()
+            ["Scene"] = () => new TextBlock(),
+            ["Settings"] = () => new TextBlock(),
+            ["Render Graph"] = () => new TextBlock(),
+            ["Profiler"] = () => new TextBlock(),
+            ["Log"] = () => new TextBlock()
         }, NullLogger.Instance);
         factory.UseLayout(factory.CreateLayout());
         return factory;
@@ -36,9 +36,15 @@ public class WorkbenchTests
     public void DefaultAndSingleInstanceMenuRestore()
     {
         var factory = Factory();
+        Assert.That(factory.Root.VisibleDockables!.Contains(factory.Root.ActiveDockable!), Is.True,
+            "Root navigation must target the complete workspace, not a nested panel.");
         Assert.That(new[] { "Scene", "Settings" }.All(factory.IsOpen), Is.True);
         Assert.That(new[] { "Render Graph", "Profiler", "Log" }.Any(factory.IsOpen), Is.False);
         factory.Show("Log"); factory.Show("Log");
+        Assert.That(factory.Root.VisibleDockables!.Contains(factory.Root.ActiveDockable!), Is.True);
+        var diagnosticsArea = (Dock.Model.Core.IDock)factory.Panel("Log").Owner!.Owner!;
+        Assert.That(WorkbenchDockFactory.Walk(diagnosticsArea).Any(panel => panel.Id == "Settings"), Is.False,
+            "Opening diagnostics must preserve the settings column's full height.");
         Assert.That(WorkbenchDockFactory.Walk(factory.Root).Count(p => p.Id == "Log"), Is.EqualTo(1));
         var saved = factory.Serialize();
         var other = Factory();
@@ -57,6 +63,19 @@ public class WorkbenchTests
         var saved = factory.Serialize().Replace("\"Version\":1", "\"Version\":99");
         Assert.Throws<InvalidDataException>(() => factory.Restore(saved, new Rect(0, 0, 800, 600)));
         Assert.That(factory.Serialize(), Does.Not.Contain("Context").And.Not.Contain("$type").And.Not.Contain("Handle"));
+    }
+    [Test]
+    public void LargeStructuredEventsCannotExceedLogProjectionByteBudget()
+    {
+        var buffer = new LogBuffer();
+        using var logger = new LoggerConfiguration().WriteTo.Sink(buffer).CreateLogger();
+        var source = new string('S', 20000);
+        var payload = new string('P', 16000);
+        for (var i = 0; i < 400; ++i) { logger.ForContext("SourceContext", source).Information("{Payload}", payload); }
+        var retained = buffer.Snapshot();
+        Assert.That(retained.Sum(row => row.Bytes), Is.LessThanOrEqualTo(8 * 1024 * 1024));
+        Assert.That(retained.All(row => row.Source.Length < source.Length), Is.True);
+        Assert.That(buffer.Counts.Dropped, Is.GreaterThan(0));
     }
     [Test]
     public void LogProjectionIsBoundedAndClearPreservesTotals()

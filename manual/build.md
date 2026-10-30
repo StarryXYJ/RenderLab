@@ -389,6 +389,10 @@ cmake --preset windows-release
 
 M7.2a 接入 Dock.Avalonia 12.0.0.2 与 Serilog：首次启动只显示 Scene 与 Render Settings，Window 菜单打开 Log、基础 Profiler 与 Render Graph 骨架；完整 Graph/Profiler 诊断分别属于后续子阶段。Layout 提供 Default、Diagnostics 与恢复保存布局；普通运行将布局写到项目旁的 UserSettings/Editor/layout.json，自检/基准使用各自输出目录，不覆盖日常布局。Scene 浮动/停回会安全重建原生视口并保留相机与管线/曝光。Log 支持筛选、搜索、复制、清空显示和打开日志目录；关闭面板仍写输出目录 logs 下的滚动 JSONL，原生日志保留独立文件。相关包与测试依赖均进入锁文件。
 
+M7.2b 的 Render Settings 已接入提交方式、录制线程/异步/Alias、已有调试视图、光照/环境、阴影、反射、导航速度、帧率/连续刷新和 GPU profiling。面板显示 Pending/Applied/Rejected 及配置 ID；暂停后可继续改参数，但须恢复或点击 Single frame 才确认生效。Defaults 恢复本次载入默认值，Save/Load preset 使用 UserSettings/Editor/render-preset.json，不改 Scene/Material。Scene 浮动/重建保留整份运行配置。图形 API 与 Validation 仍在启动时选择，动态 API 切换属于 M7.2c。
+
+配置验收沿用下方 --smoke：扩展覆盖受支持的三管线/四提交、能力拒绝、快速请求合并、暂停/单帧、预设/宿主重建保留、目标帧率 0↔60，以及曝光保留/照明失效历史。检查实际挂载的 Settings/Log，并通过菜单恢复保存布局，确认 Scene、设置控件和运行配置仍有效。报告保存参与检查的源文件 hash，GPU 专项 gpu.dx12.indexed_scene / gpu.vulkan.indexed_scene 还验证运行覆盖改变真实像素、移除覆盖恢复原图。
+
 双后端自检应分别运行。WinExe 在终端的启动/等待语义可能不同，需要可靠退出码时使用 `Start-Process -Wait -PassThru`；下面的隐藏启动用于无人值守自检，手动检查界面直接运行上面的命令。
 
 ```powershell

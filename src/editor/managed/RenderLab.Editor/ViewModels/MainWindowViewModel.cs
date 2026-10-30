@@ -16,6 +16,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     public string Title { get; }
     public string BackendName { get; }
     public IReadOnlyList<string> Pipelines { get; } = ["Forward", "Deferred", "Ray Tracing"];
+    public RenderSettingsViewModel Settings { get; }
     public string PauseLabel => IsPaused ? "Resume viewport" : "Pause viewport";
 
     [ObservableProperty]
@@ -40,14 +41,16 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     [ObservableProperty]
     private string performanceText = "Waiting for frame timings…";
 
-    public MainWindowViewModel(NativeViewportService viewport, EditorOptions options)
+    public MainWindowViewModel(NativeViewportService viewport, EditorOptions options, RenderSettingsViewModel settings)
     {
         this.viewport = viewport;
+        Settings = settings;
         SelectedPipelineIndex = (int)options.Pipeline - 1;
         Title = $"RenderLab · Avalonia Host · {options.Backend.ToUpperInvariant()}";
         BackendName = options.Backend == "dx12" ? "Direct3D 12" : "Vulkan";
         viewport.StatsUpdated += UpdateStats;
         viewport.Failed += ShowFailure;
+        viewport.ConfigurationUpdated += ReflectConfiguration;
     }
 
     partial void OnSelectedPipelineIndexChanged(int oldValue, int newValue)
@@ -100,6 +103,20 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
 
     [RelayCommand]
     private void RecreateViewport() => Execute(viewport.RequestRecreate);
+    [RelayCommand] private void SingleStep() => Execute(viewport.SingleStep);
+    private void ReflectConfiguration()
+    {
+        if (viewport.Configuration.Ready == 0) { StatusText = "Viewport closed / initializing"; return; }
+        restoringSettings = true;
+        try
+        {
+            var config = viewport.EditableConfig;
+            SelectedPipelineIndex = (int)config.Pipeline - 1;
+            Exposure = config.Exposure;
+            ErrorText = viewport.ConfigurationError;
+        }
+        finally { restoringSettings = false; }
+    }
 
     private void Execute(Action operation)
     {
@@ -123,7 +140,8 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             return;
         }
         var summary = viewport.Timings.Summarize();
-        var gpu = summary.GpuP95Ms is { } gpuMs ? $"{gpuMs:F2} ms" : stats.ProfilingEnabled == 0 ? "off" : stats.GpuFrame > 0 ? $"{stats.GpuNs / 1e6:F2} ms (frame {stats.GpuFrame})" : "pending";
+        var gpu = stats.ProfilingEnabled == 0 ? "off" : summary.GpuP95Ms is { } gpuMs ? $"{gpuMs:F2} ms" :
+            stats.GpuFrame > 0 && stats.GpuConfigRevision == stats.ConfigRevision ? $"{stats.GpuNs / 1e6:F2} ms (frame {stats.GpuFrame})" : "pending";
         var activity = stats.Activity switch { 0 => "Starting", 2 => "Idle", 3 => "Paused", 4 => "Resizing", _ => $"{summary.Fps:F1} FPS" };
         StatusText = $"{activity} · active frame P95 {summary.FrameP95Ms:F1} ms · {stats.Width} × {stats.Height} px · frame {stats.Frames} · RT {stats.ReflectionSamples} spp";
         PerformanceText = $"Active frame P95\nNative: {summary.NativeP95Ms:F2} ms\nFence: {summary.FenceWaitP95Ms:F2} ms\nAcquire: {summary.AcquireP95Ms:F2} ms\nRender: {summary.RenderP95Ms:F2} ms\nCPU prepare: {summary.ScenePrepareP95Ms:F2} ms\nPresent: {summary.PresentP95Ms:F2} ms\nGPU passes: {gpu}\nValidation: {(stats.ValidationEnabled != 0 ? "on" : "off")}";
@@ -134,5 +152,6 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     {
         viewport.StatsUpdated -= UpdateStats;
         viewport.Failed -= ShowFailure;
+        viewport.ConfigurationUpdated -= ReflectConfiguration;
     }
 }

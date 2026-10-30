@@ -85,7 +85,7 @@ Windows 编辑器使用 Avalonia 管理整个窗口和普通面板，NativeContr
 
 托管宿主按官方 Avalonia MVVM 模板组织 App、Views 与 ViewModels；XAML 使用编译绑定，CommunityToolkit.Mvvm 生成属性通知和命令，App 通过 Microsoft.Extensions.DependencyInjection 装配具体依赖。ViewModel 保存 UI 状态和服务投影，不调用 P/Invoke 或持有 HWND；NativeViewportService 管理原生 Session、已接受的视口配置与错误，NativeControlHost 适配窗口生命周期和 Timer。当前服务与视口一一对应，不建设通用模块框架；后续编辑面板沿同一结构增量加入，场景、材质和资源的权威状态继续归 C++ 服务。
 
-Editor 采用 [固定场景渲染工作台](../docs/editor-workbench.md)：Dock.Avalonia 12.0.0.2 管理固定面板和版本化布局，Scene 复用原生宿主，Ursa 按实际控件需要选用。固定源场景与资源保持只读，运行覆盖与预设逐步接入，布局保存于 UserSettings。后续图查看器消费真实 Plan 的值快照，性能面板消费带 Session/源帧/配置版本的计数与完成结果，不持有 GPU 资源或构造第二套依赖图；当前 Graph 仍为骨架，Profiler 仅展示既有宿主统计，实施状态只见阶段计划。
+Editor 采用 [固定场景渲染工作台](../docs/editor-workbench.md)：Dock.Avalonia 12.0.0.2 管理固定面板和版本化布局，Scene 复用原生宿主，Ursa 按实际控件需要选用。固定源场景与资源保持只读，运行覆盖、预设与布局保存于 UserSettings。v6 桥接以定宽配置和单调 request_id 传递请求，owner 校验后在成功提交首帧时确认 Applied；暂停改动保持 Pending，单帧/恢复后确认。照明/环境/曝光在 SceneRenderer 提取后的 Snapshot 上覆盖，原文档保持权威；能力与拒绝原因来自原生 Runtime/Renderer。后续图查看器消费真实 Plan 的值快照，性能面板消费带 Session/源帧/配置版本的计数与完成结果，不持有 GPU 资源或构造第二套依赖图；当前 Graph 仍为骨架，Profiler 仅展示既有宿主统计，实施状态只见阶段计划。
 
 工作台默认只打开 Scene 与 Render Settings；Render Graph、Profiler、Log 从顶部 Window 菜单按需打开，保留诊断预设及上次布局恢复。托管日志统一经 Serilog/DI ILogger 写结构化滚动文件和有界内存 sink；原生 Logger 保留独立文件与运行时所有权，通过可选有界镜像队列批量送入工作台日志，不在渲染/验证回调内调用托管 UI。关闭 Log 面板不停止记录，关闭程序先收取原生末尾日志再释放 Serilog。
 

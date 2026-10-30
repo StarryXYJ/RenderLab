@@ -9,6 +9,8 @@ using RenderLab.Editor.Views;
 using RenderLab.Editor.Configuration;
 using RenderLab.Editor.Interop;
 using RenderLab.Editor.Docking;
+using System.Security.Cryptography;
+using Avalonia.VisualTree;
 
 namespace RenderLab.Editor.Diagnostics;
 
@@ -25,11 +27,17 @@ internal sealed class SmokeTest
     private bool completed;
     private RenderViewportHost? detachedHost;
     private readonly float[] savedPose = new float[7];
+    private readonly Dictionary<string, string> sourceHashes;
+    private int configurationCase;
+    private ulong configurationRequest;
+    private ViewportConfig expectedConfig;
+    private uint savedReflectionSamples;
 
     internal SmokeTest(MainWindow window, EditorOptions options)
     {
         this.window = window;
         this.options = options;
+        sourceHashes = ReadSourceHashes();
         window.StatsUpdated += Update;
         watchdog.Tick += (_, _) => Fail(new TimeoutException("Viewport smoke stopped making progress."));
         watchdog.Start();
@@ -42,6 +50,10 @@ internal sealed class SmokeTest
             throw new InvalidOperationException(message);
         }
     }
+    private Dictionary<string, string> ReadSourceHashes() => Directory.EnumerateFiles(Path.GetDirectoryName(options.Project)!, "*", SearchOption.AllDirectories)
+        .Where(path => path.EndsWith(".scene") || path.EndsWith(".material") || path.EndsWith(".rlproject"))
+        .Where(path => !path.Contains(Path.DirectorySeparatorChar + "Library" + Path.DirectorySeparatorChar) && !path.Contains(Path.DirectorySeparatorChar + "UserSettings" + Path.DirectorySeparatorChar))
+        .ToDictionary(path => path, path => Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(path))));
 
     private bool PixelsMatch(ViewportStats stats) =>
         Math.Abs(stats.Width - window.Viewport.Bounds.Width * window.RenderScaling) <= 2 &&
@@ -102,6 +114,8 @@ internal sealed class SmokeTest
             switch (stage++)
             {
                 case 0:
+                    Require(window.FocusBox.GetVisualAncestors().OfType<TopLevel>().Any(),
+                        "Render Settings controls are not mounted in the visible Dock tree.");
                     Require(window.Docks.IsOpen("Scene") && window.Docks.IsOpen("Settings") &&
                         !window.Docks.IsOpen("Log") && !window.Docks.IsOpen("Render Graph") && !window.Docks.IsOpen("Profiler"),
                         "Default layout did not contain exactly the two requested panels.");
@@ -272,6 +286,147 @@ internal sealed class SmokeTest
                     Require(Program.Logging!.Buffer.Snapshot().Any(r => r.Source.StartsWith("Native.") && r.Message.Contains("Render owner thread")),
                         "Native structured log mirror never reached the Log buffer.");
                     checks.Add("Scene docks back through layout reset; native log batches are collected without managed callbacks");
+                    break;
+                case 20:
+                    var service = window.ViewportService;
+                    var configState = service.Configuration;
+                    if (configState.Status != 2) { --stage; break; }
+                    Require(stats.SessionGeneration == host.Session && stats.ConfigRevision > 0, "Completed frames lack session/config identity.");
+                    if (configurationRequest != 0)
+                    {
+                        Require(configState.AppliedId == configurationRequest, "Submission configuration was not confirmed by a successful frame.");
+                    }
+                    if (configurationCase >= 12)
+                    {
+                        checks.Add("all supported pipeline/submission modes, threaded/async/alias options and frame configuration identity");
+                        var invalid = service.EditableConfig; invalid.ShadowResolution = 192; invalid.RequestId = configState.RequestedId + 1;
+                        Require(NativeMethods.ConfigureV2(host.Session, in invalid) == 1, "Non-power-of-two shadow resolution accepted.");
+                        invalid = service.EditableConfig; invalid.LightX = float.NaN; invalid.RequestId = configState.RequestedId + 1;
+                        Require(NativeMethods.ConfigureV2(host.Session, in invalid) == 1, "Non-finite lighting accepted.");
+                        invalid = service.EditableConfig; invalid.Size = 1; invalid.RequestId = configState.RequestedId + 1;
+                        Require(NativeMethods.ConfigureV2(host.Session, in invalid) == 1, "Wrong config ABI size accepted.");
+                        window.ViewModel.IsPaused = true;
+                        break;
+                    }
+                    using (var capabilities = JsonDocument.Parse(service.Capabilities))
+                    {
+                        var pipeline = configurationCase / 4;
+                        var submission = configurationCase % 4;
+                        ++configurationCase;
+                        if (capabilities.RootElement.GetProperty("pipelines")[pipeline].GetProperty("available").GetBoolean() &&
+                            capabilities.RootElement.GetProperty("submissions")[submission].GetProperty("available").GetBoolean())
+                        {
+                            var candidate = service.EditableConfig;
+                            candidate.Pipeline = (uint)pipeline + 1; candidate.Submission = (uint)submission;
+                            candidate.RecordingThreads = submission % 2 == 0 ? 1u : 4u;
+                            candidate.AsyncCompute = submission == 3 && capabilities.RootElement.GetProperty("asyncCompute").GetBoolean() ? 1u : 0;
+                            candidate.MemoryAlias = submission == 3 ? 1u : 0; candidate.View = 0;
+                            candidate.Flags |= 15;
+                            service.Submit(candidate);
+                            configurationRequest = service.Configuration.RequestedId;
+                        }
+                    }
+                    --stage;
+                    break;
+                case 21:
+                    if (stats.Activity != 3) { --stage; break; }
+                    savedFrames = stats.Frames;
+                    savedReflectionSamples = stats.ReflectionSamples;
+                    for (var request = 0; request < 25; ++request)
+                    {
+                        var candidate = window.ViewportService.EditableConfig;
+                        candidate.Exposure = request * .01f;
+                        window.ViewportService.Submit(candidate);
+                    }
+                    configurationRequest = window.ViewportService.Configuration.RequestedId;
+                    break;
+                case 22:
+                    Require(stats.Frames == savedFrames && window.ViewportService.Configuration.AppliedId != configurationRequest,
+                        "Paused configuration was marked applied without a submitted frame.");
+                    Require(window.ViewportService.Configuration.SupersededId > 0, "Coalesced requests lost superseded identity.");
+                    window.ViewModel.SingleStepCommand.Execute(null);
+                    break;
+                case 23:
+                    if (stats.Activity != 3 || stats.Frames == savedFrames) { --stage; break; }
+                    Require(stats.Frames == savedFrames + 1 && window.ViewportService.Configuration.AppliedId == configurationRequest,
+                        "Single step did not apply exactly one paused frame.");
+                    Require(stats.ReflectionSamples == savedReflectionSamples + 1,
+                        "Exposure-only edit incorrectly discarded progressive HDR history.");
+                    checks.Add("invalid ABI/scalars rejected; rapid requests superseded; paused settings wait for exactly one single step");
+                    var preset = window.ViewportService.EditableConfig;
+                    preset.LightR = .7f; preset.LightG = .8f; preset.LightB = .9f; preset.LightIntensity = 2;
+                    preset.EnvironmentIntensity = .8f; preset.EnvironmentRotation = 15;
+                    preset.ShadowBias = .002f; preset.ShadowNormalBias = .02f; preset.ShadowResolution = 256;
+                    preset.Flags |= 16; preset.CameraSpeed = 4;
+                    window.ViewportService.Submit(preset);
+                    expectedConfig = preset;
+                    window.ViewportService.SavePreset();
+                    var temporary = preset; temporary.Exposure = -.8f; window.ViewportService.Submit(temporary);
+                    window.ViewportService.LoadPreset();
+                    configurationRequest = window.ViewportService.Configuration.RequestedId;
+                    window.ViewModel.SingleStepCommand.Execute(null);
+                    break;
+                case 24:
+                    if (window.ViewportService.Configuration.AppliedId != configurationRequest || stats.Activity != 3) { --stage; break; }
+                    var applied = window.ViewportService.Configuration.Applied;
+                    Require(Math.Abs(applied.Exposure - expectedConfig.Exposure) < .001 && Math.Abs(applied.LightR - .7) < .001 &&
+                        applied.ShadowResolution == 256 && Math.Abs(applied.EnvironmentRotation - 15) < .001,
+                        "Render preset did not restore lighting/shadow/display overrides.");
+                    Require(stats.ReflectionSamples == 1, "Lighting changes failed to invalidate progressive history.");
+                    checks.Add("runtime lighting/environment/shadow overrides and preset restoration");
+                    window.ViewModel.IsPaused = false;
+                    oldHandle = host.Session;
+                    window.RecreateViewport();
+                    break;
+                case 25:
+                    if (window.ViewportService.Configuration.Status != 2) { --stage; break; }
+                    Require(host.Session != oldHandle && window.ViewportService.Configuration.Applied.ShadowResolution == 256,
+                        "Full render configuration was lost across Dock host recreation.");
+                    var uncapped = window.ViewportService.EditableConfig; uncapped.Pipeline = 1; uncapped.TargetFps = 0; uncapped.Profiling = 0;
+                    window.ViewportService.Submit(uncapped); configurationRequest = window.ViewportService.Configuration.RequestedId;
+                    break;
+                case 26:
+                    if (window.ViewportService.Configuration.AppliedId != configurationRequest) { --stage; break; }
+                    Require(stats.ProfilingEnabled == 0 && window.ViewportService.Configuration.Applied.TargetFps == 0,
+                        "Dynamic pacing/profile configuration did not apply.");
+                    var capped = window.ViewportService.EditableConfig; capped.TargetFps = 60; capped.Profiling = 1;
+                    window.ViewportService.Submit(capped); configurationRequest = window.ViewportService.Configuration.RequestedId;
+                    break;
+                case 27:
+                    if (window.ViewportService.Configuration.AppliedId != configurationRequest) { --stage; break; }
+                    Require(ReadSourceHashes().OrderBy(p => p.Key).SequenceEqual(sourceHashes.OrderBy(p => p.Key)),
+                        "Runtime settings modified Scene/Material/Project source files.");
+                    Require(window.ViewModel.Settings.AppliedSummary.Contains("#" + configurationRequest),
+                        "Settings UI does not identify the actual applied configuration.");
+                    checks.Add("configuration retained across host recreation; VSync pacing transition and source file hashes unchanged");
+                    window.Docks.Show("Log");
+                    break;
+                case 28:
+                    if (window.ViewportService.Configuration.Status != 2) { --stage; break; }
+                    var logView = window.GetVisualDescendants().OfType<LogView>().FirstOrDefault();
+                    if (logView is null) { --stage; break; }
+                    var logModel = (RenderLab.Editor.ViewModels.LogViewModel)logView.DataContext!;
+                    if (logModel.Rows.Count == 0) { --stage; break; }
+                    Require(window.Docks.IsOpen("Log") && logModel.Rows.Any(row => row.Source.StartsWith("Native.")),
+                        "Mounted Log panel did not display native structured events.");
+                    window.Docks.CloseDockable(window.Docks.Panel("Log"));
+                    break;
+                case 29:
+                    if (window.ViewportService.Configuration.Status != 2) { --stage; break; }
+                    Require(window.Docks.IsOpen("Scene") && window.Docks.IsOpen("Settings") && !window.Docks.IsOpen("Log"),
+                        "Opening and closing diagnostics disrupted the Scene/settings docks.");
+                    checks.Add("diagnostic Dock opens beneath Scene and closes without losing the active renderer");
+                    File.WriteAllText(Path.Combine(options.Output, "layout.json"), window.Docks.Serialize());
+                    oldHandle = host.Session;
+                    window.FindControl<MenuItem>("RestoreLayoutMenu")!.RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(MenuItem.ClickEvent));
+                    break;
+                case 30:
+                    if (window.ViewportService.Configuration.Status != 2) { --stage; break; }
+                    Require(host.Session != oldHandle && window.FocusBox.GetVisualAncestors().OfType<TopLevel>().Any(),
+                        "Saved layout failed to recreate Scene and mount Render Settings.");
+                    Require(window.ViewportService.Configuration.Applied.ShadowResolution == 256,
+                        "Saved layout restore lost the runtime configuration.");
+                    checks.Add("saved layout restored through the menu with mounted settings and preserved runtime configuration");
                     Finish(stats);
                     break;
             }
@@ -307,6 +462,7 @@ internal sealed class SmokeTest
             stats,
             closeReports = window.CloseReports,
             startupClose,
+            sourceHashes,
             dpiBoundary = "Current monitor scale verified; cross-monitor DPI transition not tested."
         }, EditorDiagnostics.JsonOptions));
         ((IClassicDesktopStyleApplicationLifetime)Application.Current!.ApplicationLifetime!).Shutdown(0);

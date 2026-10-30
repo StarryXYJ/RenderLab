@@ -4,8 +4,8 @@
 
 ## 当前状态
 
-- 当前实施阶段：M7 编辑器，当前范围为固定场景渲染工作台设计；M6 核心 M6.1–M6.5、M0–M5、R1、B1–B3 DONE。可选 M6.0 Forward+ 仍为 DEFERRED。
-- 当前工作项：用户已授权实现到 M7.2b；先实施 M7.2a Dock/Log/原生宿主，验证后提交，再实施 M7.2b 运行配置。M7.2c–f 未启动，M7.3–M7.6 本轮 DEFERRED。
+- 当前实施阶段：M7 固定场景渲染工作台；M6 核心 M6.1–M6.5、M0–M5、R1、B1–B3 DONE。可选 M6.0 Forward+ 仍为 DEFERRED。
+- 当前工作项：M7.2a–b 实现与本机自动验证 DONE；本轮授权范围已完成，后续 M7.2c 等待授权。M7.2c–f 未启动，M7.3–M7.6 本轮 DEFERRED。
 - 用户约定：每个子阶段验收完成即提交 Git，无阻塞时在当前授权范围内继续推进。此前 M7 修改已进入 Git，本轮开始时工作区干净。
 
 | 阶段 | 目标 | 前置依赖 | 状态 |
@@ -21,7 +21,7 @@
 | B3 | 逐帧资源复用优化 | B2 | DONE |
 | M5 | Deferred 与光追基础 | M4 | DONE |
 | M6 | GPU Driven 与执行优化 | M4；光追调度测试另需 M5 | DONE（M6.1–M6.5；可选 M6.0 延期） |
-| M7 | C# 编辑器与完整项目工作流 | M4；默认在 M5、M6 的核心目标后开展 | IN_PROGRESS（M7.1a–g 已完成，M7.2 工作台设计已记录） |
+| M7 | C# 编辑器与完整项目工作流 | M4；默认在 M5、M6 的核心目标后开展 | IN_PROGRESS（M7.1a–g、M7.2a–b 已完成；M7.2c–f 待实施） |
 | M8 | 一个深入的渲染专题与作品交付 | 所选专题依赖已满足 | NOT_STARTED |
 
 默认顺序为 M0 到 M8。M5 和 M6 在 M4 后可以独立推进；单阶段内按下列子阶段顺序执行，不同时建设多个高级系统。完整编辑器后置，M4 只实现运行内容所需的最小项目与资源能力。
@@ -359,19 +359,25 @@ M7.1g DONE（2026 年 10 月 27 日）：--target-fps 0 取消 CPU 调度上限�
 
 #### M7.2a Dock 骨架与视口生命周期
 
-状态：实现与本机自动验收完成，2026 年 10 月 30 日；完整人工/跨屏验收保留到 M7.2f，不计作已通过。
+状态：DONE，日期：2026 年 10 月 30 日。基础实现提交 779941e；M7.2b 集成复查发现的根导航与控件复用问题已修复，完整人工/跨屏验收仍保留 M7.2f，未计作通过。
 
-结果：Dock.Avalonia 12.0.0.2 + Fluent、固定面板 ID、两面板默认布局与菜单打开/激活、版本化布局保存/恢复；Scene 浮动和布局停回安全退休并重建 Session，保留相机与管线/曝光，拖放隐藏 HWND/释放输入。Serilog/DI ILogger、UTC 结构化滚动文件、有界 Log 投影/筛选/复制/清空、原生有界 UTF-8 批量镜像与关闭 drain 已接入；桥接 v5，旧 Stats 布局不变。
+结果：Dock.Avalonia 12.0.0.2 + Fluent、固定面板 ID、两面板默认布局与菜单打开/激活、版本化布局保存/恢复；Scene 浮动和布局停回安全退休并重建 Session，保留相机与运行配置，拖放隐藏 HWND/释放输入。根导航指向完整工作区，各 presenter 新建 View 并共享模型/服务，避免设置面板缺失或 Control 重复挂载。Serilog/DI ILogger、UTC 结构化滚动文件、有界 Log 投影/筛选/复制/清空、原生有界 UTF-8 批量镜像与关闭 drain 已接入；当前桥接由 M7.2b 升为 v6。
 
-验证：RTX 5060/96 DPI，原生 Release bridge/core/input 构建与 core.contracts、editor.input 2/2；托管 Debug/Release 零警告构建、9 项测试通过。双后端真实 Avalonia --smoke 各 14 组检查，包含默认布局、单实例打开、输入/暂停/Resize、Scene 浮动/停回、相机保留、旧 Handle 拒绝与原生日志，每后端 4 次正常关闭及初始化中关闭均原生账本/验证错误/worker_failed 为 0。证据 out/m72a/final-{dx12,vulkan} 与 out/m72a/tests。
+验证：RTX 5060/96 DPI，托管 Debug/Release 零警告构建、各 11 项测试通过。双配置 × 双后端真实 Avalonia --smoke 通过，补充确认 Settings 进入顶层可视树、Log 实际显示 Native 行；浮动/停回、菜单单实例、输入/暂停/Resize、相机/配置保留、旧 Handle 拒绝与关闭账本一并检查。早期 M7.2a 的模型/Present 检查未覆盖面板真实挂载，已由本次检查补齐；最终证据入口见 M7.2b。
 
 限制：Graph 仍为说明面板，Profiler 仅显示已有宿主统计，完整诊断分别待 M7.2d/e；未验证真实鼠标取消拖放、跨屏/150% DPI、全套屏外浮窗恢复、日志文件轮转/磁盘故障与人工画面。内存日志洪峰、来源/异常/筛选/清空和损坏布局已由托管/原生行为测试覆盖；未执行项列入 M7.2f，不能当作本机通过。
 
 #### M7.2b 运行配置与生效确认
 
-- [ ] 固定场景只读，加入强类型运行覆盖与能力快照；设置面板接入管线、提交、线程/队列/Alias、光照、阴影、反射、曝光与调度的已有能力。
-- [ ] 扩展并同步升版 C ABI；请求/实际配置版本、合并与拒绝原因、暂停/单帧、恢复默认和本机预设，不能以 UI 值冒充已生效值。
-- [ ] 双后端合法/非法/快速连续配置、历史失效与源文件 hash 验证；计数与 Graph 共享 Session/帧/版本身份。
+状态：DONE，日期：2026 年 10 月 30 日。
+
+结果：强类型运行配置、原生能力快照与 C ABI v6；设置接入管线/提交、录制线程/异步/Alias、已有调试视图、光照/环境、阴影、反射、曝光、导航速度和调度。单调请求 ID、最新值合并、拒绝原因与实际配置独立展示；成功 Render/Present 才确认 Applied，暂停保持 Pending，Single frame 恰好执行一帧。本机 Defaults/预设与宿主重建保留完整配置；照明/环境/曝光只覆盖提取后 Snapshot，不修改源 Scene/Material。完成帧与 GPU 结果携带 Session/帧/配置身份，配置变化隔离旧统计。
+
+验证：RTX 5060、96 DPI（100%）、Validation On。原生 Release 全目标构建与所选 11/11 回归通过（Core/Input/Graph、双后端 Indexed Scene/PBR/窗口/Deferred）；Debug bridge/core/input/indexed_scene 构建及所选 4/4 通过。双后端 GPU 专项验证覆盖改变真实像素、移除覆盖逐字节恢复、源 Document 不变。托管 Debug/Release 零警告构建，各 11/11 测试通过；双配置 × 双后端实际 Avalonia 自检各 20 组检查通过，包含实际面板挂载、菜单恢复保存布局、受支持三管线 × 四提交、25 次连续请求、非法 ABI/数值、暂停/单帧、曝光保留/照明重置历史、预设/宿主重建保留、0↔60 FPS 与 Profiling。每次运行的 8 次会话关闭与初始化中关闭均原生账本/validation errors/worker_failed 为 0，23 个源文件 hash 不变。最终证据为本机 `out/m72b/restored-{release,debug}-{dx12,vulkan}`，托管测试为 `out/m72b/tests/complete-{Release,Debug}.trx`；C++ 格式、UTF-8/LF 与 diff 检查通过。
+
+文档：[宿主与 ABI](../docs/editor-host.md)、[工作台](../docs/editor-workbench.md)、[构建/自检入口](../manual/build.md#avalonia-嵌入原型)。
+
+限制：本轮未验证其他 GPU、人工画面/真实鼠标操作、跨屏/150% DPI、30 分钟压力与日志文件轮转/磁盘故障；这些项目继续留在 M7.2f。API/Validation 动态重建、完整 Render Graph Viewer、真实 draw/batch/instance 统计与性能面板分别待 M7.2c/d/e；当前只发布基础帧身份，未把面板骨架当作完整诊断能力，也未将 M7.2 或 M7 整体标记完成。
 
 #### M7.2c 图形 API 切换事务
 

@@ -17,7 +17,7 @@
      </MenuItem>
      <MenuItem Header="Layout">
        <MenuItem Header="Default" Click="DefaultLayout" /><MenuItem Header="Diagnostics" Click="DiagnosticLayout" />
-       <MenuItem Header="Restore saved layout" Click="RestoreLayout" />
+       <MenuItem x:Name="RestoreLayoutMenu" Header="Restore saved layout" Click="RestoreLayout" />
      </MenuItem>
      <MenuItem Header="Scene"><MenuItem Header="Pause / Resume" Command="{Binding TogglePauseCommand}" /><MenuItem Header="Reset camera" Command="{Binding ResetCameraCommand}" /></MenuItem>
    </Menu>

@@ -36,12 +36,43 @@ extern "C"
         uint64_t scene_prepare_ns;
         uint64_t frame_interval_ns, frame_time_ns, dropped_samples;
         uint32_t activity, ready, ui_thread_id, render_thread_id;
+        uint64_t config_revision, gpu_config_revision, session_generation;
     } rl_viewport_stats;
     typedef struct rl_viewport_close_report
     {
         uint64_t remaining_bytes, peak_bytes;
         uint32_t validation_errors, worker_failed;
     } rl_viewport_close_report;
+    /* Version 1, 112 bytes. Flags: reflections/history/denoise/temporal/shadows = 1/2/4/8/16. */
+    typedef struct rl_viewport_config
+    {
+        uint32_t size, version;
+        uint64_t request_id;
+        uint32_t pipeline, submission, recording_threads, async_compute, memory_alias, view;
+        uint32_t profiling, target_fps, continuous, flags, shadow_resolution;
+        float exposure, camera_speed;
+        float light_x, light_y, light_z, light_r, light_g, light_b, light_intensity;
+        float shadow_bias, shadow_normal_bias, environment_intensity, environment_rotation;
+    } rl_viewport_config;
+    /* status: 0 initializing, 1 pending, 2 applied, 3 rejected. IDs are session-local. */
+    typedef struct rl_viewport_config_state
+    {
+        uint32_t size, version;
+        uint64_t requested_id, applied_id, rejected_id, superseded_id;
+        uint32_t status, ready;
+        rl_viewport_config requested, applied;
+    } rl_viewport_config_state;
+    RENDERLAB_EDITOR_API rl_status RENDERLAB_EDITOR_CALL
+    rl_viewport_configure_v2(rl_viewport_handle session, const rl_viewport_config* config);
+    RENDERLAB_EDITOR_API rl_status RENDERLAB_EDITOR_CALL rl_viewport_get_config(
+        rl_viewport_handle session, rl_viewport_config_state* state, rl_viewport_config* defaults);
+    /* UTF-8 immutable capabilities / latest config rejection text. kind: 0 capabilities, 1 error.
+     */
+    RENDERLAB_EDITOR_API rl_status RENDERLAB_EDITOR_CALL
+    rl_viewport_config_text(rl_viewport_handle session, uint32_t kind, char* output,
+                            uint32_t capacity, uint32_t* required);
+    RENDERLAB_EDITOR_API rl_status RENDERLAB_EDITOR_CALL
+    rl_viewport_step(rl_viewport_handle session);
 
     RENDERLAB_EDITOR_API uint32_t RENDERLAB_EDITOR_CALL rl_editor_abi_version(void);
     /* UI-thread APIs. Stop retires GPU work but retains the session for final log drain. */

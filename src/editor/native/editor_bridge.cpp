@@ -1,6 +1,7 @@
 #include "editor/native/editor_bridge.h"
 
 #include "editor/native/camera_input.hpp"
+#include "editor/native/viewport_config.hpp"
 
 #include "core/log.hpp"
 #include "platform/text.hpp"
@@ -31,7 +32,8 @@
 #include <utility>
 #include <vector>
 
-static_assert(sizeof(rl_viewport_stats) == 232 && sizeof(rl_viewport_close_report) == 24);
+static_assert(sizeof(rl_viewport_stats) == 256 && sizeof(rl_viewport_close_report) == 24);
+static_assert(sizeof(rl_viewport_config) == 112 && sizeof(rl_viewport_config_state) == 272);
 namespace
 {
 using namespace renderlab;
@@ -46,6 +48,10 @@ struct Failure : std::runtime_error
 {
     Failure(rl_status status, const char* message) : std::runtime_error(message), status(status) {}
     rl_status status;
+};
+struct FatalConfiguration : std::runtime_error
+{
+    using std::runtime_error::runtime_error;
 };
 void Require(bool condition, const char* message)
 {
@@ -97,7 +103,7 @@ struct NativeHandle
 struct InputSnapshot
 {
     uint32_t width = 0, height = 0, dpi = 96;
-    bool focused = false, captured = false, paused = true;
+    bool focused = false, captured = false, paused = true, visible = false;
     std::array<bool, 256> keys{};
     float yaw = 0, pitch = 0;
     uint64_t paints = 0;
@@ -114,9 +120,12 @@ struct RenderState
     std::unique_ptr<rhi::Swapchain> swapchain;
     renderer::SceneRenderOptions options;
     scene::Transform initialCamera;
+    float cameraSpeed = 3;
     std::array<uint64_t, 2> completions{};
     std::array<rendergraph::Submission::GpuProfile, 2> profiles;
     std::array<uint64_t, 2> profileFrames{};
+    std::array<uint64_t, 2> profileConfigs{};
+    uint64_t configRevision = 0;
     std::vector<bool> initialized;
     std::array<bool, 256> keys{};
     rl_viewport_stats stats{};
@@ -206,6 +215,7 @@ struct RenderState
                 nanoseconds += timing.nanoseconds;
             stats.gpu_ns = static_cast<uint64_t>(std::max(0.0, nanoseconds));
             stats.gpu_frame = profileFrames[slot];
+            stats.gpu_config_revision = profileConfigs[slot];
             profiles[slot] = {};
         }
         start = Clock::now();
@@ -226,8 +236,9 @@ struct RenderState
         {
             const auto axis = [&](size_t positive, size_t negative)
             { return float(keys[positive]) - float(keys[negative]); };
-            const math::Vec3 motion{3 * dt * axis('D', 'A'), 3 * dt * axis('E', 'Q'),
-                                    3 * dt * axis('S', 'W')};
+            const math::Vec3 motion{cameraSpeed * dt * axis('D', 'A'),
+                                    cameraSpeed * dt * axis('E', 'Q'),
+                                    cameraSpeed * dt * axis('S', 'W')};
             const auto rotation = editor::CameraLookDelta(60 * dt * axis(VK_RIGHT, VK_LEFT) + yaw,
                                                           60 * dt * axis(VK_DOWN, VK_UP) + pitch);
             if (stats.pressed_keys || yaw != 0 || pitch != 0)
@@ -245,12 +256,14 @@ struct RenderState
         completion = result.completion;
         profiles[slot] = std::move(result.profile);
         profileFrames[slot] = stats.frames + 1;
+        profileConfigs[slot] = configRevision;
         stats.reflection_samples = result.reflectionSamples;
         initialized[acquired.index] = true;
         start = Clock::now();
         swapchain->Present();
         stats.present_ns = ElapsedNs(start);
         ++stats.frames;
+        stats.config_revision = configRevision;
         stats.pipeline = static_cast<uint32_t>(options.pipeline);
         stats.native_bytes = runtime->GetMemoryStats().used;
         stats.peak_bytes = runtime->GetMemoryStats().highWater;
@@ -284,6 +297,7 @@ struct RenderState
 struct Session
 {
     const DWORD owner = GetCurrentThreadId();
+    const uint64_t identity;
     Logger logger;
     ChildWindow child;
     std::array<bool, 256> keys{};
@@ -298,6 +312,10 @@ struct Session
     uint32_t pipeline = 2;
     float exposure = 0;
     uint64_t revision = 1, resets = 0;
+    uint64_t steps = 0;
+    rl_viewport_config configuration{}, defaults{};
+    rl_viewport_config_state configurationState{sizeof(rl_viewport_config_state), 1};
+    std::string configurationError, capabilities;
     std::array<std::string, 3> pipelineErrors;
     std::string error;
     std::string pendingLogs;
@@ -380,10 +398,10 @@ struct Session
         }
         return DefWindowProcW(window, message, w, l);
     }
-    Session(HWND parent, uint32_t backend, bool validation, bool profiling, uint32_t targetFps,
-            bool continuous, const std::filesystem::path& project,
+    Session(uint64_t id, HWND parent, uint32_t backend, bool validation, bool profiling,
+            uint32_t targetFps, bool continuous, const std::filesystem::path& project,
             const std::filesystem::path& shaders, const std::filesystem::path& log)
-        : logger(log)
+        : identity(id), logger(log)
     {
         logger.EnableMirror();
         static const auto registered = []
@@ -427,15 +445,65 @@ struct Session
                             failures[p - 1] = failure.what();
                         }
                     }
+                    scene::Extractor configExtractor;
+                    const auto sourceSnapshot = configExtractor.Extract(render.scene->Document(), 1,
+                                                                        render.scene->Models());
+                    auto activeConfig =
+                        editor::DefaultConfig(sourceSnapshot, targetFps, continuous, profiling);
+                    nlohmann::json capabilityData{
+                        {"schemaVersion", 1},
+                        {"backend", backend == 0 ? "dx12" : "vulkan"},
+                        {"adapter", render.device->GetReport()
+                                        .adapters.at(render.device->GetReport().selectedAdapter)
+                                        .name},
+                        {"driver", render.device->GetReport().driverVersion},
+                        {"asyncCompute", render.runtime->SupportsAsyncCompute()},
+                        {"instanceCapacity", renderer::IndexedInstanceCapacity},
+                        {"textureCapacity", renderer::IndexedTextureCapacity},
+                        {"pipelines", nlohmann::json::array()},
+                        {"submissions", nlohmann::json::array()}};
+                    for (uint32_t p = 1; p <= 3; ++p)
+                        capabilityData["pipelines"].push_back(
+                            {{"value", p},
+                             {"available", failures[p - 1].empty()},
+                             {"reason", failures[p - 1]}});
+                    for (uint32_t mode = 0; mode < 4; ++mode)
+                    {
+                        std::string reason;
+                        auto candidate = activeConfig;
+                        candidate.pipeline = 1;
+                        candidate.submission = mode;
+                        try
+                        {
+                            render.scene->ValidateOptions(
+                                editor::RenderOptions(candidate, sourceSnapshot.light));
+                        }
+                        catch (const std::exception& failure)
+                        {
+                            reason = failure.what();
+                        }
+                        capabilityData["submissions"].push_back(
+                            {{"value", mode}, {"available", reason.empty()}, {"reason", reason}});
+                    }
                     {
                         std::lock_guard lock(mutex);
                         pipelineErrors = std::move(failures);
+                        defaults = activeConfig;
+                        configuration = defaults;
+                        configuration.pipeline = pipeline;
+                        configuration.exposure = exposure;
+                        configuration.request_id = revision;
+                        configurationState.requested = configuration;
+                        configurationState.requested_id = revision;
+                        configurationState.status = 1;
+                        configurationState.ready = 1;
+                        capabilities = capabilityData.dump();
                         ready = true;
                         camera = render.initialCamera;
                     }
-                    uint64_t applied = 0, appliedResets = 0;
+                    uint64_t prepared = 0, appliedResets = 0, completedSteps = 0;
                     auto previous = Clock::now();
-                    const auto period =
+                    auto period =
                         std::chrono::nanoseconds(targetFps ? 1'000'000'000 / targetFps : 0);
                     auto deadline = previous;
                     auto dimensionsChanged = previous;
@@ -461,8 +529,8 @@ struct Session
                         }
                         InputSnapshot snapshot;
                         uint32_t selected;
-                        float selectedExposure;
-                        uint64_t selectedRevision, selectedResets;
+                        rl_viewport_config selectedConfig;
+                        uint64_t selectedRevision, selectedResets, selectedSteps;
                         {
                             std::lock_guard lock(mutex);
                             if (stop)
@@ -477,22 +545,91 @@ struct Session
                                 dirty = true;
                             }
                             input.yaw = input.pitch = 0;
-                            selected = pipeline;
-                            selectedExposure = exposure;
-                            selectedRevision = revision;
+                            selectedConfig = configuration;
+                            selectedRevision = configuration.request_id;
                             selectedResets = resets;
+                            selectedSteps = steps;
                         }
-                        if (selectedRevision != applied)
+                        if (selectedRevision != prepared)
                         {
-                            if (!pipelineErrors[selected - 1].empty())
-                                throw std::runtime_error(pipelineErrors[selected - 1]);
-                            render.options.pipeline = static_cast<renderer::PipelineType>(selected);
-                            render.scene->Document().exposure = selectedExposure;
-                            if (selectedResets != appliedResets)
-                                render.scene->Document()
-                                    .Get(render.scene->Document().activeCamera)
-                                    .transform = render.initialCamera;
-                            applied = selectedRevision;
+                            try
+                            {
+                                editor::ValidateConfig(selectedConfig);
+                                auto nextOptions =
+                                    editor::RenderOptions(selectedConfig, sourceSnapshot.light);
+                                render.scene->ValidateOptions(nextOptions);
+                                if ((activeConfig.target_fps == 0) !=
+                                    (selectedConfig.target_fps == 0))
+                                {
+                                    render.runtime->WaitIdle();
+                                    render.swapchain.reset();
+                                    try
+                                    {
+                                        render.swapchain = render.runtime->CreateSwapchain(
+                                            {child.value, GetModuleHandleW(nullptr)}, 1, 1,
+                                            selectedConfig.target_fps != 0);
+                                    }
+                                    catch (const std::exception& failure)
+                                    {
+                                        const auto reason = std::string(failure.what());
+                                        try
+                                        {
+                                            render.swapchain = render.runtime->CreateSwapchain(
+                                                {child.value, GetModuleHandleW(nullptr)}, 1, 1,
+                                                activeConfig.target_fps != 0);
+                                        }
+                                        catch (...)
+                                        {
+                                            throw FatalConfiguration("Swapchain reconfiguration "
+                                                                     "and recovery both failed");
+                                        }
+                                        render.initialized.clear();
+                                        render.stats.width = render.stats.height = 0;
+                                        throw std::invalid_argument("Presentation mode rejected: " +
+                                                                    reason);
+                                    }
+                                    render.initialized.clear();
+                                    render.stats.width = render.stats.height = 0;
+                                }
+                                render.options = std::move(nextOptions);
+                                render.cameraSpeed = selectedConfig.camera_speed;
+                                render.configRevision = selectedRevision;
+                                render.stats.profiling_enabled = selectedConfig.profiling;
+                                activeConfig = selectedConfig;
+                                period = std::chrono::nanoseconds(activeConfig.target_fps
+                                                                      ? 1'000'000'000 /
+                                                                            activeConfig.target_fps
+                                                                      : 0);
+                                deadline = Clock::now();
+                                dirty = true;
+                                previousCompleted.reset();
+                                logger.Write(
+                                    LogLevel::Info,
+                                    std::format("Configuration {} prepared", selectedRevision));
+                            }
+                            catch (const FatalConfiguration&)
+                            {
+                                throw;
+                            }
+                            catch (const std::exception& failure)
+                            {
+                                logger.Write(LogLevel::Warning,
+                                             std::format("Configuration {} rejected: {}",
+                                                         selectedRevision, failure.what()));
+                                std::lock_guard lock(mutex);
+                                configurationState.rejected_id = selectedRevision;
+                                configurationError = failure.what();
+                                if (configuration.request_id == selectedRevision)
+                                    configurationState.status = 3;
+                            }
+                            prepared = selectedRevision;
+                        }
+                        selected = activeConfig.pipeline;
+                        if (selectedResets != appliedResets)
+                        {
+                            render.scene->Document()
+                                .Get(render.scene->Document().activeCamera)
+                                .transform = render.initialCamera;
                             appliedResets = selectedResets;
                             dirty = true;
                         }
@@ -513,7 +650,12 @@ struct Session
                             dimensionsChanged = now;
                             dirty = true;
                         }
-                        const bool paused = snapshot.paused || !snapshot.width || !snapshot.height;
+                        const bool stepping = selectedSteps != completedSteps && snapshot.visible &&
+                                              snapshot.width && snapshot.height;
+                        const bool paused =
+                            (snapshot.paused && !stepping) || !snapshot.width || !snapshot.height;
+                        if (stepping)
+                            snapshot.paused = false;
                         if (wasPaused && !paused)
                             dirty = true;
                         wasPaused = paused;
@@ -527,9 +669,10 @@ struct Session
                             (std::ranges::any_of(snapshot.keys, [](bool down) { return down; }) ||
                              pendingYaw != 0 || pendingPitch != 0);
                         const bool accumulating =
-                            selected == 3 &&
+                            selected == 3 && (activeConfig.flags & 3) == 3 &&
                             render.stats.reflection_samples < renderer::MaxReflectionSamples;
-                        const bool needsFrame = dirty || moving || accumulating || continuous;
+                        const bool needsFrame =
+                            dirty || moving || accumulating || activeConfig.continuous || stepping;
                         const auto dt = std::clamp(
                             std::chrono::duration<float>(now - previous).count(), 0.f, .1f);
                         const bool draw =
@@ -557,6 +700,8 @@ struct Session
                                                                                          origin)
                                         .count());
                                 previousCompleted = completed;
+                                if (stepping)
+                                    ++completedSteps;
                                 dirty = false;
                             }
                             // No catch-up burst after a slow frame. VSync may impose a lower rate.
@@ -569,7 +714,9 @@ struct Session
                             previousCompleted.reset();
                             previous = now;
                             // Unlimited active frames still sleep while paused, idle or resizing.
-                            deadline = now + (targetFps ? period : std::chrono::milliseconds(16));
+                            deadline =
+                                now +
+                                (activeConfig.target_fps ? period : std::chrono::milliseconds(16));
                             if (paused)
                                 ++render.stats.paused_ticks;
                         }
@@ -590,6 +737,7 @@ struct Session
                                 {
                                     render.stats.gpu_ns = static_cast<uint64_t>(std::max(0.0, ns));
                                     render.stats.gpu_frame = render.profileFrames[slot];
+                                    render.stats.gpu_config_revision = render.profileConfigs[slot];
                                 }
                                 render.profiles[slot] = {};
                             }
@@ -600,10 +748,12 @@ struct Session
                             std::count(snapshot.keys.begin(), snapshot.keys.end(), true));
                         render.stats.ready = 1;
                         render.stats.ui_thread_id = owner;
+                        render.stats.session_generation = identity;
                         render.stats.render_thread_id = GetCurrentThreadId();
                         render.stats.activity = paused ? 3 : resizePending ? 4 : needsFrame ? 1 : 2;
                         {
                             std::lock_guard lock(mutex);
+                            const bool framePublished = draw && render.stats.frames != stats.frames;
                             if (draw && render.stats.frames != stats.frames)
                             {
                                 if (frameCount == completedFrames.size())
@@ -618,6 +768,13 @@ struct Session
                                 ++frameCount;
                             }
                             stats = render.stats;
+                            if (framePublished)
+                            {
+                                configurationState.applied = activeConfig;
+                                configurationState.applied_id = activeConfig.request_id;
+                                if (configurationState.requested_id == activeConfig.request_id)
+                                    configurationState.status = 2;
+                            }
                             camera = render.scene->Document()
                                          .Get(render.scene->Document().activeCamera)
                                          .transform;
@@ -686,6 +843,8 @@ struct Session
         input.captured = GetCapture() == child.value;
         input.paused =
             paused || !IsWindowVisible(child.value) || IsIconic(GetAncestor(child.value, GA_ROOT));
+        input.visible =
+            IsWindowVisible(child.value) && !IsIconic(GetAncestor(child.value, GA_ROOT));
         input.keys = keys;
         input.paints = paints;
         input.yaw += yaw;
@@ -703,6 +862,21 @@ struct Session
         exposure = value;
         resets += reset;
         ++revision;
+        if (ready)
+        {
+            if (configurationState.status == 1)
+                configurationState.superseded_id = configuration.request_id;
+            if (configurationState.status == 3 &&
+                configurationState.applied.size == sizeof(rl_viewport_config))
+                configuration = configurationState.applied;
+            configuration.pipeline = selected;
+            configuration.exposure = value;
+            configuration.request_id = revision;
+            configurationState.requested = configuration;
+            configurationState.requested_id = revision;
+            configurationState.status = 1;
+            configurationError.clear();
+        }
         SetEvent(wake.value);
     }
     rl_viewport_stats GetStats()
@@ -799,7 +973,87 @@ template <class F> rl_status Guard(F&& operation)
 
 uint32_t RENDERLAB_EDITOR_CALL rl_editor_abi_version()
 {
-    return 5;
+    return 6;
+}
+rl_status RENDERLAB_EDITOR_CALL rl_viewport_configure_v2(rl_viewport_handle handle,
+                                                         const rl_viewport_config* config)
+{
+    return Guard(
+        [&]
+        {
+            Require(config != nullptr, "Configuration input is null");
+            try
+            {
+                editor::ValidateConfig(*config);
+            }
+            catch (const std::invalid_argument& failure)
+            {
+                throw Failure(RL_INVALID_ARGUMENT, failure.what());
+            }
+            auto& session = Find(handle);
+            std::lock_guard lock(session.mutex);
+            session.CheckError();
+            Require(session.ready && !session.closing, "Viewport configuration is not ready");
+            Require(config->request_id > session.revision,
+                    "Configuration request ID must increase");
+            if (session.configurationState.status == 1)
+                session.configurationState.superseded_id = session.configuration.request_id;
+            session.configuration = *config;
+            session.revision = config->request_id;
+            session.pipeline = config->pipeline;
+            session.exposure = config->exposure;
+            session.configurationState.requested = *config;
+            session.configurationState.requested_id = config->request_id;
+            session.configurationState.status = 1;
+            session.configurationError.clear();
+            SetEvent(session.wake.value);
+        });
+}
+rl_status RENDERLAB_EDITOR_CALL rl_viewport_get_config(rl_viewport_handle handle,
+                                                       rl_viewport_config_state* state,
+                                                       rl_viewport_config* defaults)
+{
+    return Guard(
+        [&]
+        {
+            Require(state && defaults, "Configuration outputs are null");
+            auto& session = Find(handle);
+            std::lock_guard lock(session.mutex);
+            session.CheckError();
+            *state = session.configurationState;
+            *defaults = session.defaults;
+        });
+}
+rl_status RENDERLAB_EDITOR_CALL rl_viewport_config_text(rl_viewport_handle handle, uint32_t kind,
+                                                        char* output, uint32_t capacity,
+                                                        uint32_t* required)
+{
+    return Guard(
+        [&]
+        {
+            Require(required && kind <= 1, "Invalid configuration text request");
+            auto& session = Find(handle);
+            std::lock_guard lock(session.mutex);
+            const auto& value = kind == 0 ? session.capabilities : session.configurationError;
+            *required = static_cast<uint32_t>(value.size() + 1);
+            if (!output || capacity < *required)
+                throw Failure(RL_BUFFER_TOO_SMALL, "Configuration text buffer is too small");
+            std::memcpy(output, value.c_str(), *required);
+        });
+}
+rl_status RENDERLAB_EDITOR_CALL rl_viewport_step(rl_viewport_handle handle)
+{
+    return Guard(
+        [&]
+        {
+            auto& session = Find(handle);
+            std::lock_guard lock(session.mutex);
+            session.CheckError();
+            Require(session.ready && session.input.paused && !session.closing,
+                    "Single step requires a paused ready viewport");
+            ++session.steps;
+            SetEvent(session.wake.value);
+        });
 }
 rl_status RENDERLAB_EDITOR_CALL rl_viewport_stop(rl_viewport_handle handle,
                                                  rl_viewport_close_report* report)
@@ -898,6 +1152,7 @@ rl_status RENDERLAB_EDITOR_CALL rl_viewport_create(void* parent, uint32_t backen
                 if (!sessions[i].session)
                 {
                     auto session = std::make_unique<Session>(
+                        (uint64_t(sessions[i].generation) << 32) | (i + 1),
                         static_cast<HWND>(parent), backend, validation != 0, profiling != 0,
                         targetFps, continuous != 0, platform::Utf8ToWide(project),
                         platform::Utf8ToWide(shaders), platform::Utf8ToWide(log));

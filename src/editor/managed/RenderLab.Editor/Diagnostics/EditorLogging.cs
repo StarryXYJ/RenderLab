@@ -32,7 +32,7 @@ public sealed class LogBuffer : ILogEventSink
         try
         {
             static string Bound(string value) => value.Length > 8192 ? value[..8192] + " [truncated; see log file]" : value;
-            var source = logEvent.Properties.TryGetValue("SourceContext", out var context) ? context.ToString().Trim('"') : "Editor";
+            var source = Bound(logEvent.Properties.TryGetValue("SourceContext", out var context) ? context.ToString().Trim('"') : "Editor");
             var message = Bound(logEvent.RenderMessage(System.Globalization.CultureInfo.InvariantCulture));
             var details = Bound(string.Join(Environment.NewLine, logEvent.Properties.Select(p => $"{p.Key}: {p.Value}")) +
                 (logEvent.Exception is null ? "" : Environment.NewLine + logEvent.Exception));

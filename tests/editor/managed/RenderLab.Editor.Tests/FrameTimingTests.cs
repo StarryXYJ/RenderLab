@@ -7,6 +7,19 @@ namespace RenderLab.Editor.Tests;
 [TestFixture]
 public sealed class FrameTimingTests
 {
+    [Test]
+    public void NewConfigDoesNotReuseOldGpuTimingOrFrameDistribution()
+    {
+        var window = new FrameTimingWindow();
+        var first = Frame(1); first.SessionGeneration = 11; first.ConfigRevision = 2;
+        window.Observe(first, 0);
+        var next = Frame(2); next.SessionGeneration = 11; next.ConfigRevision = 3;
+        next.GpuFrame = 1; next.GpuConfigRevision = 2; next.GpuNs = 5000000; next.ProfilingEnabled = 1;
+        window.Observe(next, .016);
+        Assert.That(window.Summarize().Samples, Is.EqualTo(1));
+        Assert.That(window.Latest!.ConfigRevision, Is.EqualTo(3));
+        Assert.That(window.Latest.GpuMs, Is.Null);
+    }
     private static ViewportStats Frame(ulong frame, ulong cpu = 1_000_000) => new()
     {
         Frames = frame,

@@ -2,12 +2,67 @@
  xmlns:vm="using:RenderLab.Editor.ViewModels" x:Class="RenderLab.Editor.Views.RenderSettingsView" x:DataType="vm:MainWindowViewModel">
  <ScrollViewer><StackPanel Margin="12" Spacing="10">
    <TextBlock Text="{Binding BackendName}" FontSize="18" />
-   <TextBlock Text="Pipeline" /><ComboBox x:Name="PipelineSelector" ItemsSource="{Binding Pipelines}" SelectedIndex="{Binding SelectedPipelineIndex, Mode=TwoWay}" HorizontalAlignment="Stretch" />
-   <TextBlock Text="Exposure" /><Slider x:Name="ExposureControl" Minimum="-4" Maximum="4" Value="{Binding Exposure, Mode=TwoWay}" />
+   <TextBlock Text="{Binding Settings.Status}" TextWrapping="Wrap" />
+   <TextBlock Text="{Binding Settings.AppliedSummary}" TextWrapping="Wrap" />
+   <TextBlock Text="Controls below show requested values" FontStyle="Italic" />
+   <TextBlock Text="{Binding Settings.Error}" TextWrapping="Wrap" Foreground="OrangeRed" />
+   <TextBlock Text="Pipeline" /><ComboBox x:Name="PipelineSelector" ItemsSource="{Binding Settings.Pipelines}" SelectedIndex="{Binding SelectedPipelineIndex, Mode=TwoWay}" HorizontalAlignment="Stretch">
+     <ComboBox.ItemTemplate><DataTemplate x:DataType="vm:CapabilityChoice"><TextBlock Text="{Binding Name}" ToolTip.Tip="{Binding Reason}" /></DataTemplate></ComboBox.ItemTemplate>
+     <ComboBox.Styles><Style Selector="ComboBoxItem" x:DataType="vm:CapabilityChoice"><Setter Property="IsEnabled" Value="{Binding Available}" /></Style></ComboBox.Styles>
+   </ComboBox>
+   <TextBlock Text="Exposure" /><Slider x:Name="ExposureControl" Minimum="-10" Maximum="10" Value="{Binding Exposure, Mode=TwoWay}" />
    <Button x:Name="PauseAction" Content="{Binding PauseLabel}" Command="{Binding TogglePauseCommand}" />
+   <Button Content="Single frame" Command="{Binding SingleStepCommand}" IsEnabled="{Binding IsPaused}" />
    <Button x:Name="ResetAction" Content="Reset camera" Command="{Binding ResetCameraCommand}" />
    <Button x:Name="RecreateAction" Content="Recreate viewport" Command="{Binding RecreateViewportCommand}" />
    <TextBlock Text="{Binding ErrorText}" TextWrapping="Wrap" Foreground="OrangeRed" />
+   <StackPanel Spacing="8" IsEnabled="{Binding Settings.Ready}">
+    <Expander Header="Submission and execution" IsExpanded="True"><StackPanel Spacing="8">
+     <ComboBox x:Name="SubmissionSelector" ItemsSource="{Binding Settings.Submissions}" SelectedIndex="{Binding Settings.Submission}" HorizontalAlignment="Stretch">
+      <ComboBox.ItemTemplate><DataTemplate x:DataType="vm:CapabilityChoice"><TextBlock Text="{Binding Name}" ToolTip.Tip="{Binding Reason}" /></DataTemplate></ComboBox.ItemTemplate>
+      <ComboBox.Styles><Style Selector="ComboBoxItem" x:DataType="vm:CapabilityChoice"><Setter Property="IsEnabled" Value="{Binding Available}" /></Style></ComboBox.Styles>
+     </ComboBox>
+     <TextBlock Text="Recording threads" /><NumericUpDown Minimum="1" Maximum="16" Value="{Binding Settings.RecordingThreads}" />
+     <CheckBox Content="Async compute" IsChecked="{Binding Settings.AsyncCompute}" IsEnabled="{Binding Settings.AsyncSupported}" />
+     <CheckBox Content="Memory alias" IsChecked="{Binding Settings.MemoryAlias}" />
+     <TextBlock Text="Debug view" /><ComboBox ItemsSource="{Binding Settings.Views}" SelectedIndex="{Binding Settings.View}" HorizontalAlignment="Stretch" />
+    </StackPanel></Expander>
+    <Expander Header="Lighting and environment"><StackPanel Spacing="8">
+     <TextBlock Text="Direction XYZ (toward light)" /><Grid ColumnDefinitions="*,*,*">
+      <NumericUpDown Minimum="-1" Maximum="1" Increment="0.1" FormatString="F2" Value="{Binding Settings.LightX}" />
+      <NumericUpDown Grid.Column="1" Minimum="-1" Maximum="1" Increment="0.1" FormatString="F2" Value="{Binding Settings.LightY}" />
+      <NumericUpDown Grid.Column="2" Minimum="-1" Maximum="1" Increment="0.1" FormatString="F2" Value="{Binding Settings.LightZ}" />
+     </Grid>
+     <TextBlock Text="Linear color RGB" /><Grid ColumnDefinitions="*,*,*">
+      <NumericUpDown Minimum="0" Maximum="64" Increment="0.1" FormatString="F2" Value="{Binding Settings.LightR}" />
+      <NumericUpDown Grid.Column="1" Minimum="0" Maximum="64" Increment="0.1" FormatString="F2" Value="{Binding Settings.LightG}" />
+      <NumericUpDown Grid.Column="2" Minimum="0" Maximum="64" Increment="0.1" FormatString="F2" Value="{Binding Settings.LightB}" />
+     </Grid>
+     <TextBlock Text="Light intensity" /><NumericUpDown Minimum="0" Maximum="10000" Increment="0.1" Value="{Binding Settings.LightIntensity}" />
+     <TextBlock Text="Environment intensity" /><NumericUpDown Minimum="0" Maximum="1000" Increment="0.1" Value="{Binding Settings.EnvironmentIntensity}" />
+     <TextBlock Text="Environment rotation (degrees)" /><NumericUpDown Minimum="-360" Maximum="360" Value="{Binding Settings.EnvironmentRotation}" />
+    </StackPanel></Expander>
+    <Expander Header="Shadows"><StackPanel Spacing="8">
+     <CheckBox Content="Directional shadows" IsChecked="{Binding Settings.Shadows}" />
+     <ComboBox ItemsSource="{Binding Settings.ShadowResolutions}" SelectedItem="{Binding Settings.ShadowResolution}" HorizontalAlignment="Stretch" />
+     <TextBlock Text="Depth bias" /><NumericUpDown Minimum="0" Maximum="1" Increment="0.0001" FormatString="F4" Value="{Binding Settings.ShadowBias}" />
+     <TextBlock Text="Normal bias" /><NumericUpDown Minimum="0" Maximum="10" Increment="0.001" FormatString="F3" Value="{Binding Settings.ShadowNormalBias}" />
+    </StackPanel></Expander>
+    <Expander Header="Reflections"><StackPanel Spacing="8">
+     <CheckBox Content="Reflections" IsChecked="{Binding Settings.Reflections}" />
+     <CheckBox Content="Progressive accumulation" IsChecked="{Binding Settings.History}" />
+     <CheckBox Content="Spatial denoising" IsChecked="{Binding Settings.Denoise}" />
+     <CheckBox Content="Temporal reprojection" IsChecked="{Binding Settings.Temporal}" />
+    </StackPanel></Expander>
+    <Expander Header="Camera and scheduling"><StackPanel Spacing="8">
+     <TextBlock Text="Navigation speed" /><NumericUpDown Minimum="0.01" Maximum="1000" Increment="0.5" Value="{Binding Settings.CameraSpeed}" />
+     <TextBlock Text="Target FPS (0 = uncapped, VSync off)" /><NumericUpDown Minimum="0" Maximum="240" Value="{Binding Settings.TargetFps}" />
+     <CheckBox Content="Continuous redraw" IsChecked="{Binding Settings.Continuous}" />
+     <CheckBox Content="GPU profiling" IsChecked="{Binding Settings.Profiling}" />
+    </StackPanel></Expander>
+    <WrapPanel><Button Content="Defaults" Command="{Binding Settings.ResetCommand}" /><Button Content="Save preset" Command="{Binding Settings.SavePresetCommand}" /><Button Content="Load preset" Command="{Binding Settings.LoadPresetCommand}" /></WrapPanel>
+   </StackPanel>
+   <Expander Header="Device capabilities"><TextBlock Text="{Binding Settings.CapabilityText}" TextWrapping="Wrap" /></Expander>
    <Expander Header="Host diagnostics"><TextBlock Text="{Binding DetailsText}" TextWrapping="Wrap" /></Expander>
    <TextBox x:Name="ManagedInput" PlaceholderText="Type here to test input focus" />
    <TextBlock Text="Fixed scene · runtime overrides only" TextWrapping="Wrap" />

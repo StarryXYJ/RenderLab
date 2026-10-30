@@ -63,15 +63,23 @@ Close 首先停止 UI Timer，再通知渲染线程停止，等待其释放展�
 
 每个 Host 保存自己的 Session 代际。旧 Host 重复关闭不能销毁新 Session；重建保留已接受配置。服务不使用可能在 finalizer 线程执行 Destroy 的 SafeHandle。
 
-## C ABI v5 与诊断
+## C ABI v6、运行配置与诊断
 
 头文件为 src/editor/native/editor_bridge.h，托管声明为 Interop/NativeMethods.cs；DLL 和托管程序同版本发布。固定 Cdecl、UTF-8 借用字符串、代际 uint64 Handle、线程局部错误缓冲区。创建参数包含 backend、validation、profiling、target_fps 和 continuous。最多四个 Session 的句柄槽位仍是原型上限，多视口并发并未验收。M7.2a 升为 v5，新增 Stop（退休但保留 Session 以收取末尾日志）、批量 UTF-8 JSON 日志读取和相机 pose 值传递；原有 Stats/CloseReport 大小不变。日志容量查询钉住批次，成功复制后才消费，随后 Destroy 使旧 Session 失效。
 
-Dock.Avalonia 12.0.0.2 使用固定面板身份和受限版本化布局数据。默认只有 Scene/Render Settings，其他面板从 Window 菜单打开；Scene 跨父窗口经过 NativeControlHost 的销毁/重建，保存相机 pose 与管线/曝光。布局切换和浮窗关闭沿用 owner-thread GPU 退休及受限 Win32 握手，仍可能短暂阻塞窗口线程；计划中的异步设备重建在 M7.2c，不以本轮浮动成功代表无停顿迁移。
+Dock.Avalonia 12.0.0.2 使用固定面板身份和受限版本化布局数据。默认只有 Scene/Render Settings，其他面板从 Window 菜单打开。根导航指向直接包含的完整工作区；Document.Context 保存面板 ID 与 View 工厂，每个 presenter 创建自己的控件，共享 ViewModel/服务，避免浮动或重建时复用已有可视父节点的 Control。新 Host 先退休仍活动的旧 Session，旧 Host 随后的关闭由代际校验拒绝。Scene 跨父窗口经过 NativeControlHost 的销毁/重建，保存相机 pose 与完整运行配置。布局切换和浮窗关闭沿用 owner-thread GPU 退休及受限 Win32 握手，仍可能短暂阻塞窗口线程；计划中的异步设备重建在 M7.2c，不以本轮浮动成功代表无停顿迁移。
 
 Editor 托管日志接入 Serilog 4.2.0、Extensions.Logging 9.0.0 和 File 7.0.0，输出目录的 logs 保存 UTC 结构化滚动日志。有界内存投影供 Log Dock 按级别/来源/文本查看；C++ Logger 可选有界镜像，UI 批量读取后以原时间/级别/Session/序号汇入。关闭面板继续记录，清空显示保留累计错误数，原生关闭后先 drain 再 Destroy。基础 Profiler 当前只展示既有宿主统计，Graph 数据查看仍待 M7.2d，不把面板骨架当作 Viewer 已完成。
 
-Stats 顺序布局 232 字节；CloseReport 为 24 字节，最后一个 uint32 为 worker_failed，异步渲染/初始化/关闭失败时置一，不把失败关闭当作成功。字段包括 Native Tick、Fence、Acquire、Render、Present、Resize、Diagnostics、Graph Compile/Prepare/Record、CPU 场景准备与建图、已完成 GPU Pass 总时间及源帧，另有原生帧间隔/完成时间、样本丢弃计数、activity/ready、UI/render 线程 ID。activity 为 0 初始化、1 活动、2 空闲、3 暂停、4 等待尺寸稳定。所有字段跨边界均为固定宽度数值。
+M7.2b 将桥接升为 v6。Stats 顺序布局 256 字节，在原 232 字节字段后加入 config_revision、gpu_config_revision、session_generation；CloseReport 仍为 24 字节，最后一个 uint32 为 worker_failed，异步渲染/初始化/关闭失败时置一，不把失败关闭当作成功。字段包括 Native Tick、Fence、Acquire、Render、Present、Resize、Diagnostics、Graph Compile/Prepare/Record、CPU 场景准备与建图、已完成 GPU Pass 总时间及源帧，另有原生帧间隔/完成时间、样本丢弃计数、activity/ready、UI/render 线程 ID。activity 为 0 初始化、1 活动、2 空闲、3 暂停、4 等待尺寸稳定。所有字段跨边界均为固定宽度数值。
+
+`rl_viewport_config` 为 size/version=112/1 的定宽配置，包含管线/提交/线程/队列/Alias/调试视图、profiling/目标帧率/连续刷新、反射 flags、阴影、导航速度与照明/环境/曝光覆盖。原生校验枚举、布尔、容量与有限数值后接受单调递增 request_id；渲染 owner 复用 SceneRenderer::ValidateOptions 检查能力与材质/场景限制，再替换本视口选项。光照/环境/曝光只覆盖提取后的 Snapshot，源 Scene/Material 不变；相机继续由原生导航所有。
+
+`rl_viewport_config_state` 为 272 字节，携带 requested/applied 配置与 requested/applied/rejected/superseded ID。status=0 初始化、1 Pending、2 Applied、3 Rejected。Applied 只在该配置成功 Render/Present 后发布；暂停时可准备配置但保持 Pending，恢复或 Single frame 后确认。原生初始化发布只读设备/管线/提交能力 JSON 和从场景提取的 defaults，配置拒绝文本使用独立有界复制接口。后端与 Validation 仍为创建参数，本轮不接入 M7.2c 的图形 API 切换。
+
+目标帧率 0↔非 0 会在 render owner 退休并重建 Swapchain，失败先尝试恢复原展示模式；不创建第二个 Device。非 0 帧率间切换只更新调度期限。单帧要求暂停的 ready Session，隐藏/最小化时不强制 Present。宿主重建保存完整运行配置与相机，新 Session 重新校验后应用；UserSettings/Editor/render-preset.json 只保存有版本的数值配置，读入同样走原生验证，不保存 GPU 指针或资源身份。
+
+完成帧、GPU profile slot 和托管导出的 FrameSample 都携带实际配置/Session 来源；配置变化清理旧统计窗口，不把旧配置的 GPU 时间归到新帧。曝光仅改变显示，不无条件清空 HDR progressive 历史；照明/环境变化沿用 Renderer 的真实历史签名失效。
 
 ReadFrames 批量排空固定 512 项完成帧队列；满时丢最旧项并增加 dropped_samples，不无限增长。每个成功 Present 返回后在渲染线程记时间；UI 分批读取不会改变间隔。FPS/P95 来自成功提交展示调用的完成间隔，不是显示器扫描输出。暂停、Resize 等待、静态空闲打断连续区间；空闲时状态栏直接显示 Idle，不把旧活动 FPS 当作当前帧率。基准报告保留丢样计数，发生丢样的结果不可视为完整分布。
 
@@ -87,4 +95,4 @@ ReadFrames 批量排空固定 512 项完成帧队列；满时丢最旧项并增�
 
 MVVM/DI 修订后的托管 Debug/Release 构建通过，原生方向 CPU 回归和双后端 MVVM 集成回归通过，含配置失败回滚和旧 Host 重复关闭。最终运行证据在 `out/m7/mvvm-final/{dx12,vulkan}`，每后端两次关闭的资源账本和验证错误仍均为 0。
 
-人工画面质量与真实鼠标键盘交互仍未验收。本轮在固定 144 DPI（150%）下完成程序内自动回归，不代表跨屏切换已经验证。跨屏 DPI、Docking/浮动窗口重挂接、覆盖层、长时间运行、多视口、设备丢失和原生 Debug 配置运行仍未验证。Recreate 是销毁再新建，不代表同一活跃 Swapchain 的跨父窗口重挂接通过；M7.1 的完整退出条件继续保留。
+当前自检还验证 Settings 实际进入顶层可视树、Log 打开后展示原生记录、Scene 浮动/停回、菜单恢复保存布局、完整运行配置与旧 Session 隔离；覆盖合法/非法/合并请求、暂停与单帧、生效版本、历史失效、本机预设和源文件 hash。实际构建、后端、DPI、证据目录及未验证项统一记录在 [阶段计划](../design/phaseplan.md#m72-固定场景渲染工作台)。人工画面质量、真实鼠标键盘和跨屏 DPI 仍需独立验收，合成输入和固定显示缩放不代表这些项目已通过。Recreate 是销毁再新建，不代表同一活跃 Swapchain 的跨父窗口重挂接通过。

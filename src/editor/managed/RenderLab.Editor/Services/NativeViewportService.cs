@@ -19,7 +19,18 @@ public sealed class NativeViewportService : IDisposable
     private float[]? savedCamera;
     private long lastLogPoll;
     private ulong lastNativeSequence;
+    private bool nativeLogFailed;
     internal ulong NativeLogDropped { get; private set; }
+    internal ViewportConfigState Configuration { get; private set; }
+    internal ViewportConfig Defaults { get; private set; }
+    internal string Capabilities { get; private set; } = "";
+    internal string ConfigurationError { get; private set; } = "";
+    internal event Action? ConfigurationUpdated;
+    private ViewportConfig? savedConfiguration;
+    private ulong requestSequence;
+    private bool restoreConfiguration;
+    internal string UserSettingsPath => options.Smoke || options.BenchmarkSeconds > 0 ? options.Output :
+        Path.Combine(Path.GetDirectoryName(options.Project)!, "UserSettings", "Editor");
     private readonly ViewportStats[] completedFrames = new ViewportStats[512];
     internal FrameTimingWindow Timings { get; } = new();
     internal uint AbiVersion { get; private set; }
@@ -46,10 +57,13 @@ public sealed class NativeViewportService : IDisposable
         Dispatcher.UIThread.VerifyAccess();
         if (Session != 0)
         {
-            throw new InvalidOperationException("The viewport service is already attached to a host.");
+            // Dock can materialize the replacement presenter before detaching a cached one.
+            // Retire the old owner first; its later close is rejected by session generation.
+            Close(Session);
         }
         AbiVersion = NativeMethods.AbiVersion();
-        if (AbiVersion != 5 || Marshal.SizeOf<ViewportStats>() != 232 || Marshal.SizeOf<CloseReport>() != 24)
+        if (AbiVersion != 6 || Marshal.SizeOf<ViewportStats>() != 256 || Marshal.SizeOf<CloseReport>() != 24 ||
+            Marshal.SizeOf<ViewportConfig>() != 112 || Marshal.SizeOf<ViewportConfigState>() != 272)
         {
             throw new InvalidOperationException("Managed/native bridge ABI mismatch.");
         }
@@ -59,7 +73,11 @@ public sealed class NativeViewportService : IDisposable
             options.Project, options.Shaders, Path.Combine(options.Output, $"native-{++logSequence}.log"),
             out var session, out var child));
         Session = session;
+        Configuration = default;
+        Capabilities = "";
+        restoreConfiguration = savedConfiguration is not null;
         lastNativeSequence = 0;
+        nativeLogFailed = false;
         Timings.Reset();
         Child = child;
         try
@@ -80,7 +98,17 @@ public sealed class NativeViewportService : IDisposable
         Dispatcher.UIThread.VerifyAccess();
         if (Session != 0)
         {
-            NativeMethods.Check(NativeMethods.Configure(Session, pipeline, exposure, reset ? 1u : 0u));
+            if (Configuration.Ready != 0 && !reset)
+            {
+                var config = EditableConfig;
+                config.Pipeline = pipeline; config.Exposure = exposure;
+                Submit(config);
+            }
+            else
+            {
+                NativeMethods.Check(NativeMethods.Configure(Session, pipeline, exposure, reset ? 1u : 0u));
+                if (Configuration.Ready != 0) { ReadConfiguration(); }
+            }
         }
         Pipeline = pipeline;
         Exposure = exposure;
@@ -99,10 +127,15 @@ public sealed class NativeViewportService : IDisposable
         }
         NativeMethods.Check(NativeMethods.GetStats(Session, out var stats));
         Stats = stats;
+        ReadConfiguration();
         if (Stopwatch.GetElapsedTime(lastLogPoll).TotalMilliseconds >= 250)
         {
             lastLogPoll = Stopwatch.GetTimestamp();
-            DrainLogs(false);
+            if (!nativeLogFailed)
+            {
+                try { DrainLogs(false); }
+                catch (Exception error) { nativeLogFailed = true; Program.Logging?.Logger.Warning(error, "Native log projection disabled; original file remains available"); }
+            }
         }
         StatsUpdated?.Invoke(stats);
     }
@@ -123,18 +156,93 @@ public sealed class NativeViewportService : IDisposable
             return;
         }
         var pose = new float[7];
-        if (NativeMethods.Camera(Session, pose, 0) == 0) { savedCamera = pose; }
         NativeMethods.Check(NativeMethods.Stop(Session, out var report));
-        DrainLogs(true);
+        if (NativeMethods.GetConfig(Session, out var finalConfiguration, out _) == 0) { Configuration = finalConfiguration; }
+        if (Configuration.Ready != 0) { savedConfiguration = EditableConfig; }
+        if (NativeMethods.Camera(Session, pose, 0) == 0) { savedCamera = pose; }
+        try { DrainLogs(true); }
+        catch (Exception error) { Program.Logging?.Logger.Warning(error, "Final native log drain failed; original file remains available"); }
         NativeMethods.Check(NativeMethods.Destroy(Session, out _));
         Session = 0;
         Child = 0;
+        var state = Configuration; state.Ready = 0;
+        Configuration = state;
+        ConfigurationUpdated?.Invoke();
         CloseReports.Add(report);
         File.WriteAllText(Path.Combine(options.Output, "close-reports.json"),
             JsonSerializer.Serialize(CloseReports, EditorDiagnostics.JsonOptions));
     }
 
     public void Dispose() => Close(Session);
+
+    internal ViewportConfig EditableConfig => Configuration.Status == 3 && Configuration.Applied.Size != 0 ? Configuration.Applied : Configuration.Requested;
+    internal void Submit(ViewportConfig config)
+    {
+        Dispatcher.UIThread.VerifyAccess();
+        if (Session == 0 || Configuration.Ready == 0) { throw new InvalidOperationException("Viewport is not ready for configuration."); }
+        config.Size = 112; config.Version = 1;
+        config.RequestId = Math.Max(requestSequence, Configuration.RequestedId) + 1;
+        requestSequence = config.RequestId;
+        NativeMethods.Check(NativeMethods.ConfigureV2(Session, in config));
+        var state = Configuration;
+        state.SupersededId = state.Status == 1 ? state.RequestedId : state.SupersededId;
+        state.Requested = config; state.RequestedId = config.RequestId; state.Status = 1;
+        Configuration = state; ConfigurationError = "";
+        Pipeline = config.Pipeline; Exposure = config.Exposure;
+        Program.Logging?.Logger.Information("Requested configuration {RequestId} for {SessionGeneration}", config.RequestId, Session);
+        ConfigurationUpdated?.Invoke();
+    }
+    internal void SingleStep() => NativeMethods.Check(NativeMethods.Step(Session));
+    internal void ResetConfiguration() => Submit(Defaults);
+    internal void SavePreset()
+    {
+        if (Configuration.Ready == 0) { throw new InvalidOperationException("Viewport is not ready."); }
+        Directory.CreateDirectory(UserSettingsPath);
+        File.WriteAllText(Path.Combine(UserSettingsPath, "render-preset.json"), JsonSerializer.Serialize(EditableConfig, EditorDiagnostics.JsonOptions) + "\n");
+    }
+    internal void LoadPreset()
+    {
+        var path = Path.Combine(UserSettingsPath, "render-preset.json");
+        if (new FileInfo(path).Length > 16384) { throw new InvalidDataException("Preset exceeds budget."); }
+        var config = JsonSerializer.Deserialize<ViewportConfig>(File.ReadAllText(path), EditorDiagnostics.JsonOptions);
+        if (config.Version != 1 || config.Size != 112) { throw new InvalidDataException("Unsupported preset schema."); }
+        Submit(config);
+    }
+    private string ReadConfigText(uint kind)
+    {
+        NativeMethods.ConfigText(Session, kind, null, 0, out var size);
+        for (var attempt = 0; attempt < 3; ++attempt)
+        {
+            if (size > 4 * 1024 * 1024) { throw new InvalidDataException("Configuration snapshot exceeds budget."); }
+            var bytes = new byte[size];
+            var status = NativeMethods.ConfigText(Session, kind, bytes, size, out size);
+            if (status == 5) { continue; }
+            NativeMethods.Check(status);
+            return Encoding.UTF8.GetString(bytes, 0, (int)size - 1);
+        }
+        throw new InvalidOperationException("Configuration snapshot changed repeatedly during copy.");
+    }
+    private void ReadConfiguration()
+    {
+        NativeMethods.Check(NativeMethods.GetConfig(Session, out var state, out var defaults));
+        var changed = state.RequestedId != Configuration.RequestedId || state.AppliedId != Configuration.AppliedId ||
+            state.Status != Configuration.Status || state.Ready != Configuration.Ready;
+        Configuration = state; Defaults = defaults;
+        requestSequence = Math.Max(requestSequence, state.RequestedId);
+        if (state.Ready != 0 && Capabilities.Length == 0) { Capabilities = ReadConfigText(0); changed = true; }
+        if (restoreConfiguration && state.Ready != 0)
+        {
+            restoreConfiguration = false;
+            Submit(savedConfiguration!.Value);
+            return;
+        }
+        if (changed)
+        {
+            ConfigurationError = state.Status == 3 ? ReadConfigText(1) : "";
+            if (state.Status == 3 && state.Applied.Size != 0) { Pipeline = state.Applied.Pipeline; Exposure = state.Applied.Exposure; }
+            ConfigurationUpdated?.Invoke();
+        }
+    }
 
     private void DrainLogs(bool all)
     {
