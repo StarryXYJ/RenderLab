@@ -68,11 +68,16 @@ internal sealed class EditorLogging : IDisposable
     internal LogBuffer Buffer { get; } = new();
     internal Logger Logger { get; }
     internal string DirectoryPath { get; }
+    internal string SinkError { get; private set; } = "";
     internal EditorLogging(EditorOptions options)
     {
         DirectoryPath = Path.Combine(options.Output, "logs");
         Directory.CreateDirectory(DirectoryPath);
-        Serilog.Debugging.SelfLog.Enable(Console.Error);
+        Serilog.Debugging.SelfLog.Enable(message =>
+        {
+            SinkError = message.Length > 4096 ? message[..4096] : message;
+            Console.Error.WriteLine(message);
+        });
         Logger = new LoggerConfiguration().MinimumLevel.Information()
             .Enrich.WithProperty("EditorRunId", Guid.NewGuid().ToString("N"))
             .WriteTo.File(new UtcJsonFormatter(), Path.Combine(DirectoryPath, "editor-.jsonl"),

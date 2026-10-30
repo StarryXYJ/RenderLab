@@ -399,6 +399,10 @@ M7.2e 的 Profiler 提供完成帧曲线/P50/P95/P99、CPU/GPU 分段、真实�
 
 观察成本可用 `--benchmark-seconds 8 --warmup-seconds 2 --target-fps 0 --observation basic|timing|graph|readback` 分别运行。四档均使用 GPU Culled 与同一默认视口尺寸，依次为基础计数、附加 RHI/GPU timing、附加 500 ms 图元数据投影、附加 GPU 可见数 Copy/500 ms Profiler 投影。诊断投影在后台执行，不打开 Dock 改变分辨率，因此不包括面板 Canvas 绘制成本；四档输出目录必须不同，比较 performance.json 中 options/源帧/分辨率/丢样。它是一次窗口短测，不代表稳定吞吐或显示器延迟。
 
+`--isolated --output 独立目录` 从默认两面板布局启动，将布局/预设保存在该目录，适合界面复验。普通运行恢复用户上次保存的布局，因此以后启动可能包含诊断面板。
+
+M7.2f 持续验收使用 `--backend dx12 --validation on --soak-seconds 1800 --output out/m72f/soak-dx12`，Vulkan 使用另一输出目录。该模式自动隔离用户布局/预设，以 30 FPS 连续渲染并按时间切换三管线、timing/可见数读回/Alias/线程数和诊断页，定期重建布局；同时在实际连接屏幕间移动，检查当前 DPI 下的原生像素尺寸。`soak-samples.jsonl` 流式保存内存/帧数/丢样/历史预算，`soak-progress.json` 为最新进度；运行到指定墙钟时间后产生 `soak.json`，包含源文件 hash、各 Session 关闭报告和实测屏幕信息。失败写 `soak-failure.txt` 并非零退出。30 分钟需实际等待，不以短测或合成 DPI 代替；UI 手工输入与画面质量另行复验。
+
 双后端自检应分别运行。WinExe 在终端的启动/等待语义可能不同，需要可靠退出码时使用 `Start-Process -Wait -PassThru`；下面的隐藏启动用于无人值守自检，手动检查界面直接运行上面的命令。
 
 ```powershell

@@ -12,6 +12,12 @@ internal sealed class DeviceSwitchTransaction(DeviceSelection initial)
     internal string Error { get; private set; } = "";
     internal event Action? Changed;
     internal void Report(string status) { Status = status; Changed?.Invoke(); }
+    internal void ObserveReady(DeviceSelection selection)
+    {
+        if (Busy || (Current == selection && !Failed)) { return; }
+        Current = selection; Failed = false; Error = "";
+        Report("Ready (viewport recreated)");
+    }
 
     internal async Task RunAsync(DeviceSelection target, Func<DeviceSelection, Task> attempt, CancellationToken cancellation)
     {

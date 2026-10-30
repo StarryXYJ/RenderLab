@@ -19,6 +19,9 @@ public class DeviceSwitchTests
         Assert.That(controller.Current, Is.EqualTo(initial));
         Assert.That(controller.Busy, Is.False);
         Assert.That(attempts, Is.EqualTo(1));
+        controller.ObserveReady(new("vulkan", false));
+        Assert.That(controller.Current, Is.EqualTo(new DeviceSelection("vulkan", false)),
+            "A dock-created replacement must report the device that actually produced its confirmed frame.");
     }
     [Test]
     public async Task FailedTargetRollsBackExactlyOnce()

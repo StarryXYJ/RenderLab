@@ -10,6 +10,7 @@
 #include <fstream>
 #include <iostream>
 #include <iterator>
+#include <sstream>
 #include <stdexcept>
 #include <string_view>
 
@@ -230,6 +231,29 @@ int main()
         }
         Require(wrongRole, "Depth format without depth attachment support was accepted");
 
+        {
+            std::ostringstream failed;
+            failed.setstate(std::ios::badbit);
+            renderlab::Logger logger(failed);
+            logger.EnableMirror();
+            logger.Write(renderlab::LogLevel::Info, "editor survives failed file sink");
+            uint64_t dropped = 0;
+            const auto events = logger.DrainMirror(1, dropped);
+            Require(logger.FileFailed() && events.size() == 1 &&
+                        events.front().message == "editor survives failed file sink",
+                    "Editor file failure terminated or lost the independent mirror");
+            renderlab::Logger strict(failed);
+            bool rejected = false;
+            try
+            {
+                strict.Write(renderlab::LogLevel::Info, "strict host write");
+            }
+            catch (const std::runtime_error&)
+            {
+                rejected = true;
+            }
+            Require(rejected, "Strict native hosts silently ignored file failure");
+        }
         const auto path = std::filesystem::path("test-output") / "nested" / "logger.log";
         {
             renderlab::Logger logger(path);

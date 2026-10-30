@@ -36,11 +36,22 @@ void Logger::Write(LogLevel level, std::string_view message)
                                   utc.tm_min, utc.tm_sec, label, message);
     const std::scoped_lock lock(mutex_);
     std::clog << line;
-    file_ << line;
-    file_.flush();
-    if (!file_)
+    if (!fileFailed_)
     {
-        throw std::runtime_error("Writing log file failed");
+        try
+        {
+            *output_ << line;
+            output_->flush();
+            if (!*output_)
+                throw std::runtime_error("Writing log file failed");
+        }
+        catch (...)
+        {
+            if (!mirrorEnabled_)
+                throw;
+            fileFailed_ = true;
+            std::clog << "Native log file failed; editor mirror continues.\n";
+        }
     }
     if (mirrorEnabled_)
     {
@@ -71,6 +82,11 @@ void Logger::Write(LogLevel level, std::string_view message)
             ++dropped_;
         }
     }
+}
+bool Logger::FileFailed() const
+{
+    const std::scoped_lock lock(mutex_);
+    return fileFailed_;
 }
 void Logger::EnableMirror()
 {

@@ -20,6 +20,7 @@ public partial class MainWindow : Window
     private readonly NativeViewportService? viewportService;
     private readonly SmokeTest? smoke;
     private readonly ViewportBenchmark? benchmark;
+    private readonly WorkbenchSoak? soak;
     private RenderSettingsView settings = null!;
     private ContentControl? viewportContainer;
     private readonly string layoutPath = "";
@@ -76,10 +77,10 @@ public partial class MainWindow : Window
         ProfilerModel.GraphRequested += () => Docks.Show("Render Graph");
         Workbench.InitializeFactory = false;
         Workbench.InitializeLayout = false;
-        var settingsRoot = options.Smoke || options.BenchmarkSeconds > 0 ? options.Output : Path.Combine(Path.GetDirectoryName(options.Project)!, "UserSettings", "Editor");
+        var settingsRoot = options.Smoke || options.Isolated || options.BenchmarkSeconds > 0 || options.SoakSeconds > 0 ? options.Output : Path.Combine(Path.GetDirectoryName(options.Project)!, "UserSettings", "Editor");
         layoutPath = Path.Combine(settingsRoot, "layout.json");
         Docks.UseLayout(Docks.CreateLayout());
-        if (!options.Smoke && options.BenchmarkSeconds == 0) { LoadLayout(); }
+        if (!options.Smoke && !options.Isolated && options.BenchmarkSeconds == 0 && options.SoakSeconds == 0) { LoadLayout(); }
         Workbench.Layout = Docks.Root;
         dragWatch = Dock.Avalonia.Controls.DockControl.IsDraggingDockProperty.Changed.AddClassHandler<Dock.Avalonia.Controls.DockControl>((control, args) =>
         {
@@ -119,6 +120,7 @@ public partial class MainWindow : Window
         {
             benchmark = new ViewportBenchmark(this, viewportService, options);
         }
+        else if (options.SoakSeconds > 0) { soak = new WorkbenchSoak(this, viewportService, options); }
     }
 
     private void OnViewportFailure(Exception error) => smoke?.Fail(error);
@@ -131,6 +133,7 @@ public partial class MainWindow : Window
     {
         var counts = Program.Logging!.Buffer.Counts;
         LogStatus.Content = $"Log · W {counts.Warnings} / E {counts.Errors} · dropped {viewportService!.NativeLogDropped + (ulong)counts.Dropped}";
+        if (viewportService.NativeLogFileFailed || Program.Logging.SinkError.Length > 0) { LogStatus.Content += " · log file failed"; }
     }
 
     internal void RecreateViewport()

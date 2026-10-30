@@ -2,7 +2,7 @@ namespace RenderLab.Editor.Configuration;
 
 public sealed record EditorOptions(string Backend, string Project, string Shaders, string Output, bool Smoke,
     bool Validation, bool Profiling, uint Pipeline, double BenchmarkSeconds, double WarmupSeconds,
-    uint TargetFps = 60, string Observation = "normal")
+    uint TargetFps = 60, string Observation = "normal", double SoakSeconds = 0, bool Isolated = false)
 {
     internal static EditorOptions Parse(string[] args)
     {
@@ -21,10 +21,13 @@ public sealed record EditorOptions(string Backend, string Project, string Shader
         uint pipeline = 2;
         uint targetFps = 60;
         var observation = "normal";
+        double soakSeconds = 0;
+        var isolated = false;
         double benchmarkSeconds = 0, warmupSeconds = 2;
         for (var i = 0; i < args.Length; ++i)
         {
             var key = args[i];
+            if (key == "--isolated") { isolated = true; continue; }
             if (key == "--smoke")
             {
                 smoke = true;
@@ -44,6 +47,7 @@ public sealed record EditorOptions(string Backend, string Project, string Shader
                 case "--profile": profiling = ParseSwitch(args[i]); break;
                 case "--target-fps": targetFps = uint.Parse(args[i], System.Globalization.CultureInfo.InvariantCulture); break;
                 case "--observation": observation = args[i]; break;
+                case "--soak-seconds": soakSeconds = double.Parse(args[i], System.Globalization.CultureInfo.InvariantCulture); break;
                 case "--pipeline":
                     pipeline = args[i] switch
                     {
@@ -60,7 +64,9 @@ public sealed record EditorOptions(string Backend, string Project, string Shader
         if (backend is not ("dx12" or "vulkan") || !File.Exists(project) || !Directory.Exists(shaders) ||
             !double.IsFinite(benchmarkSeconds) || benchmarkSeconds < 0 || benchmarkSeconds > 120 ||
             !double.IsFinite(warmupSeconds) || warmupSeconds < 0 || warmupSeconds > 30 ||
-            (smoke && benchmarkSeconds > 0) || targetFps > 240 || observation is not ("normal" or "basic" or "timing" or "graph" or "readback"))
+            (smoke && (benchmarkSeconds > 0 || soakSeconds > 0)) || (benchmarkSeconds > 0 && soakSeconds > 0) ||
+            !double.IsFinite(soakSeconds) || soakSeconds < 0 || soakSeconds > 7200 || targetFps > 240 ||
+            observation is not ("normal" or "basic" or "timing" or "graph" or "readback"))
         {
             throw new ArgumentException("Select dx12/vulkan and existing project/shader paths.");
         }
@@ -72,7 +78,7 @@ public sealed record EditorOptions(string Backend, string Project, string Shader
         validation ??= smoke;
 #endif
         return new EditorOptions(backend, Path.GetFullPath(project), Path.GetFullPath(shaders), Path.GetFullPath(output), smoke,
-            validation.Value, profiling, pipeline, benchmarkSeconds, warmupSeconds, targetFps, observation);
+            validation.Value, profiling, pipeline, benchmarkSeconds, warmupSeconds, targetFps, observation, soakSeconds, isolated);
     }
 
     private static bool ParseSwitch(string value) => value switch

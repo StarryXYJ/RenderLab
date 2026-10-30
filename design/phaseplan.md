@@ -5,7 +5,7 @@
 ## 当前状态
 
 - 当前实施阶段：M7 固定场景渲染工作台；M6 核心 M6.1–M6.5、M0–M5、R1、B1–B3 DONE。可选 M6.0 Forward+ 仍为 DEFERRED。
-- 当前工作项：M7.2a–b DONE；用户授权实现到 M7.2f，M7.2c–d 已完成，M7.2e 已完成，当前 M7.2f 固定场景集成验收 IN_PROGRESS。M7.3–M7.6 本轮 DEFERRED。
+- 当前工作项：用户授权实现到 M7.2f；M7.2a–e DONE，M7.2f 实现与自动集成验收已完成，当前人工输入/画质及混合 DPI 复验 IN_PROGRESS。M7.3–M7.6 本轮 DEFERRED。
 - 用户约定：每个子阶段验收完成即提交 Git，无阻塞时在当前授权范围内继续推进。此前 M7 修改已进入 Git，本轮开始时工作区干净。
 
 | 阶段 | 目标 | 前置依赖 | 状态 |
@@ -21,7 +21,7 @@
 | B3 | 逐帧资源复用优化 | B2 | DONE |
 | M5 | Deferred 与光追基础 | M4 | DONE |
 | M6 | GPU Driven 与执行优化 | M4；光追调度测试另需 M5 | DONE（M6.1–M6.5；可选 M6.0 延期） |
-| M7 | C# 编辑器与完整项目工作流 | M4；默认在 M5、M6 的核心目标后开展 | IN_PROGRESS（M7.1a–g、M7.2a–e 已完成；M7.2f 集成验收进行中） |
+| M7 | C# 编辑器与完整项目工作流 | M4；默认在 M5、M6 的核心目标后开展 | IN_PROGRESS（M7.1a–g、M7.2a–e 已完成；M7.2f 实现/自动验收完成，人工复验未关闭） |
 | M8 | 一个深入的渲染专题与作品交付 | 所选专题依赖已满足 | NOT_STARTED |
 
 默认顺序为 M0 到 M8。M5 和 M6 在 M4 后可以独立推进；单阶段内按下列子阶段顺序执行，不同时建设多个高级系统。完整编辑器后置，M4 只实现运行内容所需的最小项目与资源能力。
@@ -94,45 +94,36 @@ M0–M6 核心能力及 R1、B1–B3 已完成（2026 年 10 月 23–30 日）�
 
 ### M7.1 桥接与视口试验
 
-状态：M7.1a–g DONE（2026 年 10 月 27 日）。结果：Avalonia/MVVM/DI、代际 C ABI/UTF-8、子 HWND 与 MTA 渲染 owner、输入/关闭、帧诊断、按需刷新/Resize 合并及 0–240 FPS 调度。双后端自动自检、托管两配置和原生输入回归通过，关闭账本/验证错误为 0；运行证据 `out/m7/{mvvm-final,thread,scheduling,uncapped}`。接口与测量见 [宿主](../docs/editor-host.md)、[调度实测](../docs/performance/editor-scheduling.md)，构建见 [手册](../manual/build.md#avalonia-嵌入原型)。真实输入/人工画面、跨屏 DPI 和长期压力继续由 M7.2f 验收，已有自动 Present 不替代这些项目。
+状态：M7.1a–g DONE（2026 年 10 月 27 日）。结果：Avalonia/MVVM/DI、代际 C ABI/UTF-8、子 HWND 与 MTA 渲染 owner、输入/关闭、帧诊断、按需刷新/Resize 合并及 0–240 FPS 调度。双后端自动自检、托管两配置和原生输入回归通过，关闭账本/验证错误为 0；运行证据 `out/m7/{mvvm-final,thread,scheduling,uncapped}`。接口与测量见 [宿主](../docs/editor-host.md)、[调度实测](../docs/performance/editor-scheduling.md)，构建见 [手册](../manual/build.md#avalonia-嵌入原型)。跨屏 96 DPI 和长期压力证据见 M7.2f；真实持续输入/人工画质及混合 DPI 仍需复验，已有自动 Present 不替代这些项目。
 
 ### M7.2 固定场景渲染工作台
 
 状态：IN_PROGRESS；2026 年 10 月 30 日用户授权实现至 M7.2f。设计与契约见 [工作台](../docs/editor-workbench.md)，取舍与参考见 [设计复查](design-review.md#固定场景渲染工作台设计复查)。每个子阶段实施并验证后分别提交，硬件/人工未验证项明确保留。
 
-#### M7.2a–b Dock/日志与运行配置
+#### M7.2a–e 已完成摘要
 
-状态：DONE（2026 年 10 月 30 日），提交 `779941e`、`e594733`。结果：默认 Scene/Settings、菜单按需打开诊断面板、布局保存/恢复与浮动、Serilog/有界原生日志；v6 强类型运行覆盖、能力与请求/实际生效版本、暂停/单帧、预设及跨宿主保留。源 Scene/Material 只读。
+状态：DONE（2026 年 10 月 30 日）。各子阶段分别提交；接口见 [工作台](../docs/editor-workbench.md)、[宿主/ABI](../docs/editor-host.md)，操作见 [手册](../manual/build.md#avalonia-嵌入原型)。
 
-验证：RTX 5060/96 DPI，托管 Debug/Release 零警告构建、各 11/11；原生 Release 所选 11/11、Debug 所选 4/4。双配置 × 双后端 Avalonia 自检各 20 项，覆盖真实面板挂载/菜单恢复、三管线四提交、合并/非法配置、历史失效、预设与调度；各 8 次正常及初始化中关闭账本/错误/worker_failed 为 0，23 源文件 hash 不变。证据 `out/m72b/restored-{release,debug}-{dx12,vulkan}`、`out/m72b/tests`。
+| 子阶段 / 提交 | 结果 | 实际验证与证据 |
+| --- | --- | --- |
+| a–b / `779941e`、`e594733` | 默认 Scene/Settings、菜单诊断面板、布局/浮动、Serilog/原生日志；强类型运行配置、能力/版本确认、暂停/单帧、预设及跨宿主保留，源资产只读 | 托管两配置各 11/11；原生 Release 所选 11/11、Debug 4/4；双配置×双后端自检各 20 项、各 8 次正常及启动中关闭。`out/m72b/restored-{release,debug}-{dx12,vulkan}`、`tests` |
+| c / `ced1c2e` | API/Validation 异步退休与首帧确认、代际隔离、配置/相机保留；一次回滚、Failed/Retry、取消过期事务 | 托管两配置各 14/14；Release/DX12、Debug/Vulkan 各 21 项和 10 轮 API 双向切换，暂停/最小化交叉，各 28 次关闭。`out/m72c/final-{Release-dx12,Debug-vulkan}`、`tests` |
+| d / `1f307c1` | 实际提交 Plan 值快照；Pass×Resource、版本/依赖/队列/屏障/Alias/剔除、生命周期、搜索/缩放、Freeze/Live/导出 | 托管各 16/16、原生 Input/Graph 各 2/2；已知小图、容量/钉住/短缓冲/身份与非法引用通过；两起始后端各 22 项、各 29 次关闭。`out/m72d/{release-dx12,debug-vulkan,tests}` |
+| e / `c639577` | 实际命令 Draw/Indirect/批次/实例/Dispatch/射线/AS/Copy；完成点确认的 CPU/GPU/内存、显式可见数读回、有界曲线/历史、同帧 Graph/导出 | 托管各 19/19、原生 Input/Graph/双后端 Indexed Scene 各 4/4；两起始后端各 23 项、各 30 次关闭；四档同尺寸观察短测每档 8 秒无丢样。`out/m72e/{accepted-Release-dx12,accepted-Debug-vulkan,tests,cost-*}` |
 
-入口：[工作台](../docs/editor-workbench.md)、[宿主/ABI](../docs/editor-host.md)、[构建自检](../manual/build.md#avalonia-嵌入原型)。限制：当时 Graph/Profiler 仅骨架/基础统计；API 切换待 c，完整诊断待 d/e，人工/跨屏/30 分钟及日志故障验收待 f，不能推断已经通过。
+上述构建两配置均零警告；实机 RTX 5060/96 DPI，所有报告的关闭账本/validation errors/worker_failed 为 0，并核对 23 份源 Scene/Material/Project hash 不变。过程通过 Git 追溯；不同子阶段的用例数不相加作为覆盖数量。
 
-#### M7.2c 图形 API 切换事务
-
-状态：DONE（2026 年 10 月 30 日）。结果：API/Validation 显式 Apply，v7 异步退休/首帧确认、完整配置/相机保留、重新查询能力与代际隔离；失败一次回滚，双重失败停止并提供 Retry，布局替换/关闭可取消过期事务。
-
-验证：原生 Debug/Release bridge 和托管两配置零警告构建；两配置各 14 项测试覆盖目标失败、回滚失败、显式重试与取消。Release/DX12、Debug/Vulkan 起始的实机自检各 21 项、10 轮双向 API 切换，穿插暂停/最小化；各 28 次正常与初始化中关闭账本/validation errors/worker_failed 为 0。证据 `out/m72c/final-{Release-dx12,Debug-vulkan}`、`out/m72c/tests`。失败状态机使用可控故障用例，未注入真实驱动/设备丢失；人工跨屏与长期验收仍待 f。接口和使用见 [宿主](../docs/editor-host.md)、[手册](../manual/build.md#avalonia-嵌入原型)。
-
-#### M7.2d Render Graph Viewer
-
-状态：DONE（2026 年 10 月 30 日）。结果：成功提交的真实 Plan、有界 CPU 值快照与 v8 Acquire/Copy/Release；资源类别/尺寸/格式/export/范围、队列/实际录制块、版本/依赖/屏障/Alias 与剔除原因。矩阵、选中依赖与生命周期条、搜索/缩放/滚动、Freeze/Live/手动刷新及 JSON 导出已接入；默认不读回 RT 像素。
-
-验证：两配置原生 Input/Graph 各 2/2，托管各 16/16、零警告构建；已知小图逐项检查资源/范围/录制块，快照容量、钉住/短缓冲重试/重复 Acquire/释放身份与非法引用用例通过。Release/DX12、Debug/Vulkan 自检各 22 项，覆盖实际面板、来源身份、独立 Freeze/Live/导出与既有 API/配置交叉；各 29 次关闭及初始化中关闭账本/验证错误/worker_failed 为 0。证据 `out/m72d/{release-dx12,debug-vulkan,tests}`。接口见 [宿主](../docs/editor-host.md)，操作见 [手册](../manual/build.md#avalonia-嵌入原型)；人工画面与跨屏仍待 f。超大图完整快照有 4 MiB 上限，矩阵每视图显示至多 128 × 256 项并提示搜索；不是像素调试器。
-
-#### M7.2e Profiler 与真实计数
-
-状态：DONE（2026 年 10 月 30 日）。结果：按 Pass/类别从实际命令包统计 Draw/Indirect/容量、绑定/状态连续批次、direct instances、Dispatch/TraceRays/AS/Copy；计数仅随成功提交的帧发布。v9 完成点非阻塞确认后发布 CPU/RHI/GPU Pass/队列/span、观测完成延迟、native/pool/upload/descriptor；默认 GPU 可见数未知，显式读回后带源帧显示。曲线、量化分位数、Freeze/记录帧选择、配对 Graph/导出与有界历史已接入，关闭 timing/读回不复用旧数值；超过 32 Pass 计时预算仍保留渲染。
-
-验证：两配置零警告构建、托管各 19/19，原生 Input/Graph/双后端 Indexed Scene 各 4/4；覆盖已知命令/实例与实际 GPU 路径、空视锥、计时预算与曲线来源/历史边界。Release/DX12 与 Debug/Vulkan 自检各 23 项、各 30 次正常关闭及初始化中关闭账本/错误/worker_failed 为 0，包含 opt-in GPU 计数、禁用后 N/A、冻结不暂停及同帧 Graph。四档同分辨率观察短测各 8 秒无丢样，保留全部源帧和真实开关；单次测量不推断固定性能收益。证据 `out/m72e/{accepted-Release-dx12,accepted-Debug-vulkan,tests,cost-*}`；[接口](../docs/editor-host.md)、[操作](../manual/build.md#avalonia-嵌入原型)、[成本与限制](../docs/performance/editor-workbench.md)。人工/跨屏/长期与日志故障验收仍待 f。
+保留限制：目标/回滚失败以可控状态机测试覆盖，未注入真实设备丢失；图快照单份 4 MiB、矩阵单视图 128×256，不复制 RT 像素。GPU 超过 32 Pass 计时预算仍可渲染；默认间接可见数未知。短测不代表固定性能收益或显示延迟，成本解释见 [测量](../docs/performance/editor-workbench.md)。人工/跨屏/长期及日志故障证据见 f。
 
 #### M7.2f 固定场景集成验收
 
-状态：IN_PROGRESS。
+状态：IN_PROGRESS（2026 年 10 月 30 日实现及自动验收完成；下列人工/硬件复验未关闭，不提前将 M7.2 标为 DONE）。
 
-- [ ] 双后端固定场景人工画面/真实输入、配置和 API 切换、Dock 浮动/跨屏 DPI、Graph/Profiler 源帧联动；默认/诊断/恢复布局与菜单开关，以及托管/原生日志、文件滚动/末尾 drain 和消息洪峰。
-- [ ] 每后端至少 30 分钟运行记录有界内存/快照/丢样/错误；源文件 hash 不变，关闭原生账本为 0。
-- [ ] 更新构建/运行手册与实际验证入口，保留未验证硬件、设备丢失及其他限制。工作台出口不等于整个 M7 的资源编辑出口。
+结果：新增隔离布局/预设和墙钟长测模式，按预算流式记录、轮换三管线/诊断/布局，移动实际屏幕并校验原生像素。v10 原生日志文件写失败保留镜像、托管文件错误独立显示，修复取消 API 事务后 Dock 新宿主的实际后端标识同步。
+
+验证：最终 Debug/Release 日常构建均零警告、托管各 22/22；原生 Core 两配置通过。Release/DX12、Debug/Vulkan 最终自检各 23 项，含配置/API、Dock 浮动/恢复、同帧 Graph/Profiler、末尾 drain；各 30 次正常 Session 及初始化中关闭账本/验证错误/worker_failed 为 0。文件实际写失败、滚动/消息洪峰有独立用例。Release 双后端实际运行 1800.87/1800.98 秒，观察到 53776/53779 帧，无丢样；各 4 次关闭全为 0，23 份源 hash 不变，所有历史/内存预算检查通过。两块实屏均 100%/96 DPI，根窗口跨屏后的像素尺寸匹配。证据 `out/m72f/{final-release-dx12,final-debug-vulkan,soak-dx12,soak-vulkan,tests}`；方法、内存峰值和版本边界见 [实测](../docs/performance/editor-workbench.md)，命令见 [手册](../manual/build.md#avalonia-嵌入原型)。
+
+待验收：可见桌面已观察默认固定场景、Graph/Profiler，系统点击菜单/诊断页可用；持续按键、右键拖动/捕获释放、完整浮动窗口的系统输入与用户画质认可，以及 150%/混合 DPI 仍未验证。合成输入、自动 Present 与两个 96 DPI 屏幕不替代这些项。真实设备丢失、其他 GPU、资源/场景编辑不属于本轮验收覆盖。
 
 ### M7.3 材质编辑与事务
 

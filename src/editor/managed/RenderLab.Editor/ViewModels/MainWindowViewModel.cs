@@ -13,7 +13,8 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     private readonly NativeViewportService viewport;
     private bool restoringSettings;
     private readonly RefreshGate refresh = new();
-    public string Title => $"RenderLab · {BackendName}";
+    private readonly bool soaking;
+    public string Title => $"RenderLab{(soaking ? " soak" : "")} · {BackendName}";
     public string BackendName => viewport.DeviceSwitch.Current.Backend == "dx12" ? "Direct3D 12" : "Vulkan";
     [ObservableProperty] private int selectedBackendIndex;
     [ObservableProperty] private bool selectedValidation;
@@ -50,6 +51,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     public MainWindowViewModel(NativeViewportService viewport, EditorOptions options, RenderSettingsViewModel settings)
     {
         this.viewport = viewport;
+        soaking = options.SoakSeconds > 0;
         Settings = settings;
         SelectedPipelineIndex = (int)options.Pipeline - 1;
         SelectedBackendIndex = options.Backend == "dx12" ? 0 : 1;

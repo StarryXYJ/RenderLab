@@ -1215,7 +1215,7 @@ template <class F> rl_status Guard(F&& operation)
 
 uint32_t RENDERLAB_EDITOR_CALL rl_editor_abi_version()
 {
-    return 9;
+    return 10;
 }
 rl_status RENDERLAB_EDITOR_CALL rl_viewport_request_snapshot(rl_viewport_handle handle)
 {
@@ -1385,7 +1385,9 @@ rl_status RENDERLAB_EDITOR_CALL rl_viewport_read_logs(rl_viewport_handle handle,
             {
                 uint64_t dropped = 0;
                 auto events = session.logger.DrainMirror(128, dropped);
-                nlohmann::json batch{{"events", nlohmann::json::array()}, {"dropped", dropped}};
+                nlohmann::json batch{{"events", nlohmann::json::array()},
+                                     {"dropped", dropped},
+                                     {"fileFailed", session.logger.FileFailed()}};
                 for (const auto& event : events)
                     batch["events"].push_back({{"sequence", event.sequence},
                                                {"time", event.unixMilliseconds},

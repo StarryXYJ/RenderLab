@@ -21,6 +21,7 @@ public sealed class NativeViewportService : IDisposable
     private ulong lastNativeSequence;
     private bool nativeLogFailed;
     internal ulong NativeLogDropped { get; private set; }
+    internal bool NativeLogFileFailed { get; private set; }
     internal ViewportConfigState Configuration { get; private set; }
     internal ViewportConfig Defaults { get; private set; }
     internal string Capabilities { get; private set; } = "";
@@ -35,7 +36,7 @@ public sealed class NativeViewportService : IDisposable
     private CancellationTokenSource? switchCancellation;
     private DeviceSelection creatingDevice;
     internal DeviceSwitchTransaction DeviceSwitch { get; }
-    internal string UserSettingsPath => options.Smoke || options.BenchmarkSeconds > 0 ? options.Output :
+    internal string UserSettingsPath => options.Smoke || options.Isolated || options.BenchmarkSeconds > 0 || options.SoakSeconds > 0 ? options.Output :
         Path.Combine(Path.GetDirectoryName(options.Project)!, "UserSettings", "Editor");
     private readonly ViewportStats[] completedFrames = new ViewportStats[512];
     internal FrameTimingWindow Timings { get; } = new();
@@ -70,7 +71,7 @@ public sealed class NativeViewportService : IDisposable
             Close(Session);
         }
         AbiVersion = NativeMethods.AbiVersion();
-        if (AbiVersion != 9 || Marshal.SizeOf<ViewportStats>() != 256 || Marshal.SizeOf<CloseReport>() != 24 ||
+        if (AbiVersion != 10 || Marshal.SizeOf<ViewportStats>() != 256 || Marshal.SizeOf<CloseReport>() != 24 ||
             Marshal.SizeOf<ViewportConfig>() != 112 || Marshal.SizeOf<ViewportConfigState>() != 272)
         {
             throw new InvalidOperationException("Managed/native bridge ABI mismatch.");
@@ -140,6 +141,8 @@ public sealed class NativeViewportService : IDisposable
         NativeMethods.Check(NativeMethods.GetStats(Session, out var stats));
         Stats = stats;
         ReadConfiguration();
+        if (Configuration.Status is 2 or 3 && !restoreConfiguration && Stats.SessionGeneration == Session && Stats.ConfigRevision == Configuration.AppliedId)
+        { DeviceSwitch.ObserveReady(creatingDevice); }
         if (Stopwatch.GetElapsedTime(lastLogPoll).TotalMilliseconds >= 250)
         {
             lastLogPoll = Stopwatch.GetTimestamp();
@@ -375,6 +378,7 @@ public sealed class NativeViewportService : IDisposable
             NativeMethods.Check(NativeMethods.ReadLogs(Session, bytes, required, out _));
             using var json = JsonDocument.Parse(Encoding.UTF8.GetString(bytes, 0, (int)required - 1));
             NativeLogDropped = json.RootElement.GetProperty("dropped").GetUInt64();
+            NativeLogFileFailed = json.RootElement.GetProperty("fileFailed").GetBoolean();
             var events = json.RootElement.GetProperty("events");
             foreach (var entry in events.EnumerateArray())
             {
