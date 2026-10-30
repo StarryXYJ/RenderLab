@@ -1,0 +1,15 @@
+<UserControl xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+ xmlns:vm="using:RenderLab.Editor.ViewModels" x:Class="RenderLab.Editor.Views.RenderSettingsView" x:DataType="vm:MainWindowViewModel">
+ <ScrollViewer><StackPanel Margin="12" Spacing="10">
+   <TextBlock Text="{Binding BackendName}" FontSize="18" />
+   <TextBlock Text="Pipeline" /><ComboBox x:Name="PipelineSelector" ItemsSource="{Binding Pipelines}" SelectedIndex="{Binding SelectedPipelineIndex, Mode=TwoWay}" HorizontalAlignment="Stretch" />
+   <TextBlock Text="Exposure" /><Slider x:Name="ExposureControl" Minimum="-4" Maximum="4" Value="{Binding Exposure, Mode=TwoWay}" />
+   <Button x:Name="PauseAction" Content="{Binding PauseLabel}" Command="{Binding TogglePauseCommand}" />
+   <Button x:Name="ResetAction" Content="Reset camera" Command="{Binding ResetCameraCommand}" />
+   <Button x:Name="RecreateAction" Content="Recreate viewport" Command="{Binding RecreateViewportCommand}" />
+   <TextBlock Text="{Binding ErrorText}" TextWrapping="Wrap" Foreground="OrangeRed" />
+   <Expander Header="Host diagnostics"><TextBlock Text="{Binding DetailsText}" TextWrapping="Wrap" /></Expander>
+   <TextBox x:Name="ManagedInput" PlaceholderText="Type here to test input focus" />
+   <TextBlock Text="Fixed scene · runtime overrides only" TextWrapping="Wrap" />
+ </StackPanel></ScrollViewer>
+</UserControl>

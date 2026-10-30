@@ -385,7 +385,9 @@ cmake --preset windows-release
 
 有完整 NuGet 缓存的离线机器可以增加 `-OfflinePackageCache C:/你的目录/.nuget/packages`；恢复仍使用 locked mode。直接运行 dotnet 时在仓库根目录使用 `RenderLab.slnx` 作为构建入口；需要自定义原生路径时使用 `-p:NativeBuildDir=绝对路径`。构建脚本跳过本原型没有使用的 Avalonia 商业产品构建遥测，不修改用户全局设置。
 
-默认加载源码仓库的 `sample/m4/RayTracing.rlproject`，初始为 Deferred。`--project` 可以指定其他项目，`--shaders` 可指定引擎 Shader 根目录；默认使用 exe 同目录的 shaders。周边控件提供管线、曝光、暂停、重置相机和重建视口；点击原生视口后使用 WASD/QE、方向键或右键拖动。此原型未打包示例项目，移出仓库运行时必须显式提供项目路径。
+默认加载源码仓库的 `sample/m4/RayTracing.rlproject`，初始为 Deferred。`--project` 可以指定其他项目，`--shaders` 可指定引擎 Shader 根目录；默认使用 exe 同目录的 shaders。点击原生视口后使用 WASD/QE、方向键或右键拖动。此宿主未打包示例项目，移出仓库运行时必须显式提供项目路径。
+
+M7.2a 接入 Dock.Avalonia 12.0.0.2 与 Serilog：首次启动只显示 Scene 与 Render Settings，Window 菜单打开 Log、基础 Profiler 与 Render Graph 骨架；完整 Graph/Profiler 诊断分别属于后续子阶段。Layout 提供 Default、Diagnostics 与恢复保存布局；普通运行将布局写到项目旁的 UserSettings/Editor/layout.json，自检/基准使用各自输出目录，不覆盖日常布局。Scene 浮动/停回会安全重建原生视口并保留相机与管线/曝光。Log 支持筛选、搜索、复制、清空显示和打开日志目录；关闭面板仍写输出目录 logs 下的滚动 JSONL，原生日志保留独立文件。相关包与测试依赖均进入锁文件。
 
 双后端自检应分别运行。WinExe 在终端的启动/等待语义可能不同，需要可靠退出码时使用 `Start-Process -Wait -PassThru`；下面的隐藏启动用于无人值守自检，手动检查界面直接运行上面的命令。
 

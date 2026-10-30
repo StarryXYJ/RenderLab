@@ -12,6 +12,7 @@
 #include "rhi/swapchain.hpp"
 
 #include <Windows.h>
+#include <nlohmann/json.hpp>
 #include <objbase.h>
 
 #include <algorithm>
@@ -299,6 +300,9 @@ struct Session
     uint64_t revision = 1, resets = 0;
     std::array<std::string, 3> pipelineErrors;
     std::string error;
+    std::string pendingLogs;
+    scene::Transform camera;
+    std::optional<scene::Transform> requestedCamera;
     rl_viewport_stats stats{};
     rl_viewport_close_report closed{};
     const Clock::time_point origin = Clock::now();
@@ -381,6 +385,7 @@ struct Session
             const std::filesystem::path& shaders, const std::filesystem::path& log)
         : logger(log)
     {
+        logger.EnableMirror();
         static const auto registered = []
         {
             WNDCLASSW type{};
@@ -426,6 +431,7 @@ struct Session
                         std::lock_guard lock(mutex);
                         pipelineErrors = std::move(failures);
                         ready = true;
+                        camera = render.initialCamera;
                     }
                     uint64_t applied = 0, appliedResets = 0;
                     auto previous = Clock::now();
@@ -462,6 +468,14 @@ struct Session
                             if (stop)
                                 break;
                             snapshot = input;
+                            if (requestedCamera)
+                            {
+                                render.scene->Document()
+                                    .Get(render.scene->Document().activeCamera)
+                                    .transform = *requestedCamera;
+                                requestedCamera.reset();
+                                dirty = true;
+                            }
                             input.yaw = input.pitch = 0;
                             selected = pipeline;
                             selectedExposure = exposure;
@@ -604,6 +618,9 @@ struct Session
                                 ++frameCount;
                             }
                             stats = render.stats;
+                            camera = render.scene->Document()
+                                         .Get(render.scene->Document().activeCamera)
+                                         .transform;
                         }
                     }
                     const auto report = render.Close();
@@ -782,7 +799,79 @@ template <class F> rl_status Guard(F&& operation)
 
 uint32_t RENDERLAB_EDITOR_CALL rl_editor_abi_version()
 {
-    return 4;
+    return 5;
+}
+rl_status RENDERLAB_EDITOR_CALL rl_viewport_stop(rl_viewport_handle handle,
+                                                 rl_viewport_close_report* report)
+{
+    return Guard(
+        [&]
+        {
+            Require(report != nullptr, "Close report is null");
+            *report = Find(handle).Close();
+        });
+}
+rl_status RENDERLAB_EDITOR_CALL rl_viewport_read_logs(rl_viewport_handle handle, char* output,
+                                                      uint32_t capacity, uint32_t* required)
+{
+    return Guard(
+        [&]
+        {
+            Require(required != nullptr, "Log size output is null");
+            auto& session = Find(handle);
+            if (session.pendingLogs.empty())
+            {
+                uint64_t dropped = 0;
+                auto events = session.logger.DrainMirror(128, dropped);
+                nlohmann::json batch{{"events", nlohmann::json::array()}, {"dropped", dropped}};
+                for (const auto& event : events)
+                    batch["events"].push_back({{"sequence", event.sequence},
+                                               {"time", event.unixMilliseconds},
+                                               {"level", static_cast<uint32_t>(event.level)},
+                                               {"message", event.message},
+                                               {"truncated", event.truncated}});
+                session.pendingLogs =
+                    batch.dump(-1, ' ', false, nlohmann::json::error_handler_t::replace);
+            }
+            *required = static_cast<uint32_t>(session.pendingLogs.size() + 1);
+            if (!output || capacity < *required)
+                throw Failure(RL_BUFFER_TOO_SMALL, "Log batch buffer is too small");
+            std::memcpy(output, session.pendingLogs.c_str(), *required);
+            session.pendingLogs.clear();
+        });
+}
+rl_status RENDERLAB_EDITOR_CALL rl_viewport_camera(rl_viewport_handle handle, float* pose,
+                                                   uint32_t write)
+{
+    return Guard(
+        [&]
+        {
+            Require(pose && write <= 1, "Invalid camera transfer");
+            auto& session = Find(handle);
+            std::lock_guard lock(session.mutex);
+            if (write)
+            {
+                for (size_t i = 0; i < 7; ++i)
+                    Require(std::isfinite(pose[i]), "Camera pose must be finite");
+                const auto norm = std::sqrt(pose[3] * pose[3] + pose[4] * pose[4] +
+                                            pose[5] * pose[5] + pose[6] * pose[6]);
+                Require(std::isfinite(norm) && norm > .00001f, "Camera quaternion is invalid");
+                scene::Transform transform;
+                transform.position = {pose[0], pose[1], pose[2]};
+                transform.rotation = {pose[3] / norm, pose[4] / norm, pose[5] / norm,
+                                      pose[6] / norm};
+                session.requestedCamera = transform;
+                SetEvent(session.wake.value);
+            }
+            else
+            {
+                Require(session.ready, "Camera is not ready");
+                const auto& p = session.camera.position;
+                const auto& q = session.camera.rotation;
+                const float values[]{p.x, p.y, p.z, q.x, q.y, q.z, q.w};
+                std::copy(std::begin(values), std::end(values), pose);
+            }
+        });
 }
 rl_status RENDERLAB_EDITOR_CALL rl_viewport_create(void* parent, uint32_t backend,
                                                    uint32_t validation, uint32_t profiling,

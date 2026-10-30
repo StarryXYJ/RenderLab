@@ -233,7 +233,27 @@ int main()
         const auto path = std::filesystem::path("test-output") / "nested" / "logger.log";
         {
             renderlab::Logger logger(path);
+            logger.EnableMirror();
             logger.Write(renderlab::LogLevel::Warning, "UTF-8 日志");
+            uint64_t dropped = 0;
+            const auto events = logger.DrainMirror(128, dropped);
+            Require(events.size() == 1 && events[0].message == "UTF-8 日志" &&
+                        events[0].level == renderlab::LogLevel::Warning &&
+                        events[0].sequence == 1 && events[0].unixMilliseconds > 0 &&
+                        !events[0].truncated && dropped == 0,
+                    "Log mirror lost event identity");
+            Require(logger.DrainMirror(128, dropped).empty(),
+                    "Log mirror redelivered a consumed event");
+            for (uint32_t i = 0; i < 4100; ++i)
+                logger.Write(renderlab::LogLevel::Info, "bounded mirror fixture");
+            const auto flood = logger.DrainMirror(4096, dropped);
+            Require(flood.size() == 4096 && dropped == 4 && flood.front().sequence == 6,
+                    "Log mirror did not evict oldest events within its budget");
+            logger.Write(renderlab::LogLevel::Error, std::string(16383, 'a') + "测试");
+            const auto truncated = logger.DrainMirror(1, dropped);
+            Require(truncated.size() == 1 && truncated[0].truncated &&
+                        truncated[0].message.size() == 16383,
+                    "Log mirror truncated inside a UTF-8 codepoint");
         }
         std::ifstream file(path, std::ios::binary);
         const std::string contents{std::istreambuf_iterator<char>(file), {}};

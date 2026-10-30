@@ -8,6 +8,7 @@ using RenderLab.Editor.Controls;
 using RenderLab.Editor.Views;
 using RenderLab.Editor.Configuration;
 using RenderLab.Editor.Interop;
+using RenderLab.Editor.Docking;
 
 namespace RenderLab.Editor.Diagnostics;
 
@@ -23,6 +24,7 @@ internal sealed class SmokeTest
     private ulong oldHandle, savedFrames, savedResizes, savedPaused, savedInput;
     private bool completed;
     private RenderViewportHost? detachedHost;
+    private readonly float[] savedPose = new float[7];
 
     internal SmokeTest(MainWindow window, EditorOptions options)
     {
@@ -100,6 +102,9 @@ internal sealed class SmokeTest
             switch (stage++)
             {
                 case 0:
+                    Require(window.Docks.IsOpen("Scene") && window.Docks.IsOpen("Settings") &&
+                        !window.Docks.IsOpen("Log") && !window.Docks.IsOpen("Render Graph") && !window.Docks.IsOpen("Profiler"),
+                        "Default layout did not contain exactly the two requested panels.");
                     Require(stats.UiThreadId != 0 && stats.RenderThreadId != 0 &&
                         stats.UiThreadId != stats.RenderThreadId, "Runtime did not move to a dedicated render owner.");
                     Require(stats.DroppedSamples == 0, "Completed frame samples were dropped.");
@@ -242,6 +247,31 @@ internal sealed class SmokeTest
                     Require(stats.Resizes > savedResizes && stats.Resizes <= savedResizes + 2,
                         "Consecutive resize updates were not coalesced.");
                     checks.Add("six consecutive UI resize updates coalesced into at most two swapchain rebuilds");
+                    NativeMethods.Check(NativeMethods.Camera(host.Session, savedPose, 0));
+                    oldHandle = host.Session;
+                    window.Docks.FloatDockable(window.Docks.Panel("Scene"));
+                    break;
+                case 18:
+                    Require(host.Session != oldHandle && NativeMethods.GetStats(oldHandle, out _) == 2,
+                        "Floating Scene did not retire the old native host.");
+                    var floatingPose = new float[7];
+                    NativeMethods.Check(NativeMethods.Camera(host.Session, floatingPose, 0));
+                    Require(floatingPose.Zip(savedPose).All(p => Math.Abs(p.First - p.Second) < .001f),
+                        "Floating Scene lost the navigation camera.");
+                    window.Docks.Show("Log"); window.Docks.Show("Log");
+                    Require(WorkbenchDockFactory.Walk(window.Docks.Root).Count(p => p.Id == "Log") == 1,
+                        "Opening the same Dock twice created duplicate panels.");
+                    checks.Add("Scene floating recreates the session and preserves camera; menu activation is single-instance");
+                    window.ResetLayout(false);
+                    break;
+                case 19:
+                    Require(window.Docks.IsOpen("Scene") && !window.Docks.IsOpen("Log"), "Default reset retained diagnostic docks.");
+                    var restoredPose = new float[7];
+                    NativeMethods.Check(NativeMethods.Camera(host.Session, restoredPose, 0));
+                    Require(restoredPose.Zip(savedPose).All(p => Math.Abs(p.First - p.Second) < .001f), "Dock reset lost camera pose.");
+                    Require(Program.Logging!.Buffer.Snapshot().Any(r => r.Source.StartsWith("Native.") && r.Message.Contains("Render owner thread")),
+                        "Native structured log mirror never reached the Log buffer.");
+                    checks.Add("Scene docks back through layout reset; native log batches are collected without managed callbacks");
                     Finish(stats);
                     break;
             }
@@ -255,7 +285,7 @@ internal sealed class SmokeTest
     private void Finish(ViewportStats stats)
     {
         window.Viewport.CloseViewport();
-        Require(window.CloseReports.Count == 2 && window.CloseReports.All(r => r.RemainingBytes == 0 && r.ValidationErrors == 0 && r.WorkerFailed == 0),
+        Require(window.CloseReports.Count >= 4 && window.CloseReports.All(r => r.RemainingBytes == 0 && r.ValidationErrors == 0 && r.WorkerFailed == 0),
             "Final native shutdown did not release all resources cleanly.");
         NativeMethods.Check(NativeMethods.Create(window.TryGetPlatformHandle()!.Handle,
             options.Backend == "dx12" ? 0u : 1u, options.Validation ? 1u : 0u,

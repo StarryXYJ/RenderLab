@@ -29,6 +29,12 @@ internal static class NativeMethods
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "rl_editor_abi_version")]
     internal static extern uint AbiVersion();
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "rl_viewport_stop")]
+    internal static extern int Stop(ulong session, out CloseReport report);
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "rl_viewport_read_logs")]
+    internal static extern int ReadLogs(ulong session, [Out] byte[]? buffer, uint capacity, out uint required);
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "rl_viewport_camera")]
+    internal static extern int Camera(ulong session, [In, Out] float[] pose, uint write);
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "rl_viewport_create")]
     internal static extern int Create(nint parent, uint backend, uint validation, uint profiling,
@@ -74,6 +80,9 @@ internal static class NativeMethods
 
     [DllImport("user32.dll")]
     internal static extern nint SetFocus(nint window);
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    internal static extern bool ReleaseCapture();
 
     [DllImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]

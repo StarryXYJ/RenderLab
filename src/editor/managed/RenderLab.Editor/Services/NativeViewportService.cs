@@ -1,5 +1,9 @@
 using System.Runtime.InteropServices;
 using System.Text.Json;
+using System.Text;
+using System.Diagnostics;
+using Serilog.Events;
+using Serilog.Parsing;
 using Avalonia.Threading;
 using RenderLab.Editor.Configuration;
 using RenderLab.Editor.Diagnostics;
@@ -12,6 +16,10 @@ public sealed class NativeViewportService : IDisposable
 {
     private readonly EditorOptions options;
     private int logSequence;
+    private float[]? savedCamera;
+    private long lastLogPoll;
+    private ulong lastNativeSequence;
+    internal ulong NativeLogDropped { get; private set; }
     private readonly ViewportStats[] completedFrames = new ViewportStats[512];
     internal FrameTimingWindow Timings { get; } = new();
     internal uint AbiVersion { get; private set; }
@@ -41,7 +49,7 @@ public sealed class NativeViewportService : IDisposable
             throw new InvalidOperationException("The viewport service is already attached to a host.");
         }
         AbiVersion = NativeMethods.AbiVersion();
-        if (AbiVersion != 4 || Marshal.SizeOf<ViewportStats>() != 232 || Marshal.SizeOf<CloseReport>() != 24)
+        if (AbiVersion != 5 || Marshal.SizeOf<ViewportStats>() != 232 || Marshal.SizeOf<CloseReport>() != 24)
         {
             throw new InvalidOperationException("Managed/native bridge ABI mismatch.");
         }
@@ -51,11 +59,13 @@ public sealed class NativeViewportService : IDisposable
             options.Project, options.Shaders, Path.Combine(options.Output, $"native-{++logSequence}.log"),
             out var session, out var child));
         Session = session;
+        lastNativeSequence = 0;
         Timings.Reset();
         Child = child;
         try
         {
             Configure(Pipeline, Exposure);
+            if (savedCamera is not null) { NativeMethods.Check(NativeMethods.Camera(Session, savedCamera, 1)); }
         }
         catch
         {
@@ -89,6 +99,11 @@ public sealed class NativeViewportService : IDisposable
         }
         NativeMethods.Check(NativeMethods.GetStats(Session, out var stats));
         Stats = stats;
+        if (Stopwatch.GetElapsedTime(lastLogPoll).TotalMilliseconds >= 250)
+        {
+            lastLogPoll = Stopwatch.GetTimestamp();
+            DrainLogs(false);
+        }
         StatsUpdated?.Invoke(stats);
     }
 
@@ -107,7 +122,11 @@ public sealed class NativeViewportService : IDisposable
         {
             return;
         }
-        NativeMethods.Check(NativeMethods.Destroy(Session, out var report));
+        var pose = new float[7];
+        if (NativeMethods.Camera(Session, pose, 0) == 0) { savedCamera = pose; }
+        NativeMethods.Check(NativeMethods.Stop(Session, out var report));
+        DrainLogs(true);
+        NativeMethods.Check(NativeMethods.Destroy(Session, out _));
         Session = 0;
         Child = 0;
         CloseReports.Add(report);
@@ -116,4 +135,36 @@ public sealed class NativeViewportService : IDisposable
     }
 
     public void Dispose() => Close(Session);
+
+    private void DrainLogs(bool all)
+    {
+        for (var batch = 0; batch < (all ? 40 : 1); ++batch)
+        {
+            var status = NativeMethods.ReadLogs(Session, null, 0, out var required);
+            if (status != 5) { NativeMethods.Check(status); }
+            if (required > 4 * 1024 * 1024) { throw new InvalidOperationException("Native log batch exceeds budget."); }
+            var bytes = new byte[required];
+            NativeMethods.Check(NativeMethods.ReadLogs(Session, bytes, required, out _));
+            using var json = JsonDocument.Parse(Encoding.UTF8.GetString(bytes, 0, (int)required - 1));
+            NativeLogDropped = json.RootElement.GetProperty("dropped").GetUInt64();
+            var events = json.RootElement.GetProperty("events");
+            foreach (var entry in events.EnumerateArray())
+            {
+                var sequence = entry.GetProperty("sequence").GetUInt64();
+                if (sequence <= lastNativeSequence) { continue; }
+                lastNativeSequence = sequence;
+                var level = entry.GetProperty("level").GetUInt32() switch { 1 => LogEventLevel.Warning, 2 => LogEventLevel.Error, _ => LogEventLevel.Information };
+                var logEvent = new LogEvent(DateTimeOffset.FromUnixTimeMilliseconds(entry.GetProperty("time").GetInt64()), level, null,
+                    new MessageTemplateParser().Parse("{NativeMessage}"), [
+                        new LogEventProperty("NativeMessage", new ScalarValue(entry.GetProperty("message").GetString())),
+                        new LogEventProperty("SourceContext", new ScalarValue("Native." + options.Backend)),
+                        new LogEventProperty("Origin", new ScalarValue("Native")),
+                        new LogEventProperty("SessionGeneration", new ScalarValue(Session)),
+                        new LogEventProperty("NativeSequence", new ScalarValue(sequence)),
+                        new LogEventProperty("Truncated", new ScalarValue(entry.GetProperty("truncated").GetBoolean()))]);
+                Program.Logging?.Logger.Write(logEvent);
+            }
+            if (events.GetArrayLength() < 128) { break; }
+        }
+    }
 }

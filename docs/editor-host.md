@@ -2,7 +2,7 @@
 
 本原型验证 Windows x64 上 Avalonia 12.0.5 / .NET SDK 10.0.401 与 RenderLab 原生运行时的进程内集成。构建、运行和自检入口见 [使用说明](../manual/build.md#avalonia-嵌入原型)。阶段状态与实际验证范围统一见 [M7.1](../design/phaseplan.md#m71-桥接与视口试验)。
 
-宿主作为后续 Editor 的基础继续复用。下一步先建设 [固定场景渲染工作台](editor-workbench.md)，增加 Dock、运行配置、Graph 与性能观察，再推进材质、项目和场景编辑；这些工作不改变现有 C++ 场景文档的权威所有权。工作台文档中的配置/快照/生命周期接口是拟议扩展，以下 v4 接口继续描述当前已实现宿主。
+宿主作为后续 Editor 的基础继续复用。[固定场景渲染工作台](editor-workbench.md) 定义 Dock、运行配置、Graph 与性能观察，再推进材质、项目和场景编辑；这些工作不改变现有 C++ 场景文档的权威所有权。以下记录已实现的宿主接口，工作台设计中的其余扩展按阶段计划逐步接入。
 
 ## 官方模板、MVVM 与 DI
 
@@ -63,9 +63,13 @@ Close 首先停止 UI Timer，再通知渲染线程停止，等待其释放展�
 
 每个 Host 保存自己的 Session 代际。旧 Host 重复关闭不能销毁新 Session；重建保留已接受配置。服务不使用可能在 finalizer 线程执行 Destroy 的 SafeHandle。
 
-## C ABI v4 与诊断
+## C ABI v5 与诊断
 
-头文件为 src/editor/native/editor_bridge.h，托管声明为 Interop/NativeMethods.cs；DLL 和托管程序同版本发布。固定 Cdecl、UTF-8 借用字符串、代际 uint64 Handle、线程局部错误缓冲区。创建参数包含 backend、validation、profiling、target_fps 和 continuous。最多四个 Session 的句柄槽位仍是原型上限，多视口并发并未验收。
+头文件为 src/editor/native/editor_bridge.h，托管声明为 Interop/NativeMethods.cs；DLL 和托管程序同版本发布。固定 Cdecl、UTF-8 借用字符串、代际 uint64 Handle、线程局部错误缓冲区。创建参数包含 backend、validation、profiling、target_fps 和 continuous。最多四个 Session 的句柄槽位仍是原型上限，多视口并发并未验收。M7.2a 升为 v5，新增 Stop（退休但保留 Session 以收取末尾日志）、批量 UTF-8 JSON 日志读取和相机 pose 值传递；原有 Stats/CloseReport 大小不变。日志容量查询钉住批次，成功复制后才消费，随后 Destroy 使旧 Session 失效。
+
+Dock.Avalonia 12.0.0.2 使用固定面板身份和受限版本化布局数据。默认只有 Scene/Render Settings，其他面板从 Window 菜单打开；Scene 跨父窗口经过 NativeControlHost 的销毁/重建，保存相机 pose 与管线/曝光。布局切换和浮窗关闭沿用 owner-thread GPU 退休及受限 Win32 握手，仍可能短暂阻塞窗口线程；计划中的异步设备重建在 M7.2c，不以本轮浮动成功代表无停顿迁移。
+
+Editor 托管日志接入 Serilog 4.2.0、Extensions.Logging 9.0.0 和 File 7.0.0，输出目录的 logs 保存 UTC 结构化滚动日志。有界内存投影供 Log Dock 按级别/来源/文本查看；C++ Logger 可选有界镜像，UI 批量读取后以原时间/级别/Session/序号汇入。关闭面板继续记录，清空显示保留累计错误数，原生关闭后先 drain 再 Destroy。基础 Profiler 当前只展示既有宿主统计，Graph 数据查看仍待 M7.2d，不把面板骨架当作 Viewer 已完成。
 
 Stats 顺序布局 232 字节；CloseReport 为 24 字节，最后一个 uint32 为 worker_failed，异步渲染/初始化/关闭失败时置一，不把失败关闭当作成功。字段包括 Native Tick、Fence、Acquire、Render、Present、Resize、Diagnostics、Graph Compile/Prepare/Record、CPU 场景准备与建图、已完成 GPU Pass 总时间及源帧，另有原生帧间隔/完成时间、样本丢弃计数、activity/ready、UI/render 线程 ID。activity 为 0 初始化、1 活动、2 空闲、3 暂停、4 等待尺寸稳定。所有字段跨边界均为固定宽度数值。
 

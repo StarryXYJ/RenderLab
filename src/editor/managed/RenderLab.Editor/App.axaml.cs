@@ -3,6 +3,8 @@ using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
 using Avalonia.Threading;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
+using Serilog;
 using RenderLab.Editor.Services;
 using RenderLab.Editor.ViewModels;
 using RenderLab.Editor.Views;
@@ -23,6 +25,9 @@ public partial class App : Application
         {
             services = new ServiceCollection()
                 .AddSingleton(Program.Options)
+                .AddSingleton(Program.Logging!.Buffer)
+                .AddLogging(builder => builder.ClearProviders().AddSerilog(Program.Logging.Logger, dispose: false))
+                .AddSingleton<LogViewModel>()
                 .AddSingleton<NativeViewportService>()
                 .AddSingleton<MainWindowViewModel>()
                 .AddSingleton<MainWindow>()

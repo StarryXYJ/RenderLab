@@ -7,8 +7,9 @@
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.0" />
-    <PackageReference Include="NUnit" Version="4.3.2" />
+    <PackageReference Include="NUnit" Version="4.5.1" />
     <PackageReference Include="NUnit3TestAdapter" Version="5.0.0" />
+    <PackageReference Include="Avalonia.Headless.NUnit" Version="12.0.5" />
     <ProjectReference Include="../../../../src/editor/managed/RenderLab.Editor/RenderLab.Editor.csproj" />
   </ItemGroup>
 </Project>

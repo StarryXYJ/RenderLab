@@ -1,0 +1,20 @@
+<UserControl xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:RenderLab.Editor.ViewModels" xmlns:diag="using:RenderLab.Editor.Diagnostics"
+             x:Class="RenderLab.Editor.Views.LogView" x:DataType="vm:LogViewModel">
+  <Grid RowDefinitions="Auto,Auto,*,Auto">
+    <WrapPanel Margin="8">
+      <ComboBox Width="160" ItemsSource="{Binding Levels}" SelectedIndex="{Binding LevelIndex}" />
+      <TextBox Width="200" Margin="6,0" PlaceholderText="Search message" Text="{Binding Search}" />
+      <TextBox Width="150" PlaceholderText="Source filter" Text="{Binding Source}" />
+      <CheckBox Margin="8,0" Content="Follow" IsChecked="{Binding AutoScroll}" />
+      <Button Content="Clear" Command="{Binding ClearCommand}" />
+      <Button Content="Copy" Click="CopyClicked" Margin="6,0" />
+      <Button Content="Log directory" Click="DirectoryClicked" />
+    </WrapPanel>
+    <TextBlock Grid.Row="1" Margin="8,0" Text="{Binding Counters}" />
+    <ListBox x:Name="LogList" Grid.Row="2" ItemsSource="{Binding Rows}" SelectedItem="{Binding Selected}">
+      <ListBox.ItemTemplate><DataTemplate x:DataType="diag:LogRow"><TextBlock Text="{Binding Display}" TextWrapping="Wrap" /></DataTemplate></ListBox.ItemTemplate>
+    </ListBox>
+    <TextBox Grid.Row="3" Margin="8" MaxHeight="140" IsReadOnly="True" TextWrapping="Wrap" Text="{Binding Selected.Details}" />
+  </Grid>
+</UserControl>

@@ -1,8 +1,14 @@
 <Application xmlns="https://github.com/avaloniaui"
+             xmlns:dock="using:Dock.Avalonia.Themes.Fluent"
+             xmlns:model="using:Dock.Model.Mvvm.Controls"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              x:Class="RenderLab.Editor.App"
              RequestedThemeVariant="Dark">
+    <Application.DataTemplates>
+        <DataTemplate DataType="model:Document" x:DataType="model:Document"><ContentControl Content="{Binding Context}" /></DataTemplate>
+    </Application.DataTemplates>
     <Application.Styles>
         <FluentTheme />
+        <dock:DockFluentTheme />
     </Application.Styles>
 </Application>

@@ -11,6 +11,10 @@ internal static class EditorDiagnostics
         WriteIndented = true
     };
 
-    internal static void WriteError(EditorOptions options, Exception error) =>
-        File.WriteAllText(Path.Combine(options.Output, "managed-error.txt"), error.ToString());
+    internal static void WriteError(EditorOptions options, Exception error)
+    {
+        Program.Logging?.Logger.Error(error, "Editor operation failed");
+        try { File.WriteAllText(Path.Combine(options.Output, "managed-error.txt"), error.ToString()); }
+        catch (Exception writeError) { Console.Error.WriteLine(writeError); }
+    }
 }

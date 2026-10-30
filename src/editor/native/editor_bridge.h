@@ -44,6 +44,15 @@ extern "C"
     } rl_viewport_close_report;
 
     RENDERLAB_EDITOR_API uint32_t RENDERLAB_EDITOR_CALL rl_editor_abi_version(void);
+    /* UI-thread APIs. Stop retires GPU work but retains the session for final log drain. */
+    RENDERLAB_EDITOR_API rl_status RENDERLAB_EDITOR_CALL
+    rl_viewport_stop(rl_viewport_handle session, rl_viewport_close_report* report);
+    /* UTF-8 JSON batch; capacity queries pin the batch, a successful copy consumes it. */
+    RENDERLAB_EDITOR_API rl_status RENDERLAB_EDITOR_CALL rl_viewport_read_logs(
+        rl_viewport_handle session, char* output, uint32_t capacity, uint32_t* required);
+    /* Position XYZ + quaternion XYZW; no scene object identity crosses the bridge. */
+    RENDERLAB_EDITOR_API rl_status RENDERLAB_EDITOR_CALL
+    rl_viewport_camera(rl_viewport_handle session, float* pose, uint32_t write);
     /* UTF-8 paths are borrowed for this call. backend: 0 DX12, 1 Vulkan. UI STA only.
      * target_fps: 0 disables CPU pacing and forced VSync, 1..240 caps rendering with VSync.
      * The bridge owns the returned child HWND; the managed host must destroy the session first.

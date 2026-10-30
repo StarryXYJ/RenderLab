@@ -1,10 +1,12 @@
 #include "core/log.hpp"
 
+#include <algorithm>
 #include <chrono>
 #include <ctime>
 #include <format>
 #include <iostream>
 #include <stdexcept>
+#include <utility>
 
 namespace renderlab
 {
@@ -40,5 +42,54 @@ void Logger::Write(LogLevel level, std::string_view message)
     {
         throw std::runtime_error("Writing log file failed");
     }
+    if (mirrorEnabled_)
+    {
+        try
+        {
+            auto length = std::min<size_t>(message.size(), 16 * 1024);
+            // Never split a UTF-8 codepoint in the bounded projection.
+            while (length < message.size() && length &&
+                   (static_cast<unsigned char>(message[length]) & 0xC0) == 0x80)
+                --length;
+            while (!mirror_.empty() &&
+                   (mirror_.size() >= 4096 || mirrorBytes_ + length > 8 * 1024 * 1024))
+            {
+                mirrorBytes_ -= mirror_.front().message.size();
+                mirror_.pop_front();
+                ++dropped_;
+            }
+            mirror_.push_back(
+                {++sequence_,
+                 static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::milliseconds>(
+                                           std::chrono::system_clock::now().time_since_epoch())
+                                           .count()),
+                 level, std::string(message.substr(0, length)), length < message.size()});
+            mirrorBytes_ += length;
+        }
+        catch (...)
+        {
+            ++dropped_;
+        }
+    }
+}
+void Logger::EnableMirror()
+{
+    const std::scoped_lock lock(mutex_);
+    mirrorEnabled_ = true;
+}
+std::vector<LogEvent> Logger::DrainMirror(uint32_t capacity, uint64_t& dropped)
+{
+    const std::scoped_lock lock(mutex_);
+    std::vector<LogEvent> result;
+    const auto count = std::min<size_t>(capacity, mirror_.size());
+    result.reserve(count);
+    for (size_t i = 0; i < count; ++i)
+    {
+        mirrorBytes_ -= mirror_.front().message.size();
+        result.push_back(std::move(mirror_.front()));
+        mirror_.pop_front();
+    }
+    dropped = dropped_;
+    return result;
 }
 } // namespace renderlab
