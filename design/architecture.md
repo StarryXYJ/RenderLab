@@ -21,7 +21,7 @@ RenderLab 是面向引擎岗和渲染岗求职的渲染引擎项目。核心采�
 | Render Graph | 声明访问，自动生成依赖、同步和执行计划 | 正确性优先，再实现并行录制和多队列 |
 | 渲染算法 | 光栅、混合光追、后续完整光追实验 | 共享场景和材质数据，保留各自专用管线 |
 | GPU Driven | GPU 剔除和间接绘制 | 保留 CPU 提交路径作为基线和对照 |
-| 编辑器 | C# 与 Avalonia，WPF 可作为 Windows 替代方案 | 原生运行时独立于 UI 框架 |
+| 编辑器 | C#、Avalonia 与 Dock.Avalonia | 原生运行时独立于 UI 框架，先交付固定场景渲染工作台 |
 | 项目 | Shader、Material、Scene、Model 等资源的边界 | 先定义身份和目录约定，后实现完整操作界面 |
 
 首期范围以渲染为中心。物理、网络、通用脚本、完整 Prefab 系统、节点式 Shader 编辑器和原生 C++ 动态热重载后置。早期内部接口允许调整，不建立历史 API 或旧资源格式兼容层；仍保留格式版本和清晰诊断。
@@ -30,7 +30,7 @@ RenderLab 是面向引擎岗和渲染岗求职的渲染引擎项目。核心采�
 
 同一事实只保留一个权威所有者。新增模块先提供具体数据结构和少量函数，出现真实扩展需求后再抽象接口。目录分层不意味着每层都必须有 Manager、Factory、Registry、插件协议和独立 DLL。
 
-- 后端选择只发生在 Device 创建时；上层不重复检查 DX12/Vulkan。功能能力通过明确的 FeatureRequirements 验证，首版默认关闭高级功能，显式开启但不支持时直接诊断；回落路径只在单一策略入口选择。
+- 后端选择只发生在 Device 创建时；编辑器运行中切换 API 通过退休并重建设备/视口完成，不改变活动 Device 的后端。上层不重复检查 DX12/Vulkan。功能能力通过明确的 FeatureRequirements 验证，首版默认关闭高级功能，显式开启但不支持时直接诊断；回落路径只在单一策略入口选择。
 - 首期一个 Device、一个项目、一个主视口和一条 Graphics Queue。多视图历史数据仍按 ViewID 命名，避免未来改成全局单例。
 - Render Graph 是图内同步计划的唯一生成者；RHI 执行计划并验证，不另做隐式自动状态切换。
 - Schema 是材质属性的权威描述，Template 是 ShaderPackage 的只读视图，GPU 数据是可重建投影。
@@ -84,6 +84,12 @@ RHI 定义 GPU 对象与命令语义。Render Graph 编译一帧工作的资源�
 Windows 编辑器使用 Avalonia 管理整个窗口和普通面板，NativeControlHost 托管由 C++ 创建的渲染子 HWND；C++ 使用该窗口创建 Surface，复用 SceneRenderer 与双后端 Swapchain。[提前集成原型](../docs/editor-host.md) 已验证双后端 Present，采用代际 Handle、UTF-8 和显式关闭协议。UI STA 拥有 HWND/输入，专用 MTA 渲染线程创建、使用并销毁 Device/Runtime/SceneRenderer/Swapchain；最新值邮箱传递配置与输入，完成帧快照用有界队列发布，RHI 线程所有权检查保留。关闭先停止线程、释放 GPU/展示，再在 UI 销毁 HWND；等待期间处理 Win32 同步消息以防 DXGI 死锁。目标帧率调度支持 0 表示无 CPU 限速且关闭强制 VSync；RHI Swapchain 创建参数显式选择展示同步，默认保持 VSync。Resize 合并与静态按需重绘的契约和实际验收见宿主说明及阶段计划。跨屏 DPI、Docking、浮动窗口重挂接和真实交互仍需完整编辑器阶段验证。
 
 托管宿主按官方 Avalonia MVVM 模板组织 App、Views 与 ViewModels；XAML 使用编译绑定，CommunityToolkit.Mvvm 生成属性通知和命令，App 通过 Microsoft.Extensions.DependencyInjection 装配具体依赖。ViewModel 保存 UI 状态和服务投影，不调用 P/Invoke 或持有 HWND；NativeViewportService 管理原生 Session、已接受的视口配置与错误，NativeControlHost 适配窗口生命周期和 Timer。当前服务与视口一一对应，不建设通用模块框架；后续编辑面板沿同一结构增量加入，场景、材质和资源的权威状态继续归 C++ 服务。
+
+Editor 采用 [固定场景渲染工作台](../docs/editor-workbench.md)：Dock.Avalonia 12.0.0.2 管理固定面板和版本化布局，Scene 复用原生宿主，Ursa 按实际控件需要选用。固定源场景与资源保持只读，运行覆盖、预设与布局保存于 UserSettings。v10 桥接以定宽配置和单调 request_id 传递请求，owner 校验后在成功提交首帧时确认 Applied；暂停改动保持 Pending，单帧/恢复后确认。照明/环境/曝光在 SceneRenderer 提取后的 Snapshot 上覆盖，原文档保持权威；能力与拒绝原因来自原生 Runtime/Renderer。后续图查看器消费真实 Plan 的值快照，性能面板消费带 Session/源帧/配置版本的计数与完成结果，不持有 GPU 资源或构造第二套依赖图；Graph 已消费有界实际 Plan 快照并支持矩阵/依赖/生命周期与 Freeze/导出，Profiler 消费成功提交且完成点已确认的计数/时间/内存值，并可选显式可见性读回；图与性能冻结帧共享来源身份，实施状态只见阶段计划。
+
+工作台默认只打开 Scene 与 Render Settings；Render Graph、Profiler、Log 从顶部 Window 菜单按需打开，保留诊断预设及上次布局恢复。托管日志统一经 Serilog/DI ILogger 写结构化滚动文件和有界内存 sink；原生 Logger 保留独立文件与运行时所有权，通过可选有界镜像队列批量送入工作台日志，不在渲染/验证回调内调用托管 UI。关闭 Log 面板不停止记录，关闭程序先收取原生末尾日志再释放 Serilog。
+
+Dock 迁移优先保证原生窗口生命周期：跨父窗口时停止并退休旧 Session，销毁再创建，保持相机与运行配置；airspace 内的 Dock 拖放提示通过临时隐藏原生视口避免遮挡。DX12/Vulkan 切换沿用同一重建事务，目标失败后尝试重新创建原后端，回滚失败进入明确 Failed 状态。正常重建等待采用异步生命周期通知，UI STA 与渲染 MTA 的 HWND/Device 所有权保持不变。
 
 子 HWND 存在 airspace 限制，视口内 Gizmo 和调试覆盖由原生编辑器渲染层绘制；普通 Avalonia 控件安排在视口周边。独立 Sandbox 使用自己的原生窗口。视口宿主明确窗口所有权和销毁协议，避免窗口销毁后仍提交渲染。
 

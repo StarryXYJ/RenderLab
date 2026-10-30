@@ -27,6 +27,7 @@
 #include <cstring>
 #include <map>
 #include <optional>
+#include <set>
 #include <stdexcept>
 #include <string_view>
 #include <tuple>
@@ -37,6 +38,25 @@ namespace renderlab::renderer
 {
 namespace
 {
+int IndexedTextureSlot(shader::MaterialSemantic semantic)
+{
+    using S = shader::MaterialSemantic;
+    switch (semantic)
+    {
+    case S::BaseMap:
+        return 0;
+    case S::MetallicRoughnessMap:
+        return 1;
+    case S::NormalMap:
+        return 2;
+    case S::OcclusionMap:
+        return 3;
+    case S::EmissionMap:
+        return 4;
+    default:
+        return -1;
+    }
+}
 std::array<float, 4> Vector(math::Vec3 value, float w = 0)
 {
     return {value.x, value.y, value.z, w};
@@ -872,6 +892,65 @@ const scene::Snapshot& SceneRenderer::LastSnapshot() const
 {
     return impl_->snapshot;
 }
+void SceneRenderer::ValidateOptions(const SceneRenderOptions& options)
+{
+    ValidatePipeline(options.pipeline);
+    auto& self = *impl_;
+    if (options.recordingThreads < 1 || options.recordingThreads > 16)
+        throw std::invalid_argument("Recording threads must be in [1,16]");
+    if (options.asyncCompute && !self.runtime.SupportsAsyncCompute())
+        throw std::invalid_argument("This Runtime does not provide an async compute queue");
+    if (options.submission == GeometrySubmission::Direct)
+        return;
+    if (options.submission != GeometrySubmission::IndexedDirect &&
+        options.submission != GeometrySubmission::CpuIndirect &&
+        options.submission != GeometrySubmission::GpuCulled)
+        throw std::invalid_argument("Unknown geometry submission mode");
+    const auto support = self.runtime.GetIndirectSupport();
+    if (!support.firstInstance || !support.shaderInstanceIndex ||
+        self.runtime.SampledTextureArrayLimit() < IndexedTextureCapacity)
+        throw std::invalid_argument("Indexed submission requires firstInstance, shader indexing "
+                                    "(DX12 SM 6.8) and 64 nonuniform textures");
+    if (options.submission == GeometrySubmission::GpuCulled && !support.countBuffer)
+        throw std::invalid_argument("GPU culling requires a GPU count buffer");
+    self.EnsureModels();
+    scene::Extractor extractor;
+    const auto snapshot = extractor.Extract(self.document, 1, self.models);
+    uint32_t indexedInstances = 0;
+    std::set<std::string> textures;
+    for (const auto& instance : snapshot.allInstances)
+    {
+        const auto& model = self.models.at(instance.model);
+        const auto mesh = std::ranges::find(model.meshes, instance.mesh, &assets::Mesh::id);
+        const auto material = self.MaterialFor(instance, model.materials.at(mesh->material));
+        const auto policy = material::ResolvePolicy(material.package->definition, material.asset);
+        if (policy.surface == shader::SurfaceType::Transparent)
+            continue;
+        if (++indexedInstances > IndexedInstanceCapacity)
+            throw std::invalid_argument("Indexed scene exceeds 16384 instances");
+        if (material.package->definition.assetId != builtin::Lit &&
+            material.package->definition.assetId != "9120dfaac72c5c1c88f3a41e3ac22447")
+            throw std::invalid_argument(
+                "Indexed submission supports built-in Lit/Unlit opaque or masked surfaces only");
+        const shader::MaterialTemplate definition(material.package);
+        std::array<std::string, 5> keys{"white/Srgb", "white/Linear", "normal/Linear",
+                                        "white/Linear", "white/Linear"};
+        for (const auto& property : definition.Properties())
+        {
+            const auto slot = IndexedTextureSlot(property.semantic);
+            if (slot < 0 || !property.type.resource)
+                continue;
+            const auto found = material.asset.resources.find(property.id);
+            const auto& reference = found == material.asset.resources.end()
+                                        ? property.resourceDefault
+                                        : found->second.reference;
+            keys[static_cast<size_t>(slot)] = reference + (property.srgb ? "/Srgb" : "/Linear");
+        }
+        textures.insert(keys.begin(), keys.end());
+        if (textures.size() > IndexedTextureCapacity)
+            throw std::invalid_argument("Indexed scene exceeds 64 texture/color-space versions");
+    }
+}
 const std::map<std::string, assets::Model>& SceneRenderer::Models() const
 {
     return impl_->models;
@@ -879,6 +958,10 @@ const std::map<std::string, assets::Model>& SceneRenderer::Models() const
 rhi::UploadPool::Statistics SceneRenderer::UploadStatistics() const
 {
     return impl_->uploadPool.Stats();
+}
+rendergraph::PoolStats SceneRenderer::PoolStatistics() const
+{
+    return impl_->pool.Stats();
 }
 RaySceneStatistics SceneRenderer::RayStatistics() const
 {
@@ -919,6 +1002,20 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
     self.snapshot = self.extractor.Extract(
         self.document, float(target->desc.width) / float(target->desc.height), self.models,
         options.submission != GeometrySubmission::GpuCulled);
+    if (options.lightOverride)
+    {
+        self.snapshot.light = *options.lightOverride;
+        self.snapshot.shadowCasters =
+            self.snapshot.light.shadows && self.snapshot.light.intensity > 0
+                ? self.snapshot.allInstances
+                : std::vector<scene::Instance>{};
+    }
+    if (options.environmentIntensity)
+        self.snapshot.environmentIntensity = *options.environmentIntensity;
+    if (options.environmentRotation)
+        self.snapshot.environmentRotation = *options.environmentRotation;
+    if (options.exposure)
+        self.snapshot.exposure = *options.exposure;
     if (options.shadowResolution)
     {
         const auto size = options.shadowResolution;
@@ -1520,12 +1617,7 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
                 using S = shader::MaterialSemantic;
                 if (property.type.resource)
                 {
-                    int texture = property.semantic == S::BaseMap                ? 0
-                                  : property.semantic == S::MetallicRoughnessMap ? 1
-                                  : property.semantic == S::NormalMap            ? 2
-                                  : property.semantic == S::OcclusionMap         ? 3
-                                  : property.semantic == S::EmissionMap          ? 4
-                                                                                 : -1;
+                    const auto texture = IndexedTextureSlot(property.semantic);
                     if (texture >= 0)
                     {
                         const auto found = material.asset.resources.find(property.id);
@@ -1806,6 +1898,7 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
                 binding, importBuffer(binding.buffer, "Display.Constants", rhi::State::HostWrite));
     auto displayPass = graph.AddRasterPass(
         options.view == SceneView::Final ? "Display.ToneMapping" : "Debug.TextureViewer");
+    displayPass.Category(rendergraph::PassCategory::Fullscreen);
     displayPass.ColorTarget("DisplayColor", rhi::LoadOp::Clear, {.02f, .02f, .02f, 1});
     const auto hdr = displayPass.ReadTexture(displaySource);
     const auto vertices = displayPass.ReadBuffer(fullscreen, rendergraph::Use::Vertex);
@@ -1927,6 +2020,7 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
     if (preparedAcceleration)
         self.accelerationScene.Commit(std::move(*preparedAcceleration), submitted.completion);
     uploads.Seal(submitted.completion);
+    result.sceneUploadBytes = uploads.BytesWritten();
     result.reflectionSamples = reflectionHistory ? reflectionHistory->samples : 0;
     result.reflectionHistoryReset = reflectionHistory && reflectionSamples == 0;
     result.completion = submitted.completion;
@@ -1934,6 +2028,8 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
     result.compileNs = graph.GetPlan().compileNs;
     result.prepareNs = graph.GetPlan().prepareNs;
     result.recordNs = graph.GetPlan().recordNs;
+    if (options.captureGraph)
+        result.graphSnapshot = std::make_shared<const rendergraph::Plan>(graph.GetPlan());
     if (!dump.empty())
     {
         const auto json = graph.GetPlan().ToJson();

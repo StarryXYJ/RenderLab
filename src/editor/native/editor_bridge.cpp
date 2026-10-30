@@ -1,6 +1,8 @@
 #include "editor/native/editor_bridge.h"
 
 #include "editor/native/camera_input.hpp"
+#include "editor/native/snapshot_store.hpp"
+#include "editor/native/viewport_config.hpp"
 
 #include "core/log.hpp"
 #include "platform/text.hpp"
@@ -12,6 +14,7 @@
 #include "rhi/swapchain.hpp"
 
 #include <Windows.h>
+#include <nlohmann/json.hpp>
 #include <objbase.h>
 
 #include <algorithm>
@@ -30,7 +33,8 @@
 #include <utility>
 #include <vector>
 
-static_assert(sizeof(rl_viewport_stats) == 232 && sizeof(rl_viewport_close_report) == 24);
+static_assert(sizeof(rl_viewport_stats) == 256 && sizeof(rl_viewport_close_report) == 24);
+static_assert(sizeof(rl_viewport_config) == 112 && sizeof(rl_viewport_config_state) == 272);
 namespace
 {
 using namespace renderlab;
@@ -41,10 +45,39 @@ uint64_t ElapsedNs(Clock::time_point start)
     return static_cast<uint64_t>(
         std::chrono::duration_cast<std::chrono::nanoseconds>(Clock::now() - start).count());
 }
+nlohmann::json ConfigurationJson(const rl_viewport_config& c)
+{
+    return {{"version", c.version},
+            {"requestId", c.request_id},
+            {"pipeline", c.pipeline},
+            {"submission", c.submission},
+            {"recordingThreads", c.recording_threads},
+            {"asyncCompute", c.async_compute},
+            {"memoryAlias", c.memory_alias},
+            {"view", c.view},
+            {"profiling", c.profiling},
+            {"targetFps", c.target_fps},
+            {"continuous", c.continuous},
+            {"flags", c.flags},
+            {"shadowResolution", c.shadow_resolution},
+            {"exposure", c.exposure},
+            {"cameraSpeed", c.camera_speed},
+            {"lightDirection", {c.light_x, c.light_y, c.light_z}},
+            {"lightColor", {c.light_r, c.light_g, c.light_b}},
+            {"lightIntensity", c.light_intensity},
+            {"shadowBias", c.shadow_bias},
+            {"shadowNormalBias", c.shadow_normal_bias},
+            {"environmentIntensity", c.environment_intensity},
+            {"environmentRotation", c.environment_rotation}};
+}
 struct Failure : std::runtime_error
 {
     Failure(rl_status status, const char* message) : std::runtime_error(message), status(status) {}
     rl_status status;
+};
+struct FatalConfiguration : std::runtime_error
+{
+    using std::runtime_error::runtime_error;
 };
 void Require(bool condition, const char* message)
 {
@@ -96,7 +129,7 @@ struct NativeHandle
 struct InputSnapshot
 {
     uint32_t width = 0, height = 0, dpi = 96;
-    bool focused = false, captured = false, paused = true;
+    bool focused = false, captured = false, paused = true, visible = false;
     std::array<bool, 256> keys{};
     float yaw = 0, pitch = 0;
     uint64_t paints = 0;
@@ -113,9 +146,24 @@ struct RenderState
     std::unique_ptr<rhi::Swapchain> swapchain;
     renderer::SceneRenderOptions options;
     scene::Transform initialCamera;
+    float cameraSpeed = 3;
     std::array<uint64_t, 2> completions{};
     std::array<rendergraph::Submission::GpuProfile, 2> profiles;
     std::array<uint64_t, 2> profileFrames{};
+    std::array<uint64_t, 2> profileConfigs{};
+    uint64_t configRevision = 0;
+    std::shared_ptr<const rendergraph::Plan> capturedPlan;
+    struct Observation
+    {
+        uint64_t frame = 0, config = 0;
+        Clock::time_point submitted;
+        bool complete = false;
+        nlohmann::json data, envelope;
+        renderer::IndexedCullDiagnostics culling;
+    };
+    std::array<Observation, 2> observations;
+    uint64_t lastSnapshotFrame = 0;
+    std::string completedSnapshot;
     std::vector<bool> initialized;
     std::array<bool, 256> keys{};
     rl_viewport_stats stats{};
@@ -161,6 +209,98 @@ struct RenderState
         {
         }
     }
+    void RetireObservation(size_t slot)
+    {
+        auto& observation = observations[slot];
+        if (!observation.frame || observation.complete || completions[slot] > runtime->Completed())
+            return;
+        auto timings = profiles[slot].Read(*runtime);
+        if (!timings.empty() && observation.frame > stats.gpu_frame)
+        {
+            double ns = 0;
+            for (const auto& timing : timings)
+                ns += timing.nanoseconds;
+            stats.gpu_ns = static_cast<uint64_t>(std::max(0.0, ns));
+            stats.gpu_frame = observation.frame;
+            stats.gpu_config_revision = observation.config;
+        }
+        profiles[slot] = {};
+        observation.complete = true;
+        if (!observation.data.is_null())
+        {
+            observation.data["completionObservationNs"] = ElapsedNs(observation.submitted);
+            auto gpu = nlohmann::json::array();
+            double first = 0, last = 0, sum = 0, graphics = 0, compute = 0;
+            for (const auto& timing : timings)
+            {
+                if (gpu.empty())
+                {
+                    first = timing.startNanoseconds;
+                    last = timing.endNanoseconds;
+                }
+                first = std::min(first, timing.startNanoseconds);
+                last = std::max(last, timing.endNanoseconds);
+                sum += timing.nanoseconds;
+                (timing.queue == rhi::QueueType::Compute ? compute : graphics) +=
+                    timing.nanoseconds;
+                gpu.push_back(
+                    {{"name", timing.name},
+                     {"ns", timing.nanoseconds},
+                     {"startNs", timing.startNanoseconds},
+                     {"endNs", timing.endNanoseconds},
+                     {"queue", timing.queue == rhi::QueueType::Compute ? "compute" : "graphics"}});
+            }
+            observation.data["gpuPasses"] = std::move(gpu);
+            observation.data["gpuSumNs"] =
+                timings.empty() ? nlohmann::json(nullptr) : nlohmann::json(sum);
+            observation.data["gpuSpanNs"] =
+                timings.empty() ? nlohmann::json(nullptr) : nlohmann::json(last - first);
+            observation.data["gpuGraphicsNs"] =
+                timings.empty() ? nlohmann::json(nullptr) : nlohmann::json(graphics);
+            observation.data["gpuComputeNs"] =
+                timings.empty() ? nlohmann::json(nullptr) : nlohmann::json(compute);
+            observation.data["gpuVisible"] = nullptr;
+            if (observation.culling.readback)
+            {
+                const auto bytes = observation.culling.readback->Map();
+                uint64_t visible = 0;
+                for (size_t batch = 0; batch < observation.culling.batchCapacities.size(); ++batch)
+                {
+                    if ((batch + 1) * 4 > bytes.size())
+                        throw std::runtime_error("Culling diagnostic buffer is truncated");
+                    uint32_t count = 0;
+                    std::memcpy(&count, bytes.data() + batch * 4, 4);
+                    if (count > observation.culling.batchCapacities[batch])
+                        throw std::runtime_error("Culling diagnostic count exceeds capacity");
+                    visible += count;
+                }
+                observation.data["gpuVisible"] = visible;
+            }
+        }
+        observation.culling = {};
+        if (!observation.envelope.is_null() && observation.frame > lastSnapshotFrame)
+        {
+            observation.envelope["profile"] = observation.data;
+            completedSnapshot = observation.envelope.dump();
+            lastSnapshotFrame = observation.frame;
+        }
+    }
+    std::string TakeCompletedSnapshot()
+    {
+        Observation* selected = nullptr;
+        for (auto& observation : observations)
+            if (observation.complete && !observation.envelope.is_null() &&
+                observation.frame > lastSnapshotFrame &&
+                (!selected || observation.frame > selected->frame))
+                selected = &observation;
+        if (selected)
+        {
+            selected->envelope["profile"] = selected->data;
+            lastSnapshotFrame = selected->frame;
+            completedSnapshot = selected->envelope.dump();
+        }
+        return std::exchange(completedSnapshot, {});
+    }
     void Tick(float dt, const InputSnapshot& input)
     {
         const auto tickStart = Clock::now();
@@ -198,15 +338,7 @@ struct RenderState
         start = Clock::now();
         runtime->Wait(completion);
         stats.fence_wait_ns = ElapsedNs(start);
-        if (profiles[slot].ticks)
-        {
-            double nanoseconds = 0;
-            for (const auto& timing : profiles[slot].Read(*runtime))
-                nanoseconds += timing.nanoseconds;
-            stats.gpu_ns = static_cast<uint64_t>(std::max(0.0, nanoseconds));
-            stats.gpu_frame = profileFrames[slot];
-            profiles[slot] = {};
-        }
+        RetireObservation(slot);
         start = Clock::now();
         const auto acquired = swapchain->Acquire();
         stats.acquire_ns = ElapsedNs(start);
@@ -225,8 +357,9 @@ struct RenderState
         {
             const auto axis = [&](size_t positive, size_t negative)
             { return float(keys[positive]) - float(keys[negative]); };
-            const math::Vec3 motion{3 * dt * axis('D', 'A'), 3 * dt * axis('E', 'Q'),
-                                    3 * dt * axis('S', 'W')};
+            const math::Vec3 motion{cameraSpeed * dt * axis('D', 'A'),
+                                    cameraSpeed * dt * axis('E', 'Q'),
+                                    cameraSpeed * dt * axis('S', 'W')};
             const auto rotation = editor::CameraLookDelta(60 * dt * axis(VK_RIGHT, VK_LEFT) + yaw,
                                                           60 * dt * axis(VK_DOWN, VK_UP) + pitch);
             if (stats.pressed_keys || yaw != 0 || pitch != 0)
@@ -234,9 +367,55 @@ struct RenderState
             scene->Document().MoveCamera(motion, rotation);
         }
         yaw = pitch = 0;
+        runtime->SetCpuProfiling(options.profile);
+        const auto cpuBefore = runtime->GetCpuProfile();
         start = Clock::now();
         auto result = scene->Render(acquired.texture, initial, swapchain.get(), false, {}, options);
         stats.render_ns = ElapsedNs(start);
+        auto& observation = observations[slot];
+        observation = {};
+        observation.frame = stats.frames + 1;
+        observation.config = configRevision;
+        observation.submitted = Clock::now();
+        if (options.captureGraph)
+        {
+            const auto& snapshot = scene->LastSnapshot();
+            const auto upload = scene->UploadStatistics();
+            const auto descriptors = runtime->GetDescriptorStats();
+            const auto pool = scene->PoolStatistics();
+            const auto cpu = rhi::Difference(runtime->GetCpuProfile(), cpuBefore);
+            observation.data = {
+                {"candidates", snapshot.allInstances.size()},
+                {"cpuVisible", snapshot.cpuVisibilityKnown
+                                   ? nlohmann::json(snapshot.instances.size())
+                                   : nlohmann::json(nullptr)},
+                {"nativeBytes", runtime->GetMemoryStats().used},
+                {"peakBytes", runtime->GetMemoryStats().highWater},
+                {"uploadPages", upload.pages},
+                {"uploadReservedBytes", upload.reservedBytes},
+                {"sceneUploadBytes", result.sceneUploadBytes},
+                {"poolCached", pool.cached},
+                {"poolEstimatedBytes", pool.estimatedBytes},
+                {"nativeRecordNs",
+                 options.profile
+                     ? nlohmann::json(
+                           cpu[static_cast<size_t>(rhi::CpuOperation::NativeRecord)].nanoseconds)
+                     : nlohmann::json(nullptr)},
+                {"nativeSubmitNs",
+                 options.profile
+                     ? nlohmann::json(
+                           cpu[static_cast<size_t>(rhi::CpuOperation::NativeSubmit)].nanoseconds)
+                     : nlohmann::json(nullptr)},
+                {"descriptorSlots", descriptors.inUse},
+                {"descriptorCapacity", descriptors.capacity},
+                {"submission", static_cast<uint32_t>(options.submission)},
+                {"timingEnabled", options.profile},
+                {"readbackEnabled", options.cullingDiagnostics},
+                {"width", width},
+                {"height", height},
+                {"activeCamera", scene->Document().activeCamera}};
+            observation.culling = std::move(result.culling);
+        }
         stats.scene_prepare_ns = result.scenePrepareNs;
         stats.graph_compile_ns = result.compileNs;
         stats.graph_prepare_ns = result.prepareNs;
@@ -244,16 +423,31 @@ struct RenderState
         completion = result.completion;
         profiles[slot] = std::move(result.profile);
         profileFrames[slot] = stats.frames + 1;
+        profileConfigs[slot] = configRevision;
         stats.reflection_samples = result.reflectionSamples;
         initialized[acquired.index] = true;
         start = Clock::now();
         swapchain->Present();
         stats.present_ns = ElapsedNs(start);
         ++stats.frames;
+        stats.config_revision = configRevision;
         stats.pipeline = static_cast<uint32_t>(options.pipeline);
         stats.native_bytes = runtime->GetMemoryStats().used;
         stats.peak_bytes = runtime->GetMemoryStats().highWater;
         stats.tick_ns = ElapsedNs(tickStart);
+        if (!observation.data.is_null())
+            observation.data["cpuNs"] = {{"frame", stats.tick_ns},
+                                         {"fence", stats.fence_wait_ns},
+                                         {"acquire", stats.acquire_ns},
+                                         {"scene", stats.scene_prepare_ns},
+                                         {"compile", stats.graph_compile_ns},
+                                         {"prepare", stats.graph_prepare_ns},
+                                         {"record", stats.graph_record_ns},
+                                         {"render", stats.render_ns},
+                                         {"present", stats.present_ns},
+                                         {"resize", stats.resize_ns},
+                                         {"diagnostics", stats.diagnostics_ns}};
+        capturedPlan = std::move(result.graphSnapshot);
     }
     rl_viewport_close_report Close()
     {
@@ -261,6 +455,8 @@ struct RenderState
         {
             runtime->WaitIdle();
             profiles = {};
+            observations = {};
+            capturedPlan.reset();
             swapchain.reset();
             scene.reset();
             runtime->WaitIdle();
@@ -283,6 +479,7 @@ struct RenderState
 struct Session
 {
     const DWORD owner = GetCurrentThreadId();
+    const uint64_t identity;
     Logger logger;
     ChildWindow child;
     std::array<bool, 256> keys{};
@@ -292,13 +489,22 @@ struct Session
     uint64_t paints = 0;
     std::mutex mutex;
     NativeHandle wake{CreateEventW(nullptr, FALSE, FALSE, nullptr)};
-    bool stop = false, ready = false;
+    bool stop = false, ready = false, retired = false;
     InputSnapshot input;
     uint32_t pipeline = 2;
     float exposure = 0;
     uint64_t revision = 1, resets = 0;
+    uint64_t steps = 0;
+    uint64_t snapshotRequests = 0;
+    editor::SnapshotStore snapshots;
+    rl_viewport_config configuration{}, defaults{};
+    rl_viewport_config_state configurationState{sizeof(rl_viewport_config_state), 1};
+    std::string configurationError, capabilities;
     std::array<std::string, 3> pipelineErrors;
     std::string error;
+    std::string pendingLogs;
+    scene::Transform camera;
+    std::optional<scene::Transform> requestedCamera;
     rl_viewport_stats stats{};
     rl_viewport_close_report closed{};
     const Clock::time_point origin = Clock::now();
@@ -376,11 +582,12 @@ struct Session
         }
         return DefWindowProcW(window, message, w, l);
     }
-    Session(HWND parent, uint32_t backend, bool validation, bool profiling, uint32_t targetFps,
-            bool continuous, const std::filesystem::path& project,
+    Session(uint64_t id, HWND parent, uint32_t backend, bool validation, bool profiling,
+            uint32_t targetFps, bool continuous, const std::filesystem::path& project,
             const std::filesystem::path& shaders, const std::filesystem::path& log)
-        : logger(log)
+        : identity(id), logger(log)
     {
+        logger.EnableMirror();
         static const auto registered = []
         {
             WNDCLASSW type{};
@@ -422,14 +629,67 @@ struct Session
                             failures[p - 1] = failure.what();
                         }
                     }
+                    scene::Extractor configExtractor;
+                    const auto sourceSnapshot = configExtractor.Extract(render.scene->Document(), 1,
+                                                                        render.scene->Models());
+                    auto activeConfig =
+                        editor::DefaultConfig(sourceSnapshot, targetFps, continuous, profiling);
+                    nlohmann::json capabilityData{
+                        {"schemaVersion", 1},
+                        {"backend", backend == 0 ? "dx12" : "vulkan"},
+                        {"adapter", render.device->GetReport()
+                                        .adapters.at(render.device->GetReport().selectedAdapter)
+                                        .name},
+                        {"driver", render.device->GetReport().driverVersion},
+                        {"asyncCompute", render.runtime->SupportsAsyncCompute()},
+                        {"instanceCapacity", renderer::IndexedInstanceCapacity},
+                        {"textureCapacity", renderer::IndexedTextureCapacity},
+                        {"pipelines", nlohmann::json::array()},
+                        {"submissions", nlohmann::json::array()}};
+                    for (uint32_t p = 1; p <= 3; ++p)
+                        capabilityData["pipelines"].push_back(
+                            {{"value", p},
+                             {"available", failures[p - 1].empty()},
+                             {"reason", failures[p - 1]}});
+                    for (uint32_t mode = 0; mode < 4; ++mode)
+                    {
+                        std::string reason;
+                        auto candidate = activeConfig;
+                        candidate.pipeline = 1;
+                        candidate.submission = mode;
+                        try
+                        {
+                            render.scene->ValidateOptions(
+                                editor::RenderOptions(candidate, sourceSnapshot.light));
+                        }
+                        catch (const std::exception& failure)
+                        {
+                            reason = failure.what();
+                        }
+                        capabilityData["submissions"].push_back(
+                            {{"value", mode}, {"available", reason.empty()}, {"reason", reason}});
+                    }
                     {
                         std::lock_guard lock(mutex);
                         pipelineErrors = std::move(failures);
+                        defaults = activeConfig;
+                        configuration = defaults;
+                        configuration.pipeline = pipeline;
+                        configuration.exposure = exposure;
+                        configuration.request_id = revision;
+                        configurationState.requested = configuration;
+                        configurationState.requested_id = revision;
+                        configurationState.status = 1;
+                        configurationState.ready = 1;
+                        capabilities = capabilityData.dump();
                         ready = true;
+                        camera = render.initialCamera;
                     }
-                    uint64_t applied = 0, appliedResets = 0;
+                    uint64_t prepared = 0, appliedResets = 0, completedSteps = 0;
+                    uint64_t snapshotsServed = 0, topologyRevision = 0;
+                    std::string previousTopology;
                     auto previous = Clock::now();
-                    const auto period =
+                    auto period =
                         std::chrono::nanoseconds(targetFps ? 1'000'000'000 / targetFps : 0);
                     auto deadline = previous;
                     auto dimensionsChanged = previous;
@@ -455,30 +715,112 @@ struct Session
                         }
                         InputSnapshot snapshot;
                         uint32_t selected;
-                        float selectedExposure;
-                        uint64_t selectedRevision, selectedResets;
+                        rl_viewport_config selectedConfig;
+                        uint64_t selectedRevision, selectedResets, selectedSteps;
+                        uint64_t selectedSnapshot;
                         {
                             std::lock_guard lock(mutex);
                             if (stop)
                                 break;
                             snapshot = input;
-                            input.yaw = input.pitch = 0;
-                            selected = pipeline;
-                            selectedExposure = exposure;
-                            selectedRevision = revision;
-                            selectedResets = resets;
-                        }
-                        if (selectedRevision != applied)
-                        {
-                            if (!pipelineErrors[selected - 1].empty())
-                                throw std::runtime_error(pipelineErrors[selected - 1]);
-                            render.options.pipeline = static_cast<renderer::PipelineType>(selected);
-                            render.scene->Document().exposure = selectedExposure;
-                            if (selectedResets != appliedResets)
+                            if (requestedCamera)
+                            {
                                 render.scene->Document()
                                     .Get(render.scene->Document().activeCamera)
-                                    .transform = render.initialCamera;
-                            applied = selectedRevision;
+                                    .transform = *requestedCamera;
+                                requestedCamera.reset();
+                                dirty = true;
+                            }
+                            input.yaw = input.pitch = 0;
+                            selectedConfig = configuration;
+                            selectedRevision = configuration.request_id;
+                            selectedResets = resets;
+                            selectedSteps = steps;
+                            selectedSnapshot = snapshotRequests;
+                        }
+                        if (selectedRevision != prepared)
+                        {
+                            try
+                            {
+                                editor::ValidateConfig(selectedConfig);
+                                auto nextOptions =
+                                    editor::RenderOptions(selectedConfig, sourceSnapshot.light);
+                                render.scene->ValidateOptions(nextOptions);
+                                if ((activeConfig.target_fps == 0) !=
+                                    (selectedConfig.target_fps == 0))
+                                {
+                                    render.runtime->WaitIdle();
+                                    render.swapchain.reset();
+                                    try
+                                    {
+                                        render.swapchain = render.runtime->CreateSwapchain(
+                                            {child.value, GetModuleHandleW(nullptr)}, 1, 1,
+                                            selectedConfig.target_fps != 0);
+                                    }
+                                    catch (const std::exception& failure)
+                                    {
+                                        const auto reason = std::string(failure.what());
+                                        try
+                                        {
+                                            render.swapchain = render.runtime->CreateSwapchain(
+                                                {child.value, GetModuleHandleW(nullptr)}, 1, 1,
+                                                activeConfig.target_fps != 0);
+                                        }
+                                        catch (...)
+                                        {
+                                            throw FatalConfiguration("Swapchain reconfiguration "
+                                                                     "and recovery both failed");
+                                        }
+                                        render.initialized.clear();
+                                        render.stats.width = render.stats.height = 0;
+                                        throw std::invalid_argument("Presentation mode rejected: " +
+                                                                    reason);
+                                    }
+                                    render.initialized.clear();
+                                    render.stats.width = render.stats.height = 0;
+                                }
+                                render.options = std::move(nextOptions);
+                                render.cameraSpeed = selectedConfig.camera_speed;
+                                render.configRevision = selectedRevision;
+                                render.stats.profiling_enabled = selectedConfig.profiling;
+                                activeConfig = selectedConfig;
+                                period = std::chrono::nanoseconds(activeConfig.target_fps
+                                                                      ? 1'000'000'000 /
+                                                                            activeConfig.target_fps
+                                                                      : 0);
+                                deadline = Clock::now();
+                                dirty = true;
+                                previousCompleted.reset();
+                                logger.Write(
+                                    LogLevel::Info,
+                                    std::format("Configuration {} prepared", selectedRevision));
+                            }
+                            catch (const FatalConfiguration&)
+                            {
+                                throw;
+                            }
+                            catch (const std::exception& failure)
+                            {
+                                logger.Write(LogLevel::Warning,
+                                             std::format("Configuration {} rejected: {}",
+                                                         selectedRevision, failure.what()));
+                                std::lock_guard lock(mutex);
+                                configurationState.rejected_id = selectedRevision;
+                                configurationError = failure.what();
+                                if (configuration.request_id == selectedRevision)
+                                    configurationState.status = 3;
+                            }
+                            prepared = selectedRevision;
+                        }
+                        selected = activeConfig.pipeline;
+                        render.options.captureGraph = selectedSnapshot != snapshotsServed;
+                        if (render.options.captureGraph)
+                            dirty = true;
+                        if (selectedResets != appliedResets)
+                        {
+                            render.scene->Document()
+                                .Get(render.scene->Document().activeCamera)
+                                .transform = render.initialCamera;
                             appliedResets = selectedResets;
                             dirty = true;
                         }
@@ -499,7 +841,12 @@ struct Session
                             dimensionsChanged = now;
                             dirty = true;
                         }
-                        const bool paused = snapshot.paused || !snapshot.width || !snapshot.height;
+                        const bool stepping = selectedSteps != completedSteps && snapshot.visible &&
+                                              snapshot.width && snapshot.height;
+                        const bool paused =
+                            (snapshot.paused && !stepping) || !snapshot.width || !snapshot.height;
+                        if (stepping)
+                            snapshot.paused = false;
                         if (wasPaused && !paused)
                             dirty = true;
                         wasPaused = paused;
@@ -513,9 +860,10 @@ struct Session
                             (std::ranges::any_of(snapshot.keys, [](bool down) { return down; }) ||
                              pendingYaw != 0 || pendingPitch != 0);
                         const bool accumulating =
-                            selected == 3 &&
+                            selected == 3 && (activeConfig.flags & 3) == 3 &&
                             render.stats.reflection_samples < renderer::MaxReflectionSamples;
-                        const bool needsFrame = dirty || moving || accumulating || continuous;
+                        const bool needsFrame =
+                            dirty || moving || accumulating || activeConfig.continuous || stepping;
                         const auto dt = std::clamp(
                             std::chrono::duration<float>(now - previous).count(), 0.f, .1f);
                         const bool draw =
@@ -543,6 +891,8 @@ struct Session
                                                                                          origin)
                                         .count());
                                 previousCompleted = completed;
+                                if (stepping)
+                                    ++completedSteps;
                                 dirty = false;
                             }
                             // No catch-up burst after a slow frame. VSync may impose a lower rate.
@@ -555,41 +905,88 @@ struct Session
                             previousCompleted.reset();
                             previous = now;
                             // Unlimited active frames still sleep while paused, idle or resizing.
-                            deadline = now + (targetFps ? period : std::chrono::milliseconds(16));
+                            deadline =
+                                now +
+                                (activeConfig.target_fps ? period : std::chrono::milliseconds(16));
                             if (paused)
                                 ++render.stats.paused_ticks;
                         }
                         render.stats.dpi = snapshot.dpi;
                         // Retire profiles even after a one-shot static redraw. Completion is
                         // queried without adding a GPU wait or keeping the viewport rendering.
-                        const auto completedPoint = render.runtime->Completed();
                         for (size_t slot = 0; slot < render.profiles.size(); ++slot)
-                        {
-                            if (render.profiles[slot].ticks &&
-                                render.completions[slot] <= completedPoint)
-                            {
-                                double ns = 0;
-                                for (const auto& timing :
-                                     render.profiles[slot].Read(*render.runtime))
-                                    ns += timing.nanoseconds;
-                                if (render.profileFrames[slot] > render.stats.gpu_frame)
-                                {
-                                    render.stats.gpu_ns = static_cast<uint64_t>(std::max(0.0, ns));
-                                    render.stats.gpu_frame = render.profileFrames[slot];
-                                }
-                                render.profiles[slot] = {};
-                            }
-                        }
+                            render.RetireObservation(slot);
                         render.stats.focused = snapshot.focused;
                         render.stats.captured = snapshot.captured;
                         render.stats.pressed_keys = static_cast<uint32_t>(
                             std::count(snapshot.keys.begin(), snapshot.keys.end(), true));
                         render.stats.ready = 1;
                         render.stats.ui_thread_id = owner;
+                        render.stats.session_generation = identity;
                         render.stats.render_thread_id = GetCurrentThreadId();
                         render.stats.activity = paused ? 3 : resizePending ? 4 : needsFrame ? 1 : 2;
+                        std::string graphSnapshot;
+                        if (draw && render.stats.frames != stats.frames && render.capturedPlan)
+                        {
+                            try
+                            {
+                                auto plan = nlohmann::json::parse(render.capturedPlan->ToJson());
+                                auto topology = plan;
+                                topology.erase("cpuNs");
+                                for (auto& pass : topology["passes"])
+                                {
+                                    pass.erase("commandRange");
+                                    pass.erase("commands");
+                                }
+                                for (auto& resource : topology["resources"])
+                                {
+                                    resource.erase("initial");
+                                    resource.erase("final");
+                                }
+                                topology.erase("prologueBarriers");
+                                topology.erase("finalBarriers");
+                                for (auto& scheduled : topology["schedule"])
+                                    scheduled.erase("barriers");
+                                const auto signature = topology.dump();
+                                if (signature != previousTopology)
+                                {
+                                    previousTopology = signature;
+                                    ++topologyRevision;
+                                }
+                                render
+                                    .observations[(render.stats.frames - 1) %
+                                                  render.observations.size()]
+                                    .envelope = nlohmann::json{
+                                    {"schemaVersion", 1},
+                                    {"sessionGeneration", identity},
+                                    {"frameId", render.stats.frames},
+                                    {"configRevision", render.stats.config_revision},
+                                    {"configuration", ConfigurationJson(activeConfig)},
+                                    {"topologyRevision", topologyRevision},
+                                    {"backend", backend == 0 ? "dx12" : "vulkan"},
+                                    {"project", platform::WideToUtf8(project.wstring())},
+                                    {"status", "submitted"},
+                                    {"plan", std::move(plan)}};
+                                snapshotsServed = selectedSnapshot;
+                            }
+                            catch (const std::exception& failure)
+                            {
+                                logger.Write(LogLevel::Warning,
+                                             std::string("Graph snapshot failed: ") +
+                                                 failure.what());
+                            }
+                        }
+                        graphSnapshot = render.TakeCompletedSnapshot();
                         {
                             std::lock_guard lock(mutex);
+                            const bool framePublished = draw && render.stats.frames != stats.frames;
+                            if (!graphSnapshot.empty())
+                            {
+                                if (!snapshots.Publish(std::move(graphSnapshot)))
+                                    snapshots.Publish(
+                                        "{\"schemaVersion\":1,\"status\":\"unavailable\",\"error\":"
+                                        "\"Snapshot exceeds 4 MiB budget\"}");
+                            }
                             if (draw && render.stats.frames != stats.frames)
                             {
                                 if (frameCount == completedFrames.size())
@@ -604,6 +1001,16 @@ struct Session
                                 ++frameCount;
                             }
                             stats = render.stats;
+                            if (framePublished)
+                            {
+                                configurationState.applied = activeConfig;
+                                configurationState.applied_id = activeConfig.request_id;
+                                if (configurationState.requested_id == activeConfig.request_id)
+                                    configurationState.status = 2;
+                            }
+                            camera = render.scene->Document()
+                                         .Get(render.scene->Document().activeCamera)
+                                         .transform;
                         }
                     }
                     const auto report = render.Close();
@@ -637,6 +1044,8 @@ struct Session
                             error = failure.what();
                     }
                 }
+                std::lock_guard lock(mutex);
+                retired = true;
             });
     }
     ~Session()
@@ -669,6 +1078,8 @@ struct Session
         input.captured = GetCapture() == child.value;
         input.paused =
             paused || !IsWindowVisible(child.value) || IsIconic(GetAncestor(child.value, GA_ROOT));
+        input.visible =
+            IsWindowVisible(child.value) && !IsIconic(GetAncestor(child.value, GA_ROOT));
         input.keys = keys;
         input.paints = paints;
         input.yaw += yaw;
@@ -686,6 +1097,21 @@ struct Session
         exposure = value;
         resets += reset;
         ++revision;
+        if (ready)
+        {
+            if (configurationState.status == 1)
+                configurationState.superseded_id = configuration.request_id;
+            if (configurationState.status == 3 &&
+                configurationState.applied.size == sizeof(rl_viewport_config))
+                configuration = configurationState.applied;
+            configuration.pipeline = selected;
+            configuration.exposure = value;
+            configuration.request_id = revision;
+            configurationState.requested = configuration;
+            configurationState.requested_id = revision;
+            configurationState.status = 1;
+            configurationError.clear();
+        }
         SetEvent(wake.value);
     }
     rl_viewport_stats GetStats()
@@ -705,11 +1131,18 @@ struct Session
         frameCount -= count;
         return static_cast<uint32_t>(count);
     }
+    void BeginStop()
+    {
+        closing = true;
+        {
+            std::lock_guard lock(mutex);
+            stop = true;
+        }
+        SetEvent(wake.value);
+    }
     rl_viewport_close_report Close()
     {
-        if (closing)
-            return closed;
-        closing = true;
+        BeginStop();
         if (worker.joinable())
         {
             {
@@ -782,7 +1215,227 @@ template <class F> rl_status Guard(F&& operation)
 
 uint32_t RENDERLAB_EDITOR_CALL rl_editor_abi_version()
 {
-    return 4;
+    return 10;
+}
+rl_status RENDERLAB_EDITOR_CALL rl_viewport_request_snapshot(rl_viewport_handle handle)
+{
+    return Guard(
+        [&]
+        {
+            auto& session = Find(handle);
+            std::lock_guard lock(session.mutex);
+            ++session.snapshotRequests;
+            SetEvent(session.wake.value);
+        });
+}
+rl_status RENDERLAB_EDITOR_CALL rl_viewport_acquire_snapshot(rl_viewport_handle handle,
+                                                             uint64_t* snapshot, uint32_t* required)
+{
+    return Guard(
+        [&]
+        {
+            Require(snapshot && required, "Snapshot outputs are null");
+            auto& session = Find(handle);
+            std::lock_guard lock(session.mutex);
+            const auto value = session.snapshots.Acquire();
+            *snapshot = value.first;
+            *required = value.second;
+        });
+}
+rl_status RENDERLAB_EDITOR_CALL rl_viewport_copy_snapshot(rl_viewport_handle handle,
+                                                          uint64_t snapshot, char* output,
+                                                          uint32_t capacity)
+{
+    return Guard(
+        [&]
+        {
+            auto& session = Find(handle);
+            std::lock_guard lock(session.mutex);
+            Require(session.snapshots.pin == snapshot && snapshot != 0,
+                    "Snapshot identity is stale");
+            if (!session.snapshots.Copy(snapshot, output, capacity))
+                throw Failure(RL_BUFFER_TOO_SMALL, "Snapshot output is too small");
+        });
+}
+rl_status RENDERLAB_EDITOR_CALL rl_viewport_release_snapshot(rl_viewport_handle handle,
+                                                             uint64_t snapshot)
+{
+    return Guard(
+        [&]
+        {
+            auto& session = Find(handle);
+            std::lock_guard lock(session.mutex);
+            Require(session.snapshots.Release(snapshot), "Snapshot identity is stale");
+        });
+}
+rl_status RENDERLAB_EDITOR_CALL rl_viewport_begin_stop(rl_viewport_handle handle)
+{
+    return Guard([&] { Find(handle).BeginStop(); });
+}
+rl_status RENDERLAB_EDITOR_CALL rl_viewport_is_retired(rl_viewport_handle handle, uint32_t* retired)
+{
+    return Guard(
+        [&]
+        {
+            Require(retired != nullptr, "Retirement output is null");
+            auto& session = Find(handle);
+            std::lock_guard lock(session.mutex);
+            *retired = session.retired ? 1u : 0u;
+        });
+}
+rl_status RENDERLAB_EDITOR_CALL rl_viewport_configure_v2(rl_viewport_handle handle,
+                                                         const rl_viewport_config* config)
+{
+    return Guard(
+        [&]
+        {
+            Require(config != nullptr, "Configuration input is null");
+            try
+            {
+                editor::ValidateConfig(*config);
+            }
+            catch (const std::invalid_argument& failure)
+            {
+                throw Failure(RL_INVALID_ARGUMENT, failure.what());
+            }
+            auto& session = Find(handle);
+            std::lock_guard lock(session.mutex);
+            session.CheckError();
+            Require(session.ready && !session.closing, "Viewport configuration is not ready");
+            Require(config->request_id > session.revision,
+                    "Configuration request ID must increase");
+            if (session.configurationState.status == 1)
+                session.configurationState.superseded_id = session.configuration.request_id;
+            session.configuration = *config;
+            session.revision = config->request_id;
+            session.pipeline = config->pipeline;
+            session.exposure = config->exposure;
+            session.configurationState.requested = *config;
+            session.configurationState.requested_id = config->request_id;
+            session.configurationState.status = 1;
+            session.configurationError.clear();
+            SetEvent(session.wake.value);
+        });
+}
+rl_status RENDERLAB_EDITOR_CALL rl_viewport_get_config(rl_viewport_handle handle,
+                                                       rl_viewport_config_state* state,
+                                                       rl_viewport_config* defaults)
+{
+    return Guard(
+        [&]
+        {
+            Require(state && defaults, "Configuration outputs are null");
+            auto& session = Find(handle);
+            std::lock_guard lock(session.mutex);
+            session.CheckError();
+            *state = session.configurationState;
+            *defaults = session.defaults;
+        });
+}
+rl_status RENDERLAB_EDITOR_CALL rl_viewport_config_text(rl_viewport_handle handle, uint32_t kind,
+                                                        char* output, uint32_t capacity,
+                                                        uint32_t* required)
+{
+    return Guard(
+        [&]
+        {
+            Require(required && kind <= 1, "Invalid configuration text request");
+            auto& session = Find(handle);
+            std::lock_guard lock(session.mutex);
+            const auto& value = kind == 0 ? session.capabilities : session.configurationError;
+            *required = static_cast<uint32_t>(value.size() + 1);
+            if (!output || capacity < *required)
+                throw Failure(RL_BUFFER_TOO_SMALL, "Configuration text buffer is too small");
+            std::memcpy(output, value.c_str(), *required);
+        });
+}
+rl_status RENDERLAB_EDITOR_CALL rl_viewport_step(rl_viewport_handle handle)
+{
+    return Guard(
+        [&]
+        {
+            auto& session = Find(handle);
+            std::lock_guard lock(session.mutex);
+            session.CheckError();
+            Require(session.ready && session.input.paused && !session.closing,
+                    "Single step requires a paused ready viewport");
+            ++session.steps;
+            SetEvent(session.wake.value);
+        });
+}
+rl_status RENDERLAB_EDITOR_CALL rl_viewport_stop(rl_viewport_handle handle,
+                                                 rl_viewport_close_report* report)
+{
+    return Guard(
+        [&]
+        {
+            Require(report != nullptr, "Close report is null");
+            *report = Find(handle).Close();
+        });
+}
+rl_status RENDERLAB_EDITOR_CALL rl_viewport_read_logs(rl_viewport_handle handle, char* output,
+                                                      uint32_t capacity, uint32_t* required)
+{
+    return Guard(
+        [&]
+        {
+            Require(required != nullptr, "Log size output is null");
+            auto& session = Find(handle);
+            if (session.pendingLogs.empty())
+            {
+                uint64_t dropped = 0;
+                auto events = session.logger.DrainMirror(128, dropped);
+                nlohmann::json batch{{"events", nlohmann::json::array()},
+                                     {"dropped", dropped},
+                                     {"fileFailed", session.logger.FileFailed()}};
+                for (const auto& event : events)
+                    batch["events"].push_back({{"sequence", event.sequence},
+                                               {"time", event.unixMilliseconds},
+                                               {"level", static_cast<uint32_t>(event.level)},
+                                               {"message", event.message},
+                                               {"truncated", event.truncated}});
+                session.pendingLogs =
+                    batch.dump(-1, ' ', false, nlohmann::json::error_handler_t::replace);
+            }
+            *required = static_cast<uint32_t>(session.pendingLogs.size() + 1);
+            if (!output || capacity < *required)
+                throw Failure(RL_BUFFER_TOO_SMALL, "Log batch buffer is too small");
+            std::memcpy(output, session.pendingLogs.c_str(), *required);
+            session.pendingLogs.clear();
+        });
+}
+rl_status RENDERLAB_EDITOR_CALL rl_viewport_camera(rl_viewport_handle handle, float* pose,
+                                                   uint32_t write)
+{
+    return Guard(
+        [&]
+        {
+            Require(pose && write <= 1, "Invalid camera transfer");
+            auto& session = Find(handle);
+            std::lock_guard lock(session.mutex);
+            if (write)
+            {
+                for (size_t i = 0; i < 7; ++i)
+                    Require(std::isfinite(pose[i]), "Camera pose must be finite");
+                const auto norm = std::sqrt(pose[3] * pose[3] + pose[4] * pose[4] +
+                                            pose[5] * pose[5] + pose[6] * pose[6]);
+                Require(std::isfinite(norm) && norm > .00001f, "Camera quaternion is invalid");
+                scene::Transform transform;
+                transform.position = {pose[0], pose[1], pose[2]};
+                transform.rotation = {pose[3] / norm, pose[4] / norm, pose[5] / norm,
+                                      pose[6] / norm};
+                session.requestedCamera = transform;
+                SetEvent(session.wake.value);
+            }
+            else
+            {
+                Require(session.ready, "Camera is not ready");
+                const auto& p = session.camera.position;
+                const auto& q = session.camera.rotation;
+                const float values[]{p.x, p.y, p.z, q.x, q.y, q.z, q.w};
+                std::copy(std::begin(values), std::end(values), pose);
+            }
+        });
 }
 rl_status RENDERLAB_EDITOR_CALL rl_viewport_create(void* parent, uint32_t backend,
                                                    uint32_t validation, uint32_t profiling,
@@ -809,6 +1462,7 @@ rl_status RENDERLAB_EDITOR_CALL rl_viewport_create(void* parent, uint32_t backen
                 if (!sessions[i].session)
                 {
                     auto session = std::make_unique<Session>(
+                        (uint64_t(sessions[i].generation) << 32) | (i + 1),
                         static_cast<HWND>(parent), backend, validation != 0, profiling != 0,
                         targetFps, continuous != 0, platform::Utf8ToWide(project),
                         platform::Utf8ToWide(shaders), platform::Utf8ToWide(log));

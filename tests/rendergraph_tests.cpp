@@ -1043,12 +1043,15 @@ void ProfilingContracts()
         pass.Execute([](ComputeContext&) {});
     }
     graph.Compile({.profile = true});
-    Fails([&] { graph.Execute(pool); }, "32 live passes");
+    const auto submission = graph.Execute(pool);
+    Require(!submission.profile.ticks &&
+                graph.GetPlan().profilingReason.find("32 live passes") != std::string::npos,
+            "Over-budget profiling must preserve rendering and explain the missing timestamps");
     Submission::GpuProfile profile;
     Require(profile.Read(runtime).empty(), "Disabled profile must not access readback memory");
     profile.ticks = runtime.CreateBuffer({16, rhi::Memory::Readback, "Profile"});
     profile.names = {"test"};
-    profile.completion = 1;
+    profile.completion = runtime.LastSubmitted() + 1;
     Fails([&] { profile.Read(runtime); }, "completed submission");
 }
 void QueueContracts()
@@ -1282,6 +1285,48 @@ int main()
     try
     {
         Dependencies();
+        {
+            const std::vector<rhi::Command> commands{
+                rhi::Draw{3, 0, false, 5},
+                rhi::Draw{6, 0, true, 7},
+                rhi::SetStencilReference{1},
+                rhi::DrawIndirect{nullptr, 0, 128, true, nullptr, 0},
+                rhi::Dispatch{2, 3, 4},
+                rhi::TraceRays{nullptr, 8, 4, 1},
+                rhi::BuildAccelerationStructure{nullptr, nullptr, false}};
+            const auto counts = CountCommands(commands);
+            Require(
+                counts.direct == 2 && counts.indexed == 1 && counts.indirect == 1 &&
+                    counts.batches == 2 && counts.directInstances == 12 &&
+                    counts.indirectInstancesUnknown && counts.indirectCapacity == 128 &&
+                    counts.dispatch == 1 && counts.threadGroups == 24 && counts.traceRays == 1 &&
+                    counts.rays == 32 && counts.asBuilds == 1,
+                "Actual command counters conflated draw calls, batches, instances or dispatches");
+        }
+        {
+            FakeRuntime runtime;
+            Pool pool(runtime);
+            Graph graph;
+            auto target =
+                graph.CreateTexture("Diagnostic.Target", {17, 11, rhi::Format::Rgba8, false, true});
+            auto pass = graph.AddRasterPass("Diagnostic.Pass");
+            target = pass.ColorTarget(target);
+            pass.Execute([](RasterContext&) {});
+            graph.Export(target, rhi::State::CopySource);
+            const auto& plan = graph.Compile();
+            graph.Execute(pool);
+            const auto& resource = plan.resources.front();
+            Require(resource.texture && resource.exported && resource.width == 17 &&
+                        resource.height == 11,
+                    "Plan diagnostics lost resource descriptors or export roots");
+            Require(plan.passes.front().recordingChunk == 0 &&
+                        plan.passes.front().lastCommand > plan.passes.front().firstCommand &&
+                        plan.passes.front().accesses.front().textureRange.aspect == Aspect::Color,
+                    "Plan diagnostics lost actual recording ranges or texture aspects");
+            Require(plan.ToJson().find("Diagnostic.Target") != std::string::npos &&
+                        plan.ToJson().find("textureRange") != std::string::npos,
+                    "Plan JSON lost diagnostic metadata");
+        }
         AliasContracts();
         NamesAndBuilders();
         AccessValidation();

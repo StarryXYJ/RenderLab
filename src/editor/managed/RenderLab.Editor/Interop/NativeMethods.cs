@@ -14,6 +14,7 @@ internal struct ViewportStats
     public ulong ScenePrepareNs;
     public ulong FrameIntervalNs, FrameTimeNs, DroppedSamples;
     public uint Activity, Ready, UiThreadId, RenderThreadId;
+    public ulong ConfigRevision, GpuConfigRevision, SessionGeneration;
 }
 
 [StructLayout(LayoutKind.Sequential)]
@@ -29,6 +30,32 @@ internal static class NativeMethods
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "rl_editor_abi_version")]
     internal static extern uint AbiVersion();
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "rl_viewport_request_snapshot")]
+    internal static extern int RequestSnapshot(ulong session);
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "rl_viewport_acquire_snapshot")]
+    internal static extern int AcquireSnapshot(ulong session, out ulong snapshot, out uint required);
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "rl_viewport_copy_snapshot")]
+    internal static extern int CopySnapshot(ulong session, ulong snapshot, [Out] byte[] buffer, uint capacity);
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "rl_viewport_release_snapshot")]
+    internal static extern int ReleaseSnapshot(ulong session, ulong snapshot);
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "rl_viewport_begin_stop")]
+    internal static extern int BeginStop(ulong session);
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "rl_viewport_is_retired")]
+    internal static extern int IsRetired(ulong session, out uint retired);
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "rl_viewport_configure_v2")]
+    internal static extern int ConfigureV2(ulong session, in ViewportConfig config);
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "rl_viewport_get_config")]
+    internal static extern int GetConfig(ulong session, out ViewportConfigState state, out ViewportConfig defaults);
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "rl_viewport_config_text")]
+    internal static extern int ConfigText(ulong session, uint kind, [Out] byte[]? buffer, uint capacity, out uint required);
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "rl_viewport_step")]
+    internal static extern int Step(ulong session);
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "rl_viewport_stop")]
+    internal static extern int Stop(ulong session, out CloseReport report);
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "rl_viewport_read_logs")]
+    internal static extern int ReadLogs(ulong session, [Out] byte[]? buffer, uint capacity, out uint required);
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "rl_viewport_camera")]
+    internal static extern int Camera(ulong session, [In, Out] float[] pose, uint write);
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "rl_viewport_create")]
     internal static extern int Create(nint parent, uint backend, uint validation, uint profiling,
@@ -74,6 +101,9 @@ internal static class NativeMethods
 
     [DllImport("user32.dll")]
     internal static extern nint SetFocus(nint window);
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    internal static extern bool ReleaseCapture();
 
     [DllImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]

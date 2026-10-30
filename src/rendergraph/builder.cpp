@@ -5,6 +5,11 @@
 
 namespace renderlab::rendergraph
 {
+void PassBuilder::Category(PassCategory category)
+{
+    graph_.impl_->Builder(pass_);
+    graph_.impl_->passes[pass_].category = category;
+}
 void ComputePassBuilder::AllowAsyncCompute()
 {
     auto& g = *graph_.impl_;

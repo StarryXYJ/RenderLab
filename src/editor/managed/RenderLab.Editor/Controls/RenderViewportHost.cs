@@ -12,6 +12,7 @@ internal sealed class RenderViewportHost : NativeControlHost
     private readonly DispatcherTimer timer = new() { Interval = TimeSpan.FromMilliseconds(16) };
     internal ulong Session { get; private set; }
     internal nint Child { get; private set; }
+    internal event Action? NativeCreated;
 
     internal RenderViewportHost(NativeViewportService viewport)
     {
@@ -28,6 +29,7 @@ internal sealed class RenderViewportHost : NativeControlHost
         var child = viewport.Create(parent.Handle);
         Session = viewport.Session;
         Child = child;
+        NativeCreated?.Invoke();
         timer.Start();
         return new PlatformHandle(child, "HWND");
     }
@@ -36,8 +38,9 @@ internal sealed class RenderViewportHost : NativeControlHost
 
     private void Tick()
     {
-        if (Session == 0)
+        if (Session == 0 || Session != viewport.Session)
         {
+            timer.Stop();
             return;
         }
         try

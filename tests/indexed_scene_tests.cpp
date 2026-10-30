@@ -70,6 +70,7 @@ void Scene(rhi::Runtime& runtime, shader::Target target, const std::filesystem::
         options.reflectionDenoise = false;
         options.reflectionTemporal = false;
         options.reflections = false;
+        options.captureGraph = true;
         const auto reference =
             renderer.Render(color, rhi::State::Undefined, nullptr, true, {}, options);
         const auto direct = Pixels(runtime, reference, width, height);
@@ -82,6 +83,13 @@ void Scene(rhi::Runtime& runtime, shader::Target target, const std::filesystem::
             renderer.Render(color, rhi::State::CopySource, nullptr, true,
                             output / (std::to_string(sequence++) + ".json"), options);
         const auto indirect = Pixels(runtime, indirectFrame, width, height);
+        uint64_t directCalls = 0, indirectCalls = 0;
+        for (const auto& pass : reference.graphSnapshot->passes)
+            directCalls += pass.commands.direct;
+        for (const auto& pass : indirectFrame.graphSnapshot->passes)
+            indirectCalls += pass.commands.indirect;
+        Require(directCalls > 0 && (indirectFrame.indexedScene.visible == 0 || indirectCalls > 0),
+                "Scene command counters did not follow actual direct and indirect paths");
         Require(indexed == indirect, "Indexed direct and CPU indirect pixels differ");
         options.submission = GeometrySubmission::GpuCulled;
         options.cullingDiagnostics = true;
@@ -177,6 +185,41 @@ void Scene(rhi::Runtime& runtime, shader::Target target, const std::filesystem::
                            indirectFrame.pixels->Map(), width, height, rhi::TextureRowPitch(width));
         return indirectFrame.indexedScene;
     };
+    {
+        constexpr uint32_t width = 129, height = 73;
+        auto display = runtime.CreateTexture(
+            {width, height, rhi::Format::Rgba8Srgb, false, true, "Runtime.Overrides"});
+        SceneRenderOptions settings;
+        const auto baseline =
+            renderer.Render(display, rhi::State::Undefined, nullptr, true, {}, settings);
+        const auto reference = Pixels(runtime, baseline, width, height);
+        settings.lightOverride = renderer.LastSnapshot().light;
+        settings.lightOverride->shadows = true;
+        settings.lightOverride->intensity = 2;
+        settings.lightOverride->shadowResolution = 128;
+        settings.environmentIntensity = .5f;
+        settings.environmentRotation = 15.f;
+        settings.exposure = original.exposure + 2;
+        const auto overridden =
+            renderer.Render(display, rhi::State::CopySource, nullptr, true, {}, settings);
+        Require(Pixels(runtime, overridden, width, height) != reference,
+                "Runtime lighting/display overrides did not affect real GPU pixels");
+        const auto& projected = renderer.LastSnapshot();
+        Require(projected.light.shadows && projected.light.intensity == 2 &&
+                    projected.exposure == *settings.exposure &&
+                    projected.environmentRotation == 15 &&
+                    projected.shadowCasters.size() == projected.allInstances.size(),
+                "Runtime overrides were not applied to the extracted frame");
+        Require(document.exposure == original.exposure &&
+                    document.environmentIntensity == original.environmentIntensity &&
+                    document.environmentRotation == original.environmentRotation,
+                "Runtime view overrides mutated the authoritative scene");
+        settings = {};
+        const auto restored =
+            renderer.Render(display, rhi::State::CopySource, nullptr, true, {}, settings);
+        Require(Pixels(runtime, restored, width, height) == reference,
+                "Removing runtime overrides did not restore original GPU pixels");
+    }
     for (const auto pipeline : {PipelineType::Forward, PipelineType::Deferred})
         check(pipeline);
     if (project.stem() == "Pbr")

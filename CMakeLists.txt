@@ -186,7 +186,7 @@ add_library(renderlab_editor_bridge SHARED src/editor/native/editor_bridge.cpp)
 target_compile_definitions(renderlab_editor_bridge PRIVATE RENDERLAB_EDITOR_BRIDGE_EXPORTS)
 target_include_directories(renderlab_editor_bridge PUBLIC src)
 target_link_libraries(renderlab_editor_bridge PRIVATE renderlab_options renderlab_renderer
-    renderlab_rhi renderlab_platform renderlab_core ole32 user32)
+    renderlab_rhi renderlab_platform renderlab_core nlohmann_json::nlohmann_json ole32 user32)
 add_dependencies(renderlab_editor_bridge renderlab_scene_shaders)
 add_custom_command(TARGET renderlab_editor_bridge POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_FILE:renderlab_dxc>

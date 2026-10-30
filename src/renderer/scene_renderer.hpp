@@ -2,6 +2,7 @@
 
 #include "renderer/indexed_scene.hpp"
 #include "renderer/pipeline.hpp"
+#include "rendergraph/pool.hpp"
 #include "rendergraph/types.hpp"
 #include "rhi/resources.hpp"
 #include "rhi/upload.hpp"
@@ -12,6 +13,7 @@
 #include <filesystem>
 #include <map>
 #include <memory>
+#include <optional>
 
 namespace renderlab::rhi
 {
@@ -49,6 +51,8 @@ struct SceneRenderOptions
     bool cullingDiagnostics = false;
     SceneView view = SceneView::Final;
     bool profile = false;
+    /// Copy CPU plan values only for an explicit diagnostic request; no GPU readback.
+    bool captureGraph = false;
     /// Zero preserves the scene setting; otherwise a power of two in [128,2048].
     uint32_t shadowResolution = 0;
     bool reflections = true;
@@ -61,10 +65,14 @@ struct SceneRenderOptions
     /// Read back per-pixel history weight, history length, reprojection path and stable hit
     /// distance.
     bool reflectionDiagnostics = false;
+    /// Per-view values applied to extraction results; never written to Scene/Material assets.
+    std::optional<scene::MainLight> lightOverride;
+    std::optional<float> environmentIntensity, environmentRotation, exposure;
 };
 /// @brief Submission completion point and optional pixels; wait before mapping the readback buffer.
 struct SceneReadback
 {
+    std::shared_ptr<const rendergraph::Plan> graphSnapshot;
     uint64_t completion = 0;
     std::shared_ptr<rhi::Buffer> pixels;
     rendergraph::Submission::GpuProfile profile;
@@ -82,6 +90,7 @@ struct SceneReadback
     uint64_t scenePrepareNs = 0;
     IndexedSceneStatistics indexedScene;
     IndexedCullDiagnostics culling;
+    uint64_t sceneUploadBytes = 0;
 };
 /// Cumulative ray-surface preparation work; no timing overhead.
 struct RaySceneStatistics
@@ -103,9 +112,12 @@ public:
     scene::Scene& Document();
     /// Validate composition/material compatibility before changing an interactive selection.
     void ValidatePipeline(PipelineType pipeline);
+    /// Owner-thread preflight for an interactive configuration before changing the active view.
+    void ValidateOptions(const SceneRenderOptions& options);
     const scene::Snapshot& LastSnapshot() const;
     const std::map<std::string, assets::Model>& Models() const;
     rhi::UploadPool::Statistics UploadStatistics() const;
+    rendergraph::PoolStats PoolStatistics() const;
     RaySceneStatistics RayStatistics() const;
     /** @brief Extracts scene values and submits the existing Forward/Graph composition.
      * initial must match the target state; output is Present for a swapchain, otherwise CopySource.

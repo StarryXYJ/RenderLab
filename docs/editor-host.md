@@ -2,7 +2,7 @@
 
 本原型验证 Windows x64 上 Avalonia 12.0.5 / .NET SDK 10.0.401 与 RenderLab 原生运行时的进程内集成。构建、运行和自检入口见 [使用说明](../manual/build.md#avalonia-嵌入原型)。阶段状态与实际验证范围统一见 [M7.1](../design/phaseplan.md#m71-桥接与视口试验)。
 
-宿主作为后续 Editor 的基础继续复用。先验证原生托管，再逐步加入材质、项目和场景编辑；这些工作不改变现有 C++ 场景文档的权威所有权。
+宿主作为后续 Editor 的基础继续复用。[固定场景渲染工作台](editor-workbench.md) 定义 Dock、运行配置、Graph 与性能观察，再推进材质、项目和场景编辑；这些工作不改变现有 C++ 场景文档的权威所有权。以下记录已实现的宿主接口，工作台设计中的其余扩展按阶段计划逐步接入。
 
 ## 官方模板、MVVM 与 DI
 
@@ -63,17 +63,45 @@ Close 首先停止 UI Timer，再通知渲染线程停止，等待其释放展�
 
 每个 Host 保存自己的 Session 代际。旧 Host 重复关闭不能销毁新 Session；重建保留已接受配置。服务不使用可能在 finalizer 线程执行 Destroy 的 SafeHandle。
 
-## C ABI v4 与诊断
+## C ABI v10、运行配置与诊断
 
-头文件为 src/editor/native/editor_bridge.h，托管声明为 Interop/NativeMethods.cs；DLL 和托管程序同版本发布。固定 Cdecl、UTF-8 借用字符串、代际 uint64 Handle、线程局部错误缓冲区。创建参数包含 backend、validation、profiling、target_fps 和 continuous。最多四个 Session 的句柄槽位仍是原型上限，多视口并发并未验收。
+v10 日志批次新增 `fileFailed`。启用 editor mirror 后，文件写入异常只禁用该文件输出，原生有界镜像继续提供事件；普通 Sandbox/Player 的严格 Logger 仍传播 I/O 异常。创建目录或首次打开原生文件失败仍会使 Session 创建失败。托管 Serilog 文件 sink 的内部错误由独立 SelfLog 投影到状态栏，内存 sink 继续工作；文件被占用时 Serilog 可另开序号文件。末尾 drain、文件错误和队列 dropped 分别报告，不能把内存日志存在等同于完整文件持久化。
 
-Stats 顺序布局 232 字节；CloseReport 为 24 字节，最后一个 uint32 为 worker_failed，异步渲染/初始化/关闭失败时置一，不把失败关闭当作成功。字段包括 Native Tick、Fence、Acquire、Render、Present、Resize、Diagnostics、Graph Compile/Prepare/Record、CPU 场景准备与建图、已完成 GPU Pass 总时间及源帧，另有原生帧间隔/完成时间、样本丢弃计数、activity/ready、UI/render 线程 ID。activity 为 0 初始化、1 活动、2 空闲、3 暂停、4 等待尺寸稳定。所有字段跨边界均为固定宽度数值。
+M7.2c 增加 BeginStop/IsRetired：UI 请求停止后继续分发消息，owner 完成 GPU/展示退休才报告 retired；随后 UI 收取最终配置/相机/日志并销毁 HWND。设备切换只保留一个活动 Device，确认恢复配置的首帧后发布实际后端。目标失败尝试一次原后端，回滚失败进入 Failed/Retry；关闭或布局替换取消过期事务，旧代不能操作新 Session。
+
+M7.2d 的 v8 增加 Request/Acquire/Copy/Release snapshot。显式请求在下一次可展示帧复制成功提交的 Plan 值，不插入 RT 读回；暂停时等待恢复/单步，静态场景可能产生一次额外重绘。每 Session 保留 latest 与一个 pinned UTF-8 快照，单份上限 4 MiB；容量不足不消费，重复 Acquire 保持当前 pin，Release/Session 退休后旧 ID 无效。JSON schemaVersion=1，携带后端、Session/源帧/配置/拓扑身份、真实访问/依赖/队列/屏障/Alias，以及资源描述和实际录制块。超限明确 unavailable，不发布截断图。UI 最快 500 ms 拉取，关闭停止该面板请求；Freeze 仅保留托管值副本，不持有 Plan/GPU 对象。
+
+头文件为 src/editor/native/editor_bridge.h，托管声明为 Interop/NativeMethods.cs；DLL 和托管程序同版本发布。固定 Cdecl、UTF-8 借用字符串、代际 uint64 Handle、线程局部错误缓冲区。创建参数包含 backend、validation、profiling、target_fps 和 continuous。最多四个 Session 的句柄槽位仍是原型上限，多视口并发并未验收。M7.2a 升为 v5，新增 Stop（退休但保留 Session 以收取末尾日志）、批量 UTF-8 JSON 日志读取和相机 pose 值传递；原有 Stats/CloseReport 大小不变。日志容量查询钉住批次，成功复制后才消费，随后 Destroy 使旧 Session 失效。
+
+Dock.Avalonia 12.0.0.2 使用固定面板身份和受限版本化布局数据。默认只有 Scene/Render Settings，其他面板从 Window 菜单打开。根导航指向直接包含的完整工作区；Document.Context 保存面板 ID 与 View 工厂，每个 presenter 创建自己的控件，共享 ViewModel/服务，避免浮动或重建时复用已有可视父节点的 Control。新 Host 先退休仍活动的旧 Session，旧 Host 随后的关闭由代际校验拒绝。Scene 跨父窗口经过 NativeControlHost 的销毁/重建，保存相机 pose 与完整运行配置。布局切换和浮窗关闭沿用 owner-thread GPU 退休及受限 Win32 握手，仍可能短暂阻塞窗口线程；API 切换使用 v7 BeginStop/IsRetired 异步退休握手；Dock 强制卸载仍使用受限同步收尾，不承诺无停顿迁移。
+
+Editor 托管日志接入 Serilog 4.2.0、Extensions.Logging 9.0.0 和 File 7.0.0，输出目录的 logs 保存 UTC 结构化滚动日志。有界内存投影供 Log Dock 按级别/来源/文本查看；C++ Logger 可选有界镜像，UI 批量读取后以原时间/级别/Session/序号汇入。关闭面板继续记录，清空显示保留累计错误数，原生关闭后先 drain 再 Destroy。Graph 与 Profiler 的实际数据契约见下文。
+
+M7.2b 将桥接升为 v6。Stats 顺序布局 256 字节，在原 232 字节字段后加入 config_revision、gpu_config_revision、session_generation；CloseReport 仍为 24 字节，最后一个 uint32 为 worker_failed，异步渲染/初始化/关闭失败时置一，不把失败关闭当作成功。字段包括 Native Tick、Fence、Acquire、Render、Present、Resize、Diagnostics、Graph Compile/Prepare/Record、CPU 场景准备与建图、已完成 GPU Pass 总时间及源帧，另有原生帧间隔/完成时间、样本丢弃计数、activity/ready、UI/render 线程 ID。activity 为 0 初始化、1 活动、2 空闲、3 暂停、4 等待尺寸稳定。所有字段跨边界均为固定宽度数值。
+
+`rl_viewport_config` 为 size/version=112/1 的定宽配置，包含管线/提交/线程/队列/Alias/调试视图、profiling/目标帧率/连续刷新、反射 flags、阴影、导航速度与照明/环境/曝光覆盖。原生校验枚举、布尔、容量与有限数值后接受单调递增 request_id；渲染 owner 复用 SceneRenderer::ValidateOptions 检查能力与材质/场景限制，再替换本视口选项。光照/环境/曝光只覆盖提取后的 Snapshot，源 Scene/Material 不变；相机继续由原生导航所有。
+
+`rl_viewport_config_state` 为 272 字节，携带 requested/applied 配置与 requested/applied/rejected/superseded ID。status=0 初始化、1 Pending、2 Applied、3 Rejected。Applied 只在该配置成功 Render/Present 后发布；暂停时可准备配置但保持 Pending，恢复或 Single frame 后确认。原生初始化发布只读设备/管线/提交能力 JSON 和从场景提取的 defaults，配置拒绝文本使用独立有界复制接口。后端与 Validation 为设备创建参数，运行时切换通过上述退休/重建事务完成。
+
+目标帧率 0↔非 0 会在 render owner 退休并重建 Swapchain，失败先尝试恢复原展示模式；不创建第二个 Device。非 0 帧率间切换只更新调度期限。单帧要求暂停的 ready Session，隐藏/最小化时不强制 Present。宿主重建保存完整运行配置与相机，新 Session 重新校验后应用；UserSettings/Editor/render-preset.json 只保存有版本的数值配置，读入同样走原生验证，不保存 GPU 指针或资源身份。
+
+完成帧、GPU profile slot 和托管导出的 FrameSample 都携带实际配置/Session 来源；配置变化清理旧统计窗口，不把旧配置的 GPU 时间归到新帧。曝光仅改变显示，不无条件清空 HDR progressive 历史；照明/环境变化沿用 Renderer 的真实历史签名失效。
 
 ReadFrames 批量排空固定 512 项完成帧队列；满时丢最旧项并增加 dropped_samples，不无限增长。每个成功 Present 返回后在渲染线程记时间；UI 分批读取不会改变间隔。FPS/P95 来自成功提交展示调用的完成间隔，不是显示器扫描输出。暂停、Resize 等待、静态空闲打断连续区间；空闲时状态栏直接显示 Idle，不把旧活动 FPS 当作当前帧率。基准报告保留丢样计数，发生丢样的结果不可视为完整分布。
 
 托管侧最多保留 240 帧活动样本，每 250 ms 发布状态；重建清空历史。GPU 计时仅在真实提交完成后读回，包含源帧号；静态单次重绘后也无等待地收集已完成结果。GPU Pass 总时间不等于整个设备利用率。Release 默认关闭验证，Debug/默认 smoke 开启，--validation on|off 和 --profile on|off 显式覆盖。DX12 验证警告按消息 ID 记录首条并在关闭汇总重复数；错误逐条输出，既有警告根因不因此视为修复。
 
 性能基线、对照环境和限制见 [调度测量](performance/editor-scheduling.md)，运行命令见 [构建说明](../manual/build.md#avalonia-嵌入原型)。
+
+## Profiler 完成帧与计数
+
+v9 配置 flags 的 32 位启用显式 GPU 可见数诊断；默认关闭，不创建 Count 读回。完成点经非阻塞查询确认后才映射，结果与该帧 Plan 一起发布；单份快照仍为 schemaVersion=1 / 4 MiB，新增 profile 值字段。GPU 未完成/关闭/超出 32 Pass 预算时显示 Pending/N/A；超预算关闭该图 timing，保留渲染和计数。
+
+Graph 在实际命令包边界按 Pass 计数，成功提交/Present 后才能进入诊断快照。Direct 包含 Draw/DrawIndexed（另列 indexed 子集），Indirect 为 API 调用次数，capacity 为最大命令容量；batch 是共享 pipeline/bindings/geometry/stencil 的连续 draw run，不是线程块或队列提交数。每 Pass 有 Opaque/Shadow/Transparent/Fullscreen 分类，direct instances 是该 Pass 实际调用实例数，间接实例默认未知；场景 candidates、CPU visible 与可选 GPU opaque visible 单独显示。Dispatch/TraceRays 的调用/工作量/最后尺寸、AS build/update 和 Copy payload 也分别记录。
+
+CPU 诊断区分 viewport Tick、Render 内嵌套的场景准备/Graph compile/prepare/packet record、可选 RHI native record/submit，以及 Fence/Acquire/Present；嵌套值不相加。GPU Pass 和/每队列时间与共同时间域 span 分开。提交返回到 CPU 观测完成的时间包含队列等待和查询分辨率，不是精确 GPU 执行时间或扫描/输入延迟；Tick 也不包括完整调度等待和外部快照 JSON 序列化。
+
+Profiler 保存最多 240 个数值曲线样本、64 份且 raw JSON UTF-16 投影预算 8 MiB 的诊断帧（解析值另有固定节点/快照上限）。Live 在配置/Session 变化时清理活动历史，Freeze 保留完整来源身份；关闭面板停止其 UI 拉取，已启用的 timing/readback 配置保持独立。GPU 曲线按 gpu_frame 对齐，选中冻结诊断帧可打开同一帧/配置/拓扑的 Graph；导出包含完整配置来源和观察开关。
 
 ## 自检与限制
 
@@ -83,4 +111,4 @@ ReadFrames 批量排空固定 512 项完成帧队列；满时丢最旧项并增�
 
 MVVM/DI 修订后的托管 Debug/Release 构建通过，原生方向 CPU 回归和双后端 MVVM 集成回归通过，含配置失败回滚和旧 Host 重复关闭。最终运行证据在 `out/m7/mvvm-final/{dx12,vulkan}`，每后端两次关闭的资源账本和验证错误仍均为 0。
 
-人工画面质量与真实鼠标键盘交互仍未验收。本轮在固定 144 DPI（150%）下完成程序内自动回归，不代表跨屏切换已经验证。跨屏 DPI、Docking/浮动窗口重挂接、覆盖层、长时间运行、多视口、设备丢失和原生 Debug 配置运行仍未验证。Recreate 是销毁再新建，不代表同一活跃 Swapchain 的跨父窗口重挂接通过；M7.1 的完整退出条件继续保留。
+当前自检还验证 Settings 实际进入顶层可视树、Log 打开后展示原生记录、Scene 浮动/停回、菜单恢复保存布局、完整运行配置与旧 Session 隔离；覆盖合法/非法/合并请求、暂停与单帧、生效版本、历史失效、本机预设和源文件 hash。实际构建、后端、DPI、证据目录及未验证项统一记录在 [阶段计划](../design/phaseplan.md#m72-固定场景渲染工作台)。人工画面质量、真实鼠标键盘和跨屏 DPI 仍需独立验收，合成输入和固定显示缩放不代表这些项目已通过。Recreate 是销毁再新建，不代表同一活跃 Swapchain 的跨父窗口重挂接通过。

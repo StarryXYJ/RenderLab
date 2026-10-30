@@ -5,7 +5,7 @@ namespace RenderLab.Editor.Diagnostics;
 internal sealed record FrameSample(ulong Frame, double? IntervalMs, double NativeMs,
     double FenceWaitMs, double AcquireMs, double RenderMs, double PresentMs, double ResizeMs,
     double DiagnosticsMs, double GraphCompileMs, double GraphPrepareMs, double GraphRecordMs,
-    double? GpuMs, ulong GpuFrame, double ScenePrepareMs);
+    double? GpuMs, ulong GpuFrame, double ScenePrepareMs, ulong SessionGeneration, ulong ConfigRevision, ulong GpuConfigRevision);
 
 internal sealed record FrameSummary(int Samples, double Fps, double FrameP95Ms,
     double NativeP95Ms, double FenceWaitP95Ms, double AcquireP95Ms, double RenderP95Ms,
@@ -17,7 +17,9 @@ internal sealed class FrameTimingWindow(int capacity = 240)
     private readonly Queue<FrameSample> samples = new();
     private ulong previousFrame;
     private double? previousTime;
+    private ulong sessionGeneration, configRevision;
     internal FrameSample? Latest { get; private set; }
+    internal FrameSample[] Snapshot() => samples.ToArray();
 
     internal void Reset()
     {
@@ -29,6 +31,12 @@ internal sealed class FrameTimingWindow(int capacity = 240)
 
     internal void Observe(ViewportStats stats, double seconds)
     {
+        if ((sessionGeneration != 0 && stats.SessionGeneration != sessionGeneration) ||
+            (configRevision != 0 && stats.ConfigRevision != configRevision))
+        {
+            Reset();
+        }
+        sessionGeneration = stats.SessionGeneration; configRevision = stats.ConfigRevision;
         if (stats.Frames < previousFrame)
         {
             Reset();
@@ -50,7 +58,9 @@ internal sealed class FrameTimingWindow(int capacity = 240)
             stats.FenceWaitNs / 1e6, stats.AcquireNs / 1e6, stats.RenderNs / 1e6,
             stats.PresentNs / 1e6, stats.ResizeNs / 1e6, stats.DiagnosticsNs / 1e6,
             stats.GraphCompileNs / 1e6, stats.GraphPrepareNs / 1e6, stats.GraphRecordNs / 1e6,
-            stats.GpuFrame > 0 ? stats.GpuNs / 1e6 : null, stats.GpuFrame, stats.ScenePrepareNs / 1e6);
+            stats.GpuFrame > 0 && stats.GpuConfigRevision == stats.ConfigRevision &&
+                (stats.ProfilingEnabled != 0 || stats.ConfigRevision == 0) ? stats.GpuNs / 1e6 : null,
+            stats.GpuFrame, stats.ScenePrepareNs / 1e6, stats.SessionGeneration, stats.ConfigRevision, stats.GpuConfigRevision);
         samples.Enqueue(Latest);
         while (samples.Count > capacity)
         {

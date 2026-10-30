@@ -8,6 +8,7 @@ namespace RenderLab.Editor;
 internal static class Program
 {
     internal static EditorOptions Options { get; private set; } = null!;
+    internal static EditorLogging? Logging { get; private set; }
 
     [STAThread]
     internal static int Main(string[] args)
@@ -16,10 +17,12 @@ internal static class Program
         {
             Options = EditorOptions.Parse(args);
             Directory.CreateDirectory(Options.Output);
+            Logging = new EditorLogging(Options);
             return BuildAvaloniaApp().StartWithClassicDesktopLifetime(args);
         }
         catch (Exception error)
         {
+            Logging?.Logger.Fatal(error, "Editor terminated");
             if (Options != null)
             {
                 EditorDiagnostics.WriteError(Options, error);
@@ -30,6 +33,7 @@ internal static class Program
         finally
         {
             (Application.Current as App)?.DisposeServices();
+            Logging?.Dispose();
         }
     }
 

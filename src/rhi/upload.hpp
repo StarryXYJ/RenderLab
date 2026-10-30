@@ -65,11 +65,15 @@ public:
         UploadArena::Slice Write(std::span<const std::byte> bytes, uint64_t alignment = 256);
         /// Seal once with the successful submission consuming this batch. Destruction cancels.
         void Seal(uint64_t completion);
+        uint64_t BytesWritten() const
+        {
+            return written_;
+        }
 
     private:
         UploadPool& pool_;
         std::vector<size_t> pages_;
-        uint64_t beganAfter_, used_ = 0;
+        uint64_t beganAfter_, used_ = 0, written_ = 0;
         bool sealed_ = false;
     };
     explicit UploadPool(Runtime& runtime, uint64_t bytesPerPage = 65536, size_t maxPages = 64);

@@ -385,7 +385,23 @@ cmake --preset windows-release
 
 有完整 NuGet 缓存的离线机器可以增加 `-OfflinePackageCache C:/你的目录/.nuget/packages`；恢复仍使用 locked mode。直接运行 dotnet 时在仓库根目录使用 `RenderLab.slnx` 作为构建入口；需要自定义原生路径时使用 `-p:NativeBuildDir=绝对路径`。构建脚本跳过本原型没有使用的 Avalonia 商业产品构建遥测，不修改用户全局设置。
 
-默认加载源码仓库的 `sample/m4/RayTracing.rlproject`，初始为 Deferred。`--project` 可以指定其他项目，`--shaders` 可指定引擎 Shader 根目录；默认使用 exe 同目录的 shaders。周边控件提供管线、曝光、暂停、重置相机和重建视口；点击原生视口后使用 WASD/QE、方向键或右键拖动。此原型未打包示例项目，移出仓库运行时必须显式提供项目路径。
+默认加载源码仓库的 `sample/m4/RayTracing.rlproject`，初始为 Deferred。`--project` 可以指定其他项目，`--shaders` 可指定引擎 Shader 根目录；默认使用 exe 同目录的 shaders。点击原生视口后使用 WASD/QE、方向键或右键拖动。此宿主未打包示例项目，移出仓库运行时必须显式提供项目路径。
+
+M7.2a 接入 Dock.Avalonia 12.0.0.2 与 Serilog：首次启动只显示 Scene 与 Render Settings，Window 菜单打开 Log、Profiler 与 Render Graph；Profiler 现提供实际计数与完成帧诊断。Layout 提供 Default、Diagnostics 与恢复保存布局；普通运行将布局写到项目旁的 UserSettings/Editor/layout.json，自检/基准使用各自输出目录，不覆盖日常布局。Scene 浮动/停回会安全重建原生视口并保留相机与管线/曝光。Log 支持筛选、搜索、复制、清空显示和打开日志目录；关闭面板仍写输出目录 logs 下的滚动 JSONL，原生日志保留独立文件。相关包与测试依赖均进入锁文件。
+
+M7.2b 的 Render Settings 已接入提交方式、录制线程/异步/Alias、已有调试视图、光照/环境、阴影、反射、导航速度、帧率/连续刷新和 GPU profiling。面板显示 Pending/Applied/Rejected 及配置 ID；暂停后可继续改参数，但须恢复或点击 Single frame 才确认生效。Defaults 恢复本次载入默认值，Save/Load preset 使用 UserSettings/Editor/render-preset.json，不改 Scene/Material。Scene 浮动/重建保留整份运行配置。M7.2c 支持在同一面板选择 API/Validation 并点击 Apply API / Retry，等待退休/创建/首帧确认；失败会尝试一次原后端，双重失败可显式 Retry。布局、相机和覆盖保留，GPU 历史重建。
+
+配置验收沿用下方 --smoke：扩展覆盖受支持的三管线/四提交、能力拒绝、快速请求合并、暂停/单帧、预设/宿主重建保留、目标帧率 0↔60，以及曝光保留/照明失效历史。检查实际挂载的 Settings/Log，并通过菜单恢复保存布局，确认 Scene、设置控件和运行配置仍有效。报告保存参与检查的源文件 hash，GPU 专项 gpu.dx12.indexed_scene / gpu.vulkan.indexed_scene 还验证运行覆盖改变真实像素、移除覆盖恢复原图。
+
+M7.2d 的 Render Graph 默认显示实际 Pass × Resource 矩阵。点击单元格查看版本/用途/范围、队列/录制块、依赖和 Alias；下方有生命周期条，可搜索、缩放、滚动与显示被剔除 Pass。Freeze 保留当前观察帧，Refresh 请求一次新帧，Export JSON 写到输出目录 snapshots；默认不读回 RT 像素。Live 最快 500 ms 请求，暂停时需恢复或 Single frame 才得到新图。
+
+M7.2e 的 Profiler 提供完成帧曲线/P50/P95/P99、CPU/GPU 分段、真实调用/批次/实例、内存和观测完成延迟。Freeze 后可从下拉框选择记录帧，Inspect graph 打开同帧图；Export JSON 保存配对数据。GPU visible readback 显式增加 Copy，GPU 模式默认可见数未知；关闭 timing 后 N/A，不沿用旧值。
+
+观察成本可用 `--benchmark-seconds 8 --warmup-seconds 2 --target-fps 0 --observation basic|timing|graph|readback` 分别运行。四档均使用 GPU Culled 与同一默认视口尺寸，依次为基础计数、附加 RHI/GPU timing、附加 500 ms 图元数据投影、附加 GPU 可见数 Copy/500 ms Profiler 投影。诊断投影在后台执行，不打开 Dock 改变分辨率，因此不包括面板 Canvas 绘制成本；四档输出目录必须不同，比较 performance.json 中 options/源帧/分辨率/丢样。它是一次窗口短测，不代表稳定吞吐或显示器延迟。
+
+`--isolated --output 独立目录` 从默认两面板布局启动，将布局/预设保存在该目录，适合界面复验。普通运行恢复用户上次保存的布局，因此以后启动可能包含诊断面板。
+
+M7.2f 持续验收使用 `--backend dx12 --validation on --soak-seconds 1800 --output out/m72f/soak-dx12`，Vulkan 使用另一输出目录。该模式自动隔离用户布局/预设，以 30 FPS 连续渲染并按时间切换三管线、timing/可见数读回/Alias/线程数和诊断页，定期重建布局；同时在实际连接屏幕间移动，检查当前 DPI 下的原生像素尺寸。`soak-samples.jsonl` 流式保存内存/帧数/丢样/历史预算，`soak-progress.json` 为最新进度；运行到指定墙钟时间后产生 `soak.json`，包含源文件 hash、各 Session 关闭报告和实测屏幕信息。失败写 `soak-failure.txt` 并非零退出。30 分钟需实际等待，不以短测或合成 DPI 代替；UI 手工输入与画面质量另行复验。
 
 双后端自检应分别运行。WinExe 在终端的启动/等待语义可能不同，需要可靠退出码时使用 `Start-Process -Wait -PassThru`；下面的隐藏启动用于无人值守自检，手动检查界面直接运行上面的命令。
 

@@ -4,6 +4,19 @@
 
 这里引用的是公开说明的机制与限制，不能据此断言相关项目存在未修复缺陷。以下取舍是 RenderLab 自己的设计决策；修订已并入 [总体设计](architecture.md)，实现验收进入 [阶段计划](phaseplan.md)。运行正确性与性能结论以阶段计划的实际验收为准。
 
+## 固定场景渲染工作台设计复查
+
+2026 年 10 月 30 日，用户要求本轮暂不修改资源与场景，以给定固定场景验证 Dock 编辑器、运行配置、Render Graph 与性能观察。详细设计和拟议数据契约见 [工作台](../docs/editor-workbench.md)，实现任务只记录在 M7.2；原材质/项目/场景/导出任务顺延到 M7.3–M7.6，本轮延期。
+
+- 参考 Unity 的工具布局与按帧检查方式。已只读检查用户指定 [Gal.Net dev](https://github.com/StarryXYJ/Gal.Net/tree/dev) 的 `774b35f7561708a785f5fa1109efebe3b9aa5da5`：EditorDockFactory、DockViewLocator、DockLayoutSerializer、UrsaDockHostWindow、MainWindow/App 与包版本。其 Avalonia 12.0.5 / Dock 12.0.0.2 / Ursa 2.1.0 组合是依赖候选依据，不代替 RenderLab 的恢复、构建和原生 HWND 集成验证。只参考具体布局、面板 ID 和持久化组织，不移植完整扩展框架。
+- 固定场景需要区分源数据和运行覆盖。光照、导航相机、曝光与管线可以临时变化，配置经原生 owner 在帧边界应用；预设只保存 UserSettings。暂不引入材质 Inspector、场景编辑事务或资源文件操作。
+- 图形 API 是 Device 的创建属性。运行中切换采用串行退休/销毁/重建，保留 UI 与可序列化运行状态；历史纹理、PSO、AS 和完成点全部失效。失败时重建原后端也可能失败，应保留 Failed/Retry；这不是设备丢失恢复，也不保证无停顿。
+- NativeControlHost 的 airspace 与父窗口生命周期限制仍然成立。Dock 拖放时可能需要隐藏原生子窗；跨父窗口通过重建 Session 完成，不能以托管 Dock 库支持浮窗推断活动 Swapchain 能直接重挂接。该项必须先于复杂面板验收。
+- Render Graph Viewer 展示实际 Plan，以访问矩阵和可选择依赖图减少大型全连接图的阅读负担。快照有源帧、Session、配置与拓扑版本；补足诊断字段，默认不增加 Copy/Readback。旧版本和 Alias 逻辑身份都不保证旧像素仍存在，RT 预览需要额外显式保存与完成点。
+- CPU API 调用数、间接调用数、几何 batch、候选/可见/提交 instances 是不同统计。GPU 模式的实际可见数不默认读回；计时未完成或未开启必须显示未知。GPU Pass 总和、GPU span、CPU 帧工作和提交完成观测延迟分开，避免把并行区间累加成帧延迟或宣称已测输入到屏幕延迟。
+- 当前 C ABI v4 只覆盖部分配置/统计。新增快照和配置采用同版本 DLL/托管程序升版、定宽 POD 与低频 UTF-8 JSON，保持有界队列和不可变值快照；不在 UI 持有 Plan/GPU 指针、不每帧序列化完整图。文档设计不代表这些接口已经实现。
+- 用户后续收紧默认布局：仅 Scene 与 Render Settings 可见，Graph/Profiler/Log 通过顶部菜单打开；诊断布局与用户保存布局仍可恢复。托管接入 Serilog 和有界 Log 面板，原生日志以可选队列镜像批量汇入，保留原始文件/来源/时间。面板关闭、清空和筛选不改变日志记录或 GPU 验证错误计数；不把日志洪峰变成逐事件 UI 调度或在 GPU 回调中调用 C#。
+
 ## 需要优先修订的设计
 
 | 问题 | 原设计的风险 | 本轮处理 | 验证位置 |

@@ -99,6 +99,7 @@ void GBufferFeature::Build(rendergraph::Graph& graph, const RenderFrame& frame)
         graph.CreateTexture(
             name, {camera.width, camera.height, rhi::Format::Rgba32Float, false, true, name});
     auto pass = graph.AddRasterPass("Deferred.GBuffer");
+    pass.Category(PassCategory::Opaque);
     // Pixels with a cleared depth value are sky and ignored by DeferredLighting.
     constexpr std::array<float, 4> clear{.02f, .02f, .02f, 1};
     pass.ColorTarget("GBuffer.AlbedoMetallic", rhi::LoadOp::Clear, clear);
@@ -120,6 +121,7 @@ void GBufferFeature::Build(rendergraph::Graph& graph, const RenderFrame& frame)
 void DeferredLightingFeature::Build(rendergraph::Graph& graph, const RenderFrame& frame)
 {
     auto pass = graph.AddRasterPass("Deferred.Lighting");
+    pass.Category(PassCategory::Fullscreen);
     pass.ColorTarget("CameraColor", rhi::LoadOp::Clear, frame.clearColor);
     auto draw = Declare(pass, frame.deferredLighting);
     pass.Execute([draw = std::move(draw)](RasterContext& context) { Record(context, draw); });
