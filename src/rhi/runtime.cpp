@@ -81,8 +81,9 @@ void Runtime::SetAllocationBudget(uint64_t bytes)
 {
     if (std::this_thread::get_id() != ownerThread_)
         throw std::logic_error("Allocation budget requires runtime owner thread");
-    Require(bytes > 0 && bytes >= ledger_->stats.used,
-            "Allocation budget must be nonzero and cover current native usage");
+    Require(bytes > 0 && bytes >= ledger_->stats.reserved,
+            "Allocation budget must be nonzero and cover current native usage including reserved "
+            "backing");
     ledger_->stats.budget = bytes;
 }
 

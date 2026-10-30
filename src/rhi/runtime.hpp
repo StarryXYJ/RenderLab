@@ -104,7 +104,7 @@ public:
         return ledger_->stats;
     }
     /// Owner-thread application limit for tracked native allocations; does not reserve VRAM.
-    /// Rejects zero or a limit below current usage. Configure before creating renderer pools.
+    /// Rejects zero or a limit below reserved backing. Configure before creating renderer pools.
     void SetAllocationBudget(uint64_t bytes);
     DescriptorStats GetDescriptorStats() const
     {

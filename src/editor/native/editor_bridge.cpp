@@ -383,14 +383,19 @@ struct RenderState
             const auto upload = scene->UploadStatistics();
             const auto descriptors = runtime->GetDescriptorStats();
             const auto pool = scene->PoolStatistics();
+            const auto memory = runtime->GetMemoryStats();
             const auto cpu = rhi::Difference(runtime->GetCpuProfile(), cpuBefore);
             observation.data = {
                 {"candidates", snapshot.allInstances.size()},
                 {"cpuVisible", snapshot.cpuVisibilityKnown
                                    ? nlohmann::json(snapshot.instances.size())
                                    : nlohmann::json(nullptr)},
-                {"nativeBytes", runtime->GetMemoryStats().used},
-                {"peakBytes", runtime->GetMemoryStats().highWater},
+                {"nativeBytes", memory.used},
+                {"peakBytes", memory.highWater},
+                {"reservedBytes", memory.reserved},
+                {"reservedPeakBytes", memory.reservedHighWater},
+                {"allocationCount", memory.allocations},
+                {"blockCount", memory.blocks},
                 {"uploadPages", upload.pages},
                 {"uploadReservedBytes", upload.reservedBytes},
                 {"sceneUploadBytes", result.sceneUploadBytes},
@@ -462,13 +467,16 @@ struct RenderState
             runtime->WaitIdle();
             closed.remaining_bytes = runtime->GetMemoryStats().used;
             closed.peak_bytes = runtime->GetMemoryStats().highWater;
+            const auto memory = runtime->GetMemoryStats();
             runtime.reset();
             device->Shutdown();
             closed.validation_errors = device->GetValidationErrorCount();
             device.reset();
             logger.Write(LogLevel::Info,
-                         std::format("Embedded shutdown: errors={}, remaining={}",
-                                     closed.validation_errors, closed.remaining_bytes));
+                         std::format("Embedded shutdown: errors={}, remaining={}, reserved={}, "
+                                     "allocations={}, blocks={}",
+                                     closed.validation_errors, closed.remaining_bytes,
+                                     memory.reserved, memory.allocations, memory.blocks));
         }
 
         return closed;

@@ -59,6 +59,25 @@ public:
         Shutdown();
     }
 
+    std::vector<DriverMemoryBudget> QueryMemoryBudget() const override
+    {
+        if (!instance_ || !device_ || !memoryBudgetSupported_)
+            return {};
+        VkPhysicalDeviceMemoryBudgetPropertiesEXT budget{};
+        budget.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MEMORY_BUDGET_PROPERTIES_EXT;
+        VkPhysicalDeviceMemoryProperties2 memory{};
+        memory.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MEMORY_PROPERTIES_2;
+        memory.pNext = &budget;
+        vkGetPhysicalDeviceMemoryProperties2(physical_, &memory);
+        std::vector<DriverMemoryBudget> result;
+        for (uint32_t i = 0; i < memory.memoryProperties.memoryHeapCount; ++i)
+            result.push_back({std::format("vulkan.heap.{}", i),
+                              (memory.memoryProperties.memoryHeaps[i].flags &
+                               VK_MEMORY_HEAP_DEVICE_LOCAL_BIT) != 0,
+                              budget.heapUsage[i], budget.heapBudget[i]});
+        return result;
+    }
+
     void Shutdown() noexcept override
     {
         // Keep the messenger alive while destroying the device to capture cleanup diagnostics.
@@ -305,6 +324,8 @@ public:
         queueInfo.queueCount = asyncQueueAvailable_ ? 2 : 1;
         queueInfo.pQueuePriorities = queuePriorities;
         std::vector<const char*> deviceExtensions{VK_KHR_SWAPCHAIN_EXTENSION_NAME};
+        if (memoryBudgetSupported_)
+            deviceExtensions.push_back(VK_EXT_MEMORY_BUDGET_EXTENSION_NAME);
         if (calibratedTimestampExtension_)
             deviceExtensions.push_back(calibratedTimestampExtension_);
         if (report_.supported.accelerationStructure)
@@ -450,6 +471,7 @@ private:
             return false;
         }
         physical_ = physical;
+        memoryBudgetSupported_ = HasExtension(extensions, VK_EXT_MEMORY_BUDGET_EXTENSION_NAME);
         queueFamily_ = *selectedQueue;
         asyncQueueAvailable_ = queues[queueFamily_].queueCount >= 2;
         calibratedTimestampExtension_ =
@@ -579,6 +601,7 @@ private:
     VkQueue queue_ = VK_NULL_HANDLE;
     VkQueue computeQueue_ = VK_NULL_HANDLE;
     bool asyncQueueAvailable_ = false;
+    bool memoryBudgetSupported_ = false;
     const char* calibratedTimestampExtension_ = nullptr;
 };
 } // namespace

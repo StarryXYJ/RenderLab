@@ -79,7 +79,13 @@ void CheckTransfers(Runtime& runtime)
 }
 void CheckLifetime(Runtime& runtime)
 {
-    const auto baseline = runtime.GetMemoryStats().used;
+    const auto baseline = runtime.GetMemoryStats();
+    const auto sameLiveMemory = [&]
+    {
+        const auto stats = runtime.GetMemoryStats();
+        return stats.used == baseline.used && stats.reserved == baseline.reserved &&
+               stats.allocations == baseline.allocations && stats.blocks == baseline.blocks;
+    };
     auto buffer = runtime.CreateBuffer({512, Memory::Device, "Lifetime.Cancel"});
     std::weak_ptr<Buffer> weak = buffer;
     auto cancel = runtime.CreateCommands();
@@ -88,7 +94,7 @@ void CheckLifetime(Runtime& runtime)
     Require(!weak.expired(), "recorded command did not retain resource");
     cancel->Cancel();
     Require(weak.expired(), "cancel did not release resource");
-    Require(runtime.GetMemoryStats().used == baseline, "cancel leaked allocation");
+    Require(sameLiveMemory(), "cancel leaked allocation/backing counts");
 
     auto source = runtime.CreateBuffer({512, Memory::Upload, "Lifetime.DelayedSource"});
     std::fill(source->Map().begin(), source->Map().end(), std::byte{0x73});
@@ -107,7 +113,7 @@ void CheckLifetime(Runtime& runtime)
     Require(std::ranges::all_of(readback->Map(), [](auto b) { return b == std::byte{0x73}; }),
             "delayed submission corrupted source");
     readback.reset();
-    Require(runtime.GetMemoryStats().used == baseline && runtime.PendingCount() == 0,
+    Require(sameLiveMemory() && runtime.PendingCount() == 0,
             "completion did not retire allocations");
 }
 void CheckUploadRing(Runtime& runtime)

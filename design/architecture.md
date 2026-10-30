@@ -185,6 +185,11 @@ M1 采用拥有资源引用的命令包序列，在 Submit 时由后端生成原
 
 显存分配可以采用 VMA 和 D3D12 Memory Allocator；上传、描述符分配、驻留策略、资源池和图内复用仍由引擎管理。帧内临时分配器避免零散堆分配，按实际用途选择 std::pmr。上传、光追 scratch 和资源池记录当前占用与高水位，设置容量上限，并在相关提交完成后按预算或显式请求清理闲置分配。容量不足时明确扩容、分批处理或报错，避免无限增长及每帧缩扩容。
 
+统一账本区分资源分配范围与底层 reserved backing，普通分配和原生 Alias 共享同一个应用限额；
+Alias backing 不逐成员重复计费，空闲保留块不因 used 为零而隐藏。应用预算约束 reserved，
+驱动 usage/budget 按原生 segment/heap 显式查询，进程 working set/private commit 另计，
+不在每帧账本读取中调用 OS/driver。计数、拒绝、释放和导出口径见 [GPU 内存](../docs/gpu-memory.md)。
+
 B2 实测发现常量、描述符与读回存在逐帧原生分配。[B3 复用方案](resource-reuse.md) 按帧数据、不可变材质和结果持有期分别管理。帧上传使用有界 UploadPool，以 CPU Buffer 引用、活动批次和实际提交完成共同保护整页复用；材质在包代际内有界缓存不可变常量版本。DX12 描述符从持久 heap 页分配不可变区间，Vulkan 复用无外部引用的同布局 pool/set 块；逻辑组与命令保活分配，缓存页/块不持有场景资源，容量与高水位独立统计。Timestamp 读回进入现有 Graph Pool，CPU profiling 结果继续保活读回；默认 View 由 Texture 弱缓存、物理分配/宿主/交换链分别持有，交换链在 resize 前清除自己的 View。接口见 [资源复用](../docs/resource-reuse.md)，实际验收与性能以阶段计划和测量结果为准。
 
 ## 场景数据与 GPU Driven

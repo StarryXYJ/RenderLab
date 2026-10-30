@@ -40,7 +40,14 @@ FrameContext 的索引由 CPU 帧序号选择，与交换链图像索引独立�
 
 Buffer 的内存类别为 Device、Upload、Readback。仅后两类允许映射；读回前必须完成 CopyDest→HostRead 屏障并等待提交。Upload 的映射内容在消费它的提交完成前不得改写。Vulkan 首版要求 HostVisible + HostCoherent 内存类型，不引入隐藏的非一致内存刷新行为。设备资源初始状态为 Undefined，Upload 为 HostWrite，Readback 为 CopyDest。
 
-普通资源采用 DX12 committed resource 和 Vulkan dedicated allocation，不引入尚无子分配需求的 VMA/D3D12MA 包装；可选的瞬态纹理另提供 [placed/共享 Alias 分配](memory-alias.md)，共享 backing 只计费一次。AllocationLedger 记录实际原生分配大小、当前占用与高水位，Runtime 默认共享 256 MiB 明确预算，超额报错。宿主可在创建 Renderer/Pool 前通过 owner-thread `SetAllocationBudget(bytes)` 配置上限；零值或低于当前 native 占用会被拒绝。此设置只修改分配账本限额，不预留显存，也不改变硬件预算。Sandbox/Player 场景默认使用 2048 MiB，独立 RHI Demo 默认仍为 256 MiB，可用 `--gpu-budget-mib N`（64..16384）覆盖。失败诊断包含 requested/used/limit 字节数。交换链借用图像、驱动内部分配和描述符堆不计入该数值，它不是完整显存预算报告。普通资源随安全完成点释放；命令池保持有界的最高并发数量至 Runtime 关闭。
+普通资源仍采用 DX12 committed resource 和 Vulkan dedicated allocation；可选的瞬态纹理另提供
+[placed/共享 Alias 分配](memory-alias.md)。账本区分已获准分配范围 used、底层 reserved backing
+及各自字节/数量峰值，Alias 组只计一次。应用预算约束 reserved，不是驱动 residency budget。
+默认 256 MiB，场景宿主默认 2048 MiB，可用 `--gpu-budget-mib N`（64..16384）覆盖；
+owner-thread `SetAllocationBudget(bytes)` 拒绝零值及低于 reserved 的上限。
+失败诊断包含 requested/used/reserved/limit。完整口径、排除项、驱动/进程采样与释放契约见
+[GPU 内存计费](gpu-memory.md)。资源仍按安全完成点释放，命令池保持有界的最高并发数量至 Runtime 关闭；
+本次统计契约不代表已接入分配库。
 
 `UploadArena` 是固定容量、显式对齐的线性上传分配器，超容量报错，不静默增长。`UploadRing` 轮换两个 Arena，BeginFrame 等待该段完成点后 Reset，EndFrame 使用实际消费该段的提交点封存。不要保留 Arena 引用并在封存后继续写入；需要多次提交消费同一段时，用最后一次提交点封存。
 

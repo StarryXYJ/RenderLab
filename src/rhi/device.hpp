@@ -43,6 +43,14 @@ struct AdapterInfo
     bool software = false;
 };
 
+/// Live driver estimate for one native segment/heap. Unknown values are not zero.
+struct DriverMemoryBudget
+{
+    std::string name;
+    bool deviceLocal = false;
+    std::optional<uint64_t> usage, budget;
+};
+
 struct QueueInfo
 {
     std::string name;
@@ -111,6 +119,9 @@ class Device
 public:
     virtual ~Device() = default;
     virtual const DeviceReport& GetReport() const = 0;
+    /// Owner-thread, explicit diagnostic query; empty when unavailable or after Shutdown.
+    /// Native segment scopes differ between backends; not the application's allocation limit.
+    virtual std::vector<DriverMemoryBudget> QueryMemoryBudget() const = 0;
     /// Create one graphics runtime; destroy it and all GPU objects before Shutdown.
     virtual std::unique_ptr<Runtime> CreateRuntime() = 0;
     /// Collect pending diagnostics; callback-driven backends may have already recorded them.

@@ -119,8 +119,13 @@ int Run(const sandbox::Options& options, const std::filesystem::path& shaderRoot
                      std::format("Tracked RHI allocation limit: {} MiB", budgetMiB));
         sandbox::RunRendering(window.get(), *device, *runtime, options, shaderRoot, logger);
         runtime->WaitIdle();
-        if (runtime->GetMemoryStats().used != 0)
-            throw std::runtime_error("GPU resources leaked after sample shutdown");
+        const auto memory = runtime->GetMemoryStats();
+        logger.Write(LogLevel::Info,
+                     std::format("Tracked memory at shutdown: allocated={}, reserved={}, "
+                                 "allocations={}, blocks={}",
+                                 memory.used, memory.reserved, memory.allocations, memory.blocks));
+        if (memory.used || memory.reserved || memory.allocations || memory.blocks)
+            throw std::runtime_error("GPU allocations/backing blocks leaked after sample shutdown");
     }
     device->PollDiagnostics();
     // Include validation errors emitted during native device destruction in the final report.

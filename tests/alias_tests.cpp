@@ -113,10 +113,15 @@ void Native(rhi::Runtime& runtime)
         for (const auto& desc : Descs)
             textures.push_back(runtime.CreateTexture(desc));
         ordinary = runtime.GetMemoryStats().used;
+        const auto stats = runtime.GetMemoryStats();
+        Require(stats.reserved == ordinary && stats.allocations == 2 && stats.blocks == 2,
+                "Dedicated textures lost allocation/backing counts");
     }
     {
         auto textures = runtime.CreateAliasedTextures(Descs);
+        const auto stats = runtime.GetMemoryStats();
         Require(runtime.GetMemoryStats().used == bytes && bytes < ordinary &&
+                    stats.reserved == bytes && stats.allocations == 1 && stats.blocks == 1 &&
                     textures[0]->aliasBacking &&
                     textures[0]->aliasBacking == textures[1]->aliasBacking,
                 "Alias backing must charge native bytes exactly once and save memory");
@@ -127,6 +132,24 @@ void Native(rhi::Runtime& runtime)
         Reject([&] { imported.ImportTexture("ExternalAlias", pin, {}); });
     }
     Require(runtime.GetMemoryStats().used == 0, "Alias backing leaked");
+    Require(runtime.GetMemoryStats().reserved == 0 && runtime.GetMemoryStats().blocks == 0 &&
+                runtime.GetMemoryStats().allocations == 0,
+            "Alias backing/counts leaked");
+    const auto limit = runtime.GetMemoryStats().budget;
+    runtime.SetAllocationBudget(bytes - 1);
+    const auto before = runtime.GetMemoryStats();
+    bool rejected = false;
+    try
+    {
+        runtime.CreateAliasedTextures(Descs);
+    }
+    catch (const std::runtime_error&)
+    {
+        rejected = true;
+    }
+    Require(rejected && runtime.GetMemoryStats() == before,
+            "Rejected Alias backing changed ledger or escaped its budget");
+    runtime.SetAllocationBudget(limit);
     auto incompatible = Descs;
     incompatible[1].format = rhi::Format::R32Float;
     Reject([&] { runtime.CreateAliasedTextures(incompatible); });
@@ -225,6 +248,14 @@ int main(int argc, char** argv)
             std::string(argv[1]) == "dx12" ? rhi::Backend::Dx12 : rhi::Backend::Vulkan;
         options.validation = rhi::ValidationMode::On;
         auto device = rhi::CreateDevice(options, logger);
+        const auto budgets = device->QueryMemoryBudget();
+        for (const auto& budget : budgets)
+        {
+            Require(!budget.name.empty() && budget.usage.has_value() == budget.budget.has_value(),
+                    "Driver budget omitted its identity or one half of the estimate");
+            std::cout << "Driver segment=" << budget.name << " known=" << budget.usage.has_value()
+                      << '\n';
+        }
         {
             auto runtime = device->CreateRuntime();
             Native(*runtime);
@@ -234,6 +265,7 @@ int main(int argc, char** argv)
         }
         device->PollDiagnostics();
         device->Shutdown();
+        Require(device->QueryMemoryBudget().empty(), "Shutdown device queried driver memory");
         Require(device->GetValidationErrorCount() == 0, "Alias validation errors");
         std::cout << "Alias contracts passed\n";
         return 0;

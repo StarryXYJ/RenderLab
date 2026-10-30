@@ -30,6 +30,29 @@ public:
         Shutdown();
     }
 
+    std::vector<DriverMemoryBudget> QueryMemoryBudget() const override
+    {
+        ComPtr<IDXGIAdapter3> adapter;
+        if (!adapter_ || FAILED(adapter_.As(&adapter)))
+            return {};
+        std::vector<DriverMemoryBudget> result;
+        for (const bool local : {true, false})
+        {
+            DriverMemoryBudget segment{local ? "dxgi.local" : "dxgi.nonLocal", local};
+            DXGI_QUERY_VIDEO_MEMORY_INFO info{};
+            if (SUCCEEDED(adapter->QueryVideoMemoryInfo(0,
+                                                        local ? DXGI_MEMORY_SEGMENT_GROUP_LOCAL
+                                                              : DXGI_MEMORY_SEGMENT_GROUP_NON_LOCAL,
+                                                        &info)))
+            {
+                segment.usage = info.CurrentUsage;
+                segment.budget = info.Budget;
+            }
+            result.push_back(std::move(segment));
+        }
+        return result;
+    }
+
     void Shutdown() noexcept override
     {
         queue_.Reset();

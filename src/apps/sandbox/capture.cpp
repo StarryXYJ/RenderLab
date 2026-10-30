@@ -14,7 +14,7 @@
 
 namespace renderlab::sandbox
 {
-void CaptureScene(rhi::Runtime& runtime, const rhi::DeviceReport& device, const Options& options,
+void CaptureScene(rhi::Runtime& runtime, const rhi::Device& device, const Options& options,
                   const std::filesystem::path& shaders, Logger& logger)
 {
     const auto output =
@@ -98,6 +98,9 @@ void CaptureScene(rhi::Runtime& runtime, const rhi::DeviceReport& device, const 
     if (recording)
         recording->Close(milliseconds(Clock::now() - measureStart), warmupFrames, warmupMs);
     const auto memory = runtime.GetMemoryStats();
+    const auto driverBudgets = recording || !options.profilePath.empty()
+                                   ? device.QueryMemoryBudget()
+                                   : std::vector<rhi::DriverMemoryBudget>{};
     const auto descriptors = runtime.GetDescriptorStats();
     const auto uploads = scene.UploadStatistics();
     const auto rayScene = scene.RayStatistics();
@@ -109,9 +112,9 @@ void CaptureScene(rhi::Runtime& runtime, const rhi::DeviceReport& device, const 
     samples::SaveImage(output / "scene.bmp", capture.pixels->Map(), options.width, options.height,
                        rhi::TextureRowPitch(options.width));
     if (recording || !options.profilePath.empty())
-        statistics.Save(reportPath, options, device, memory, recording.get(),
+        statistics.Save(reportPath, options, device.GetReport(), memory, recording.get(),
                         options.cpuProfile ? &cpuOperations : nullptr, &descriptors, &uploads,
-                        &rayScene);
+                        &rayScene, &driverBudgets);
     if (recording)
     {
         const auto summary = recording->Summary(reportPath);

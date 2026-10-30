@@ -31,6 +31,13 @@ Sandbox/Player 共用 CaptureScene 的固定场景路径。`--benchmark N` 按�
 
 B3 起 headless 报告可包含 `resourceReuse`：`frameUpload` 为 pages/reservedBytes/batchHighWaterBytes/batches，`descriptors` 为 pages/capacitySlots/inUseSlots/highWaterSlots/nativeCreations。在测量结束、截图前采集，包含启动/预热累计量；不同于仅覆盖测量帧的 cpuOperations。描述符项数不代表显存字节；接口与拥有权见 [资源复用](resource-reuse.md)。
 
+`memory` 区分 tracked `usedBytes/highWaterBytes` 与 backing
+`reservedBytes/reservedHighWaterBytes`，另含 allocation/block count 及其峰值。
+`budgetBytes` 约束 reserved backing，不是 driver budget；`driverBudgets` 按原生
+segment/heap 导出 usage/budget，整体/单项未知为 null，不从 Adapter 静态容量猜测。
+进程 working set/private commit 在保存时另采，不与 GPU charge 相加；具体采样时间和排除项见
+[内存计费](gpu-memory.md)。这些为诊断快照，不作为逐帧耗时指标或默认 OS 查询。
+
 默认文件在 OUTPUT/BACKEND/benchmark.json 和 frames.jsonl。`--profile`、`--samples` 可独立指定路径，但不能指向同一文件。每行 JSONL 是一个完成帧：
 
 ```json

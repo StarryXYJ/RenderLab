@@ -5,7 +5,7 @@
 ## 当前状态
 
 - 当前实施阶段：B4 基础库与计算/分配优化；M6 核心 M6.1–M6.5、M0–M5、R1、B1–B3 DONE。可选 M6.0 Forward+ 仍为 DEFERRED。
-- 当前工作项：2026 年 10 月 30 日用户继续授权 B4，已核对 B4.4b 在 `7011dd7` 中提交，B4.1–B4.4 DONE；当前 B4.5a 内存计费口径与诊断 IN_PROGRESS，按 a–c 独立验收和提交。M7 工作台 UI/UX 修订 DONE；M7.2f 完整持续输入/画质及混合 DPI 复验仍未关闭，本轮保留为 DEFERRED，不冒充完成。
+- 当前工作项：2026 年 10 月 30 日用户继续授权 B4，B4.1–B4.4、B4.5a DONE；当前 B4.5b DX12 分配器接入 IN_PROGRESS，按 a–c 独立验收和提交。B4.5a 首轮 Debug 窗口超时的原因未确认，隔离复验 3/3，后续继续跟踪。M7 工作台 UI/UX 修订 DONE；M7.2f 完整持续输入/画质及混合 DPI 复验仍未关闭，本轮保留为 DEFERRED，不冒充完成。
 - 用户约定：每个子阶段验收完成即精简计划、标注 DONE 并提交 Git，无阻塞时在当前授权范围内继续推进。本次继续时已有 B4.4a 未提交改动，已接续检查与验证；库候选按实测决定采用或延期，不以引入依赖本身作为性能成果。
 
 | 阶段 | 目标 | 前置依赖 | 状态 |
@@ -19,7 +19,7 @@
 | B1 | 样例整理与可扩展 Benchmark | M4、R1 | DONE |
 | B2 | 双后端性能差异调查 | B1 | DONE |
 | B3 | 逐帧资源复用优化 | B2 | DONE |
-| B4 | 基础库、CPU 计算与 GPU 内存分配优化 | B3、M6 核心 | IN_PROGRESS（B4.1–B4.4 DONE；当前 B4.5a） |
+| B4 | 基础库、CPU 计算与 GPU 内存分配优化 | B3、M6 核心 | IN_PROGRESS（B4.1–B4.4、B4.5a DONE；当前 B4.5b） |
 | M5 | Deferred 与光追基础 | M4 | DONE |
 | M6 | GPU Driven 与执行优化 | M4；光追调度测试另需 M5 | DONE（M6.1–M6.5；可选 M6.0 延期） |
 | M7 | C# 编辑器与完整项目工作流 | M4；默认在 M5、M6 的核心目标后开展 | DEFERRED（已有实现/自动验收保留；M7.2f 人工复验及后续工作未关闭，本轮先执行 B4） |
@@ -131,9 +131,16 @@ M0–M6 核心能力及 R1、B1–B3 已完成（2026 年 10 月 23–30 日）�
 
 ### B4.5 GPU 内存分配
 
-状态：IN_PROGRESS（a）。按 a–c 分别验收和提交，不同时改两个后端及 Graph Alias 算法。
+状态：IN_PROGRESS（b）。按 a–c 分别验收和提交，不同时改两个后端的分配实现及 Graph Alias 算法。
 
-- [ ] a：定义资源分配字节、底层保留块、驱动 usage/budget 与进程内存的区别，适配统一预算与诊断；现有原生 Alias 与普通分配统一计费，不漏计或重复计费。
+a 状态：DONE，2026 年 10 月 30 日。范围/保留块字节与数量分离，统一限额约束 reserved；
+普通与 Alias 共用账本，驱动 segment/heap 与进程内存独立导出，未知为 null，热路径不查询 OS。
+验证：两配置 clean-first 全目标构建；Release CTest 66/66，Debug 65/66（Vulkan 光追窗口超时）后
+该用例隔离连续 3/3；托管各 22/22、Python 15/15，两起始后端工作台各 23 项及各 30 次关闭四项计数全零。
+双后端 PBR 参考 hash 不变、driver budget 实际可用，validation errors=0。契约见 [GPU 内存](../docs/gpu-memory.md)，
+数据与未复现超时限制见 [验证](../docs/performance/b4-memory.md)，证据 `out/b4/memory-accounting`。
+限制：本步尚未接入分配库，未进行其它 GPU/长期压力；首轮窗口超时不被复验隐去。
+
 - [ ] b：固定版本 D3D12MA 并接入 DX12 普通 Buffer/Texture/AS 用途；保留上传/描述符/资源池、完成点和 CPU/命令保活；验证预算、取消、延迟销毁、Resize 与关闭。
 - [ ] c：固定版本 VMA 并接入 Vulkan 普通资源，处理映射、coherent 要求、device address/AS、分配对齐与销毁顺序；保留 Alias 原生路径的合法性与同步。
 - [ ] 两后端 Debug/Validation、Release、Alias/多队列/光追及编辑器重建回归；对比加载、动态分配、稳定帧、底层块数/峰值/空闲回收。关闭后存活分配与最终保留块分别检查，不能将缓存容量隐藏为零。

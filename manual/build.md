@@ -136,6 +136,27 @@ ISPC 的 gather/scatter 性能提示保留；`cmake --install` 复制 ISPC 许�
 本轮实际完整验证使用 NMake 构建树 `out/build/m5-{nmake,release}`；新 Ninja 构建目录的
 编译器探针受沙箱影响未完成，不将上述预设示例本身当作 Ninja 验收证据。
 
+## GPU 内存诊断
+
+普通 C++ 构建即可验证计费；实际本轮构建树为 `out/build/m5-{nmake,release}`：
+
+```powershell
+ctest --test-dir out/build/m5-release -R 'memory.contracts|rendergraph.contracts' --output-on-failure
+ctest --test-dir out/build/m5-release -R 'gpu\.(dx12|vulkan)\.(alias|rhi)$' --output-on-failure
+./out/build/m5-release/renderlab_player.exe --backend dx12 --headless --validation on --project sample/m4/Pbr.rlproject --width 640 --height 360 --benchmark 8 --warmup-frames 8 --output out/memory-probe --profile out/memory-probe/report.json
+```
+
+另以 Debug 和 Vulkan 运行同一入口；GPU 用例要求 `RENDERLAB_GPU_TESTS=ON`。
+报告 `memory` 中的 used/peak 是 tracked 分配范围，reserved/peak 是底层保留 backing；
+各自另有数量。`--gpu-budget-mib` 约束 reserved，空闲块也不能隐藏为零。
+`driverBudgets` 按 DXGI segment / Vulkan heap 返回驱动估计，未知为 null；process working set
+和 private bytes 分别是进程工作集与 private commit，不与 GPU 数字相加。
+导出时才显式查询驱动，逐帧 `GetMemoryStats()` 不查询 OS。
+
+关闭日志应核对 allocated、reserved、allocations、blocks，而非仅检查第一个零值。
+当前普通路径仍 committed/dedicated，二者通常相等；统计契约本身不是 D3D12MA/VMA 集成。
+字段与生命周期、预算边界见 [GPU 内存计费](../docs/gpu-memory.md)，实际验收只见阶段计划。
+
 ## 运行 Sandbox
 
 ```powershell
