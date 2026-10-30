@@ -1,77 +1,144 @@
 <UserControl xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
- xmlns:vm="using:RenderLab.Editor.ViewModels" x:Class="RenderLab.Editor.Views.RenderSettingsView" x:DataType="vm:MainWindowViewModel">
- <ScrollViewer><StackPanel Margin="12" Spacing="10">
-   <TextBlock Text="{Binding BackendName}" FontSize="18" />
-   <StackPanel Spacing="6" IsEnabled="{Binding DeviceControlsEnabled}">
-    <ComboBox ItemsSource="{Binding Backends}" SelectedIndex="{Binding SelectedBackendIndex}" HorizontalAlignment="Stretch" />
-    <CheckBox Content="GPU validation" IsChecked="{Binding SelectedValidation}" />
-    <Button Content="Apply API / Retry" Command="{Binding ApplyDeviceCommand}" />
-   </StackPanel>
-   <TextBlock Text="{Binding DeviceStatus}" TextWrapping="Wrap" />
-   <TextBlock Text="{Binding DeviceError}" TextWrapping="Wrap" Foreground="OrangeRed" />
-   <TextBlock Text="{Binding Settings.Status}" TextWrapping="Wrap" />
-   <TextBlock Text="{Binding Settings.AppliedSummary}" TextWrapping="Wrap" />
-   <TextBlock Text="Controls below show requested values" FontStyle="Italic" />
-   <TextBlock Text="{Binding Settings.Error}" TextWrapping="Wrap" Foreground="OrangeRed" />
-   <TextBlock Text="Pipeline" /><ComboBox x:Name="PipelineSelector" ItemsSource="{Binding Settings.Pipelines}" SelectedIndex="{Binding SelectedPipelineIndex, Mode=TwoWay}" HorizontalAlignment="Stretch">
-     <ComboBox.ItemTemplate><DataTemplate x:DataType="vm:CapabilityChoice"><TextBlock Text="{Binding Name}" ToolTip.Tip="{Binding Reason}" /></DataTemplate></ComboBox.ItemTemplate>
-     <ComboBox.Styles><Style Selector="ComboBoxItem" x:DataType="vm:CapabilityChoice"><Setter Property="IsEnabled" Value="{Binding Available}" /></Style></ComboBox.Styles>
-   </ComboBox>
-   <TextBlock Text="Exposure" /><Slider x:Name="ExposureControl" Minimum="-10" Maximum="10" Value="{Binding Exposure, Mode=TwoWay}" />
-   <Button x:Name="PauseAction" Content="{Binding PauseLabel}" Command="{Binding TogglePauseCommand}" />
-   <Button Content="Single frame" Command="{Binding SingleStepCommand}" IsEnabled="{Binding IsPaused}" />
-   <Button x:Name="ResetAction" Content="Reset camera" Command="{Binding ResetCameraCommand}" />
-   <Button x:Name="RecreateAction" Content="Recreate viewport" Command="{Binding RecreateViewportCommand}" />
-   <TextBlock Text="{Binding ErrorText}" TextWrapping="Wrap" Foreground="OrangeRed" />
-   <StackPanel Spacing="8" IsEnabled="{Binding Settings.Ready}">
-    <Expander Header="Submission and execution" IsExpanded="True"><StackPanel Spacing="8">
-     <ComboBox x:Name="SubmissionSelector" ItemsSource="{Binding Settings.Submissions}" SelectedIndex="{Binding Settings.Submission}" HorizontalAlignment="Stretch">
-      <ComboBox.ItemTemplate><DataTemplate x:DataType="vm:CapabilityChoice"><TextBlock Text="{Binding Name}" ToolTip.Tip="{Binding Reason}" /></DataTemplate></ComboBox.ItemTemplate>
-      <ComboBox.Styles><Style Selector="ComboBoxItem" x:DataType="vm:CapabilityChoice"><Setter Property="IsEnabled" Value="{Binding Available}" /></Style></ComboBox.Styles>
-     </ComboBox>
-     <TextBlock Text="Recording threads" /><NumericUpDown Minimum="1" Maximum="16" Value="{Binding Settings.RecordingThreads}" />
-     <CheckBox Content="Async compute" IsChecked="{Binding Settings.AsyncCompute}" IsEnabled="{Binding Settings.AsyncSupported}" />
-     <CheckBox Content="Memory alias" IsChecked="{Binding Settings.MemoryAlias}" />
-     <TextBlock Text="Debug view" /><ComboBox ItemsSource="{Binding Settings.Views}" SelectedIndex="{Binding Settings.View}" HorizontalAlignment="Stretch" />
-    </StackPanel></Expander>
-    <Expander Header="Lighting and environment"><StackPanel Spacing="8">
-     <TextBlock Text="Direction XYZ (toward light)" /><Grid ColumnDefinitions="*,*,*">
-      <NumericUpDown Minimum="-1" Maximum="1" Increment="0.1" FormatString="F2" Value="{Binding Settings.LightX}" />
-      <NumericUpDown Grid.Column="1" Minimum="-1" Maximum="1" Increment="0.1" FormatString="F2" Value="{Binding Settings.LightY}" />
-      <NumericUpDown Grid.Column="2" Minimum="-1" Maximum="1" Increment="0.1" FormatString="F2" Value="{Binding Settings.LightZ}" />
-     </Grid>
-     <TextBlock Text="Linear color RGB" /><Grid ColumnDefinitions="*,*,*">
-      <NumericUpDown Minimum="0" Maximum="64" Increment="0.1" FormatString="F2" Value="{Binding Settings.LightR}" />
-      <NumericUpDown Grid.Column="1" Minimum="0" Maximum="64" Increment="0.1" FormatString="F2" Value="{Binding Settings.LightG}" />
-      <NumericUpDown Grid.Column="2" Minimum="0" Maximum="64" Increment="0.1" FormatString="F2" Value="{Binding Settings.LightB}" />
-     </Grid>
-     <TextBlock Text="Light intensity" /><NumericUpDown Minimum="0" Maximum="10000" Increment="0.1" Value="{Binding Settings.LightIntensity}" />
-     <TextBlock Text="Environment intensity" /><NumericUpDown Minimum="0" Maximum="1000" Increment="0.1" Value="{Binding Settings.EnvironmentIntensity}" />
-     <TextBlock Text="Environment rotation (degrees)" /><NumericUpDown Minimum="-360" Maximum="360" Value="{Binding Settings.EnvironmentRotation}" />
-    </StackPanel></Expander>
-    <Expander Header="Shadows"><StackPanel Spacing="8">
-     <CheckBox Content="Directional shadows" IsChecked="{Binding Settings.Shadows}" />
-     <ComboBox ItemsSource="{Binding Settings.ShadowResolutions}" SelectedItem="{Binding Settings.ShadowResolution}" HorizontalAlignment="Stretch" />
-     <TextBlock Text="Depth bias" /><NumericUpDown Minimum="0" Maximum="1" Increment="0.0001" FormatString="F4" Value="{Binding Settings.ShadowBias}" />
-     <TextBlock Text="Normal bias" /><NumericUpDown Minimum="0" Maximum="10" Increment="0.001" FormatString="F3" Value="{Binding Settings.ShadowNormalBias}" />
-    </StackPanel></Expander>
-    <Expander Header="Reflections"><StackPanel Spacing="8">
-     <CheckBox Content="Reflections" IsChecked="{Binding Settings.Reflections}" />
-     <CheckBox Content="Progressive accumulation" IsChecked="{Binding Settings.History}" />
-     <CheckBox Content="Spatial denoising" IsChecked="{Binding Settings.Denoise}" />
-     <CheckBox Content="Temporal reprojection" IsChecked="{Binding Settings.Temporal}" />
-    </StackPanel></Expander>
-    <Expander Header="Camera and scheduling"><StackPanel Spacing="8">
-     <TextBlock Text="Navigation speed" /><NumericUpDown Minimum="0.01" Maximum="1000" Increment="0.5" Value="{Binding Settings.CameraSpeed}" />
-     <TextBlock Text="Target FPS (0 = uncapped, VSync off)" /><NumericUpDown Minimum="0" Maximum="240" Value="{Binding Settings.TargetFps}" />
-     <CheckBox Content="Continuous redraw" IsChecked="{Binding Settings.Continuous}" />
-     <CheckBox Content="GPU profiling" IsChecked="{Binding Settings.Profiling}" />
-    </StackPanel></Expander>
-    <WrapPanel><Button Content="Defaults" Command="{Binding Settings.ResetCommand}" /><Button Content="Save preset" Command="{Binding Settings.SavePresetCommand}" /><Button Content="Load preset" Command="{Binding Settings.LoadPresetCommand}" /></WrapPanel>
-   </StackPanel>
-   <Expander Header="Device capabilities"><TextBlock Text="{Binding Settings.CapabilityText}" TextWrapping="Wrap" /></Expander>
-   <Expander Header="Host diagnostics"><TextBlock Text="{Binding DetailsText}" TextWrapping="Wrap" /></Expander>
-   <TextBox x:Name="ManagedInput" PlaceholderText="Type here to test input focus" />
-   <TextBlock Text="Fixed scene · runtime overrides only" TextWrapping="Wrap" />
- </StackPanel></ScrollViewer>
+             xmlns:vm="using:RenderLab.Editor.ViewModels"
+             x:Class="RenderLab.Editor.Views.RenderSettingsView" x:DataType="vm:MainWindowViewModel">
+    <Grid RowDefinitions="Auto,*,Auto">
+        <Border Classes="toolbar">
+            <Grid ColumnDefinitions="*,Auto">
+                <TextBlock Classes="section" Text="Runtime settings" />
+                <TextBlock Grid.Column="1" Classes="muted" Text="{Binding Settings.Status}"
+                           MaxWidth="190" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding Settings.AppliedSummary}" />
+            </Grid>
+        </Border>
+        <ScrollViewer Grid.Row="1" HorizontalScrollBarVisibility="Disabled">
+            <StackPanel>
+                <StackPanel Margin="12" Spacing="8">
+                    <Grid Classes="property" ColumnDefinitions="112,*">
+                        <TextBlock Classes="label" Text="Pipeline" />
+                        <ComboBox x:Name="PipelineSelector" Grid.Column="1" ItemsSource="{Binding Settings.Pipelines}"
+                                  SelectedIndex="{Binding SelectedPipelineIndex, Mode=TwoWay}">
+                            <ComboBox.ItemTemplate><DataTemplate x:DataType="vm:CapabilityChoice">
+                                <TextBlock Text="{Binding Name}" ToolTip.Tip="{Binding Reason}" />
+                            </DataTemplate></ComboBox.ItemTemplate>
+                            <ComboBox.Styles><Style Selector="ComboBoxItem" x:DataType="vm:CapabilityChoice">
+                                <Setter Property="IsEnabled" Value="{Binding Available}" />
+                            </Style></ComboBox.Styles>
+                        </ComboBox>
+                    </Grid>
+                    <Grid Classes="property" ColumnDefinitions="112,*">
+                        <TextBlock Classes="label" Text="Debug view" />
+                        <ComboBox Grid.Column="1" ItemsSource="{Binding Settings.Views}" SelectedIndex="{Binding Settings.View}" />
+                    </Grid>
+                    <Grid Classes="property" ColumnDefinitions="112,*">
+                        <TextBlock Classes="label" Text="Exposure" />
+                        <Grid Grid.Column="1" ColumnDefinitions="*,64" ColumnSpacing="6">
+                            <Slider x:Name="ExposureControl" Minimum="-10" Maximum="10" Value="{Binding Exposure, Mode=TwoWay}" />
+                            <NumericUpDown Grid.Column="1" Minimum="-10" Maximum="10" Increment="0.1" FormatString="F1"
+                                           Value="{Binding Exposure, Mode=TwoWay}" ShowButtonSpinner="False" ToolTip.Tip="Exposure (EV)" />
+                        </Grid>
+                    </Grid>
+                    <TextBlock Classes="error" Text="{Binding ErrorText}" />
+                    <TextBlock Classes="error" Text="{Binding Settings.Error}" />
+                </StackPanel>
+                <Expander Classes="inspector" Header="Execution" IsExpanded="True" IsEnabled="{Binding Settings.Ready}">
+                    <StackPanel Margin="12,0,12,12" Spacing="8">
+                        <Grid Classes="property" ColumnDefinitions="112,*">
+                            <TextBlock Classes="label" Text="Submission" />
+                            <ComboBox x:Name="SubmissionSelector" Grid.Column="1" ItemsSource="{Binding Settings.Submissions}"
+                                      SelectedIndex="{Binding Settings.Submission}">
+                                <ComboBox.ItemTemplate><DataTemplate x:DataType="vm:CapabilityChoice">
+                                    <TextBlock Text="{Binding Name}" ToolTip.Tip="{Binding Reason}" />
+                                </DataTemplate></ComboBox.ItemTemplate>
+                                <ComboBox.Styles><Style Selector="ComboBoxItem" x:DataType="vm:CapabilityChoice">
+                                    <Setter Property="IsEnabled" Value="{Binding Available}" />
+                                </Style></ComboBox.Styles>
+                            </ComboBox>
+                        </Grid>
+                        <Grid Classes="property" ColumnDefinitions="112,*"><TextBlock Classes="label" Text="Record threads" /><NumericUpDown Grid.Column="1" Minimum="1" Maximum="16" Value="{Binding Settings.RecordingThreads}" /></Grid>
+                        <Grid Classes="property" ColumnDefinitions="112,*">
+                            <TextBlock Classes="label" Text="Async compute" />
+                            <CheckBox Grid.Column="1" IsChecked="{Binding Settings.AsyncCompute}" IsEnabled="{Binding Settings.AsyncSupported}"
+                                      ToolTip.Tip="Schedule supported passes on a compute queue" AutomationProperties.Name="Async compute" />
+                        </Grid>
+                        <Grid Classes="property" ColumnDefinitions="112,*"><TextBlock Classes="label" Text="Memory alias" /><CheckBox Grid.Column="1" IsChecked="{Binding Settings.MemoryAlias}" AutomationProperties.Name="Memory alias" /></Grid>
+                    </StackPanel>
+                </Expander>
+                <Expander Classes="inspector" Header="Lighting &amp; environment" IsEnabled="{Binding Settings.Ready}">
+                    <StackPanel Margin="12,0,12,12" Spacing="8">
+                        <TextBlock Classes="muted" Text="Direction" />
+                        <Grid ColumnDefinitions="*,*,*" ColumnSpacing="6">
+                            <NumericUpDown Minimum="-1" Maximum="1" Increment="0.1" FormatString="F2" Value="{Binding Settings.LightX}" ToolTip.Tip="Direction X" />
+                            <NumericUpDown Grid.Column="1" Minimum="-1" Maximum="1" Increment="0.1" FormatString="F2" Value="{Binding Settings.LightY}" ToolTip.Tip="Direction Y" />
+                            <NumericUpDown Grid.Column="2" Minimum="-1" Maximum="1" Increment="0.1" FormatString="F2" Value="{Binding Settings.LightZ}" ToolTip.Tip="Direction Z" />
+                        </Grid>
+                        <TextBlock Classes="muted" Text="Linear RGB" />
+                        <Grid ColumnDefinitions="*,*,*" ColumnSpacing="6">
+                            <NumericUpDown Minimum="0" Maximum="64" Increment="0.1" FormatString="F2" Value="{Binding Settings.LightR}" ToolTip.Tip="Red" />
+                            <NumericUpDown Grid.Column="1" Minimum="0" Maximum="64" Increment="0.1" FormatString="F2" Value="{Binding Settings.LightG}" ToolTip.Tip="Green" />
+                            <NumericUpDown Grid.Column="2" Minimum="0" Maximum="64" Increment="0.1" FormatString="F2" Value="{Binding Settings.LightB}" ToolTip.Tip="Blue" />
+                        </Grid>
+                        <Grid Classes="property" ColumnDefinitions="112,*"><TextBlock Classes="label" Text="Intensity" /><NumericUpDown Grid.Column="1" Minimum="0" Maximum="10000" Increment="0.1" Value="{Binding Settings.LightIntensity}" /></Grid>
+                        <Grid Classes="property" ColumnDefinitions="112,*"><TextBlock Classes="label" Text="Environment" /><NumericUpDown Grid.Column="1" Minimum="0" Maximum="1000" Increment="0.1" Value="{Binding Settings.EnvironmentIntensity}" /></Grid>
+                        <Grid Classes="property" ColumnDefinitions="112,*"><TextBlock Classes="label" Text="Rotation" /><NumericUpDown Grid.Column="1" Minimum="-360" Maximum="360" Value="{Binding Settings.EnvironmentRotation}" ToolTip.Tip="Environment rotation in degrees" /></Grid>
+                    </StackPanel>
+                </Expander>
+                <Expander Classes="inspector" Header="Shadows" IsEnabled="{Binding Settings.Ready}">
+                    <StackPanel Margin="12,0,12,12" Spacing="8">
+                        <Grid Classes="property" ColumnDefinitions="112,*"><TextBlock Classes="label" Text="Directional" /><CheckBox Grid.Column="1" IsChecked="{Binding Settings.Shadows}" AutomationProperties.Name="Directional shadows" /></Grid>
+                        <Grid Classes="property" ColumnDefinitions="112,*"><TextBlock Classes="label" Text="Resolution" /><ComboBox Grid.Column="1" ItemsSource="{Binding Settings.ShadowResolutions}" SelectedItem="{Binding Settings.ShadowResolution}" /></Grid>
+                        <Grid Classes="property" ColumnDefinitions="112,*"><TextBlock Classes="label" Text="Depth bias" /><NumericUpDown Grid.Column="1" Minimum="0" Maximum="1" Increment="0.0001" FormatString="F4" Value="{Binding Settings.ShadowBias}" /></Grid>
+                        <Grid Classes="property" ColumnDefinitions="112,*"><TextBlock Classes="label" Text="Normal bias" /><NumericUpDown Grid.Column="1" Minimum="0" Maximum="10" Increment="0.001" FormatString="F3" Value="{Binding Settings.ShadowNormalBias}" /></Grid>
+                    </StackPanel>
+                </Expander>
+                <Expander Classes="inspector" Header="Reflections" IsEnabled="{Binding Settings.Ready}">
+                    <StackPanel Margin="12,0,12,12" Spacing="6">
+                        <Grid Classes="property" ColumnDefinitions="112,*"><TextBlock Classes="label" Text="Enabled" /><CheckBox Grid.Column="1" IsChecked="{Binding Settings.Reflections}" AutomationProperties.Name="Reflections" /></Grid>
+                        <Grid Classes="property" ColumnDefinitions="112,*"><TextBlock Classes="label" Text="Accumulate" /><CheckBox Grid.Column="1" IsChecked="{Binding Settings.History}" AutomationProperties.Name="Progressive accumulation" /></Grid>
+                        <Grid Classes="property" ColumnDefinitions="112,*"><TextBlock Classes="label" Text="Spatial denoise" /><CheckBox Grid.Column="1" IsChecked="{Binding Settings.Denoise}" AutomationProperties.Name="Spatial denoising" /></Grid>
+                        <Grid Classes="property" ColumnDefinitions="112,*"><TextBlock Classes="label" Text="Reprojection" /><CheckBox Grid.Column="1" IsChecked="{Binding Settings.Temporal}" AutomationProperties.Name="Temporal reprojection" /></Grid>
+                    </StackPanel>
+                </Expander>
+                <Expander Classes="inspector" Header="Camera &amp; scheduling" IsEnabled="{Binding Settings.Ready}">
+                    <StackPanel Margin="12,0,12,12" Spacing="8">
+                        <Grid Classes="property" ColumnDefinitions="112,*"><TextBlock Classes="label" Text="Move speed" /><NumericUpDown Grid.Column="1" Minimum="0.01" Maximum="1000" Increment="0.5" Value="{Binding Settings.CameraSpeed}" /></Grid>
+                        <Grid Classes="property" ColumnDefinitions="112,*"><TextBlock Classes="label" Text="Frame limit" /><NumericUpDown Grid.Column="1" Minimum="0" Maximum="240" Value="{Binding Settings.TargetFps}" ToolTip.Tip="0 = uncapped with VSync off; 1-240 = FPS cap" /></Grid>
+                        <Grid Classes="property" ColumnDefinitions="112,*"><TextBlock Classes="label" Text="Continuous" /><CheckBox Grid.Column="1" IsChecked="{Binding Settings.Continuous}" AutomationProperties.Name="Continuous redraw" /></Grid>
+                        <Grid Classes="property" ColumnDefinitions="112,*"><TextBlock Classes="label" Text="GPU timing" /><CheckBox Grid.Column="1" IsChecked="{Binding Settings.Profiling}" AutomationProperties.Name="GPU profiling" /></Grid>
+                    </StackPanel>
+                </Expander>
+                <Expander Classes="inspector" Header="Graphics device">
+                    <StackPanel Margin="12,0,12,12" Spacing="8">
+                        <StackPanel Spacing="8" IsEnabled="{Binding DeviceControlsEnabled}">
+                            <Grid Classes="property" ColumnDefinitions="112,*"><TextBlock Classes="label" Text="API" /><ComboBox Grid.Column="1" ItemsSource="{Binding Backends}" SelectedIndex="{Binding SelectedBackendIndex}" /></Grid>
+                            <Grid Classes="property" ColumnDefinitions="112,*"><TextBlock Classes="label" Text="Validation" /><CheckBox Grid.Column="1" IsChecked="{Binding SelectedValidation}" AutomationProperties.Name="GPU validation" /></Grid>
+                            <Button Classes="primary" Content="Apply API / Retry" Command="{Binding ApplyDeviceCommand}" HorizontalAlignment="Right" />
+                        </StackPanel>
+                        <TextBlock Classes="muted" Text="{Binding DeviceStatus}" TextWrapping="Wrap" />
+                        <TextBlock Classes="error" Text="{Binding DeviceError}" />
+                        <TextBlock Classes="muted" Text="{Binding Settings.CapabilityText}" TextWrapping="Wrap" />
+                        <Button x:Name="RecreateAction" Classes="command" Content="Recreate viewport" Command="{Binding RecreateViewportCommand}" HorizontalAlignment="Right" />
+                    </StackPanel>
+                </Expander>
+                <Expander x:Name="HostDiagnostics" Classes="inspector" Header="Host diagnostics">
+                    <StackPanel Margin="12,0,12,12" Spacing="8">
+                        <TextBlock Classes="mono muted" Text="{Binding DetailsText}" TextWrapping="Wrap" />
+                        <TextBox x:Name="ManagedInput" PlaceholderText="Input focus test" IsVisible="{Binding IsSmokeTest}" />
+                    </StackPanel>
+                </Expander>
+                <Expander Classes="inspector" Header="Applied configuration">
+                    <TextBlock Margin="12,0,12,12" Classes="muted" Text="{Binding Settings.AppliedSummary}" TextWrapping="Wrap" />
+                </Expander>
+            </StackPanel>
+        </ScrollViewer>
+        <Border Grid.Row="2" Classes="toolbar" BorderThickness="0,1,0,0">
+            <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="6" IsEnabled="{Binding Settings.Ready}">
+                <Button Classes="command" Content="Defaults" Command="{Binding Settings.ResetCommand}" HorizontalAlignment="Left" />
+                <Button Grid.Column="1" Classes="tool" Command="{Binding Settings.LoadPresetCommand}" ToolTip.Tip="Load preset" AutomationProperties.Name="Load preset">
+                    <TextBlock Classes="glyph" Text="&#xE8B7;" />
+                </Button>
+                <Button Grid.Column="2" Classes="tool" Command="{Binding Settings.SavePresetCommand}" ToolTip.Tip="Save preset" AutomationProperties.Name="Save preset">
+                    <TextBlock Classes="glyph" Text="&#xE74E;" />
+                </Button>
+            </Grid>
+        </Border>
+    </Grid>
 </UserControl>

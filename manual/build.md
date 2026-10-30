@@ -397,6 +397,8 @@ M7.2d 的 Render Graph 默认显示实际 Pass × Resource 矩阵。点击单元
 
 M7.2e 的 Profiler 提供完成帧曲线/P50/P95/P99、CPU/GPU 分段、真实调用/批次/实例、内存和观测完成延迟。Freeze 后可从下拉框选择记录帧，Inspect graph 打开同帧图；Export JSON 保存配对数据。GPU visible readback 显式增加 Copy，GPU 模式默认可见数未知；关闭 timing 后 N/A，不沿用旧值。
 
+工作台排版修订后，暂停/恢复、单帧与重置相机位于顶部图标工具栏，悬停查看操作名称；API/Validation 在 Settings 的 Graphics device 分组。设置按属性行对齐、底部提供 Defaults 和预设操作。Profiler 的完整区间与导出路径在 Frame details，Graph 详情栏可拖动分隔线，日志选中后展开完整事件。已有保存布局会继续恢复；可用 Layout → Default/Diagnostics 查看新的默认分栏比例。
+
 观察成本可用 `--benchmark-seconds 8 --warmup-seconds 2 --target-fps 0 --observation basic|timing|graph|readback` 分别运行。四档均使用 GPU Culled 与同一默认视口尺寸，依次为基础计数、附加 RHI/GPU timing、附加 500 ms 图元数据投影、附加 GPU 可见数 Copy/500 ms Profiler 投影。诊断投影在后台执行，不打开 Dock 改变分辨率，因此不包括面板 Canvas 绘制成本；四档输出目录必须不同，比较 performance.json 中 options/源帧/分辨率/丢样。它是一次窗口短测，不代表稳定吞吐或显示器延迟。
 
 `--isolated --output 独立目录` 从默认两面板布局启动，将布局/预设保存在该目录，适合界面复验。普通运行恢复用户上次保存的布局，因此以后启动可能包含诊断面板。

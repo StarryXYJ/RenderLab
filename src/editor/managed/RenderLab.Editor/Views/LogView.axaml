@@ -1,20 +1,37 @@
 <UserControl xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:RenderLab.Editor.ViewModels" xmlns:diag="using:RenderLab.Editor.Diagnostics"
              x:Class="RenderLab.Editor.Views.LogView" x:DataType="vm:LogViewModel">
-  <Grid RowDefinitions="Auto,Auto,*,Auto">
-    <WrapPanel Margin="8">
-      <ComboBox Width="160" ItemsSource="{Binding Levels}" SelectedIndex="{Binding LevelIndex}" />
-      <TextBox Width="200" Margin="6,0" PlaceholderText="Search message" Text="{Binding Search}" />
-      <TextBox Width="150" PlaceholderText="Source filter" Text="{Binding Source}" />
-      <CheckBox Margin="8,0" Content="Follow" IsChecked="{Binding AutoScroll}" />
-      <Button Content="Clear" Command="{Binding ClearCommand}" />
-      <Button Content="Copy" Click="CopyClicked" Margin="6,0" />
-      <Button Content="Log directory" Click="DirectoryClicked" />
-    </WrapPanel>
-    <TextBlock Grid.Row="1" Margin="8,0" Text="{Binding Counters}" />
-    <ListBox x:Name="LogList" Grid.Row="2" ItemsSource="{Binding Rows}" SelectedItem="{Binding Selected}">
-      <ListBox.ItemTemplate><DataTemplate x:DataType="diag:LogRow"><TextBlock Text="{Binding Display}" TextWrapping="Wrap" /></DataTemplate></ListBox.ItemTemplate>
-    </ListBox>
-    <TextBox Grid.Row="3" Margin="8" MaxHeight="140" IsReadOnly="True" TextWrapping="Wrap" Text="{Binding Selected.Details}" />
-  </Grid>
+    <Grid RowDefinitions="Auto,Auto,*,Auto">
+        <Border Classes="toolbar">
+            <WrapPanel>
+                <ComboBox Width="135" ItemsSource="{Binding Levels}" SelectedIndex="{Binding LevelIndex}" Margin="0,0,8,0" />
+                <TextBox Width="200" PlaceholderText="Search messages" Text="{Binding Search}" Margin="0,0,8,0" />
+                <TextBox Width="135" PlaceholderText="Source" Text="{Binding Source}" Margin="0,0,12,0" />
+                <CheckBox Content="Follow" IsChecked="{Binding AutoScroll}" Margin="0,0,8,0" />
+                <Button Classes="tool" Command="{Binding ClearCommand}" ToolTip.Tip="Clear display" AutomationProperties.Name="Clear display"><TextBlock Classes="glyph" Text="&#xE74D;" /></Button>
+                <Button Classes="tool" Click="CopyClicked" ToolTip.Tip="Copy selection" AutomationProperties.Name="Copy selection"><TextBlock Classes="glyph" Text="&#xE8C8;" /></Button>
+                <Button Classes="tool" Click="DirectoryClicked" ToolTip.Tip="Open log directory" AutomationProperties.Name="Open log directory"><TextBlock Classes="glyph" Text="&#xE8B7;" /></Button>
+            </WrapPanel>
+        </Border>
+        <Border Grid.Row="1" Classes="tableHeader">
+            <Grid ColumnDefinitions="90,85,140,*">
+                <TextBlock Classes="muted" Text="Time" /><TextBlock Grid.Column="1" Classes="muted" Text="Level" />
+                <TextBlock Grid.Column="2" Classes="muted" Text="Source" />
+                <TextBlock Grid.Column="3" Classes="muted" Text="{Binding Counters}" TextTrimming="CharacterEllipsis" HorizontalAlignment="Right" />
+            </Grid>
+        </Border>
+        <ListBox x:Name="LogList" Grid.Row="2" ItemsSource="{Binding Rows}" SelectedItem="{Binding Selected}">
+            <ListBox.ItemTemplate><DataTemplate x:DataType="diag:LogRow">
+                <Grid ColumnDefinitions="90,85,140,*" ToolTip.Tip="{Binding Message}">
+                    <TextBlock Classes="mono muted" Text="{Binding TimeText}" />
+                    <TextBlock Grid.Column="1" Classes="mono" Text="{Binding Level}" Foreground="{Binding LevelColor}" />
+                    <TextBlock Grid.Column="2" Classes="mono muted" Text="{Binding Source}" TextTrimming="CharacterEllipsis" Margin="0,0,10,0" />
+                    <TextBlock Grid.Column="3" Text="{Binding Message}" TextTrimming="CharacterEllipsis" />
+                </Grid>
+            </DataTemplate></ListBox.ItemTemplate>
+        </ListBox>
+        <Expander Grid.Row="3" Classes="inspector" Header="Selected event" IsExpanded="{Binding HasSelection}">
+            <ScrollViewer MaxHeight="180"><SelectableTextBlock Margin="12,0,12,10" FontFamily="Consolas" FontSize="11" TextWrapping="Wrap" Text="{Binding SelectedDetails}" /></ScrollViewer>
+        </Expander>
+    </Grid>
 </UserControl>

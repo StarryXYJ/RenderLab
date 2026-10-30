@@ -5,7 +5,7 @@
 ## 当前状态
 
 - 当前实施阶段：M7 固定场景渲染工作台；M6 核心 M6.1–M6.5、M0–M5、R1、B1–B3 DONE。可选 M6.0 Forward+ 仍为 DEFERRED。
-- 当前工作项：用户授权实现到 M7.2f；M7.2a–e DONE，M7.2f 实现与自动集成验收已完成，当前人工输入/画质及混合 DPI 复验 IN_PROGRESS。M7.3–M7.6 本轮 DEFERRED。
+- 当前工作项：固定场景工作台 UI/UX 修订 DONE，2026 年 10 月 30 日按用户意见收尾；M7.2a–e DONE，M7.2f 原有自动验收已完成，完整持续输入/画质及混合 DPI 复验仍未关闭。M7.3–M7.6 本轮 DEFERRED。
 - 用户约定：每个子阶段验收完成即提交 Git，无阻塞时在当前授权范围内继续推进。此前 M7 修改已进入 Git，本轮开始时工作区干净。
 
 | 阶段 | 目标 | 前置依赖 | 状态 |
@@ -124,6 +124,12 @@ M0–M6 核心能力及 R1、B1–B3 已完成（2026 年 10 月 23–30 日）�
 验证：最终 Debug/Release 日常构建均零警告、托管各 22/22；原生 Core 两配置通过。Release/DX12、Debug/Vulkan 最终自检各 23 项，含配置/API、Dock 浮动/恢复、同帧 Graph/Profiler、末尾 drain；各 30 次正常 Session 及初始化中关闭账本/验证错误/worker_failed 为 0。文件实际写失败、滚动/消息洪峰有独立用例。Release 双后端实际运行 1800.87/1800.98 秒，观察到 53776/53779 帧，无丢样；各 4 次关闭全为 0，23 份源 hash 不变，所有历史/内存预算检查通过。两块实屏均 100%/96 DPI，根窗口跨屏后的像素尺寸匹配。证据 `out/m72f/{final-release-dx12,final-debug-vulkan,soak-dx12,soak-vulkan,tests}`；方法、内存峰值和版本边界见 [实测](../docs/performance/editor-workbench.md)，命令见 [手册](../manual/build.md#avalonia-嵌入原型)。
 
 待验收：可见桌面已观察默认固定场景、Graph/Profiler，系统点击菜单/诊断页可用；持续按键、右键拖动/捕获释放、完整浮动窗口的系统输入与用户画质认可，以及 150%/混合 DPI 仍未验证。合成输入、自动 Present 与两个 96 DPI 屏幕不替代这些项。真实设备丢失、其他 GPU、资源/场景编辑不属于本轮验收覆盖。
+
+#### M7.2 工作台 UI/UX 修订
+
+状态：DONE（2026 年 10 月 30 日，用户追加授权并确认按当前版本收尾）。结果：中性灰紧凑主题、双列属性 Inspector、精确曝光输入、顶部图标工具栏、固定预设操作、Profiler 指标/曲线/可滚动 Pass 表、Graph 工具栏/访问图例/可调详情栏及 Live 选择保留、分列/分级着色日志与完整事件详情。默认仍只有 Scene/Settings；已有保存布局继续恢复。
+
+验证：最终 Debug/Release 构建零警告、托管各 22/22。Release/DX12 窗口自检与末轮排版后的 Debug/Vulkan 自检各 23 项、各 30 次正常 Session 及启动中关闭账本/验证错误/worker_failed 为 0；修订焦点自检以实际展开后的控件接收焦点，暂停命令检查图标与 tooltip。可见窗口检查了默认场景、分组/滑条/关闭按钮，以及 Graph 与 Profiler 的真实渲染；用户停止 computer-use 后未继续界面操作。证据 `out/ui-workbench/{verified-release-dx12,final-debug-vulkan,tests}`。本轮未重跑 30 分钟长测或混合 DPI，M7.2f 的既有限制继续保留。设计见 [工作台](../docs/editor-workbench.md#工作台视觉与布局)，操作见 [手册](../manual/build.md#avalonia-嵌入原型)。
 
 ### M7.3 材质编辑与事务
 

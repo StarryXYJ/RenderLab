@@ -25,6 +25,9 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     public IReadOnlyList<string> Pipelines { get; } = ["Forward", "Deferred", "Ray Tracing"];
     public RenderSettingsViewModel Settings { get; }
     public string PauseLabel => IsPaused ? "Resume viewport" : "Pause viewport";
+    public string PauseGlyph => IsPaused ? "\uE768" : "\uE769";
+    public string SceneName { get; }
+    public bool IsSmokeTest { get; }
 
     [ObservableProperty]
     private int selectedPipelineIndex = 1;
@@ -34,6 +37,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(PauseLabel))]
+    [NotifyPropertyChangedFor(nameof(PauseGlyph))]
     private bool isPaused;
 
     [ObservableProperty]
@@ -52,6 +56,8 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     {
         this.viewport = viewport;
         soaking = options.SoakSeconds > 0;
+        SceneName = Path.GetFileNameWithoutExtension(options.Project);
+        IsSmokeTest = options.Smoke;
         Settings = settings;
         SelectedPipelineIndex = (int)options.Pipeline - 1;
         SelectedBackendIndex = options.Backend == "dx12" ? 0 : 1;

@@ -8,7 +8,12 @@
         <DataTemplate DataType="model:Document" x:DataType="model:Document"><ContentControl Content="{Binding Context}" /></DataTemplate>
     </Application.DataTemplates>
     <Application.Styles>
-        <FluentTheme />
+        <FluentTheme DensityStyle="Compact">
+            <FluentTheme.Palettes>
+                <ColorPaletteResources x:Key="Dark" Accent="#72C5B0" />
+            </FluentTheme.Palettes>
+        </FluentTheme>
         <dock:DockFluentTheme />
+        <StyleInclude Source="/Themes/Workbench.axaml" />
     </Application.Styles>
 </Application>

@@ -14,14 +14,18 @@ internal sealed class GraphMatrixControl : Control
     private const double Header = 110, Row = 30, Label = 225, Cell = 44;
     internal void Refresh()
     {
-        Width = (Label + (Model?.VisibleResources.Length ?? 0) * Cell) * (Model?.Zoom ?? 1);
-        Height = (Header + (Model?.VisiblePasses.Length ?? 0) * Row + 650) * (Model?.Zoom ?? 1);
+        Width = Math.Max(700, Label + (Model?.VisibleResources.Length ?? 0) * Cell) * (Model?.Zoom ?? 1);
+        var edgeCount = Model?.Snapshot?.Edges.Count(edge => edge.Before == Model.SelectedPass || edge.After == Model.SelectedPass) ?? 0;
+        var lifetimeCount = Model?.VisibleResources.Count(resource => resource.First is not null) ?? 0;
+        Height = (Header + (Model?.VisiblePasses.Length ?? 0) * Row + 90 +
+            (Model?.SelectedPass >= 0 ? 50 + Math.Min(6, edgeCount) * 25 : 0) +
+            Math.Min(16, lifetimeCount) * 23) * (Model?.Zoom ?? 1);
         InvalidateVisual();
     }
     private static void Text(DrawingContext context, string value, Point point, IBrush? brush = null, double size = 12)
     {
         context.DrawText(new FormattedText(value, CultureInfo.InvariantCulture, FlowDirection.LeftToRight,
-            Typeface.Default, size, brush ?? Brushes.Gainsboro), point);
+            Typeface.Default, size, brush ?? new SolidColorBrush(Color.Parse("#D6D6D6"))), point);
     }
     public override void Render(DrawingContext context)
     {
@@ -29,7 +33,7 @@ internal sealed class GraphMatrixControl : Control
         if (Model?.Snapshot is not { } snapshot) { return; }
         var passes = Model.VisiblePasses; var resources = Model.VisibleResources;
         using var transform = context.PushTransform(Matrix.CreateScale(Model.Zoom, Model.Zoom));
-        Text(context, "Pass × Resource · click to inspect", new(8, 8));
+        Text(context, "RESOURCE ACCESS", new(10, 10), Brushes.Gray, 10);
         for (var column = 0; column < resources.Length; ++column)
         {
             var resource = resources[column];
@@ -42,7 +46,7 @@ internal sealed class GraphMatrixControl : Control
         for (var row = 0; row < passes.Length; ++row)
         {
             var pass = passes[row]; var y = Header + row * Row;
-            IBrush background = pass.Id == Model.SelectedPass ? new SolidColorBrush(Color.Parse("#344865")) : row % 2 == 0 ? new SolidColorBrush(Color.Parse("#24272E")) : Brushes.Transparent;
+            IBrush background = pass.Id == Model.SelectedPass ? new SolidColorBrush(Color.Parse("#354940")) : row % 2 == 0 ? new SolidColorBrush(Color.Parse("#292929")) : Brushes.Transparent;
             context.DrawRectangle(background, null, new Rect(0, y, Label + resources.Length * Cell, Row));
             var title = pass.Name.Length > 27 ? pass.Name[..27] + "…" : pass.Name;
             Text(context, $"{pass.Id}: {title}", new(8, y + 5), pass.Live ? Brushes.Gainsboro : Brushes.Gray);
@@ -51,24 +55,25 @@ internal sealed class GraphMatrixControl : Control
                 var access = pass.Accesses.FirstOrDefault(a => a.Resource == resources[column].Id);
                 if (access is null) { continue; }
                 var x = Label + column * Cell;
-                context.DrawRectangle(access.Write ? Brushes.DarkGoldenrod : Brushes.DarkSlateBlue, null, new Rect(x + 2, y + 2, Cell - 4, Row - 4));
+                var color = access.Read && access.Write ? "#365B51" : access.Write ? "#655331" : "#344B5C";
+                context.DrawRectangle(new SolidColorBrush(Color.Parse(color)), null, new Rect(x + 2, y + 3, Cell - 4, Row - 6), 3, 3);
                 Text(context, access.Read && access.Write ? "RW" : access.Write ? "W" : "R", new(x + 10, y + 5));
             }
         }
         var top = Header + passes.Length * Row + 20;
-        Text(context, "Selected-pass dependencies (actual RAW / WAR / WAW / ordering edges)", new(8, top));
         var edges = snapshot.Edges.Where(e => e.Before == Model.SelectedPass || e.After == Model.SelectedPass).Take(6).ToArray();
         var names = snapshot.Passes.ToDictionary(p => p.Id, p => p.Name);
+        if (Model.SelectedPass >= 0) { Text(context, "DEPENDENCIES", new(10, top), Brushes.Gray, 10); }
         for (var index = 0; index < edges.Length; ++index)
         {
             var edge = edges[index]; var y = top + 30 + index * 25;
             Text(context, names[edge.Before], new(12, y));
-            context.DrawLine(new Pen(Brushes.SteelBlue, 2), new(230, y + 10), new(285, y + 10));
-            context.DrawLine(new Pen(Brushes.SteelBlue, 2), new(278, y + 5), new(285, y + 10));
+            context.DrawLine(new Pen(Brushes.CadetBlue, 1), new(230, y + 10), new(285, y + 10));
+            context.DrawLine(new Pen(Brushes.CadetBlue, 1), new(278, y + 5), new(285, y + 10));
             Text(context, names[edge.After] + " · " + edge.Reason, new(295, y));
         }
-        top += 215;
-        Text(context, "Logical lifetimes · Alias reuses memory, not resource contents", new(8, top));
+        if (Model.SelectedPass >= 0) { top += 50 + edges.Length * 25; }
+        Text(context, "RESOURCE LIFETIMES", new(10, top), Brushes.Gray, 10);
         var scheduleLength = Math.Max(1, snapshot.Passes.Count(p => p.Live));
         var lifetimes = resources.Where(r => r.First is not null).Take(16).ToArray();
         for (var index = 0; index < lifetimes.Length; ++index)
@@ -76,7 +81,7 @@ internal sealed class GraphMatrixControl : Control
             var resource = lifetimes[index]; var y = top + 28 + index * 23;
             Text(context, $"R{resource.Id} [{resource.First}, {resource.Last}] alias {resource.Alias?.ToString() ?? "—"}", new(8, y));
             var first = resource.First!.Value;
-            context.DrawRectangle(resource.Alias.HasValue ? Brushes.DarkCyan : Brushes.SlateGray, null,
+            context.DrawRectangle(new SolidColorBrush(Color.Parse(resource.Alias.HasValue ? "#518F7C" : "#536D80")), null,
                 new Rect(Label + first * 450.0 / scheduleLength, y + 2, Math.Max(4, (resource.Last - first + 1) * 450.0 / scheduleLength), 15));
         }
     }

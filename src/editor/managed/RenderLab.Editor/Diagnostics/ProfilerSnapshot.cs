@@ -5,9 +5,12 @@ namespace RenderLab.Editor.Diagnostics;
 public sealed record ProfilerPassRow(string Pass, string Category, string Queue, ulong Direct, ulong Indirect,
     ulong Capacity, ulong Batches, string Instances, ulong Dispatch, ulong TraceRays, string Gpu);
 
+public sealed record ProfilerMetric(string Label, string Value, string Detail);
+
 internal sealed record ProfilerSnapshot(GraphSnapshot Graph, ProfilerPassRow[] Passes, string Summary, string Details,
     ulong? GpuVisible, bool TimingEnabled, bool ReadbackEnabled)
 {
+    internal ProfilerMetric[] Metrics { get; init; } = [];
     internal static ProfilerSnapshot Parse(string json)
     {
         var graph = GraphSnapshot.Parse(json);
@@ -50,6 +53,17 @@ internal sealed record ProfilerSnapshot(GraphSnapshot Graph, ProfilerPassRow[] P
             "Nested CPU intervals overlap. GPU Pass sum is not GPU span. A batch is a draw run sharing pipeline/bindings/geometry; indirect capacity is not a visible count.\n" +
             string.Join("\n", gpu.Select(t => $"{Value(t, "name")} [{Value(t, "startNs")}, {Value(t, "endNs")}] ns ({Value(t, "queue")})"));
         return new(graph, passes, summary, details, profile.GetProperty("gpuVisible").ValueKind == JsonValueKind.Null ? null : profile.GetProperty("gpuVisible").GetUInt64(),
-            profile.GetProperty("timingEnabled").GetBoolean(), profile.GetProperty("readbackEnabled").GetBoolean());
+            profile.GetProperty("timingEnabled").GetBoolean(), profile.GetProperty("readbackEnabled").GetBoolean())
+        {
+            Metrics =
+            [
+                new("CPU Tick", Ms(cpu, "frame"), "Native viewport wall time; nested CPU intervals overlap."),
+                new("GPU Pass sum", Ms(profile, "gpuSumNs"), $"Span {Ms(profile, "gpuSpanNs")} | graphics {Ms(profile, "gpuGraphicsNs")} | compute {Ms(profile, "gpuComputeNs")}"),
+                new("Draw API", Sum("direct").ToString(), "Actual direct draw calls in this submitted frame."),
+                new("Indirect API", Sum("indirect").ToString(), $"Command capacity {Sum("indirectCapacity")}; capacity is not visibility."),
+                new("Batches", Sum("batches").ToString(), "Contiguous draw runs sharing pipeline, bindings and geometry."),
+                new("Native", $"{profile.GetProperty("nativeBytes").GetDouble() / 1048576:F1} MiB", "Tracked RHI allocations; driver residency is not available.")
+            ]
+        };
     }
 }

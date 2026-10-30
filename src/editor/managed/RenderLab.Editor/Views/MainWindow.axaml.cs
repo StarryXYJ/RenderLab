@@ -36,11 +36,18 @@ public partial class MainWindow : Window
     internal NativeViewportService ViewportService => viewportService!;
     internal RenderViewportHost Viewport { get; private set; } = null!;
     internal MainWindowViewModel ViewModel => (MainWindowViewModel)DataContext!;
-    internal TextBox FocusBox => settings.FindControl<TextBox>("ManagedInput")!;
+    internal TextBox FocusBox
+    {
+        get
+        {
+            if (options?.Smoke == true) { settings.FindControl<Expander>("HostDiagnostics")!.IsExpanded = true; }
+            return settings.FindControl<TextBox>("ManagedInput")!;
+        }
+    }
     internal ComboBox PipelinePicker => settings.FindControl<ComboBox>("PipelineSelector")!;
     internal Slider ExposureSlider => settings.FindControl<Slider>("ExposureControl")!;
-    internal Button PauseButton => settings.FindControl<Button>("PauseAction")!;
-    internal Button ResetButton => settings.FindControl<Button>("ResetAction")!;
+    internal Button PauseButton => this.FindControl<Button>("PauseAction")!;
+    internal Button ResetButton => this.FindControl<Button>("ResetAction")!;
     internal Button RecreateButton => settings.FindControl<Button>("RecreateAction")!;
     internal IReadOnlyList<CloseReport> CloseReports => viewportService!.CloseReports;
     internal event Action<ViewportStats>? StatsUpdated;

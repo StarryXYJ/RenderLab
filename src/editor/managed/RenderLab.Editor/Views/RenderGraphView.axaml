@@ -1,20 +1,37 @@
 <UserControl xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
- xmlns:vm="using:RenderLab.Editor.ViewModels" xmlns:controls="using:RenderLab.Editor.Controls"
- x:Class="RenderLab.Editor.Views.RenderGraphView" x:DataType="vm:RenderGraphViewModel">
- <Grid RowDefinitions="Auto,Auto,*,Auto" Margin="8" RowSpacing="6">
-  <WrapPanel>
-   <TextBox Width="190" PlaceholderText="Search pass / resource" Text="{Binding Search}" />
-   <CheckBox Content="Freeze" IsChecked="{Binding Frozen}" Margin="8,0" />
-   <CheckBox Content="Culled passes" IsChecked="{Binding ShowCulled}" Margin="8,0" />
-   <Button Content="Refresh" Command="{Binding RefreshNowCommand}" />
-   <Button Content="Export JSON" Command="{Binding ExportCommand}" />
-   <Slider Width="100" Minimum="0.5" Maximum="2" Value="{Binding Zoom}" />
-  </WrapPanel>
-  <TextBlock Grid.Row="1" Text="{Binding Status}" TextWrapping="Wrap" />
-  <Grid Grid.Row="2" ColumnDefinitions="3*,2*" ColumnSpacing="8">
-   <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto"><controls:GraphMatrixControl x:Name="Matrix" /></ScrollViewer>
-   <ScrollViewer Grid.Column="1"><TextBlock Text="{Binding Details}" TextWrapping="Wrap" /></ScrollViewer>
-  </Grid>
-  <TextBlock Grid.Row="3" Text="{Binding ExportPath}" TextWrapping="Wrap" />
- </Grid>
+             xmlns:vm="using:RenderLab.Editor.ViewModels" xmlns:controls="using:RenderLab.Editor.Controls"
+             x:Class="RenderLab.Editor.Views.RenderGraphView" x:DataType="vm:RenderGraphViewModel">
+    <Grid RowDefinitions="Auto,Auto,*">
+        <Border Classes="toolbar">
+            <WrapPanel>
+                <TextBox Width="200" PlaceholderText="Find pass or resource" Text="{Binding Search}" Margin="0,0,8,0" />
+                <ToggleButton Content="Freeze" IsChecked="{Binding Frozen}" Margin="0,0,10,0" />
+                <CheckBox Content="Culled" IsChecked="{Binding ShowCulled}" Margin="0,0,10,0" />
+                <Button Classes="tool" Command="{Binding RefreshNowCommand}" ToolTip.Tip="Refresh graph" AutomationProperties.Name="Refresh graph"><TextBlock Classes="glyph" Text="&#xE72C;" /></Button>
+                <Button Classes="tool" Command="{Binding ExportCommand}" ToolTip.Tip="Export graph JSON" AutomationProperties.Name="Export JSON"><TextBlock Classes="glyph" Text="&#xE74E;" /></Button>
+                <Border Classes="divider" />
+                <TextBlock Classes="glyph" Text="&#xE71E;" Margin="4,0" Foreground="{DynamicResource WorkbenchMuted}" />
+                <Slider Width="100" Minimum="0.5" Maximum="2" Value="{Binding Zoom}" ToolTip.Tip="Zoom" />
+            </WrapPanel>
+        </Border>
+        <Grid Grid.Row="1" ColumnDefinitions="*,Auto" Margin="12,6">
+            <TextBlock Classes="muted" Text="{Binding SourceLabel}" ToolTip.Tip="{Binding Status}" TextTrimming="CharacterEllipsis" />
+            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="10" Margin="10,0,0,0" ToolTip.Tip="R: read | W: write | RW: preserving write">
+                <TextBlock Text="R" Foreground="#8DB9D8" /><TextBlock Text="W" Foreground="#D9B779" /><TextBlock Text="RW" Foreground="#80C8B4" />
+            </StackPanel>
+        </Grid>
+        <Grid Grid.Row="2" ColumnDefinitions="3*,5,1.2*">
+            <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto" Background="#222222">
+                <controls:GraphMatrixControl x:Name="Matrix" />
+            </ScrollViewer>
+            <GridSplitter Grid.Column="1" HorizontalAlignment="Stretch" Background="{DynamicResource WorkbenchBorder}" />
+            <ScrollViewer Grid.Column="2" Background="{DynamicResource WorkbenchSurface}">
+                <StackPanel Margin="12" Spacing="10">
+                    <TextBlock Classes="section" Text="{Binding SelectionLabel}" TextWrapping="Wrap" />
+                    <TextBlock Classes="mono muted" Text="{Binding Details}" TextWrapping="Wrap" />
+                    <TextBlock Classes="muted" Text="{Binding ExportPath}" TextWrapping="Wrap" />
+                </StackPanel>
+            </ScrollViewer>
+        </Grid>
+    </Grid>
 </UserControl>

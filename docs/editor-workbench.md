@@ -2,6 +2,14 @@
 
 设计日期：2026 年 10 月 30 日。本文定义本轮 Editor 的目标界面与契约，具体接口是否已接入以 [Editor Host](editor-host.md) 为准。实施任务、状态与实际验收只记录于 [阶段计划](../design/phaseplan.md#m72-固定场景渲染工作台)，不以设计描述代替实现验收。
 
+## 工作台视觉与布局
+
+工作台采用紧凑的中性灰工具界面。顶部区分菜单与视口工具栏，暂停/恢复、单帧、重置相机使用系统 Fluent 字体图标，并保留 tooltip 与无障碍名称；Window 菜单仍按需打开诊断面板，首次布局仍只有 Scene/Render Settings。参考 Unity Inspector 的属性行组织，以及 Gal.Net Editor 的主题资源、工具按钮和日志字段组织；未引入其第三方主题或复制资源。
+
+`Themes/Workbench.axaml` 集中定义字号、表面、边框、状态色、控件密度及紧凑分组模板。Inspector 使用统一标签列、数字输入与可折叠分组；曝光同时提供滑条和精确数值，预设操作固定在底部。设备 API/Validation、能力与重建位于 Graphics device；只在自检期间显示输入焦点测试框。字段保持原有 requested/applied 语义。
+
+Profiler 将真实完成帧投影为 CPU Tick/GPU Pass sum/Draw/Indirect/Batch/Native 指标、带网格的曲线与逐 Pass 表。窄面板的指标/表格可水平滚动，低面板的曲线和表格整体纵向滚动；完整来源身份和区间定义保留在 tooltip/Frame details。Graph 保留矩阵/依赖/生命周期，配备独立工具栏、访问颜色图例和可调宽详情栏；Live 刷新保留选中资源，跨 Session/拓扑清理选择。Log 按本地时间、级别、来源、消息分列，级别着色、长行省略，选中后查看完整事件。界面排版不改变原生快照预算、计数口径或资源所有权。
+
 ## 目标与边界
 
 在给定项目与固定场景上，提供 Unity 风格的可停靠渲染实验工作台：观察画面、调整运行配置、查看真实 Render Graph、定位 CPU/GPU 成本。沿用现有 Avalonia、CommunityToolkit.Mvvm、DI 与进程内 C++ Renderer。
