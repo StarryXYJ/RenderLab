@@ -21,6 +21,7 @@ Vec3 Normalize(Vec3 a);
 struct Quaternion
 {
     float x = 0, y = 0, z = 0, w = 1;
+    bool operator==(const Quaternion&) const = default;
     /// @brief Builds Rz * Ry * Rx from XYZ angles in degrees.
     static Quaternion EulerDegrees(Vec3 angles);
 };
@@ -54,6 +55,7 @@ Vec3 Direction(const Mat4& matrix, Vec3 direction);
 struct Bounds
 {
     Vec3 minimum{}, maximum{};
+    bool operator==(const Bounds&) const = default;
 };
 Bounds TransformBounds(const Mat4& world, Bounds bounds);
 /// @brief Conservative six-plane test; intersecting world bounds remain visible.

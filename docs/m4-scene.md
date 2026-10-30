@@ -55,11 +55,32 @@ Extractor 从 CPU 文档提取相机、主光和实例值快照，延迟回调�
 
 M5 增加独立于相机和灯光开关的 `allInstances` 表供 AS 构建与射线实例索引使用；`instances` 保持相机可见集，`shadowCasters` 保持启用光栅阴影时的候选集。两种候选集都从同一实例身份和值数据派生。
 
-M6 GPU 剔除模式以 cpuCulling=false 提取，cpuVisibilityKnown=false，此时 instances/culledInstances 不提供 CPU 可见结果；allInstances 与 shadowCasters 仍完整。默认 CPU 路径保留原契约。材质输入在每帧首次读取时冻结；对象提取使用临时 ID 索引，GPU/CPU 剔除与诊断契约见 [GPU Driven](gpu-driven.md)。
+M6 GPU 剔除模式以 cpuCulling=false 提取，cpuVisibilityKnown=false，此时 instances/culledInstances 不提供 CPU 可见结果；allInstances 与 shadowCasters 仍完整。默认 CPU 路径保留原契约。材质输入在每帧首次读取时冻结；GPU/CPU 剔除与诊断契约见 [GPU Driven](gpu-driven.md)。
+
+### CPU 提取缓存
+
+Extractor 拥有上次成功提取的对象值、层级结果和 ID→文档索引。逐帧比较完整对象值（含组件、parent、
+enabled、材质覆盖和顺序），相同则复用已验证层级；发生任何对象编辑就重新验证和解析整个层级，
+不要求调用者设置 dirty 标记，也不按指针或文件时间猜测变化。全局环境/曝光仍每次验证。
+相机移动会触发层级重新解析，首版不是局部层级增量更新系统。
+
+实例继续按稳定 ID 与实际组合 world 关联；world 和网格 localBounds 都未变时，复用逆转置 normal
+与 worldBounds。检查不依赖不可变 Model 指针或内容 key，因此直接修改 node transform 或 mesh.bounds
+也会正确失效；材质覆盖、可见集和阴影候选仍按本次输入生成。实际层级 shear 继续使用完整逆转置，
+不改为仅四元数/倒数缩放近似。
+
+新缓存及 previousWorld 只在成功提取后发布；异常不推进历史。禁用/删除的实例在下一次成功提取后
+移出缓存，重新加入时 previousWorld 使用当前 world。LastStatistics 仅记录上次成功调用的层级重建和
+几何计算/复用数量，不读计时钟。缓存容量随当前文档/启用实例有界，不积累历史场景。
+
+math 的 TRS 校验保留原有限性和 1e-10 pivot 拒绝规则，但仅消元 3×3 线性部分，不构造丢弃的逆矩阵；
+Bounds 按每个输出轴选取极值角，保留 Point 的浮点运算顺序，与八角参考对照，支持镜像、非均匀缩放及
+层级 shear。视锥仍保留原保守八角测试，尚未因缓存改造而更换剔除语义。
+专项入口为 math.contracts、scene.contracts，实测见 [B4](performance/b4-foundation.md)。
 
 MeshRenderer.model 为模型 UUID，mesh 可指定 primitive 子资源 UUID；materials 将导入材质子资源 UUID 映射到用户 .material UUID。GPU Mesh/图像为可重建投影；静态资源准备时上传，常量按帧创建，命令引用/完成点保护在途资源。普通帧不调用 WaitIdle。
 
-View/Lighting/Shadow 常量每帧创建并共享，分别包含相机、主光/环境与阴影数据；Object 保存模型、法线、上一帧模型矩阵，同实例多 Pass 复用。Material 返回 PSO 与绑定值，适配成 Graph 名称/声明，由 Graph 建立绑定组；保留 generation 以复用 ShaderModule/Layout/PSO，不重复准备两份 BindingGroup。
+View/Lighting/Shadow 常量每帧准备并共享，由完成点/引用保护的 UploadPool 页面承载，分别包含相机、主光/环境与阴影数据；Object 保存模型、法线、上一帧模型矩阵，同实例多 Pass 复用。Material 返回 PSO 与绑定值，适配成 Graph 名称/声明，由 Graph 建立绑定组；保留 generation 以复用 ShaderModule/Layout/PSO，不重复准备两份 BindingGroup。
 
 ## HLSL 库与项目 Shader
 

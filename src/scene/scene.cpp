@@ -29,6 +29,22 @@ void Require(bool value, const char* message)
     if (!value)
         throw std::invalid_argument(message);
 }
+void ValidateSettings(const Scene& scene)
+{
+    Require(scene.objects.size() <= 10000, "Scene exceeds object limit");
+    const auto colorValid = [](math::Vec3 c)
+    {
+        return std::isfinite(c.x) && std::isfinite(c.y) && std::isfinite(c.z) && c.x >= 0 &&
+               c.y >= 0 && c.z >= 0;
+    };
+    Require(colorValid(scene.ambient), "Invalid ambient color");
+    Require((scene.environment.empty() || project::ValidId(scene.environment)) &&
+                std::isfinite(scene.environmentIntensity) && scene.environmentIntensity >= 0 &&
+                scene.environmentIntensity <= 10000 && std::isfinite(scene.environmentRotation),
+            "Invalid environment settings");
+    Require(std::isfinite(scene.exposure) && scene.exposure >= -16 && scene.exposure <= 16,
+            "Exposure must be in [-16,16] stops");
+}
 } // namespace
 math::Mat4 Transform::Matrix() const
 {
@@ -47,19 +63,12 @@ const Object& Scene::Get(const std::string& id) const
 }
 std::map<std::string, WorldTransform> Scene::WorldTransforms() const
 {
-    Require(objects.size() <= 10000, "Scene exceeds object limit");
+    ValidateSettings(*this);
     const auto colorValid = [](math::Vec3 c)
     {
         return std::isfinite(c.x) && std::isfinite(c.y) && std::isfinite(c.z) && c.x >= 0 &&
                c.y >= 0 && c.z >= 0;
     };
-    Require(colorValid(ambient), "Invalid ambient color");
-    Require((environment.empty() || project::ValidId(environment)) &&
-                std::isfinite(environmentIntensity) && environmentIntensity >= 0 &&
-                environmentIntensity <= 10000 && std::isfinite(environmentRotation),
-            "Invalid environment settings");
-    Require(std::isfinite(exposure) && exposure >= -16 && exposure <= 16,
-            "Exposure must be in [-16,16] stops");
     std::map<std::string, const Object*> ids;
     for (const auto& object : objects)
     {
@@ -237,10 +246,21 @@ void Scene::MoveCamera(math::Vec3 motion, math::Vec3 rotation)
 Snapshot Extractor::Extract(const Scene& scene, float aspect,
                             const std::map<std::string, assets::Model>& models, bool cpuCulling)
 {
-    const auto transforms = scene.WorldTransforms();
-    std::map<std::string, const Object*> objects;
-    for (const auto& object : scene.objects)
-        objects.emplace(object.id, &object);
+    ValidateSettings(scene);
+    Statistics statistics;
+    statistics.hierarchyRebuilt = !initialized_ || objects_ != scene.objects;
+    std::map<std::string, WorldTransform> updatedTransforms;
+    std::map<std::string, size_t> updatedIndices;
+    std::vector<Object> updatedObjects;
+    if (statistics.hierarchyRebuilt)
+    {
+        updatedTransforms = scene.WorldTransforms();
+        for (size_t i = 0; i < scene.objects.size(); ++i)
+            updatedIndices.emplace(scene.objects[i].id, i);
+        updatedObjects = scene.objects;
+    }
+    const auto& transforms = statistics.hierarchyRebuilt ? updatedTransforms : transforms_;
+    const auto& indices = statistics.hierarchyRebuilt ? updatedIndices : objectIndices_;
     const auto& camera = scene.Get(scene.activeCamera);
     Require(camera.camera.has_value() && transforms.at(camera.id).enabled,
             "Active camera is disabled/missing");
@@ -260,7 +280,7 @@ Snapshot Extractor::Extract(const Scene& scene, float aspect,
     // UUID order, independent of document storage order, chooses one active directional light.
     for (const auto& [id, world] : transforms)
     {
-        const auto& object = *objects.at(id);
+        const auto& object = scene.objects.at(indices.at(id));
         if (world.enabled && object.light && object.light->enabled)
         {
             snapshot.light = {id,
@@ -275,10 +295,10 @@ Snapshot Extractor::Extract(const Scene& scene, float aspect,
             break;
         }
     }
-    std::map<std::string, math::Mat4> next;
+    std::map<std::string, Geometry> next;
     for (const auto& [id, world] : transforms)
     {
-        const auto& object = *objects.at(id);
+        const auto& object = scene.objects.at(indices.at(id));
         if (!world.enabled || !object.mesh)
             continue;
         const auto& renderer = *object.mesh;
@@ -299,11 +319,25 @@ Snapshot Extractor::Extract(const Scene& scene, float aspect,
             instance.model = model.id;
             instance.mesh = mesh.id;
             instance.world = world.matrix * transform;
-            instance.normal = math::Transpose(math::Inverse(instance.world));
+            const auto previous = previous_.find(instance.id);
             instance.previousWorld =
-                previous_.contains(instance.id) ? previous_.at(instance.id) : instance.world;
-            next.emplace(instance.id, instance.world);
-            instance.bounds = math::TransformBounds(instance.world, mesh.bounds);
+                previous != previous_.end() ? previous->second.world : instance.world;
+            if (previous != previous_.end() &&
+                previous->second.world.values == instance.world.values &&
+                previous->second.localBounds == mesh.bounds)
+            {
+                instance.normal = previous->second.normal;
+                instance.bounds = previous->second.bounds;
+                ++statistics.geometryReused;
+            }
+            else
+            {
+                instance.normal = math::Transpose(math::Inverse(instance.world));
+                instance.bounds = math::TransformBounds(instance.world, mesh.bounds);
+                ++statistics.geometryComputed;
+            }
+            next.emplace(instance.id,
+                         Geometry{instance.world, instance.normal, mesh.bounds, instance.bounds});
             const auto& surface = model.materials.at(mesh.material);
             if (auto found = renderer.materials.find(surface.id); found != renderer.materials.end())
                 instance.material = found->second;
@@ -335,6 +369,14 @@ Snapshot Extractor::Extract(const Scene& scene, float aspect,
         Require(matched, "Unknown model mesh subresource");
     }
     previous_ = std::move(next);
+    if (statistics.hierarchyRebuilt)
+    {
+        objects_ = std::move(updatedObjects);
+        transforms_ = std::move(updatedTransforms);
+        objectIndices_ = std::move(updatedIndices);
+        initialized_ = true;
+    }
+    statistics_ = statistics;
     return snapshot;
 }
 } // namespace renderlab::scene

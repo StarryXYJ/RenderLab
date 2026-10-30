@@ -5,7 +5,7 @@
 ## 当前状态
 
 - 当前实施阶段：B4 基础库与计算/分配优化；M6 核心 M6.1–M6.5、M0–M5、R1、B1–B3 DONE。可选 M6.0 Forward+ 仍为 DEFERRED。
-- 当前工作项：2026 年 10 月 30 日用户授权制定计划并开始 B4，B4.1 DONE，当前 B4.2 减少重复计算与几何算法 IN_PROGRESS，按子阶段依次推进。M7 工作台 UI/UX 修订 DONE；M7.2f 完整持续输入/画质及混合 DPI 复验仍未关闭，本轮保留为 DEFERRED，不冒充完成。
+- 当前工作项：2026 年 10 月 30 日用户授权制定计划并开始 B4，B4.1–B4.2 DONE，当前 B4.3 成熟数学实现 IN_PROGRESS，按子阶段依次推进。M7 工作台 UI/UX 修订 DONE；M7.2f 完整持续输入/画质及混合 DPI 复验仍未关闭，本轮保留为 DEFERRED，不冒充完成。
 - 用户约定：每个子阶段验收完成即精简计划、标注 DONE 并提交 Git，无阻塞时在当前授权范围内继续推进。本轮开始时工作区干净；库候选按实测决定采用或延期，不以引入依赖本身作为性能成果。
 
 | 阶段 | 目标 | 前置依赖 | 状态 |
@@ -19,7 +19,7 @@
 | B1 | 样例整理与可扩展 Benchmark | M4、R1 | DONE |
 | B2 | 双后端性能差异调查 | B1 | DONE |
 | B3 | 逐帧资源复用优化 | B2 | DONE |
-| B4 | 基础库、CPU 计算与 GPU 内存分配优化 | B3、M6 核心 | IN_PROGRESS（B4.2；B4.1 已完成） |
+| B4 | 基础库、CPU 计算与 GPU 内存分配优化 | B3、M6 核心 | IN_PROGRESS（B4.3；B4.1–B4.2 已完成） |
 | M5 | Deferred 与光追基础 | M4 | DONE |
 | M6 | GPU Driven 与执行优化 | M4；光追调度测试另需 M5 | DONE（M6.1–M6.5；可选 M6.0 延期） |
 | M7 | C# 编辑器与完整项目工作流 | M4；默认在 M5、M6 的核心目标后开展 | DEFERRED（已有实现/自动验收保留；M7.2f 人工复验及后续工作未关闭，本轮先执行 B4） |
@@ -98,21 +98,22 @@ M0–M6 核心能力及 R1、B1–B3 已完成（2026 年 10 月 23–30 日）�
 状态：DONE，2026 年 10 月 30 日。
 
 结果：独立 CPU kernel/64–4096 实例提取测量入口；可选 CPU 准备分解，关闭不读额外时钟；固定场景双后端基线与二进制/源码身份。
-验证：MSVC Debug/Release 全目标构建成功，所选 CPU/Graph/Core/Benchmark/双后端 PBR/Player 两配置各 10/10；Python Benchmark 15/15。Release/RTX 5060 基线 24 次、116445 帧，六组探针 PBR 截图一致，准备子区间求和正确；双后端固定 16 spp 光追参考 validation errors=0（仍有既有警告）。
+验证：MSVC Debug/Release 全目标构建成功，所选 CPU/Graph/Core/Benchmark/双后端 PBR/Player 两配置各 10/10；Python Benchmark 15/15。Release/RTX 5060 基线 24 次、116445 帧，六组探针 PBR 截图一致，准备子区间求和正确；双后端固定帧预算光追参考 validation errors=0（仍有既有警告；报告 16 spp，测量外截图 17 spp）。
 文档：[指标与接口](../docs/benchmark.md#场景准备分解与-cpu-kernel)、[基线与限制](../docs/performance/b4-foundation.md)、[命令](../manual/build.md#cpu-与基础优化基线)。原始证据 `out/b4/baseline`。
 限制：CPU 校验消费计入 kernel，环境 case 是重新生成而非稳定帧；固定小场景、短测和串行 headless 不代表窗口 FPS 或其他设备收益。
 
 ### B4.2 减少重复计算与几何算法
 
-状态：IN_PROGRESS。
+状态：DONE，2026 年 10 月 30 日。
 
-- [ ] 在保持可直接编辑 Scene 的前提下建立可靠的缓存输入比较/失效规则，减少未变实例的 world、normal 与 Bounds 重算；保留 previousWorld、父级变化、启用/删除/重排和模型变化语义。
-- [ ] 评估 Compose 校验的冗余完整求逆、仿射中心/半尺寸 Bounds 及视图平面批量准备；保留有限性、奇异输入和保守剔除契约，不将透视矩阵当仿射。
-- [ ] 随机/退化/镜像/非均匀缩放及层级 shear 对照、缓存失效合约、双后端场景回归与配对测量。
+结果：对象值比较复用已验证层级与 ID 索引；实际 world/localBounds 比较复用 normal/Bounds，失败不推进历史；TRS 仅做线性消元校验，Bounds 改为逐轴极值角以保持八角浮点结果。
+验证：Debug/Release 全目标构建成功，各 18/18 CPU/CLI + 10/10 双后端 Alias/索引/反射/PBR/Scene 回归；5000 组 shear/镜像 Bounds 与原参考一致，拒绝边界和直接编辑失效合约通过。五次 CPU 配对的十二项 checksum 相同，20 组静态/固定帧图像 hash 相同；Release 场景配对 24 次、119630 帧，validation errors=0，既有警告保留。
+文档：[缓存契约](../docs/m4-scene.md#cpu-提取缓存)、[测量与限制](../docs/performance/b4-foundation.md#b42-重复工作与-bounds)。证据 `out/b4/cache`。
+限制：任意对象改变仍整体验证/解析层级；快照字符串/表和实例 world 投影仍按帧生成。视锥保留原八角基线，未因本阶段引入新的平面剔除语义；小 PBR 没有明确整帧收益，时长预算光追不能当相同 spp/Pass 工作的配对比较。
 
 ### B4.3 复用成熟数学实现
 
-状态：NOT_STARTED。
+状态：IN_PROGRESS。
 
 - [ ] 首选评估固定版本 DirectXMath，仅在 math 内部适配；保持 Vec3/Mat4/Vertex 尺寸、CPU 行主序/列向量与 GPU Pack 契约。
 - [ ] 比较矩阵乘法、逆、向量和四元数实现，保留错误诊断与独立标量/高精度测试参考；不同时引入多套数学库。

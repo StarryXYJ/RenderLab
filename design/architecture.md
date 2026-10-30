@@ -191,6 +191,8 @@ B2 实测发现常量、描述符与读回存在逐帧原生分配。[B3 复用�
 
 Scene Document 使用稳定对象 ID，运行时使用类型明确的 Handle。每帧提取 RenderSceneSnapshot，Renderer 不在录制期间遍历可被 UI 修改的场景文档。
 
+Extractor 可缓存上次成功提取的已验证层级及实例几何投影，文档仍是唯一可编辑状态。直接编辑通过对象值比较、实际 world/localBounds 比较使缓存失效，不依赖调用方 dirty 标记；异常不发布缓存或推进 previousWorld，移除实例清除历史。首版对象变化仍整体验证/解析层级，不引入局部更新或 ECS；契约见 [CPU 提取缓存](../docs/m4-scene.md#cpu-提取缓存)。
+
 即使首期使用 CPU 提交，也提前建立可索引的渲染数据：
 
 - InstanceData：当前和历史 Transform、Bounds、MeshID、MaterialID。

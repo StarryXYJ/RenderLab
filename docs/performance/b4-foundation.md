@@ -52,8 +52,40 @@ CPU/GPU 提取仅表示是否执行 CPU 视锥测试，不创建 GPU。
 两配置全目标构建成功，CPU benchmark、Content、PBR CPU、Core、Graph、Benchmark 和双后端
 PBR/Player 所选回归各 10/10；Python Benchmark 15/15。
 三次 × 双后端的 PBR diagnostics 与关闭探针参考 BMP hash 全部一致，准备子区间均值之和
-与 scenePrepareMs 一致。固定光追另按 8 帧预热/8 帧测量保存 16 spp 的后续参考，
-见 `out/b4/baseline/fixed-ray`，双后端 validation errors=0。
+与 scenePrepareMs 一致。固定光追另按 8 帧预热/8 帧测量保存后续参考，报告为 16 spp，
+测量外的额外截图为 17 spp，见 `out/b4/baseline/fixed-ray`，双后端 validation errors=0。
 
 已有 DX12 optimized-clear 不匹配及 Vulkan 未消费顶点属性警告仍存在，不把零验证错误表述为零警告。
-其他 GPU、4K、长期压力和 M7 人工/DPI 验收不在本阶段；尚未发生数学库、SIMD 或 GPU 分配器迁移。
+其他 GPU、4K、长期压力和 M7 人工/DPI 验收不在本阶段；该原始基线未包含数学库、SIMD 或 GPU 分配器迁移。
+
+## B4.2 重复工作与 Bounds
+
+沿用相同设备/配置/测量程序及五次 CPU 重复，源码与实际 exe hash 见
+[cache-cpu.json](b4-foundation/cache-cpu.json)。所有十二项输出 checksum 与基线完全相同。
+
+| case | 原始 / 缓存后 ms |
+| --- | ---: |
+| Bounds transform，4096 | 0.083049 / 0.022840 |
+| CPU 提取，64 | 0.116380 / 0.038620 |
+| CPU 提取，1024 | 2.344140 / 1.120230 |
+| CPU 提取，4096 | 12.790450 / 5.898580 |
+| 跳过 CPU 剔除的提取，4096 | 12.308800 / 5.100400 |
+
+静态文档避免重复对象验证/层级解析，未变实例避免逆转置和 Bounds 计算；完整快照、字符串/表分配、
+实例 world 投影与可见性仍按帧生成。它不是一般局部层级增量系统，移动相机仍会重建层级，
+但静态实例的 normal/Bounds 可继续复用。冷帧和变化帧仍需计算，不把暖缓存结果推广为所有帧。
+没有改变的逆矩阵控制项也从 0.373 波动到 0.331 ms，提示短测/系统频率的影响，不能将全部数字差异归因于改造。
+
+场景套件再执行 24 次、119630 帧，完整 manifest/raw/分析位于 `out/b4/cache/scenes`。
+关闭探针的 PBR serial frame：DX12 0.8787→0.8764 ms，Vulkan 0.8648→0.8487 ms，
+没有足够证据宣称小场景整帧显著改善。Shadow 为 0.8576→0.7623 / 0.8004→0.7603 ms，
+仍只是一轮三次短测。PBR diagnostics 与正式结果分开。
+
+时长预算 Ray Tracing 的实际 spp 不同，且可能在 2048 spp 后旁路重建 Pass；两轮因此并非相同 GPU
+工作序列，不能将该项 CPU/GPU 均值差异作为独立缓存加速结论。固定帧预算只用于本次正确性对照。
+静态 PBR/diagnostics/Shadow 的 18 对图像及双后端固定 17 spp 的两对图像均逐字节一致。
+
+Debug/Release 全目标构建成功，各 18 项 CPU/CLI 和 10 项双后端 Alias、Indexed Scene、
+Reflections、PBR、Scene 回归通过。Math 独立覆盖 5000 组非均匀缩放/镜像/shear 的八角对照及
+原 TRS pivot 拒绝边界；Scene 覆盖父级/相机/材质/模型节点/Bounds、启用/删除/重插/重排与失败事务。
+所有报告 validation errors=0，既有警告保留。尚未以新视锥平面测试替换八角基线。
