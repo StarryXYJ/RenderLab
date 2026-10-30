@@ -2,14 +2,32 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstring>
 #include <limits>
 #include <numbers>
 #include <stdexcept>
+
+#include <DirectXMath.h>
 
 namespace renderlab::math
 {
 namespace
 {
+DirectX::XMMATRIX XM_CALLCONV Load(const Mat4& matrix)
+{
+    DirectX::XMFLOAT4X4 value;
+    static_assert(sizeof(value) == sizeof(matrix.values));
+    std::memcpy(&value, matrix.values.data(), sizeof(value));
+    return DirectX::XMLoadFloat4x4(&value);
+}
+Mat4 XM_CALLCONV Store(DirectX::FXMMATRIX matrix)
+{
+    DirectX::XMFLOAT4X4 value;
+    DirectX::XMStoreFloat4x4(&value, matrix);
+    Mat4 result;
+    std::memcpy(result.values.data(), &value, sizeof(value));
+    return result;
+}
 void ValidateLinearTransform(const Mat4& matrix)
 {
     float values[3][3]{};
@@ -86,10 +104,12 @@ Quaternion Quaternion::EulerDegrees(Vec3 angles)
 }
 Quaternion operator*(Quaternion a, Quaternion b)
 {
-    return {a.w * b.x + a.x * b.w + a.y * b.z - a.z * b.y,
-            a.w * b.y - a.x * b.z + a.y * b.w + a.z * b.x,
-            a.w * b.z + a.x * b.y - a.y * b.x + a.z * b.w,
-            a.w * b.w - a.x * b.x - a.y * b.y - a.z * b.z};
+    // DirectXMath returns Q2 * Q1; RenderLab applies b first, then a.
+    const auto first = DirectX::XMVectorSet(b.x, b.y, b.z, b.w);
+    const auto second = DirectX::XMVectorSet(a.x, a.y, a.z, a.w);
+    DirectX::XMFLOAT4 result;
+    DirectX::XMStoreFloat4(&result, DirectX::XMQuaternionMultiply(first, second));
+    return {result.x, result.y, result.z, result.w};
 }
 Mat4 Mat4::Identity()
 {
@@ -100,12 +120,8 @@ Mat4 Mat4::Identity()
 }
 Mat4 operator*(const Mat4& a, const Mat4& b)
 {
-    Mat4 result;
-    for (size_t r = 0; r < 4; ++r)
-        for (size_t c = 0; c < 4; ++c)
-            for (size_t k = 0; k < 4; ++k)
-                result.At(r, c) += a.At(r, k) * b.At(k, c);
-    return result;
+    // Ordinary A * B is independent of the library's row-vector transform convention.
+    return Store(DirectX::XMMatrixMultiply(Load(a), Load(b)));
 }
 Mat4 Inverse(const Mat4& a)
 {
@@ -147,11 +163,7 @@ Mat4 Inverse(const Mat4& a)
 }
 Mat4 Transpose(const Mat4& a)
 {
-    Mat4 result;
-    for (size_t r = 0; r < 4; ++r)
-        for (size_t c = 0; c < 4; ++c)
-            result.At(r, c) = a.At(c, r);
-    return result;
+    return Store(DirectX::XMMatrixTranspose(Load(a)));
 }
 Mat4 Compose(Vec3 t, Quaternion q, Vec3 scale)
 {

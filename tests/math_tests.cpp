@@ -130,6 +130,38 @@ void Contracts()
             for (size_t c = 0; c < 4; ++c)
                 Require(std::abs(identity.At(r, c) - (r == c ? 1.f : 0.f)) < .004f,
                         "Sheared inverse identity residual");
+        math::Mat4 arbitrary;
+        for (auto& value : arbitrary.values)
+            value = position(random);
+        const auto multiplied = shear * arbitrary;
+        for (size_t r = 0; r < 4; ++r)
+            for (size_t c = 0; c < 4; ++c)
+            {
+                double expected = 0, magnitude = 0;
+                for (size_t k = 0; k < 4; ++k)
+                {
+                    const auto term = double(shear.At(r, k)) * arbitrary.At(k, c);
+                    expected += term;
+                    magnitude += std::abs(term);
+                }
+                Require(std::abs(double(multiplied.At(r, c)) - expected) <=
+                            8 * std::numeric_limits<float>::epsilon() * magnitude + 1e-6,
+                        "Matrix multiply differs from double column-vector reference");
+            }
+        Require(math::Transpose(math::Transpose(arbitrary)).values == arbitrary.values,
+                "Transpose changed storage values");
+        const auto second = math::Quaternion::EulerDegrees({19, -31, 53});
+        const auto product = q * second;
+        const math::Quaternion expected{
+            q.w * second.x + q.x * second.w + q.y * second.z - q.z * second.y,
+            q.w * second.y - q.x * second.z + q.y * second.w + q.z * second.x,
+            q.w * second.z + q.x * second.y - q.y * second.x + q.z * second.w,
+            q.w * second.w - q.x * second.x - q.y * second.y - q.z * second.z};
+        Require(std::abs(product.x - expected.x) < 1e-6f &&
+                    std::abs(product.y - expected.y) < 1e-6f &&
+                    std::abs(product.z - expected.z) < 1e-6f &&
+                    std::abs(product.w - expected.w) < 1e-6f,
+                "Quaternion composition order changed");
     }
     for (float value :
          {0.f, 1e-12f, 1e-10f, 1e-9f, 1e-6f, 1.f, 1e6f, std::numeric_limits<float>::infinity(),

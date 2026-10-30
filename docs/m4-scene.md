@@ -45,6 +45,14 @@ WIC 解码复用调用线程已有的 COM apartment，不改变其初始化计�
 
 世界为右手、Y-up、相机局部 -Z。CPU 矩阵按行存储、列向量运算；material::Pack 转换到列主序 GPU 布局。透视使用有限远平面与 0..1 Reversed-Z。法线用逆转置并在像素阶段重新归一化；镜像变换通过 PSO 绕序处理，双面材质背面翻转法线。
 
+math.cpp 内部使用固定版本 DirectXMath 的矩阵乘法、转置与四元数组合，库不进入公共头文件；
+Vec3/Mat4/Vertex 仍保持原尺寸和对齐。普通 A×B 不因库的行向量 convention 改变操作数顺序，
+但 XMQuaternionMultiply 返回 Q2×Q1，因此内部交换参数以保持先 b 后 a 的契约。
+Load/Store 使用库的非对齐存取与显式字节复制，不把 Mat4 指针别名转换为库类型。
+Point/Direction、TRS、Reversed-Z 投影和带有限性/pivot 诊断的通用 Inverse 继续由当前契约定义，
+没有直接用库的奇异矩阵 Inf 返回值取代异常。矩阵乘法允许符合双精度参考误差界的舍入差异，
+不承诺与原标量求和逐 bit 相同；GPU Pack 布局不变。安装 Player 时保留 DirectXMath MIT 许可证。
+
 方向光是带旋转/颜色/强度的场景组件。可有多个；每帧按 UUID 字典序选择首个继承启用状态且 Light 启用的对象，不依赖容器顺序。强度为零仍是选中光；禁用/删除后再选下一盏。光线沿局部 -Z 发射，Shader direction 表示从表面指向光源，取相反方向；父级旋转生效，位置和缩放不影响方向。
 
 无主光时直射强度为零，环境光独立配置。颜色与光照使用线性数值，颜色纹理由 sRGB 解码。M4.3 使用 RGBA32F HDR 中间附件，经曝光与 ACES fitted Tone Mapping 写入 sRGB 显示目标；Scene 同时保存环境图 UUID、强度、旋转与曝光。

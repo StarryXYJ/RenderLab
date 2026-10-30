@@ -5,7 +5,7 @@
 
 ## 原始基线
 
-本机 Windows x64、MSVC 19.51.36257，Release。GPU 为 RTX 5060，DX12 驱动 32.0.15.9174，
+本机 Windows x64、Intel Core Ultra 7 265K、MSVC 19.51.36257，Release。GPU 为 RTX 5060，DX12 驱动 32.0.15.9174，
 Vulkan 591.74。构建树 `out/build/m5-release`，Debug 为 `out/build/m5-nmake`。
 CPU/Player 原始二进制保存于 `out/b4/baseline/bin`；所有后续比较必须使用各轮真实 exe hash，
 不能把运行时工作区 revision 当编译版本。固定 CPU 输入及结果消费来自同一测量工具。
@@ -89,3 +89,22 @@ Debug/Release 全目标构建成功，各 18 项 CPU/CLI 和 10 项双后端 Ali
 Reflections、PBR、Scene 回归通过。Math 独立覆盖 5000 组非均匀缩放/镜像/shear 的八角对照及
 原 TRS pivot 拒绝边界；Scene 覆盖父级/相机/材质/模型节点/Bounds、启用/删除/重插/重排与失败事务。
 所有报告 validation errors=0，既有警告保留。尚未以新视锥平面测试替换八角基线。
+
+## B4.3 数学库
+
+固定 DirectXMath 3.21 / jun2026，Git `93e6399d6d15e1e57f80b5cea04d5a8eb892d693`。
+仅 math.cpp 使用库的矩阵乘法、转置与按参数顺序适配的四元数组合，不泄漏库类型或改变 GPU 布局。
+默认 Windows x64 SSE2 路径，没有全局开启 AVX、FMA 或 fast-math。
+一般求逆保留现有有限性及 pivot 诊断；未以“返回 Inf 的库调用 + 单个 determinant 阈值”
+替代尺度相关的原拒绝契约，也未宣称该项有新性能收益。
+
+相同五次 CPU case 的数据见 [math-cpu.json](b4-foundation/math-cpu.json)。
+4096 次矩阵乘法由 B4.2 的 0.080497 降至 0.043204 ms；其 checksum 有预期的浮点结合顺序差异，
+通过逐元素双精度参考界验证，而非要求和原求和 bitwise 一样。逆矩阵控制项为 0.330558→0.329750 ms。
+4096 CPU 提取为 5.898580→5.946085 ms，不能据微基准推断整帧或完整提取同比加速。
+
+Debug/Release 全目标构建成功，各 18 项 CPU/CLI 与 10 项双后端 GPU 回归通过；
+5000 组随机矩阵乘法（双精度参考）、四元数组合顺序、转置、shear 与缓存边界通过。
+双后端固定 PBR/Shadow 与 17 spp 光追六对图像 hash 与 B4.2 相同，validation errors=0，
+既有警告保留。`out/b4/math/install` 实际安装了 Player 与 DirectXMath MIT 许可证，
+尚未将该安装检查描述为其他机器独立运行验收。未验证其他 CPU 或 ISA。

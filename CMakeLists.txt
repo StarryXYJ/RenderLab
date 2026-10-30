@@ -38,7 +38,8 @@ add_library(renderlab_content STATIC
     src/assets/gltf.cpp src/assets/image.cpp src/scene/scene.cpp)
 target_include_directories(renderlab_content PUBLIC src)
 target_link_libraries(renderlab_content PRIVATE renderlab_options renderlab_core
-    renderlab_platform nlohmann_json::nlohmann_json windowscodecs ole32 crypt32)
+    renderlab_platform nlohmann_json::nlohmann_json DirectXMath windowscodecs ole32 crypt32)
+target_compile_definitions(renderlab_content PRIVATE _XM_NO_XMVECTOR_OVERLOADS_)
 
 add_library(renderlab_rhi STATIC
     src/rhi/device.cpp
@@ -218,6 +219,8 @@ target_link_libraries(renderlab_app_host PRIVATE renderlab_options renderlab_cor
     renderlab_rhi renderlab_renderer renderlab_sandbox_options renderlab_samples renderlab_benchmark nlohmann_json::nlohmann_json ole32 gdi32 psapi)
 
 install(TARGETS renderlab_player RUNTIME DESTINATION .)
+install(FILES "${directxmath_SOURCE_DIR}/LICENSE" DESTINATION licenses
+    RENAME DirectXMath-LICENSE.txt)
 install(FILES $<TARGET_FILE:renderlab_dxc> $<TARGET_FILE:renderlab_pix> DESTINATION .)
 install(DIRECTORY shaders/RenderLab DESTINATION shaders)
 install(DIRECTORY sample/m4/Assets DESTINATION project)

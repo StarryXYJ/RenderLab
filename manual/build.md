@@ -51,6 +51,7 @@ cmake --build --preset windows-debug --clean-first
 | WinPixEventRuntime | NuGet `1.0.240308001`，固定 SHA-256 见 `cmake/Dependencies.cmake` | DX12 GPU Marker |
 | SPIRV-Reflect | `e55086b044225f9b511ae44dbf9b079d3625943f` | SPIR-V 绑定与常量反射 |
 | nlohmann/json | `65ee68451d8eb2b5f3a30b410476ab83deb3289b`（v3.12.0） | 缓存、Schema 与材质序列化 |
+| DirectXMath | `93e6399d6d15e1e57f80b5cea04d5a8eb892d693`（3.21 / June 2026） | 两后端共用的 CPU SIMD 数学实现 |
 
 Vulkan-Headers、volk 和 SPIRV-Reflect 对应 Vulkan SDK 1.4.321.0 源码版本，实际运行最低要求 Vulkan 1.3。首次配置需要 Git 和 GitHub 网络访问。依赖来源与授权说明位于各依赖源码的 LICENSE 文件，不在引擎源码中复制或修改它们。
 

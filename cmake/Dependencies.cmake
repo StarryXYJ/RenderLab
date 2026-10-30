@@ -31,6 +31,13 @@ FetchContent_Declare(nlohmann_json
 set(JSON_BuildTests OFF CACHE BOOL "Disable dependency tests" FORCE)
 FetchContent_MakeAvailable(nlohmann_json)
 
+# DirectXMath 3.21 / June 2026; CPU-only, shared by DX12 and Vulkan consumers.
+FetchContent_Declare(directxmath
+    GIT_REPOSITORY https://github.com/microsoft/DirectXMath.git
+    GIT_TAG 93e6399d6d15e1e57f80b5cea04d5a8eb892d693
+    SYSTEM EXCLUDE_FROM_ALL)
+FetchContent_MakeAvailable(directxmath)
+
 FetchContent_Declare(winpix
     URL https://www.nuget.org/api/v2/package/WinPixEventRuntime/1.0.240308001
     URL_HASH SHA256=726acc93d6968e2146261a1e415521747d50ad69894c2b42b5d0d4c29fd66ec4
