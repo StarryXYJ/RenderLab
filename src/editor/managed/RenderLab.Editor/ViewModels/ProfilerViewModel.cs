@@ -18,6 +18,10 @@ public sealed partial class ProfilerViewModel(NativeViewportService service, Ren
     internal event Action? CurveChanged;
     internal event Action? GraphRequested;
     public ObservableCollection<ProfilerPassRow> Passes { get; } = [];
+    [ObservableProperty] private ProfilerMetric[] metrics = [];
+    [ObservableProperty] private string sourceLabel = "No completed frame";
+    [ObservableProperty] private string frameRate = "Waiting";
+    [ObservableProperty] private string intervalLabel = "";
     [ObservableProperty] private string summary = "Waiting for a completed diagnostic frame…", details = "", statistics = "", exportPath = "";
     [ObservableProperty] private bool frozen, continuous, gpuReadback;
     [ObservableProperty] private int selectedFrame = -1;
@@ -41,7 +45,8 @@ public sealed partial class ProfilerViewModel(NativeViewportService service, Ren
         {
             if (historySession != service.Session || historyConfig != service.Stats.ConfigRevision)
             {
-                history.Clear(); Current = null; Passes.Clear(); FrameChoices = [];
+                history.Clear(); Current = null; Passes.Clear(); FrameChoices = []; Metrics = [];
+                SourceLabel = "Waiting for current configuration";
                 historySession = service.Session; historyConfig = service.Stats.ConfigRevision;
                 Summary = "Waiting for this session/configuration to complete…";
                 Details = "No completed snapshot for this source yet.";
@@ -63,6 +68,8 @@ public sealed partial class ProfilerViewModel(NativeViewportService service, Ren
             var intervals = Curve.Where(sample => sample.IntervalMs.HasValue).Select(sample => sample.IntervalMs!.Value).Order().ToArray();
             double P(double percentile) => intervals.Length == 0 ? 0 : intervals[(int)Math.Ceiling(intervals.Length * percentile) - 1];
             var activity = service.Stats.Activity;
+            FrameRate = activity == 2 ? "Idle" : activity == 3 ? "Paused" : intervals.Length == 0 ? "Waiting" : $"{1000 / intervals.Average():F1} FPS";
+            IntervalLabel = $"P50 {P(.50):F2}  /  P95 {P(.95):F2}  /  P99 {P(.99):F2} ms";
             Statistics = $"{(activity == 2 ? "Idle" : activity == 3 ? "Paused" : intervals.Length == 0 ? "FPS pending" : $"{1000 / intervals.Average():F1} FPS")} · {Curve.Length} completed-frame samples · dropped {service.Stats.DroppedSamples}\n" +
                 $"Active intervals P50/P95/P99 {P(.50):F2} / {P(.95):F2} / {P(.99):F2} ms · metadata sampled ≤4 Hz / {history.Count} frames (64 / 8 MiB budget)";
             CurveChanged?.Invoke();
@@ -73,6 +80,8 @@ public sealed partial class ProfilerViewModel(NativeViewportService service, Ren
     private void Display(ProfilerSnapshot snapshot)
     {
         Current = snapshot; Summary = snapshot.Summary; Details = snapshot.Details;
+        Metrics = snapshot.Metrics;
+        SourceLabel = $"{snapshot.Graph.Backend.ToUpperInvariant()}  /  Frame {snapshot.Graph.Frame}  /  Config {snapshot.Graph.Config}";
         Passes.Clear(); foreach (var row in snapshot.Passes) { Passes.Add(row); }
     }
     internal void Observe(ProfilerSnapshot snapshot)
@@ -88,7 +97,9 @@ public sealed partial class ProfilerViewModel(NativeViewportService service, Ren
     [RelayCommand]
     private void Clear()
     {
-        history.Clear(); FrameChoices = []; Passes.Clear(); Current = null; service.Timings.Reset(); Curve = []; CurveChanged?.Invoke();
+        history.Clear(); FrameChoices = []; Passes.Clear(); Current = null; Metrics = []; SourceLabel = "No completed frame";
+        Summary = "Waiting for a completed diagnostic frame"; Details = ""; FrameRate = "Waiting"; IntervalLabel = "";
+        service.Timings.Reset(); Curve = []; CurveChanged?.Invoke();
     }
     [RelayCommand]
     private void ShowGraph()

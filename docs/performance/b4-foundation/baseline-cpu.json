@@ -1,0 +1,359 @@
+{
+  "cases": [
+    {
+      "elements": 4096,
+      "iterationsPerSample": 16,
+      "name": "matrix.multiply",
+      "samples": [
+        {
+          "checksum": 139263.99959643537,
+          "ms": 0.079
+        },
+        {
+          "checksum": 139263.99959643537,
+          "ms": 0.07756875
+        },
+        {
+          "checksum": 139263.99959643537,
+          "ms": 0.0769875
+        },
+        {
+          "checksum": 139263.99959643537,
+          "ms": 0.08415
+        },
+        {
+          "checksum": 139263.99959643537,
+          "ms": 0.084475
+        }
+      ],
+      "warmupMs": 0.0846
+    },
+    {
+      "elements": 4096,
+      "iterationsPerSample": 16,
+      "name": "matrix.inverse",
+      "samples": [
+        {
+          "checksum": -19454.655692778208,
+          "ms": 0.331175
+        },
+        {
+          "checksum": -19454.655692778208,
+          "ms": 0.32995625
+        },
+        {
+          "checksum": -19454.655692778208,
+          "ms": 0.39806875
+        },
+        {
+          "checksum": -19454.655692778208,
+          "ms": 0.39858125
+        },
+        {
+          "checksum": -19454.655692778208,
+          "ms": 0.4072
+        }
+      ],
+      "warmupMs": 0.3363
+    },
+    {
+      "elements": 4096,
+      "iterationsPerSample": 16,
+      "name": "bounds.transform",
+      "samples": [
+        {
+          "checksum": -15649.468844294548,
+          "ms": 0.08590625
+        },
+        {
+          "checksum": -15649.468844294548,
+          "ms": 0.086975
+        },
+        {
+          "checksum": -15649.468844294548,
+          "ms": 0.0768875
+        },
+        {
+          "checksum": -15649.468844294548,
+          "ms": 0.08751875
+        },
+        {
+          "checksum": -15649.468844294548,
+          "ms": 0.07795625
+        }
+      ],
+      "warmupMs": 0.0877
+    },
+    {
+      "elements": 4096,
+      "iterationsPerSample": 16,
+      "name": "bounds.visible",
+      "samples": [
+        {
+          "checksum": 2562.0,
+          "ms": 0.07639375
+        },
+        {
+          "checksum": 2562.0,
+          "ms": 0.07578125
+        },
+        {
+          "checksum": 2562.0,
+          "ms": 0.0758875
+        },
+        {
+          "checksum": 2562.0,
+          "ms": 0.0762
+        },
+        {
+          "checksum": 2562.0,
+          "ms": 0.10085625
+        }
+      ],
+      "warmupMs": 0.0781
+    },
+    {
+      "elements": 64,
+      "iterationsPerSample": 4,
+      "name": "scene.extract.cpu",
+      "samples": [
+        {
+          "checksum": 96.0,
+          "ms": 0.1317
+        },
+        {
+          "checksum": 96.0,
+          "ms": 0.0994
+        },
+        {
+          "checksum": 96.0,
+          "ms": 0.098925
+        },
+        {
+          "checksum": 96.0,
+          "ms": 0.1056
+        },
+        {
+          "checksum": 96.0,
+          "ms": 0.146275
+        }
+      ],
+      "warmupMs": 0.186
+    },
+    {
+      "elements": 64,
+      "iterationsPerSample": 4,
+      "name": "scene.extract.gpu",
+      "samples": [
+        {
+          "checksum": 64.0,
+          "ms": 0.0819
+        },
+        {
+          "checksum": 64.0,
+          "ms": 0.07955
+        },
+        {
+          "checksum": 64.0,
+          "ms": 0.07965
+        },
+        {
+          "checksum": 64.0,
+          "ms": 0.081775
+        },
+        {
+          "checksum": 64.0,
+          "ms": 0.0786
+        }
+      ],
+      "warmupMs": 0.1125
+    },
+    {
+      "elements": 1024,
+      "iterationsPerSample": 4,
+      "name": "scene.extract.cpu",
+      "samples": [
+        {
+          "checksum": 1536.0,
+          "ms": 2.3103
+        },
+        {
+          "checksum": 1536.0,
+          "ms": 2.591075
+        },
+        {
+          "checksum": 1536.0,
+          "ms": 2.332825
+        },
+        {
+          "checksum": 1536.0,
+          "ms": 2.23065
+        },
+        {
+          "checksum": 1536.0,
+          "ms": 2.25585
+        }
+      ],
+      "warmupMs": 2.0112
+    },
+    {
+      "elements": 1024,
+      "iterationsPerSample": 4,
+      "name": "scene.extract.gpu",
+      "samples": [
+        {
+          "checksum": 1024.0,
+          "ms": 2.1147
+        },
+        {
+          "checksum": 1024.0,
+          "ms": 1.9799
+        },
+        {
+          "checksum": 1024.0,
+          "ms": 2.167975
+        },
+        {
+          "checksum": 1024.0,
+          "ms": 1.937625
+        },
+        {
+          "checksum": 1024.0,
+          "ms": 2.016325
+        }
+      ],
+      "warmupMs": 2.0063
+    },
+    {
+      "elements": 4096,
+      "iterationsPerSample": 4,
+      "name": "scene.extract.cpu",
+      "samples": [
+        {
+          "checksum": 6144.0,
+          "ms": 12.105675
+        },
+        {
+          "checksum": 6144.0,
+          "ms": 12.912625
+        },
+        {
+          "checksum": 6144.0,
+          "ms": 12.80325
+        },
+        {
+          "checksum": 6144.0,
+          "ms": 13.675225
+        },
+        {
+          "checksum": 6144.0,
+          "ms": 12.455475
+        }
+      ],
+      "warmupMs": 10.0797
+    },
+    {
+      "elements": 4096,
+      "iterationsPerSample": 4,
+      "name": "scene.extract.gpu",
+      "samples": [
+        {
+          "checksum": 4096.0,
+          "ms": 11.93095
+        },
+        {
+          "checksum": 4096.0,
+          "ms": 12.59955
+        },
+        {
+          "checksum": 4096.0,
+          "ms": 13.432575
+        },
+        {
+          "checksum": 4096.0,
+          "ms": 11.804275
+        },
+        {
+          "checksum": 4096.0,
+          "ms": 11.77665
+        }
+      ],
+      "warmupMs": 12.3432
+    },
+    {
+      "elements": 2048,
+      "iterationsPerSample": 1,
+      "name": "environment.prefilter",
+      "samples": [
+        {
+          "checksum": 27716.715966292424,
+          "ms": 488.2721
+        },
+        {
+          "checksum": 27716.715966292424,
+          "ms": 462.6703
+        },
+        {
+          "checksum": 27716.715966292424,
+          "ms": 466.3213
+        },
+        {
+          "checksum": 27716.715966292424,
+          "ms": 470.0055
+        },
+        {
+          "checksum": 27716.715966292424,
+          "ms": 495.3412
+        }
+      ],
+      "warmupMs": 504.591
+    },
+    {
+      "elements": 4096,
+      "iterationsPerSample": 1,
+      "name": "environment.brdf",
+      "samples": [
+        {
+          "checksum": 7157.898796246394,
+          "ms": 15.2177
+        },
+        {
+          "checksum": 7157.898796246394,
+          "ms": 15.0499
+        },
+        {
+          "checksum": 7157.898796246394,
+          "ms": 14.5362
+        },
+        {
+          "checksum": 7157.898796246394,
+          "ms": 14.8785
+        },
+        {
+          "checksum": 7157.898796246394,
+          "ms": 14.5984
+        }
+      ],
+      "warmupMs": 15.7501
+    }
+  ],
+  "compiler": 195136257,
+  "configuration": "Release",
+  "executableSha256": "59919304fa290fc66625d8f0ddb77a45b94d5f3f723b18454ce20aab90108e70",
+  "logicalProcessors": 20,
+  "samplesPerCase": 5,
+  "schemaVersion": 1,
+  "scope": "single-thread CPU kernels including checksum validation; not FPS",
+  "sourceIdentity": "runtime source hashes; executable hash identifies binary",
+  "sourceSha256": {
+    "CMakeLists.txt": "d92e3beeba78a27812675dc3ced474f8d568bf9990a53988afad7731e437fcc0",
+    "cmake/Dependencies.cmake": "f18c65c5639a8d216dcc830a5112e6c0b611d99f9590fc6f7b0cd5a4c15c656d",
+    "src/math/math.cpp": "9766fea877c6dfe6d2be8472e80e0abdedf449a3cfb8a515dcd0bf3ebfa76709",
+    "src/math/math.hpp": "ebeb146c3a7a369b9f9741edd87c518cd40df0a36d73cc0de76ef6bab3663ab5",
+    "src/renderer/environment.cpp": "1b0e634e12691f6e1a6017e8edf9f9b3009333ea99d99d53469d753ae85bd5d5",
+    "src/renderer/environment.hpp": "d203b43532f5f265e5fa1c5f21129b789ccba48f17dee05f60d71cbb8ab74dd5",
+    "src/scene/scene.cpp": "10b870b571cdaca1f6ae691bf093de5e01e9162ad4a0999d843cb2c37158fc91",
+    "src/scene/scene.hpp": "58e6264f7434a1e03391c91291de9af2c443edaea7ce4e2b1a0d6ddf09853608",
+    "src/tools/cpu_benchmark/main.cpp": "a6224acdbee90c1a4e2df9e740a5cc28ef952ffda70444a28fd59778369e3aa8"
+  }
+}

@@ -45,6 +45,14 @@ WIC 解码复用调用线程已有的 COM apartment，不改变其初始化计�
 
 世界为右手、Y-up、相机局部 -Z。CPU 矩阵按行存储、列向量运算；material::Pack 转换到列主序 GPU 布局。透视使用有限远平面与 0..1 Reversed-Z。法线用逆转置并在像素阶段重新归一化；镜像变换通过 PSO 绕序处理，双面材质背面翻转法线。
 
+math.cpp 内部使用固定版本 DirectXMath 的矩阵乘法、转置与四元数组合，库不进入公共头文件；
+Vec3/Mat4/Vertex 仍保持原尺寸和对齐。普通 A×B 不因库的行向量 convention 改变操作数顺序，
+但 XMQuaternionMultiply 返回 Q2×Q1，因此内部交换参数以保持先 b 后 a 的契约。
+Load/Store 使用库的非对齐存取与显式字节复制，不把 Mat4 指针别名转换为库类型。
+Point/Direction、TRS、Reversed-Z 投影和带有限性/pivot 诊断的通用 Inverse 继续由当前契约定义，
+没有直接用库的奇异矩阵 Inf 返回值取代异常。矩阵乘法允许符合双精度参考误差界的舍入差异，
+不承诺与原标量求和逐 bit 相同；GPU Pack 布局不变。安装 Player 时保留 DirectXMath MIT 许可证。
+
 方向光是带旋转/颜色/强度的场景组件。可有多个；每帧按 UUID 字典序选择首个继承启用状态且 Light 启用的对象，不依赖容器顺序。强度为零仍是选中光；禁用/删除后再选下一盏。光线沿局部 -Z 发射，Shader direction 表示从表面指向光源，取相反方向；父级旋转生效，位置和缩放不影响方向。
 
 无主光时直射强度为零，环境光独立配置。颜色与光照使用线性数值，颜色纹理由 sRGB 解码。M4.3 使用 RGBA32F HDR 中间附件，经曝光与 ACES fitted Tone Mapping 写入 sRGB 显示目标；Scene 同时保存环境图 UUID、强度、旋转与曝光。
@@ -55,11 +63,32 @@ Extractor 从 CPU 文档提取相机、主光和实例值快照，延迟回调�
 
 M5 增加独立于相机和灯光开关的 `allInstances` 表供 AS 构建与射线实例索引使用；`instances` 保持相机可见集，`shadowCasters` 保持启用光栅阴影时的候选集。两种候选集都从同一实例身份和值数据派生。
 
-M6 GPU 剔除模式以 cpuCulling=false 提取，cpuVisibilityKnown=false，此时 instances/culledInstances 不提供 CPU 可见结果；allInstances 与 shadowCasters 仍完整。默认 CPU 路径保留原契约。材质输入在每帧首次读取时冻结；对象提取使用临时 ID 索引，GPU/CPU 剔除与诊断契约见 [GPU Driven](gpu-driven.md)。
+M6 GPU 剔除模式以 cpuCulling=false 提取，cpuVisibilityKnown=false，此时 instances/culledInstances 不提供 CPU 可见结果；allInstances 与 shadowCasters 仍完整。默认 CPU 路径保留原契约。材质输入在每帧首次读取时冻结；GPU/CPU 剔除与诊断契约见 [GPU Driven](gpu-driven.md)。
+
+### CPU 提取缓存
+
+Extractor 拥有上次成功提取的对象值、层级结果和 ID→文档索引。逐帧比较完整对象值（含组件、parent、
+enabled、材质覆盖和顺序），相同则复用已验证层级；发生任何对象编辑就重新验证和解析整个层级，
+不要求调用者设置 dirty 标记，也不按指针或文件时间猜测变化。全局环境/曝光仍每次验证。
+相机移动会触发层级重新解析，首版不是局部层级增量更新系统。
+
+实例继续按稳定 ID 与实际组合 world 关联；world 和网格 localBounds 都未变时，复用逆转置 normal
+与 worldBounds。检查不依赖不可变 Model 指针或内容 key，因此直接修改 node transform 或 mesh.bounds
+也会正确失效；材质覆盖、可见集和阴影候选仍按本次输入生成。实际层级 shear 继续使用完整逆转置，
+不改为仅四元数/倒数缩放近似。
+
+新缓存及 previousWorld 只在成功提取后发布；异常不推进历史。禁用/删除的实例在下一次成功提取后
+移出缓存，重新加入时 previousWorld 使用当前 world。LastStatistics 仅记录上次成功调用的层级重建和
+几何计算/复用数量，不读计时钟。缓存容量随当前文档/启用实例有界，不积累历史场景。
+
+math 的 TRS 校验保留原有限性和 1e-10 pivot 拒绝规则，但仅消元 3×3 线性部分，不构造丢弃的逆矩阵；
+Bounds 按每个输出轴选取极值角，保留 Point 的浮点运算顺序，与八角参考对照，支持镜像、非均匀缩放及
+层级 shear。视锥仍保留原保守八角测试，尚未因缓存改造而更换剔除语义。
+专项入口为 math.contracts、scene.contracts，实测见 [B4](performance/b4-foundation.md)。
 
 MeshRenderer.model 为模型 UUID，mesh 可指定 primitive 子资源 UUID；materials 将导入材质子资源 UUID 映射到用户 .material UUID。GPU Mesh/图像为可重建投影；静态资源准备时上传，常量按帧创建，命令引用/完成点保护在途资源。普通帧不调用 WaitIdle。
 
-View/Lighting/Shadow 常量每帧创建并共享，分别包含相机、主光/环境与阴影数据；Object 保存模型、法线、上一帧模型矩阵，同实例多 Pass 复用。Material 返回 PSO 与绑定值，适配成 Graph 名称/声明，由 Graph 建立绑定组；保留 generation 以复用 ShaderModule/Layout/PSO，不重复准备两份 BindingGroup。
+View/Lighting/Shadow 常量每帧准备并共享，由完成点/引用保护的 UploadPool 页面承载，分别包含相机、主光/环境与阴影数据；Object 保存模型、法线、上一帧模型矩阵，同实例多 Pass 复用。Material 返回 PSO 与绑定值，适配成 Graph 名称/声明，由 Graph 建立绑定组；保留 generation 以复用 ShaderModule/Layout/PSO，不重复准备两份 BindingGroup。
 
 ## HLSL 库与项目 Shader
 

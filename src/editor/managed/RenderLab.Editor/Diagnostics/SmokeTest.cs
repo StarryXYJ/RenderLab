@@ -126,7 +126,7 @@ internal sealed class SmokeTest
             switch (stage++)
             {
                 case 0:
-                    Require(window.FocusBox.GetVisualAncestors().OfType<TopLevel>().Any(),
+                    Require(window.PipelinePicker.GetVisualAncestors().OfType<TopLevel>().Any(),
                         "Render Settings controls are not mounted in the visible Dock tree.");
                     Require(window.Docks.IsOpen("Scene") && window.Docks.IsOpen("Settings") &&
                         !window.Docks.IsOpen("Log") && !window.Docks.IsOpen("Render Graph") && !window.Docks.IsOpen("Profiler"),
@@ -169,8 +169,11 @@ internal sealed class SmokeTest
                     break;
                 case 3:
                     Require(stats.Captured != 0, "Right mouse capture failed.");
+                    var focusBox = window.FocusBox;
+                    if (!focusBox.GetVisualAncestors().OfType<TopLevel>().Any()) { --stage; break; }
                     NativeMethods.SetFocus(root);
-                    window.FocusBox.Focus();
+                    focusBox.BringIntoView();
+                    Require(focusBox.Focus(), "Managed focus field did not accept keyboard focus.");
                     break;
                 case 4:
                     Require(stats.Focused == 0 && stats.Captured == 0 && stats.PressedKeys == 0,
@@ -221,7 +224,8 @@ internal sealed class SmokeTest
                     break;
                 case 11:
                     Require(stats.PausedTicks > savedPaused && stats.Frames == savedFrames &&
-                        window.ViewModel.IsPaused && window.PauseButton.Content?.ToString() == "Resume viewport",
+                        window.ViewModel.IsPaused && ToolTip.GetTip(window.PauseButton)?.ToString() == "Resume viewport" &&
+                        window.PauseButton.Content is TextBlock { Text: "\uE768" },
                         "Pause command or generated property notification did not update rendering and UI.");
                     window.PauseButton.Command!.Execute(null);
                     checks.Add("generated pause command and pause-label notification");
@@ -434,7 +438,7 @@ internal sealed class SmokeTest
                     break;
                 case 30:
                     if (window.ViewportService.Configuration.Status != 2) { --stage; break; }
-                    Require(host.Session != oldHandle && window.FocusBox.GetVisualAncestors().OfType<TopLevel>().Any(),
+                    Require(host.Session != oldHandle && window.PipelinePicker.GetVisualAncestors().OfType<TopLevel>().Any(),
                         "Saved layout failed to recreate Scene and mount Render Settings.");
                     Require(window.ViewportService.Configuration.Applied.ShadowResolution == 256,
                         "Saved layout restore lost the runtime configuration.");

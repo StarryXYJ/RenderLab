@@ -10,6 +10,6 @@
 namespace renderlab::sandbox
 {
 /// @brief Fixed-camera capture and optional warmup/measurement run; independent of presentation.
-void CaptureScene(rhi::Runtime& runtime, const rhi::DeviceReport& device, const Options& options,
+void CaptureScene(rhi::Runtime& runtime, const rhi::Device& device, const Options& options,
                   const std::filesystem::path& shaders, Logger& logger);
 } // namespace renderlab::sandbox

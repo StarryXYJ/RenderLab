@@ -39,8 +39,8 @@ internal sealed class WorkbenchDockFactory : Factory
     {
         var scene = Group("SceneGroup", "Scene");
         var settings = Group("SettingsGroup", "Settings");
-        settings.Proportion = .26;
-        scene.Proportion = .74;
+        settings.Proportion = .29;
+        scene.Proportion = .71;
         var body = new ProportionalDock
         {
             Id = "Body",
@@ -74,14 +74,14 @@ internal sealed class WorkbenchDockFactory : Factory
             if (group is null)
             {
                 group = Group("DiagnosticsGroup");
-                group.Proportion = .36;
+                group.Proportion = .44;
                 var sceneGroup = Walk(Root).OfType<DocumentDock>().FirstOrDefault(dock => dock.Id == "SceneGroup");
                 var sceneOwner = sceneGroup is null ? null : Walk(Root).OfType<IDock>().FirstOrDefault(dock => dock.VisibleDockables?.Contains(sceneGroup) == true);
                 if (sceneGroup is not null && sceneOwner?.VisibleDockables is { } siblings)
                 {
                     var position = siblings.IndexOf(sceneGroup);
                     var proportion = sceneGroup.Proportion;
-                    sceneGroup.Proportion = .64;
+                    sceneGroup.Proportion = .56;
                     siblings[position] = new ProportionalDock
                     {
                         Id = "SceneWorkspace",

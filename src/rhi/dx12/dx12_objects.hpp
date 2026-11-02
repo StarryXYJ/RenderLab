@@ -13,10 +13,12 @@
 
 namespace renderlab::rhi::dx12
 {
+struct DxMemoryAllocation;
 struct Allocation
 {
     std::shared_ptr<AllocationLedger> ledger;
     uint64_t bytes = 0;
+    std::shared_ptr<DxMemoryAllocation> managed;
     ~Allocation()
     {
         if (ledger)

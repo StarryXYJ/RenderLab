@@ -1,0 +1,2330 @@
+{
+  "schemaVersion": 1,
+  "scope": "Release validation-off headless serial; 640x360 medium; three runs per case/backend; diagnostics separate",
+  "executableSha256": "9dee8da9eddba651d706d474a94f0f17fdc928af2c55d31fb21f58eba290178e",
+  "engineShadersSha256": "2d521dab0ac39bae12a6c67645a04d2fd7cd74334c8881e47ced859d494e33ee",
+  "workspace": {
+    "sourceRevision": "63a4cdd8f91e76b73d272aa8bdd480e746c9f5a5",
+    "trackedChanges": true,
+    "note": "Workspace state; executable SHA-256 identifies the tested binary."
+  },
+  "raw": "out/b4/baseline/scenes",
+  "runs": [
+    {
+      "id": "pbr-01-dx12",
+      "case": "pbr",
+      "backend": "dx12",
+      "adapter": "NVIDIA GeForce RTX 5060",
+      "driver": "32.0.15.9174",
+      "samples": 5162,
+      "metrics": {
+        "cpuRenderMs": {
+          "maxMs": 4.1671,
+          "meanMs": 0.792342057342114,
+          "minMs": 0.6109,
+          "samples": 5162
+        },
+        "frameTimeMs": {
+          "maxMs": 6.0361,
+          "meanMs": 0.9416919798527681,
+          "minMs": 0.6707,
+          "samples": 5162
+        },
+        "gpuPassSumMs": {
+          "maxMs": 0.343168,
+          "meanMs": 0.020763034482758597,
+          "minMs": 0.017152,
+          "samples": 5162
+        },
+        "gpuQueueOverlapMs": {
+          "maxMs": 0.0,
+          "meanMs": 0.0,
+          "minMs": 0.0,
+          "samples": 5162
+        },
+        "gpuQueueSpanMs": {
+          "maxMs": 0.343168,
+          "meanMs": 0.020824015497868952,
+          "minMs": 0.017184,
+          "samples": 5162
+        },
+        "gpuWaitMs": {
+          "maxMs": 3.7765,
+          "meanMs": 0.14934992251065557,
+          "minMs": 0.0004,
+          "samples": 5162
+        },
+        "graphCompileMs": {
+          "maxMs": 0.1241,
+          "meanMs": 0.01726941108097639,
+          "minMs": 0.0135,
+          "samples": 5162
+        },
+        "graphPrepareMs": {
+          "maxMs": 0.1371,
+          "meanMs": 0.004108039519566059,
+          "minMs": 0.0031,
+          "samples": 5162
+        },
+        "graphRecordMs": {
+          "maxMs": 2.4505,
+          "meanMs": 0.14254312282061227,
+          "minMs": 0.1185,
+          "samples": 5162
+        },
+        "scenePrepareMs": {
+          "maxMs": 2.9726,
+          "meanMs": 0.4936826423866724,
+          "minMs": 0.3894,
+          "samples": 5162
+        }
+      },
+      "memory": {
+        "budgetBytes": 2147483648,
+        "highWaterBytes": 7602176,
+        "processPrivateBytes": 95555584,
+        "processWorkingSetBytes": 94965760,
+        "usedBytes": 7602176
+      }
+    },
+    {
+      "id": "pbr-01-vulkan",
+      "case": "pbr",
+      "backend": "vulkan",
+      "adapter": "NVIDIA GeForce RTX 5060",
+      "driver": "NVIDIA; 591.74 (raw 0x93D28000)",
+      "samples": 5596,
+      "metrics": {
+        "cpuRenderMs": {
+          "maxMs": 4.7031,
+          "meanMs": 0.6786446747676895,
+          "minMs": 0.5204,
+          "samples": 5596
+        },
+        "frameTimeMs": {
+          "maxMs": 7.7725,
+          "meanMs": 0.8668649035025009,
+          "minMs": 0.6143,
+          "samples": 5596
+        },
+        "gpuPassSumMs": {
+          "maxMs": 0.350592,
+          "meanMs": 0.019158192994996416,
+          "minMs": 0.016576,
+          "samples": 5596
+        },
+        "gpuQueueOverlapMs": {
+          "maxMs": 0.0,
+          "meanMs": 0.0,
+          "minMs": 0.0,
+          "samples": 5596
+        },
+        "gpuQueueSpanMs": {
+          "maxMs": 1.2216,
+          "meanMs": 0.029921955682630477,
+          "minMs": 0.025504,
+          "samples": 5596
+        },
+        "gpuWaitMs": {
+          "maxMs": 3.0694,
+          "meanMs": 0.1882202287348108,
+          "minMs": 0.0001,
+          "samples": 5596
+        },
+        "graphCompileMs": {
+          "maxMs": 0.1017,
+          "meanMs": 0.015016082916368865,
+          "minMs": 0.0115,
+          "samples": 5596
+        },
+        "graphPrepareMs": {
+          "maxMs": 0.1637,
+          "meanMs": 0.003556504646175844,
+          "minMs": 0.0025,
+          "samples": 5596
+        },
+        "graphRecordMs": {
+          "maxMs": 0.9236,
+          "meanMs": 0.10810614724803448,
+          "minMs": 0.0881,
+          "samples": 5596
+        },
+        "scenePrepareMs": {
+          "maxMs": 2.5794,
+          "meanMs": 0.44498725875625317,
+          "minMs": 0.3529,
+          "samples": 5596
+        }
+      },
+      "memory": {
+        "budgetBytes": 2147483648,
+        "highWaterBytes": 6366016,
+        "processPrivateBytes": 315895808,
+        "processWorkingSetBytes": 299556864,
+        "usedBytes": 6366016
+      }
+    },
+    {
+      "id": "pbr-02-vulkan",
+      "case": "pbr",
+      "backend": "vulkan",
+      "adapter": "NVIDIA GeForce RTX 5060",
+      "driver": "NVIDIA; 591.74 (raw 0x93D28000)",
+      "samples": 5513,
+      "metrics": {
+        "cpuRenderMs": {
+          "maxMs": 3.3521,
+          "meanMs": 0.6873662978414653,
+          "minMs": 0.5117,
+          "samples": 5513
+        },
+        "frameTimeMs": {
+          "maxMs": 4.7904,
+          "meanMs": 0.881172084164703,
+          "minMs": 0.6014,
+          "samples": 5513
+        },
+        "gpuPassSumMs": {
+          "maxMs": 0.33504,
+          "meanMs": 0.01929374206421187,
+          "minMs": 0.016224,
+          "samples": 5513
+        },
+        "gpuQueueOverlapMs": {
+          "maxMs": 0.0,
+          "meanMs": 0.0,
+          "minMs": 0.0,
+          "samples": 5513
+        },
+        "gpuQueueSpanMs": {
+          "maxMs": 0.353984,
+          "meanMs": 0.02898232976600758,
+          "minMs": 0.025216,
+          "samples": 5513
+        },
+        "gpuWaitMs": {
+          "maxMs": 4.1517,
+          "meanMs": 0.1938057863232366,
+          "minMs": 0.0001,
+          "samples": 5513
+        },
+        "graphCompileMs": {
+          "maxMs": 0.3904,
+          "meanMs": 0.015529004171957196,
+          "minMs": 0.0116,
+          "samples": 5513
+        },
+        "graphPrepareMs": {
+          "maxMs": 0.1866,
+          "meanMs": 0.0035599492109559187,
+          "minMs": 0.0027,
+          "samples": 5513
+        },
+        "graphRecordMs": {
+          "maxMs": 1.0523,
+          "meanMs": 0.10932889533829127,
+          "minMs": 0.0869,
+          "samples": 5513
+        },
+        "scenePrepareMs": {
+          "maxMs": 2.1066,
+          "meanMs": 0.4510853618719391,
+          "minMs": 0.3479,
+          "samples": 5513
+        }
+      },
+      "memory": {
+        "budgetBytes": 2147483648,
+        "highWaterBytes": 6366016,
+        "processPrivateBytes": 312561664,
+        "processWorkingSetBytes": 299630592,
+        "usedBytes": 6366016
+      }
+    },
+    {
+      "id": "pbr-02-dx12",
+      "case": "pbr",
+      "backend": "dx12",
+      "adapter": "NVIDIA GeForce RTX 5060",
+      "driver": "32.0.15.9174",
+      "samples": 5961,
+      "metrics": {
+        "cpuRenderMs": {
+          "maxMs": 1.5493,
+          "meanMs": 0.6686537661466193,
+          "minMs": 0.544,
+          "samples": 5961
+        },
+        "frameTimeMs": {
+          "maxMs": 2.2729,
+          "meanMs": 0.8153426270759927,
+          "minMs": 0.6059,
+          "samples": 5961
+        },
+        "gpuPassSumMs": {
+          "maxMs": 0.151744,
+          "meanMs": 0.02039794128501937,
+          "minMs": 0.017088,
+          "samples": 5961
+        },
+        "gpuQueueOverlapMs": {
+          "maxMs": 0.0,
+          "meanMs": 0.0,
+          "minMs": 0.0,
+          "samples": 5961
+        },
+        "gpuQueueSpanMs": {
+          "maxMs": 0.152256,
+          "meanMs": 0.02044276061063579,
+          "minMs": 0.017088,
+          "samples": 5961
+        },
+        "gpuWaitMs": {
+          "maxMs": 1.7087,
+          "meanMs": 0.14668886092937455,
+          "minMs": 0.0001,
+          "samples": 5961
+        },
+        "graphCompileMs": {
+          "maxMs": 0.4327,
+          "meanMs": 0.014317127998657904,
+          "minMs": 0.0114,
+          "samples": 5961
+        },
+        "graphPrepareMs": {
+          "maxMs": 0.0497,
+          "meanMs": 0.003301845327965111,
+          "minMs": 0.0027,
+          "samples": 5961
+        },
+        "graphRecordMs": {
+          "maxMs": 0.4199,
+          "meanMs": 0.12007567522227844,
+          "minMs": 0.1045,
+          "samples": 5961
+        },
+        "scenePrepareMs": {
+          "maxMs": 1.0873,
+          "meanMs": 0.41993319912766364,
+          "minMs": 0.3478,
+          "samples": 5961
+        }
+      },
+      "memory": {
+        "budgetBytes": 2147483648,
+        "highWaterBytes": 7602176,
+        "processPrivateBytes": 93540352,
+        "processWorkingSetBytes": 94703616,
+        "usedBytes": 7602176
+      }
+    },
+    {
+      "id": "pbr-03-dx12",
+      "case": "pbr",
+      "backend": "dx12",
+      "adapter": "NVIDIA GeForce RTX 5060",
+      "driver": "32.0.15.9174",
+      "samples": 5530,
+      "metrics": {
+        "cpuRenderMs": {
+          "maxMs": 7.3909,
+          "meanMs": 0.726222585895118,
+          "minMs": 0.5636,
+          "samples": 5530
+        },
+        "frameTimeMs": {
+          "maxMs": 7.4037,
+          "meanMs": 0.8789340144665471,
+          "minMs": 0.6199,
+          "samples": 5530
+        },
+        "gpuPassSumMs": {
+          "maxMs": 0.344256,
+          "meanMs": 0.02063644122965642,
+          "minMs": 0.017152,
+          "samples": 5530
+        },
+        "gpuQueueOverlapMs": {
+          "maxMs": 0.0,
+          "meanMs": 0.0,
+          "minMs": 0.0,
+          "samples": 5530
+        },
+        "gpuQueueSpanMs": {
+          "maxMs": 0.344288,
+          "meanMs": 0.0206862524412296,
+          "minMs": 0.017152,
+          "samples": 5530
+        },
+        "gpuWaitMs": {
+          "maxMs": 4.2529,
+          "meanMs": 0.15271142857142847,
+          "minMs": 0.0001,
+          "samples": 5530
+        },
+        "graphCompileMs": {
+          "maxMs": 0.8939,
+          "meanMs": 0.015361157323688961,
+          "minMs": 0.0118,
+          "samples": 5530
+        },
+        "graphPrepareMs": {
+          "maxMs": 0.0473,
+          "meanMs": 0.003419385171790224,
+          "minMs": 0.0026,
+          "samples": 5530
+        },
+        "graphRecordMs": {
+          "maxMs": 6.1751,
+          "meanMs": 0.12791139240506327,
+          "minMs": 0.106,
+          "samples": 5530
+        },
+        "scenePrepareMs": {
+          "maxMs": 3.4286,
+          "meanMs": 0.45370157323689064,
+          "minMs": 0.3589,
+          "samples": 5530
+        }
+      },
+      "memory": {
+        "budgetBytes": 2147483648,
+        "highWaterBytes": 7602176,
+        "processPrivateBytes": 94191616,
+        "processWorkingSetBytes": 95207424,
+        "usedBytes": 7602176
+      }
+    },
+    {
+      "id": "pbr-03-vulkan",
+      "case": "pbr",
+      "backend": "vulkan",
+      "adapter": "NVIDIA GeForce RTX 5060",
+      "driver": "NVIDIA; 591.74 (raw 0x93D28000)",
+      "samples": 5738,
+      "metrics": {
+        "cpuRenderMs": {
+          "maxMs": 3.4858,
+          "meanMs": 0.6572163297316144,
+          "minMs": 0.5095,
+          "samples": 5738
+        },
+        "frameTimeMs": {
+          "maxMs": 3.5231,
+          "meanMs": 0.8463893691181581,
+          "minMs": 0.6044,
+          "samples": 5738
+        },
+        "gpuPassSumMs": {
+          "maxMs": 1.483264,
+          "meanMs": 0.019536440571627744,
+          "minMs": 0.016672,
+          "samples": 5738
+        },
+        "gpuQueueOverlapMs": {
+          "maxMs": 0.0,
+          "meanMs": 0.0,
+          "minMs": 0.0,
+          "samples": 5738
+        },
+        "gpuQueueSpanMs": {
+          "maxMs": 1.49184,
+          "meanMs": 0.02902179714186129,
+          "minMs": 0.025664,
+          "samples": 5738
+        },
+        "gpuWaitMs": {
+          "maxMs": 2.2335,
+          "meanMs": 0.1891730393865459,
+          "minMs": 0.0001,
+          "samples": 5738
+        },
+        "graphCompileMs": {
+          "maxMs": 0.2415,
+          "meanMs": 0.014583844545137701,
+          "minMs": 0.0111,
+          "samples": 5738
+        },
+        "graphPrepareMs": {
+          "maxMs": 0.0845,
+          "meanMs": 0.003388149180899266,
+          "minMs": 0.0026,
+          "samples": 5738
+        },
+        "graphRecordMs": {
+          "maxMs": 1.4666,
+          "meanMs": 0.10489984315092359,
+          "minMs": 0.087,
+          "samples": 5738
+        },
+        "scenePrepareMs": {
+          "maxMs": 1.911,
+          "meanMs": 0.431502056465667,
+          "minMs": 0.3464,
+          "samples": 5738
+        }
+      },
+      "memory": {
+        "budgetBytes": 2147483648,
+        "highWaterBytes": 6366016,
+        "processPrivateBytes": 312520704,
+        "processWorkingSetBytes": 299155456,
+        "usedBytes": 6366016
+      }
+    },
+    {
+      "id": "pbr-diagnostics-01-dx12",
+      "case": "pbr-diagnostics",
+      "backend": "dx12",
+      "adapter": "NVIDIA GeForce RTX 5060",
+      "driver": "32.0.15.9174",
+      "samples": 5736,
+      "metrics": {
+        "assetUpdateMs": {
+          "maxMs": 0.1151,
+          "meanMs": 0.0005235704323570444,
+          "minMs": 0.0002,
+          "samples": 5736
+        },
+        "cpuRenderMs": {
+          "maxMs": 1.8202,
+          "meanMs": 0.691094107391911,
+          "minMs": 0.5655,
+          "samples": 5736
+        },
+        "environmentUpdateMs": {
+          "maxMs": 0.0101,
+          "meanMs": 8.97838214783819E-05,
+          "minMs": 0.0,
+          "samples": 5736
+        },
+        "frameTimeMs": {
+          "maxMs": 2.7605,
+          "meanMs": 0.8360132147838206,
+          "minMs": 0.6303,
+          "samples": 5736
+        },
+        "gpuPassSumMs": {
+          "maxMs": 1.9792319999999999,
+          "meanMs": 0.02103677545327752,
+          "minMs": 0.016960000000000003,
+          "samples": 5736
+        },
+        "gpuQueueOverlapMs": {
+          "maxMs": 0.0,
+          "meanMs": 0.0,
+          "minMs": 0.0,
+          "samples": 5736
+        },
+        "gpuQueueSpanMs": {
+          "maxMs": 1.979232,
+          "meanMs": 0.021083135285913462,
+          "minMs": 0.016992,
+          "samples": 5736
+        },
+        "gpuWaitMs": {
+          "maxMs": 2.0349,
+          "meanMs": 0.14491910739191102,
+          "minMs": 0.0002,
+          "samples": 5736
+        },
+        "graphCompileMs": {
+          "maxMs": 0.2189,
+          "meanMs": 0.014947001394700135,
+          "minMs": 0.0119,
+          "samples": 5736
+        },
+        "graphPrepareMs": {
+          "maxMs": 0.0453,
+          "meanMs": 0.0038345536959553663,
+          "minMs": 0.0031,
+          "samples": 5736
+        },
+        "graphRecordMs": {
+          "maxMs": 0.7505,
+          "meanMs": 0.13217447698744775,
+          "minMs": 0.1141,
+          "samples": 5736
+        },
+        "rhiBufferCreateMs": {
+          "maxMs": 0.0,
+          "meanMs": 0.0,
+          "minMs": 0.0,
+          "samples": 5736
+        },
+        "rhiDescriptorHeapBindMs": {
+          "maxMs": 0.0147,
+          "meanMs": 0.0010363493723849371,
+          "minMs": 0.0006,
+          "samples": 5736
+        },
+        "rhiDescriptorPageCreateMs": {
+          "maxMs": 0.0,
+          "meanMs": 0.0,
+          "minMs": 0.0,
+          "samples": 5736
+        },
+        "rhiFenceWaitMs": {
+          "maxMs": 2.02,
+          "meanMs": 0.1369290446304051,
+          "minMs": 0.0,
+          "samples": 5736
+        },
+        "rhiGroupCreateMs": {
+          "maxMs": 0.2371,
+          "meanMs": 0.035730108089260866,
+          "minMs": 0.0279,
+          "samples": 5736
+        },
+        "rhiNativeRecordMs": {
+          "maxMs": 0.3674,
+          "meanMs": 0.035849616457461646,
+          "minMs": 0.0237,
+          "samples": 5736
+        },
+        "rhiNativeSubmitMs": {
+          "maxMs": 0.4359,
+          "meanMs": 0.08831518479776866,
+          "minMs": 0.0563,
+          "samples": 5736
+        },
+        "rhiRetireMs": {
+          "maxMs": 0.1539,
+          "meanMs": 0.008119142259414187,
+          "minMs": 0.0035,
+          "samples": 5736
+        },
+        "rhiViewCreateMs": {
+          "maxMs": 0.0244,
+          "meanMs": 0.0006054044630404455,
+          "minMs": 0.0,
+          "samples": 5736
+        },
+        "sceneExtractMs": {
+          "maxMs": 0.4027,
+          "meanMs": 0.025512796373779647,
+          "minMs": 0.0182,
+          "samples": 5736
+        },
+        "scenePrepareMs": {
+          "maxMs": 1.216,
+          "meanMs": 0.4268308577405852,
+          "minMs": 0.353,
+          "samples": 5736
+        },
+        "scenePrepareOtherMs": {
+          "maxMs": 1.178,
+          "meanMs": 0.4007047071129713,
+          "minMs": 0.334,
+          "samples": 5736
+        }
+      },
+      "memory": {
+        "budgetBytes": 2147483648,
+        "highWaterBytes": 7602176,
+        "processPrivateBytes": 94199808,
+        "processWorkingSetBytes": 95080448,
+        "usedBytes": 7602176
+      }
+    },
+    {
+      "id": "pbr-diagnostics-01-vulkan",
+      "case": "pbr-diagnostics",
+      "backend": "vulkan",
+      "adapter": "NVIDIA GeForce RTX 5060",
+      "driver": "NVIDIA; 591.74 (raw 0x93D28000)",
+      "samples": 5732,
+      "metrics": {
+        "assetUpdateMs": {
+          "maxMs": 0.0329,
+          "meanMs": 0.0005334089323098394,
+          "minMs": 0.0002,
+          "samples": 5732
+        },
+        "cpuRenderMs": {
+          "maxMs": 3.2853,
+          "meanMs": 0.6558559141660854,
+          "minMs": 0.5155,
+          "samples": 5732
+        },
+        "environmentUpdateMs": {
+          "maxMs": 0.0006,
+          "meanMs": 9.54640614096301E-05,
+          "minMs": 0.0,
+          "samples": 5732
+        },
+        "frameTimeMs": {
+          "maxMs": 4.4079,
+          "meanMs": 0.8368950802512204,
+          "minMs": 0.6067,
+          "samples": 5732
+        },
+        "gpuPassSumMs": {
+          "maxMs": 1.213792,
+          "meanMs": 0.01989982414515001,
+          "minMs": 0.016512,
+          "samples": 5732
+        },
+        "gpuQueueOverlapMs": {
+          "maxMs": 0.0,
+          "meanMs": 0.0,
+          "minMs": 0.0,
+          "samples": 5732
+        },
+        "gpuQueueSpanMs": {
+          "maxMs": 1.222336,
+          "meanMs": 0.029585607815771065,
+          "minMs": 0.02544,
+          "samples": 5732
+        },
+        "gpuWaitMs": {
+          "maxMs": 1.6717,
+          "meanMs": 0.18103916608513584,
+          "minMs": 0.0001,
+          "samples": 5732
+        },
+        "graphCompileMs": {
+          "maxMs": 1.4392,
+          "meanMs": 0.015951727145847923,
+          "minMs": 0.012,
+          "samples": 5732
+        },
+        "graphPrepareMs": {
+          "maxMs": 0.0388,
+          "meanMs": 0.0035275994417306254,
+          "minMs": 0.0028,
+          "samples": 5732
+        },
+        "graphRecordMs": {
+          "maxMs": 0.5051,
+          "meanMs": 0.10342749476622479,
+          "minMs": 0.0881,
+          "samples": 5732
+        },
+        "rhiBufferCreateMs": {
+          "maxMs": 0.0,
+          "meanMs": 0.0,
+          "minMs": 0.0,
+          "samples": 5732
+        },
+        "rhiDescriptorHeapBindMs": {
+          "maxMs": 0.0,
+          "meanMs": 0.0,
+          "minMs": 0.0,
+          "samples": 5732
+        },
+        "rhiDescriptorPageCreateMs": {
+          "maxMs": 0.0,
+          "meanMs": 0.0,
+          "minMs": 0.0,
+          "samples": 5732
+        },
+        "rhiFenceWaitMs": {
+          "maxMs": 1.6078,
+          "meanMs": 0.1722710223307746,
+          "minMs": 0.0,
+          "samples": 5732
+        },
+        "rhiGroupCreateMs": {
+          "maxMs": 0.0569,
+          "meanMs": 0.00963988136775994,
+          "minMs": 0.0059,
+          "samples": 5732
+        },
+        "rhiNativeRecordMs": {
+          "maxMs": 0.2768,
+          "meanMs": 0.029263660153524135,
+          "minMs": 0.02,
+          "samples": 5732
+        },
+        "rhiNativeSubmitMs": {
+          "maxMs": 2.3461,
+          "meanMs": 0.07909661549197487,
+          "minMs": 0.0485,
+          "samples": 5732
+        },
+        "rhiRetireMs": {
+          "maxMs": 0.7619,
+          "meanMs": 0.008995987438939278,
+          "minMs": 0.0035,
+          "samples": 5732
+        },
+        "rhiViewCreateMs": {
+          "maxMs": 0.0471,
+          "meanMs": 0.00992484298674108,
+          "minMs": 0.0062,
+          "samples": 5732
+        },
+        "sceneExtractMs": {
+          "maxMs": 1.0252,
+          "meanMs": 0.024322871598046053,
+          "minMs": 0.0168,
+          "samples": 5732
+        },
+        "scenePrepareMs": {
+          "maxMs": 2.2499,
+          "meanMs": 0.4362764829030015,
+          "minMs": 0.3469,
+          "samples": 5732
+        },
+        "scenePrepareOtherMs": {
+          "maxMs": 1.2236,
+          "meanMs": 0.41132473831123517,
+          "minMs": 0.3299,
+          "samples": 5732
+        }
+      },
+      "memory": {
+        "budgetBytes": 2147483648,
+        "highWaterBytes": 6366016,
+        "processPrivateBytes": 317321216,
+        "processWorkingSetBytes": 299278336,
+        "usedBytes": 6366016
+      }
+    },
+    {
+      "id": "pbr-diagnostics-02-vulkan",
+      "case": "pbr-diagnostics",
+      "backend": "vulkan",
+      "adapter": "NVIDIA GeForce RTX 5060",
+      "driver": "NVIDIA; 591.74 (raw 0x93D28000)",
+      "samples": 5817,
+      "metrics": {
+        "assetUpdateMs": {
+          "maxMs": 0.0314,
+          "meanMs": 0.0005206979542719605,
+          "minMs": 0.0002,
+          "samples": 5817
+        },
+        "cpuRenderMs": {
+          "maxMs": 3.0164,
+          "meanMs": 0.6430731304796279,
+          "minMs": 0.5172,
+          "samples": 5817
+        },
+        "environmentUpdateMs": {
+          "maxMs": 0.0866,
+          "meanMs": 0.00011198212136840309,
+          "minMs": 0.0,
+          "samples": 5817
+        },
+        "frameTimeMs": {
+          "maxMs": 3.1548,
+          "meanMs": 0.8248109162798676,
+          "minMs": 0.6148,
+          "samples": 5817
+        },
+        "gpuPassSumMs": {
+          "maxMs": 1.1896959999999999,
+          "meanMs": 0.019626523637613937,
+          "minMs": 0.016736,
+          "samples": 5817
+        },
+        "gpuQueueOverlapMs": {
+          "maxMs": 0.0,
+          "meanMs": 0.0,
+          "minMs": 0.0,
+          "samples": 5817
+        },
+        "gpuQueueSpanMs": {
+          "maxMs": 1.198304,
+          "meanMs": 0.02922580299123268,
+          "minMs": 0.025728,
+          "samples": 5817
+        },
+        "gpuWaitMs": {
+          "maxMs": 1.7447,
+          "meanMs": 0.18173778580024025,
+          "minMs": 0.0002,
+          "samples": 5817
+        },
+        "graphCompileMs": {
+          "maxMs": 0.1612,
+          "meanMs": 0.01582822760873301,
+          "minMs": 0.0121,
+          "samples": 5817
+        },
+        "graphPrepareMs": {
+          "maxMs": 0.0491,
+          "meanMs": 0.0035292934502320797,
+          "minMs": 0.0028,
+          "samples": 5817
+        },
+        "graphRecordMs": {
+          "maxMs": 0.8752,
+          "meanMs": 0.10540947223654829,
+          "minMs": 0.0879,
+          "samples": 5817
+        },
+        "rhiBufferCreateMs": {
+          "maxMs": 0.0,
+          "meanMs": 0.0,
+          "minMs": 0.0,
+          "samples": 5817
+        },
+        "rhiDescriptorHeapBindMs": {
+          "maxMs": 0.0,
+          "meanMs": 0.0,
+          "minMs": 0.0,
+          "samples": 5817
+        },
+        "rhiDescriptorPageCreateMs": {
+          "maxMs": 0.0,
+          "meanMs": 0.0,
+          "minMs": 0.0,
+          "samples": 5817
+        },
+        "rhiFenceWaitMs": {
+          "maxMs": 1.7279,
+          "meanMs": 0.17263300670448659,
+          "minMs": 0.0,
+          "samples": 5817
+        },
+        "rhiGroupCreateMs": {
+          "maxMs": 0.2749,
+          "meanMs": 0.00980163314423244,
+          "minMs": 0.0059,
+          "samples": 5817
+        },
+        "rhiNativeRecordMs": {
+          "maxMs": 0.1238,
+          "meanMs": 0.028988292934502325,
+          "minMs": 0.0196,
+          "samples": 5817
+        },
+        "rhiNativeSubmitMs": {
+          "maxMs": 2.4151,
+          "meanMs": 0.0783207495272474,
+          "minMs": 0.0484,
+          "samples": 5817
+        },
+        "rhiRetireMs": {
+          "maxMs": 0.2923,
+          "meanMs": 0.009289547876912519,
+          "minMs": 0.0034,
+          "samples": 5817
+        },
+        "rhiViewCreateMs": {
+          "maxMs": 0.409,
+          "meanMs": 0.010190029224686271,
+          "minMs": 0.0061,
+          "samples": 5817
+        },
+        "sceneExtractMs": {
+          "maxMs": 1.4769,
+          "meanMs": 0.024643269726663284,
+          "minMs": 0.0171,
+          "samples": 5817
+        },
+        "scenePrepareMs": {
+          "maxMs": 1.9945,
+          "meanMs": 0.42266957194430077,
+          "minMs": 0.3466,
+          "samples": 5817
+        },
+        "scenePrepareOtherMs": {
+          "maxMs": 0.8916,
+          "meanMs": 0.3973936221419971,
+          "minMs": 0.3292,
+          "samples": 5817
+        }
+      },
+      "memory": {
+        "budgetBytes": 2147483648,
+        "highWaterBytes": 6366016,
+        "processPrivateBytes": 314429440,
+        "processWorkingSetBytes": 298987520,
+        "usedBytes": 6366016
+      }
+    },
+    {
+      "id": "pbr-diagnostics-02-dx12",
+      "case": "pbr-diagnostics",
+      "backend": "dx12",
+      "adapter": "NVIDIA GeForce RTX 5060",
+      "driver": "32.0.15.9174",
+      "samples": 5620,
+      "metrics": {
+        "assetUpdateMs": {
+          "maxMs": 0.0072,
+          "meanMs": 0.0004919750889679716,
+          "minMs": 0.0002,
+          "samples": 5620
+        },
+        "cpuRenderMs": {
+          "maxMs": 3.3919,
+          "meanMs": 0.7093621530249099,
+          "minMs": 0.5775,
+          "samples": 5620
+        },
+        "environmentUpdateMs": {
+          "maxMs": 0.0006,
+          "meanMs": 8.86654804270464E-05,
+          "minMs": 0.0,
+          "samples": 5620
+        },
+        "frameTimeMs": {
+          "maxMs": 3.457,
+          "meanMs": 0.8543420106761549,
+          "minMs": 0.6429,
+          "samples": 5620
+        },
+        "gpuPassSumMs": {
+          "maxMs": 0.329376,
+          "meanMs": 0.020617822064056945,
+          "minMs": 0.017088,
+          "samples": 5620
+        },
+        "gpuQueueOverlapMs": {
+          "maxMs": 0.0,
+          "meanMs": 0.0,
+          "minMs": 0.0,
+          "samples": 5620
+        },
+        "gpuQueueSpanMs": {
+          "maxMs": 0.329728,
+          "meanMs": 0.020668082562277538,
+          "minMs": 0.017088,
+          "samples": 5620
+        },
+        "gpuWaitMs": {
+          "maxMs": 1.6939,
+          "meanMs": 0.14497985765124555,
+          "minMs": 0.0001,
+          "samples": 5620
+        },
+        "graphCompileMs": {
+          "maxMs": 0.0745,
+          "meanMs": 0.014705622775800719,
+          "minMs": 0.0117,
+          "samples": 5620
+        },
+        "graphPrepareMs": {
+          "maxMs": 0.0493,
+          "meanMs": 0.0035365302491103187,
+          "minMs": 0.0029,
+          "samples": 5620
+        },
+        "graphRecordMs": {
+          "maxMs": 0.4108,
+          "meanMs": 0.12275153024911022,
+          "minMs": 0.1075,
+          "samples": 5620
+        },
+        "rhiBufferCreateMs": {
+          "maxMs": 0.0,
+          "meanMs": 0.0,
+          "minMs": 0.0,
+          "samples": 5620
+        },
+        "rhiDescriptorHeapBindMs": {
+          "maxMs": 0.0276,
+          "meanMs": 0.0010717971530249143,
+          "minMs": 0.0006,
+          "samples": 5620
+        },
+        "rhiDescriptorPageCreateMs": {
+          "maxMs": 0.0,
+          "meanMs": 0.0,
+          "minMs": 0.0,
+          "samples": 5620
+        },
+        "rhiFenceWaitMs": {
+          "maxMs": 1.6811,
+          "meanMs": 0.13672939501779346,
+          "minMs": 0.0,
+          "samples": 5620
+        },
+        "rhiGroupCreateMs": {
+          "maxMs": 0.2361,
+          "meanMs": 0.035535373665480305,
+          "minMs": 0.0284,
+          "samples": 5620
+        },
+        "rhiNativeRecordMs": {
+          "maxMs": 2.5939,
+          "meanMs": 0.03644247330960852,
+          "minMs": 0.0248,
+          "samples": 5620
+        },
+        "rhiNativeSubmitMs": {
+          "maxMs": 2.7084,
+          "meanMs": 0.0886867437722419,
+          "minMs": 0.0585,
+          "samples": 5620
+        },
+        "rhiRetireMs": {
+          "maxMs": 0.311,
+          "meanMs": 0.008373256227758008,
+          "minMs": 0.0034,
+          "samples": 5620
+        },
+        "rhiViewCreateMs": {
+          "maxMs": 0.0145,
+          "meanMs": 0.0006004626334519551,
+          "minMs": 0.0001,
+          "samples": 5620
+        },
+        "sceneExtractMs": {
+          "maxMs": 0.1629,
+          "meanMs": 0.025476761565836344,
+          "minMs": 0.0189,
+          "samples": 5620
+        },
+        "scenePrepareMs": {
+          "maxMs": 1.806,
+          "meanMs": 0.45217964412811396,
+          "minMs": 0.3668,
+          "samples": 5620
+        },
+        "scenePrepareOtherMs": {
+          "maxMs": 1.776,
+          "meanMs": 0.4261222419928814,
+          "minMs": 0.347,
+          "samples": 5620
+        }
+      },
+      "memory": {
+        "budgetBytes": 2147483648,
+        "highWaterBytes": 7602176,
+        "processPrivateBytes": 95580160,
+        "processWorkingSetBytes": 95186944,
+        "usedBytes": 7602176
+      }
+    },
+    {
+      "id": "pbr-diagnostics-03-dx12",
+      "case": "pbr-diagnostics",
+      "backend": "dx12",
+      "adapter": "NVIDIA GeForce RTX 5060",
+      "driver": "32.0.15.9174",
+      "samples": 5318,
+      "metrics": {
+        "assetUpdateMs": {
+          "maxMs": 0.0124,
+          "meanMs": 0.000513520120345995,
+          "minMs": 0.0002,
+          "samples": 5318
+        },
+        "cpuRenderMs": {
+          "maxMs": 3.7118,
+          "meanMs": 0.7432632756675437,
+          "minMs": 0.5748,
+          "samples": 5318
+        },
+        "environmentUpdateMs": {
+          "maxMs": 0.009,
+          "meanMs": 0.00010065814215870606,
+          "minMs": 0.0,
+          "samples": 5318
+        },
+        "frameTimeMs": {
+          "maxMs": 8.8988,
+          "meanMs": 0.9027031966904845,
+          "minMs": 0.6344,
+          "samples": 5318
+        },
+        "gpuPassSumMs": {
+          "maxMs": 0.41206400000000004,
+          "meanMs": 0.0208848258743889,
+          "minMs": 0.017056,
+          "samples": 5318
+        },
+        "gpuQueueOverlapMs": {
+          "maxMs": 0.0,
+          "meanMs": 0.0,
+          "minMs": 0.0,
+          "samples": 5318
+        },
+        "gpuQueueSpanMs": {
+          "maxMs": 0.412256,
+          "meanMs": 0.02093804287326069,
+          "minMs": 0.017056,
+          "samples": 5318
+        },
+        "gpuWaitMs": {
+          "maxMs": 7.72,
+          "meanMs": 0.1594399210229405,
+          "minMs": 0.0002,
+          "samples": 5318
+        },
+        "graphCompileMs": {
+          "maxMs": 0.1294,
+          "meanMs": 0.015424821361414064,
+          "minMs": 0.0118,
+          "samples": 5318
+        },
+        "graphPrepareMs": {
+          "maxMs": 0.0467,
+          "meanMs": 0.0037461451673561595,
+          "minMs": 0.0029,
+          "samples": 5318
+        },
+        "graphRecordMs": {
+          "maxMs": 1.794,
+          "meanMs": 0.12869825122226414,
+          "minMs": 0.1057,
+          "samples": 5318
+        },
+        "rhiBufferCreateMs": {
+          "maxMs": 0.0,
+          "meanMs": 0.0,
+          "minMs": 0.0,
+          "samples": 5318
+        },
+        "rhiDescriptorHeapBindMs": {
+          "maxMs": 0.1198,
+          "meanMs": 0.0012197066566378362,
+          "minMs": 0.0007,
+          "samples": 5318
+        },
+        "rhiDescriptorPageCreateMs": {
+          "maxMs": 0.0,
+          "meanMs": 0.0,
+          "minMs": 0.0,
+          "samples": 5318
+        },
+        "rhiFenceWaitMs": {
+          "maxMs": 7.6956,
+          "meanMs": 0.15020436254230865,
+          "minMs": 0.0,
+          "samples": 5318
+        },
+        "rhiGroupCreateMs": {
+          "maxMs": 0.3364,
+          "meanMs": 0.03805156073711927,
+          "minMs": 0.0275,
+          "samples": 5318
+        },
+        "rhiNativeRecordMs": {
+          "maxMs": 1.1346,
+          "meanMs": 0.04021130124106803,
+          "minMs": 0.025,
+          "samples": 5318
+        },
+        "rhiNativeSubmitMs": {
+          "maxMs": 1.2631,
+          "meanMs": 0.09881534411432873,
+          "minMs": 0.0595,
+          "samples": 5318
+        },
+        "rhiRetireMs": {
+          "maxMs": 2.2281,
+          "meanMs": 0.009404795035727725,
+          "minMs": 0.0035,
+          "samples": 5318
+        },
+        "rhiViewCreateMs": {
+          "maxMs": 0.0107,
+          "meanMs": 0.0006165475742760444,
+          "minMs": 0.0,
+          "samples": 5318
+        },
+        "sceneExtractMs": {
+          "maxMs": 0.7142,
+          "meanMs": 0.02652790522752916,
+          "minMs": 0.0186,
+          "samples": 5318
+        },
+        "scenePrepareMs": {
+          "maxMs": 1.9408,
+          "meanMs": 0.46750754042873366,
+          "minMs": 0.3707,
+          "samples": 5318
+        },
+        "scenePrepareOtherMs": {
+          "maxMs": 1.7894,
+          "meanMs": 0.44036545693869905,
+          "minMs": 0.3516,
+          "samples": 5318
+        }
+      },
+      "memory": {
+        "budgetBytes": 2147483648,
+        "highWaterBytes": 7602176,
+        "processPrivateBytes": 94838784,
+        "processWorkingSetBytes": 94965760,
+        "usedBytes": 7602176
+      }
+    },
+    {
+      "id": "pbr-diagnostics-03-vulkan",
+      "case": "pbr-diagnostics",
+      "backend": "vulkan",
+      "adapter": "NVIDIA GeForce RTX 5060",
+      "driver": "NVIDIA; 591.74 (raw 0x93D28000)",
+      "samples": 5793,
+      "metrics": {
+        "assetUpdateMs": {
+          "maxMs": 0.0363,
+          "meanMs": 0.0005154324184360445,
+          "minMs": 0.0002,
+          "samples": 5793
+        },
+        "cpuRenderMs": {
+          "maxMs": 3.37,
+          "meanMs": 0.6433430174348358,
+          "minMs": 0.5169,
+          "samples": 5793
+        },
+        "environmentUpdateMs": {
+          "maxMs": 0.0019,
+          "meanMs": 0.00010680131192818945,
+          "minMs": 0.0,
+          "samples": 5793
+        },
+        "frameTimeMs": {
+          "maxMs": 3.4827,
+          "meanMs": 0.8286694286207492,
+          "minMs": 0.6138,
+          "samples": 5793
+        },
+        "gpuPassSumMs": {
+          "maxMs": 0.37347199999999997,
+          "meanMs": 0.01954676333505954,
+          "minMs": 0.016512000000000002,
+          "samples": 5793
+        },
+        "gpuQueueOverlapMs": {
+          "maxMs": 0.0,
+          "meanMs": 0.0,
+          "minMs": 0.0,
+          "samples": 5793
+        },
+        "gpuQueueSpanMs": {
+          "maxMs": 1.219456,
+          "meanMs": 0.029284341791817603,
+          "minMs": 0.025312,
+          "samples": 5793
+        },
+        "gpuWaitMs": {
+          "maxMs": 1.705,
+          "meanMs": 0.18532641118591425,
+          "minMs": 0.0002,
+          "samples": 5793
+        },
+        "graphCompileMs": {
+          "maxMs": 0.2112,
+          "meanMs": 0.014422078370447084,
+          "minMs": 0.0114,
+          "samples": 5793
+        },
+        "graphPrepareMs": {
+          "maxMs": 0.0287,
+          "meanMs": 0.0034574659071292977,
+          "minMs": 0.0028,
+          "samples": 5793
+        },
+        "graphRecordMs": {
+          "maxMs": 1.1614,
+          "meanMs": 0.10373732090453991,
+          "minMs": 0.0878,
+          "samples": 5793
+        },
+        "rhiBufferCreateMs": {
+          "maxMs": 0.0,
+          "meanMs": 0.0,
+          "minMs": 0.0,
+          "samples": 5793
+        },
+        "rhiDescriptorHeapBindMs": {
+          "maxMs": 0.0,
+          "meanMs": 0.0,
+          "minMs": 0.0,
+          "samples": 5793
+        },
+        "rhiDescriptorPageCreateMs": {
+          "maxMs": 0.0,
+          "meanMs": 0.0,
+          "minMs": 0.0,
+          "samples": 5793
+        },
+        "rhiFenceWaitMs": {
+          "maxMs": 1.6909,
+          "meanMs": 0.17587186259278395,
+          "minMs": 0.0,
+          "samples": 5793
+        },
+        "rhiGroupCreateMs": {
+          "maxMs": 0.0548,
+          "meanMs": 0.009532349387191446,
+          "minMs": 0.0059,
+          "samples": 5793
+        },
+        "rhiNativeRecordMs": {
+          "maxMs": 0.3617,
+          "meanMs": 0.029026376661488044,
+          "minMs": 0.0186,
+          "samples": 5793
+        },
+        "rhiNativeSubmitMs": {
+          "maxMs": 2.6019,
+          "meanMs": 0.07765772484032486,
+          "minMs": 0.0477,
+          "samples": 5793
+        },
+        "rhiRetireMs": {
+          "maxMs": 0.0833,
+          "meanMs": 0.009609563266010687,
+          "minMs": 0.0037,
+          "samples": 5793
+        },
+        "rhiViewCreateMs": {
+          "maxMs": 0.0592,
+          "meanMs": 0.009376316243742445,
+          "minMs": 0.006,
+          "samples": 5793
+        },
+        "sceneExtractMs": {
+          "maxMs": 0.1187,
+          "meanMs": 0.024889659934403528,
+          "minMs": 0.0172,
+          "samples": 5793
+        },
+        "scenePrepareMs": {
+          "maxMs": 1.2574,
+          "meanMs": 0.42644118764025374,
+          "minMs": 0.3524,
+          "samples": 5793
+        },
+        "scenePrepareOtherMs": {
+          "maxMs": 1.1789,
+          "meanMs": 0.4009292939754864,
+          "minMs": 0.3345,
+          "samples": 5793
+        }
+      },
+      "memory": {
+        "budgetBytes": 2147483648,
+        "highWaterBytes": 6366016,
+        "processPrivateBytes": 313106432,
+        "processWorkingSetBytes": 299175936,
+        "usedBytes": 6366016
+      }
+    },
+    {
+      "id": "shadow-01-dx12",
+      "case": "shadow",
+      "backend": "dx12",
+      "adapter": "NVIDIA GeForce RTX 5060",
+      "driver": "32.0.15.9174",
+      "samples": 6439,
+      "metrics": {
+        "cpuRenderMs": {
+          "maxMs": 1.8033,
+          "meanMs": 0.5825729771703724,
+          "minMs": 0.4567,
+          "samples": 6439
+        },
+        "frameTimeMs": {
+          "maxMs": 2.2956,
+          "meanMs": 0.7513027644044116,
+          "minMs": 0.5317,
+          "samples": 6439
+        },
+        "gpuPassSumMs": {
+          "maxMs": 1.36032,
+          "meanMs": 0.03758621400838649,
+          "minMs": 0.03296,
+          "samples": 6439
+        },
+        "gpuQueueOverlapMs": {
+          "maxMs": 0.0,
+          "meanMs": 0.0,
+          "minMs": 0.0,
+          "samples": 6439
+        },
+        "gpuQueueSpanMs": {
+          "maxMs": 1.360672,
+          "meanMs": 0.037596948594502286,
+          "minMs": 0.033024,
+          "samples": 6439
+        },
+        "gpuWaitMs": {
+          "maxMs": 1.6235,
+          "meanMs": 0.16872978723404272,
+          "minMs": 0.0003,
+          "samples": 6439
+        },
+        "graphCompileMs": {
+          "maxMs": 0.0841,
+          "meanMs": 0.020849852461562304,
+          "minMs": 0.0167,
+          "samples": 6439
+        },
+        "graphPrepareMs": {
+          "maxMs": 0.042,
+          "meanMs": 0.003361841900916277,
+          "minMs": 0.0025,
+          "samples": 6439
+        },
+        "graphRecordMs": {
+          "maxMs": 0.4878,
+          "meanMs": 0.1030582854480512,
+          "minMs": 0.085,
+          "samples": 6439
+        },
+        "scenePrepareMs": {
+          "maxMs": 1.3691,
+          "meanMs": 0.34178624009939357,
+          "minMs": 0.2752,
+          "samples": 6439
+        }
+      },
+      "memory": {
+        "budgetBytes": 2147483648,
+        "highWaterBytes": 12451840,
+        "processPrivateBytes": 100028416,
+        "processWorkingSetBytes": 94973952,
+        "usedBytes": 12451840
+      }
+    },
+    {
+      "id": "shadow-01-vulkan",
+      "case": "shadow",
+      "backend": "vulkan",
+      "adapter": "NVIDIA GeForce RTX 5060",
+      "driver": "NVIDIA; 591.74 (raw 0x93D28000)",
+      "samples": 6148,
+      "metrics": {
+        "cpuRenderMs": {
+          "maxMs": 3.8195,
+          "meanMs": 0.5767988451528936,
+          "minMs": 0.4136,
+          "samples": 6148
+        },
+        "frameTimeMs": {
+          "maxMs": 5.6336,
+          "meanMs": 0.7865169323357183,
+          "minMs": 0.5195,
+          "samples": 6148
+        },
+        "gpuPassSumMs": {
+          "maxMs": 1.258016,
+          "meanMs": 0.03495886011711118,
+          "minMs": 0.031104,
+          "samples": 6148
+        },
+        "gpuQueueOverlapMs": {
+          "maxMs": 0.0,
+          "meanMs": 0.0,
+          "minMs": 0.0,
+          "samples": 6148
+        },
+        "gpuQueueSpanMs": {
+          "maxMs": 1.26096,
+          "meanMs": 0.04012505400130129,
+          "minMs": 0.03488,
+          "samples": 6148
+        },
+        "gpuWaitMs": {
+          "maxMs": 4.6291,
+          "meanMs": 0.2097180871828232,
+          "minMs": 0.0001,
+          "samples": 6148
+        },
+        "graphCompileMs": {
+          "maxMs": 0.1184,
+          "meanMs": 0.020587605725439207,
+          "minMs": 0.0153,
+          "samples": 6148
+        },
+        "graphPrepareMs": {
+          "maxMs": 0.0728,
+          "meanMs": 0.0034966818477553665,
+          "minMs": 0.0025,
+          "samples": 6148
+        },
+        "graphRecordMs": {
+          "maxMs": 2.2999,
+          "meanMs": 0.09277231620039034,
+          "minMs": 0.0703,
+          "samples": 6148
+        },
+        "scenePrepareMs": {
+          "maxMs": 2.1928,
+          "meanMs": 0.35770585556278356,
+          "minMs": 0.2668,
+          "samples": 6148
+        }
+      },
+      "memory": {
+        "budgetBytes": 2147483648,
+        "highWaterBytes": 11606592,
+        "processPrivateBytes": 318816256,
+        "processWorkingSetBytes": 300802048,
+        "usedBytes": 11606592
+      }
+    },
+    {
+      "id": "shadow-02-vulkan",
+      "case": "shadow",
+      "backend": "vulkan",
+      "adapter": "NVIDIA GeForce RTX 5060",
+      "driver": "NVIDIA; 591.74 (raw 0x93D28000)",
+      "samples": 5962,
+      "metrics": {
+        "cpuRenderMs": {
+          "maxMs": 3.0595,
+          "meanMs": 0.6332887118416627,
+          "minMs": 0.4278,
+          "samples": 5962
+        },
+        "frameTimeMs": {
+          "maxMs": 3.1747,
+          "meanMs": 0.8102363804092605,
+          "minMs": 0.5356,
+          "samples": 5962
+        },
+        "gpuPassSumMs": {
+          "maxMs": 0.35187199999999996,
+          "meanMs": 0.03434373431734314,
+          "minMs": 0.031487999999999995,
+          "samples": 5962
+        },
+        "gpuQueueOverlapMs": {
+          "maxMs": 0.0,
+          "meanMs": 0.0,
+          "minMs": 0.0,
+          "samples": 5962
+        },
+        "gpuQueueSpanMs": {
+          "maxMs": 0.364128,
+          "meanMs": 0.03872943039248575,
+          "minMs": 0.034944,
+          "samples": 5962
+        },
+        "gpuWaitMs": {
+          "maxMs": 2.1528,
+          "meanMs": 0.17694766856759428,
+          "minMs": 0.0002,
+          "samples": 5962
+        },
+        "graphCompileMs": {
+          "maxMs": 0.1555,
+          "meanMs": 0.022407849714860796,
+          "minMs": 0.016,
+          "samples": 5962
+        },
+        "graphPrepareMs": {
+          "maxMs": 0.1059,
+          "meanMs": 0.0037704126132170335,
+          "minMs": 0.0025,
+          "samples": 5962
+        },
+        "graphRecordMs": {
+          "maxMs": 1.3111,
+          "meanMs": 0.10144832271049992,
+          "minMs": 0.0724,
+          "samples": 5962
+        },
+        "scenePrepareMs": {
+          "maxMs": 1.5373,
+          "meanMs": 0.39425296880241617,
+          "minMs": 0.2766,
+          "samples": 5962
+        }
+      },
+      "memory": {
+        "budgetBytes": 2147483648,
+        "highWaterBytes": 11606592,
+        "processPrivateBytes": 322985984,
+        "processWorkingSetBytes": 300978176,
+        "usedBytes": 11606592
+      }
+    },
+    {
+      "id": "shadow-02-dx12",
+      "case": "shadow",
+      "backend": "dx12",
+      "adapter": "NVIDIA GeForce RTX 5060",
+      "driver": "32.0.15.9174",
+      "samples": 5213,
+      "metrics": {
+        "cpuRenderMs": {
+          "maxMs": 4.221,
+          "meanMs": 0.784395070017264,
+          "minMs": 0.5052,
+          "samples": 5213
+        },
+        "frameTimeMs": {
+          "maxMs": 4.2391,
+          "meanMs": 0.9294274889698827,
+          "minMs": 0.5876,
+          "samples": 5213
+        },
+        "gpuPassSumMs": {
+          "maxMs": 0.36624,
+          "meanMs": 0.03777735967772875,
+          "minMs": 0.033408,
+          "samples": 5213
+        },
+        "gpuQueueOverlapMs": {
+          "maxMs": 0.0,
+          "meanMs": 0.0,
+          "minMs": 0.0,
+          "samples": 5213
+        },
+        "gpuQueueSpanMs": {
+          "maxMs": 0.366272,
+          "meanMs": 0.0377887957030501,
+          "minMs": 0.03344,
+          "samples": 5213
+        },
+        "gpuWaitMs": {
+          "maxMs": 2.3835,
+          "meanMs": 0.1450324189526185,
+          "minMs": 0.0001,
+          "samples": 5213
+        },
+        "graphCompileMs": {
+          "maxMs": 0.2154,
+          "meanMs": 0.027046249760214837,
+          "minMs": 0.0189,
+          "samples": 5213
+        },
+        "graphPrepareMs": {
+          "maxMs": 0.1363,
+          "meanMs": 0.004138442355649331,
+          "minMs": 0.0027,
+          "samples": 5213
+        },
+        "graphRecordMs": {
+          "maxMs": 2.082,
+          "meanMs": 0.1400321312104354,
+          "minMs": 0.0977,
+          "samples": 5213
+        },
+        "scenePrepareMs": {
+          "maxMs": 3.1929,
+          "meanMs": 0.4617321887588718,
+          "minMs": 0.3063,
+          "samples": 5213
+        }
+      },
+      "memory": {
+        "budgetBytes": 2147483648,
+        "highWaterBytes": 12451840,
+        "processPrivateBytes": 100315136,
+        "processWorkingSetBytes": 94978048,
+        "usedBytes": 12451840
+      }
+    },
+    {
+      "id": "shadow-03-dx12",
+      "case": "shadow",
+      "backend": "dx12",
+      "adapter": "NVIDIA GeForce RTX 5060",
+      "driver": "32.0.15.9174",
+      "samples": 5420,
+      "metrics": {
+        "cpuRenderMs": {
+          "maxMs": 6.5774,
+          "meanMs": 0.7509410332103332,
+          "minMs": 0.4834,
+          "samples": 5420
+        },
+        "frameTimeMs": {
+          "maxMs": 7.7477,
+          "meanMs": 0.8921575461254623,
+          "minMs": 0.5607,
+          "samples": 5420
+        },
+        "gpuPassSumMs": {
+          "maxMs": 0.366112,
+          "meanMs": 0.0383880088560884,
+          "minMs": 0.033088,
+          "samples": 5420
+        },
+        "gpuQueueOverlapMs": {
+          "maxMs": 0.0,
+          "meanMs": 0.0,
+          "minMs": 0.0,
+          "samples": 5420
+        },
+        "gpuQueueSpanMs": {
+          "maxMs": 0.366112,
+          "meanMs": 0.03839966937269357,
+          "minMs": 0.033088,
+          "samples": 5420
+        },
+        "gpuWaitMs": {
+          "maxMs": 3.1019,
+          "meanMs": 0.1412165129151299,
+          "minMs": 0.0001,
+          "samples": 5420
+        },
+        "graphCompileMs": {
+          "maxMs": 0.3837,
+          "meanMs": 0.024996678966789716,
+          "minMs": 0.0172,
+          "samples": 5420
+        },
+        "graphPrepareMs": {
+          "maxMs": 0.7745,
+          "meanMs": 0.004363671586715856,
+          "minMs": 0.0027,
+          "samples": 5420
+        },
+        "graphRecordMs": {
+          "maxMs": 0.8767,
+          "meanMs": 0.12419509225092237,
+          "minMs": 0.0859,
+          "samples": 5420
+        },
+        "scenePrepareMs": {
+          "maxMs": 5.6604,
+          "meanMs": 0.4502820295202942,
+          "minMs": 0.2936,
+          "samples": 5420
+        }
+      },
+      "memory": {
+        "budgetBytes": 2147483648,
+        "highWaterBytes": 12451840,
+        "processPrivateBytes": 102076416,
+        "processWorkingSetBytes": 95232000,
+        "usedBytes": 12451840
+      }
+    },
+    {
+      "id": "shadow-03-vulkan",
+      "case": "shadow",
+      "backend": "vulkan",
+      "adapter": "NVIDIA GeForce RTX 5060",
+      "driver": "NVIDIA; 591.74 (raw 0x93D28000)",
+      "samples": 6009,
+      "metrics": {
+        "cpuRenderMs": {
+          "maxMs": 3.7683,
+          "meanMs": 0.6325952404726245,
+          "minMs": 0.4243,
+          "samples": 6009
+        },
+        "frameTimeMs": {
+          "maxMs": 5.0444,
+          "meanMs": 0.8043489432517885,
+          "minMs": 0.5363,
+          "samples": 6009
+        },
+        "gpuPassSumMs": {
+          "maxMs": 0.35622400000000004,
+          "meanMs": 0.03448557829921788,
+          "minMs": 0.031584,
+          "samples": 6009
+        },
+        "gpuQueueOverlapMs": {
+          "maxMs": 0.0,
+          "meanMs": 0.0,
+          "minMs": 0.0,
+          "samples": 6009
+        },
+        "gpuQueueSpanMs": {
+          "maxMs": 0.36208,
+          "meanMs": 0.03920522416375433,
+          "minMs": 0.034976,
+          "samples": 6009
+        },
+        "gpuWaitMs": {
+          "maxMs": 2.5318,
+          "meanMs": 0.17175370277916505,
+          "minMs": 0.0001,
+          "samples": 6009
+        },
+        "graphCompileMs": {
+          "maxMs": 0.1307,
+          "meanMs": 0.022053602928939948,
+          "minMs": 0.0159,
+          "samples": 6009
+        },
+        "graphPrepareMs": {
+          "maxMs": 0.1334,
+          "meanMs": 0.00381567648527208,
+          "minMs": 0.0026,
+          "samples": 6009
+        },
+        "graphRecordMs": {
+          "maxMs": 1.6871,
+          "meanMs": 0.10171279747046094,
+          "minMs": 0.0714,
+          "samples": 6009
+        },
+        "scenePrepareMs": {
+          "maxMs": 3.2271,
+          "meanMs": 0.39437583624563133,
+          "minMs": 0.2742,
+          "samples": 6009
+        }
+      },
+      "memory": {
+        "budgetBytes": 2147483648,
+        "highWaterBytes": 11606592,
+        "processPrivateBytes": 319143936,
+        "processWorkingSetBytes": 301121536,
+        "usedBytes": 11606592
+      }
+    },
+    {
+      "id": "raytracing-01-dx12",
+      "case": "raytracing",
+      "backend": "dx12",
+      "adapter": "NVIDIA GeForce RTX 5060",
+      "driver": "32.0.15.9174",
+      "samples": 2235,
+      "metrics": {
+        "cpuRenderMs": {
+          "maxMs": 5.3414,
+          "meanMs": 1.4238621923937338,
+          "minMs": 0.8637,
+          "samples": 2235
+        },
+        "frameTimeMs": {
+          "maxMs": 6.9985,
+          "meanMs": 2.18794881431767,
+          "minMs": 1.2611,
+          "samples": 2235
+        },
+        "gpuPassSumMs": {
+          "maxMs": 2.318816,
+          "meanMs": 0.46650546398210285,
+          "minMs": 0.138816,
+          "samples": 2235
+        },
+        "gpuQueueOverlapMs": {
+          "maxMs": 0.0,
+          "meanMs": 0.0,
+          "minMs": 0.0,
+          "samples": 2235
+        },
+        "gpuQueueSpanMs": {
+          "maxMs": 2.321056,
+          "meanMs": 0.4734302496644305,
+          "minMs": 0.139104,
+          "samples": 2235
+        },
+        "gpuWaitMs": {
+          "maxMs": 4.7915,
+          "meanMs": 0.7640866219239364,
+          "minMs": 0.1141,
+          "samples": 2235
+        },
+        "graphCompileMs": {
+          "maxMs": 0.5229,
+          "meanMs": 0.07712639821029074,
+          "minMs": 0.0371,
+          "samples": 2235
+        },
+        "graphPrepareMs": {
+          "maxMs": 0.0422,
+          "meanMs": 0.010113288590604036,
+          "minMs": 0.0051,
+          "samples": 2235
+        },
+        "graphRecordMs": {
+          "maxMs": 1.2473,
+          "meanMs": 0.2584902908277401,
+          "minMs": 0.14,
+          "samples": 2235
+        },
+        "scenePrepareMs": {
+          "maxMs": 2.8376,
+          "meanMs": 0.8327194183445183,
+          "minMs": 0.5305,
+          "samples": 2235
+        }
+      },
+      "memory": {
+        "budgetBytes": 2147483648,
+        "highWaterBytes": 90832896,
+        "processPrivateBytes": 351776768,
+        "processWorkingSetBytes": 262438912,
+        "usedBytes": 59310080
+      }
+    },
+    {
+      "id": "raytracing-01-vulkan",
+      "case": "raytracing",
+      "backend": "vulkan",
+      "adapter": "NVIDIA GeForce RTX 5060",
+      "driver": "NVIDIA; 591.74 (raw 0x93D28000)",
+      "samples": 2418,
+      "metrics": {
+        "cpuRenderMs": {
+          "maxMs": 4.3908,
+          "meanMs": 1.2164992969396184,
+          "minMs": 0.652,
+          "samples": 2418
+        },
+        "frameTimeMs": {
+          "maxMs": 5.4726,
+          "meanMs": 2.0160885856079425,
+          "minMs": 1.1014,
+          "samples": 2418
+        },
+        "gpuPassSumMs": {
+          "maxMs": 0.838304,
+          "meanMs": 0.4252898329197692,
+          "minMs": 0.119136,
+          "samples": 2418
+        },
+        "gpuQueueOverlapMs": {
+          "maxMs": 0.0,
+          "meanMs": 0.0,
+          "minMs": 0.0,
+          "samples": 2418
+        },
+        "gpuQueueSpanMs": {
+          "maxMs": 0.850368,
+          "meanMs": 0.4373386004962784,
+          "minMs": 0.125312,
+          "samples": 2418
+        },
+        "gpuWaitMs": {
+          "maxMs": 2.1437,
+          "meanMs": 0.7995892886683216,
+          "minMs": 0.0008,
+          "samples": 2418
+        },
+        "graphCompileMs": {
+          "maxMs": 0.183,
+          "meanMs": 0.07487084367245649,
+          "minMs": 0.034,
+          "samples": 2418
+        },
+        "graphPrepareMs": {
+          "maxMs": 0.0874,
+          "meanMs": 0.0259956575682382,
+          "minMs": 0.0095,
+          "samples": 2418
+        },
+        "graphRecordMs": {
+          "maxMs": 1.0443,
+          "meanMs": 0.21875252274607127,
+          "minMs": 0.1123,
+          "samples": 2418
+        },
+        "scenePrepareMs": {
+          "maxMs": 1.7386,
+          "meanMs": 0.679228494623657,
+          "minMs": 0.394,
+          "samples": 2418
+        }
+      },
+      "memory": {
+        "budgetBytes": 2147483648,
+        "highWaterBytes": 89735104,
+        "processPrivateBytes": 476725248,
+        "processWorkingSetBytes": 340635648,
+        "usedBytes": 58277568
+      }
+    },
+    {
+      "id": "raytracing-02-vulkan",
+      "case": "raytracing",
+      "backend": "vulkan",
+      "adapter": "NVIDIA GeForce RTX 5060",
+      "driver": "NVIDIA; 591.74 (raw 0x93D28000)",
+      "samples": 2368,
+      "metrics": {
+        "cpuRenderMs": {
+          "maxMs": 4.9702,
+          "meanMs": 1.2425182010135134,
+          "minMs": 0.6573,
+          "samples": 2368
+        },
+        "frameTimeMs": {
+          "maxMs": 5.0286,
+          "meanMs": 2.058426435810814,
+          "minMs": 1.0533,
+          "samples": 2368
+        },
+        "gpuPassSumMs": {
+          "maxMs": 0.895808,
+          "meanMs": 0.4311794189189185,
+          "minMs": 0.11888,
+          "samples": 2368
+        },
+        "gpuQueueOverlapMs": {
+          "maxMs": 0.0,
+          "meanMs": 0.0,
+          "minMs": 0.0,
+          "samples": 2368
+        },
+        "gpuQueueSpanMs": {
+          "maxMs": 0.907328,
+          "meanMs": 0.442626972972973,
+          "minMs": 0.125024,
+          "samples": 2368
+        },
+        "gpuWaitMs": {
+          "maxMs": 2.6765,
+          "meanMs": 0.8159082347972981,
+          "minMs": 0.0006,
+          "samples": 2368
+        },
+        "graphCompileMs": {
+          "maxMs": 0.3572,
+          "meanMs": 0.07639983108108095,
+          "minMs": 0.0343,
+          "samples": 2368
+        },
+        "graphPrepareMs": {
+          "maxMs": 0.1447,
+          "meanMs": 0.027393454391891874,
+          "minMs": 0.0095,
+          "samples": 2368
+        },
+        "graphRecordMs": {
+          "maxMs": 0.712,
+          "meanMs": 0.22308378378378368,
+          "minMs": 0.1126,
+          "samples": 2368
+        },
+        "scenePrepareMs": {
+          "maxMs": 1.3359,
+          "meanMs": 0.690470692567567,
+          "minMs": 0.3934,
+          "samples": 2368
+        }
+      },
+      "memory": {
+        "budgetBytes": 2147483648,
+        "highWaterBytes": 89735104,
+        "processPrivateBytes": 477593600,
+        "processWorkingSetBytes": 341393408,
+        "usedBytes": 58277568
+      }
+    },
+    {
+      "id": "raytracing-02-dx12",
+      "case": "raytracing",
+      "backend": "dx12",
+      "adapter": "NVIDIA GeForce RTX 5060",
+      "driver": "32.0.15.9174",
+      "samples": 2216,
+      "metrics": {
+        "cpuRenderMs": {
+          "maxMs": 3.5279,
+          "meanMs": 1.4464383122743636,
+          "minMs": 0.9337,
+          "samples": 2216
+        },
+        "frameTimeMs": {
+          "maxMs": 4.2434,
+          "meanMs": 2.205554377256315,
+          "minMs": 1.2832,
+          "samples": 2216
+        },
+        "gpuPassSumMs": {
+          "maxMs": 0.9566079999999998,
+          "meanMs": 0.46808555956678743,
+          "minMs": 0.13452799999999998,
+          "samples": 2216
+        },
+        "gpuQueueOverlapMs": {
+          "maxMs": 0.0,
+          "meanMs": 0.0,
+          "minMs": 0.0,
+          "samples": 2216
+        },
+        "gpuQueueSpanMs": {
+          "maxMs": 0.958912,
+          "meanMs": 0.4747443465703974,
+          "minMs": 0.134912,
+          "samples": 2216
+        },
+        "gpuWaitMs": {
+          "maxMs": 1.6909,
+          "meanMs": 0.7591160649819503,
+          "minMs": 0.1727,
+          "samples": 2216
+        },
+        "graphCompileMs": {
+          "maxMs": 0.2853,
+          "meanMs": 0.07900699458483751,
+          "minMs": 0.0378,
+          "samples": 2216
+        },
+        "graphPrepareMs": {
+          "maxMs": 0.1432,
+          "meanMs": 0.01085085740072205,
+          "minMs": 0.0056,
+          "samples": 2216
+        },
+        "graphRecordMs": {
+          "maxMs": 0.7762,
+          "meanMs": 0.2617812274368231,
+          "minMs": 0.1412,
+          "samples": 2216
+        },
+        "scenePrepareMs": {
+          "maxMs": 2.0546,
+          "meanMs": 0.8452151624548737,
+          "minMs": 0.5678,
+          "samples": 2216
+        }
+      },
+      "memory": {
+        "budgetBytes": 2147483648,
+        "highWaterBytes": 90832896,
+        "processPrivateBytes": 353050624,
+        "processWorkingSetBytes": 262520832,
+        "usedBytes": 59310080
+      }
+    },
+    {
+      "id": "raytracing-03-dx12",
+      "case": "raytracing",
+      "backend": "dx12",
+      "adapter": "NVIDIA GeForce RTX 5060",
+      "driver": "32.0.15.9174",
+      "samples": 2214,
+      "metrics": {
+        "cpuRenderMs": {
+          "maxMs": 3.6219,
+          "meanMs": 1.438183468834689,
+          "minMs": 0.8494,
+          "samples": 2214
+        },
+        "frameTimeMs": {
+          "maxMs": 6.2871,
+          "meanMs": 2.209804019873533,
+          "minMs": 1.2651,
+          "samples": 2214
+        },
+        "gpuPassSumMs": {
+          "maxMs": 0.885184,
+          "meanMs": 0.4700478554652211,
+          "minMs": 0.135552,
+          "samples": 2214
+        },
+        "gpuQueueOverlapMs": {
+          "maxMs": 0.0,
+          "meanMs": 0.0,
+          "minMs": 0.0,
+          "samples": 2214
+        },
+        "gpuQueueSpanMs": {
+          "maxMs": 0.972544,
+          "meanMs": 0.476730912375791,
+          "minMs": 0.13584,
+          "samples": 2214
+        },
+        "gpuWaitMs": {
+          "maxMs": 3.3851,
+          "meanMs": 0.7716205510388443,
+          "minMs": 0.1083,
+          "samples": 2214
+        },
+        "graphCompileMs": {
+          "maxMs": 0.6842,
+          "meanMs": 0.07924539295392961,
+          "minMs": 0.036,
+          "samples": 2214
+        },
+        "graphPrepareMs": {
+          "maxMs": 0.1348,
+          "meanMs": 0.009433152664859966,
+          "minMs": 0.005,
+          "samples": 2214
+        },
+        "graphRecordMs": {
+          "maxMs": 1.5759,
+          "meanMs": 0.25868870822041495,
+          "minMs": 0.1355,
+          "samples": 2214
+        },
+        "scenePrepareMs": {
+          "maxMs": 2.9631,
+          "meanMs": 0.8501997289972892,
+          "minMs": 0.5296,
+          "samples": 2214
+        }
+      },
+      "memory": {
+        "budgetBytes": 2147483648,
+        "highWaterBytes": 90832896,
+        "processPrivateBytes": 349032448,
+        "processWorkingSetBytes": 262225920,
+        "usedBytes": 59310080
+      }
+    },
+    {
+      "id": "raytracing-03-vulkan",
+      "case": "raytracing",
+      "backend": "vulkan",
+      "adapter": "NVIDIA GeForce RTX 5060",
+      "driver": "NVIDIA; 591.74 (raw 0x93D28000)",
+      "samples": 2287,
+      "metrics": {
+        "cpuRenderMs": {
+          "maxMs": 4.2618,
+          "meanMs": 1.3146072584171409,
+          "minMs": 0.6685,
+          "samples": 2287
+        },
+        "frameTimeMs": {
+          "maxMs": 4.7431,
+          "meanMs": 2.1360429383471837,
+          "minMs": 1.1252,
+          "samples": 2287
+        },
+        "gpuPassSumMs": {
+          "maxMs": 1.01024,
+          "meanMs": 0.43977823874070887,
+          "minMs": 0.11888,
+          "samples": 2287
+        },
+        "gpuQueueOverlapMs": {
+          "maxMs": 0.0,
+          "meanMs": 0.0,
+          "minMs": 0.0,
+          "samples": 2287
+        },
+        "gpuQueueSpanMs": {
+          "maxMs": 1.021568,
+          "meanMs": 0.45165077044162677,
+          "minMs": 0.125024,
+          "samples": 2287
+        },
+        "gpuWaitMs": {
+          "maxMs": 2.92,
+          "meanMs": 0.8214356799300394,
+          "minMs": 0.0005,
+          "samples": 2287
+        },
+        "graphCompileMs": {
+          "maxMs": 0.2097,
+          "meanMs": 0.07388893747267168,
+          "minMs": 0.0354,
+          "samples": 2287
+        },
+        "graphPrepareMs": {
+          "maxMs": 0.395,
+          "meanMs": 0.02578898119807609,
+          "minMs": 0.0098,
+          "samples": 2287
+        },
+        "graphRecordMs": {
+          "maxMs": 0.6325,
+          "meanMs": 0.32459191080017563,
+          "minMs": 0.115,
+          "samples": 2287
+        },
+        "scenePrepareMs": {
+          "maxMs": 1.4542,
+          "meanMs": 0.6736700043725412,
+          "minMs": 0.4008,
+          "samples": 2287
+        }
+      },
+      "memory": {
+        "budgetBytes": 2147483648,
+        "highWaterBytes": 89735104,
+        "processPrivateBytes": 473620480,
+        "processWorkingSetBytes": 341258240,
+        "usedBytes": 58277568
+      }
+    }
+  ]
+}

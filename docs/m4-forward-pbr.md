@@ -39,6 +39,29 @@ Scene 的可保存字段：
 
 预滤波在 Renderer 准备阶段确定性执行，不在 Graph Execute 中运行。每个图块 64×32，纵向 6 层 GGX 粗糙度 `[0,1]` 加一层 cosine 卷积 irradiance/pi，128 个 Hammersley 样本；BRDF scale/bias LUT 为 64×64、128 样本，采用 GGX 与 Schlick-Smith 的 split-sum 近似。使用单 mip/layer 的 RGBA32F 2D 图集，Shader 显式双线性 Load、经度环绕、纬度钳制和粗糙度层插值。该低分辨率近似用于基础 IBL，无环境重要性采样、原生 cubemap/mip、镜面多次散射补偿或实时探针。
 
+CPU 预计算表只保存固定尺寸的 sRGB 解码、输出方向/切线基及样本方向，不缓存输入图像或改变
+每像素样本的累加顺序。空图直接填充 fallback；固定 BRDF LUT 首次调用生成，后续返回拥有独立
+像素存储的值副本。函数局部静态初始化保证并发首次调用安全，缓存不持有 Device/GPU 对象，
+因此可跨 Renderer/后端重建复用。BRDF 半向量按 roughness 行生成一次。`environment.contracts`
+保留改造前独立标量算法，覆盖非均匀/单像素/奇数尺寸、接缝脉冲、恒定能量、确定性、并发初始化、
+副本编辑和非法输入；数值与性能证据见 [基础优化测量](performance/b4-foundation.md#b44a-环境预计算)。
+
+`RENDERLAB_ENVIRONMENT_SIMD` 是默认关闭的编译选项。开启时固定 ISPC 1.28.2，在图块级组织
+uniform 工作，一个输出像素对应一个 lane，保留各像素 128 次样本的累加次序；未滤波 tile 0
+仍用原 C++ 采样，卷积层使用 SSE2/AVX2 运行时分派。只接受 SSE2 单目标或 SSE2/AVX2 组合，
+不把高 ISA 指令泄漏到普通 C++，不引入后台 task。核函数与 64×32、六层、128 样本契约同时固定，
+C++ 静态断言防止单边修改尺寸。输入仍由公共函数校验，内部范围核只消费合法像素区间。
+普通 C++ 内核同样采用可局部内联的分量运算，以及依据 atan2 范围证明的经度单步环绕，
+不在每个样本调用图外通用 Vec3 运算或重复做整数模；操作的浮点结合顺序与原始参考保持一致。
+因而 SIMD 收益必须与这条整理后的 C++/MSVC 优化路径比较，不能只对比改造前的间接调用成本。
+
+系统数学函数和关闭 FMA/fast-math 不意味着逐位相同；高分辨率高频源会放大方向运算的舍入。
+独立参考测试对常规非均匀图使用绝对分量误差 `2e-6`，对 8192×1 / 1×8192 边界使用 `2e-4`；
+这些是已测 fixture 的接受界，不是任意输入的数学误差证明。未滤波层和 BRDF 保持精确参考，
+暖调用确定性、常量能量、范围 guard/空区间/尾部单独验证。SIMD 只另存约 82.5 KiB 的显式
+标量布局适配表，不将库类型暴露到公共 API 或用 reinterpret_cast 假设 Vec3 ABI。
+普通 C++ 仍保留逐元素相同的参考路径；开关与固定编译器校验见 [构建](../manual/build.md#可选环境-simd)。
+
 ## HDR 与 Graph
 
 Lighting 的 `EnvironmentParameters` 保存强度和弧度旋转。View/Object/Lighting/Shadow 分块由 `.params` 生成 C++/HLSL 契约，环境图集和 LUT 通过固定资源语义解析为 Lit Forward Pass 的绑定 handle；HLSL 库接受显式值和纹理参数。

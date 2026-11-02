@@ -2,12 +2,66 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstring>
 #include <limits>
 #include <numbers>
 #include <stdexcept>
 
+#include <DirectXMath.h>
+
 namespace renderlab::math
 {
+namespace
+{
+DirectX::XMMATRIX XM_CALLCONV Load(const Mat4& matrix)
+{
+    DirectX::XMFLOAT4X4 value;
+    static_assert(sizeof(value) == sizeof(matrix.values));
+    std::memcpy(&value, matrix.values.data(), sizeof(value));
+    return DirectX::XMLoadFloat4x4(&value);
+}
+Mat4 XM_CALLCONV Store(DirectX::FXMMATRIX matrix)
+{
+    DirectX::XMFLOAT4X4 value;
+    DirectX::XMStoreFloat4x4(&value, matrix);
+    Mat4 result;
+    std::memcpy(result.values.data(), &value, sizeof(value));
+    return result;
+}
+void ValidateLinearTransform(const Mat4& matrix)
+{
+    float values[3][3]{};
+    for (size_t r = 0; r < 3; ++r)
+    {
+        for (size_t c = 0; c < 4; ++c)
+            if (!std::isfinite(matrix.At(r, c)))
+                throw std::invalid_argument("Nonfinite matrix");
+        for (size_t c = 0; c < 3; ++c)
+            values[r][c] = matrix.At(r, c);
+    }
+    // Match Inverse's pivot rejection without constructing a discarded inverse of affine TRS.
+    for (size_t c = 0; c < 3; ++c)
+    {
+        size_t pivot = c;
+        for (size_t r = c + 1; r < 3; ++r)
+            if (std::abs(values[r][c]) > std::abs(values[pivot][c]))
+                pivot = r;
+        if (std::abs(values[pivot][c]) < 1e-10f)
+            throw std::invalid_argument("Singular transform");
+        for (size_t k = c; k < 3; ++k)
+            std::swap(values[c][k], values[pivot][k]);
+        const auto divisor = values[c][c];
+        for (size_t k = c + 1; k < 3; ++k)
+            values[c][k] /= divisor;
+        for (size_t r = c + 1; r < 3; ++r)
+        {
+            const auto factor = values[r][c];
+            for (size_t k = c + 1; k < 3; ++k)
+                values[r][k] -= factor * values[c][k];
+        }
+    }
+}
+} // namespace
 Vec3 operator+(Vec3 a, Vec3 b)
 {
     return {a.x + b.x, a.y + b.y, a.z + b.z};
@@ -50,10 +104,12 @@ Quaternion Quaternion::EulerDegrees(Vec3 angles)
 }
 Quaternion operator*(Quaternion a, Quaternion b)
 {
-    return {a.w * b.x + a.x * b.w + a.y * b.z - a.z * b.y,
-            a.w * b.y - a.x * b.z + a.y * b.w + a.z * b.x,
-            a.w * b.z + a.x * b.y - a.y * b.x + a.z * b.w,
-            a.w * b.w - a.x * b.x - a.y * b.y - a.z * b.z};
+    // DirectXMath returns Q2 * Q1; RenderLab applies b first, then a.
+    const auto first = DirectX::XMVectorSet(b.x, b.y, b.z, b.w);
+    const auto second = DirectX::XMVectorSet(a.x, a.y, a.z, a.w);
+    DirectX::XMFLOAT4 result;
+    DirectX::XMStoreFloat4(&result, DirectX::XMQuaternionMultiply(first, second));
+    return {result.x, result.y, result.z, result.w};
 }
 Mat4 Mat4::Identity()
 {
@@ -64,12 +120,8 @@ Mat4 Mat4::Identity()
 }
 Mat4 operator*(const Mat4& a, const Mat4& b)
 {
-    Mat4 result;
-    for (size_t r = 0; r < 4; ++r)
-        for (size_t c = 0; c < 4; ++c)
-            for (size_t k = 0; k < 4; ++k)
-                result.At(r, c) += a.At(r, k) * b.At(k, c);
-    return result;
+    // Ordinary A * B is independent of the library's row-vector transform convention.
+    return Store(DirectX::XMMatrixMultiply(Load(a), Load(b)));
 }
 Mat4 Inverse(const Mat4& a)
 {
@@ -111,11 +163,7 @@ Mat4 Inverse(const Mat4& a)
 }
 Mat4 Transpose(const Mat4& a)
 {
-    Mat4 result;
-    for (size_t r = 0; r < 4; ++r)
-        for (size_t c = 0; c < 4; ++c)
-            result.At(r, c) = a.At(c, r);
-    return result;
+    return Store(DirectX::XMMatrixTranspose(Load(a)));
 }
 Mat4 Compose(Vec3 t, Quaternion q, Vec3 scale)
 {
@@ -145,7 +193,7 @@ Mat4 Compose(Vec3 t, Quaternion q, Vec3 scale)
     r.At(0, 3) = t.x;
     r.At(1, 3) = t.y;
     r.At(2, 3) = t.z;
-    Inverse(r);
+    ValidateLinearTransform(r);
     return r;
 }
 Mat4 Perspective(float fov, float aspect, float nearPlane, float farPlane)
@@ -177,18 +225,19 @@ Vec3 Direction(const Mat4& m, Vec3 p)
 }
 Bounds TransformBounds(const Mat4& m, Bounds b)
 {
-    Bounds result{{INFINITY, INFINITY, INFINITY}, {-INFINITY, -INFINITY, -INFINITY}};
-    for (unsigned i = 0; i < 8; ++i)
+    std::array<float, 3> minimum{}, maximum{};
+    for (size_t row = 0; row < 3; ++row)
     {
-        const auto p =
-            Point(m, {i & 1 ? b.maximum.x : b.minimum.x, i & 2 ? b.maximum.y : b.minimum.y,
-                      i & 4 ? b.maximum.z : b.minimum.z});
-        result.minimum = {std::min(result.minimum.x, p.x), std::min(result.minimum.y, p.y),
-                          std::min(result.minimum.z, p.z)};
-        result.maximum = {std::max(result.maximum.x, p.x), std::max(result.maximum.y, p.y),
-                          std::max(result.maximum.z, p.z)};
+        const auto x = m.At(row, 0), y = m.At(row, 1), z = m.At(row, 2), t = m.At(row, 3);
+        // Axis support corners preserve Point's operation order, including nonuniform scale/shear.
+        minimum[row] = x * (x < 0 ? b.maximum.x : b.minimum.x) +
+                       y * (y < 0 ? b.maximum.y : b.minimum.y) +
+                       z * (z < 0 ? b.maximum.z : b.minimum.z) + t;
+        maximum[row] = x * (x < 0 ? b.minimum.x : b.maximum.x) +
+                       y * (y < 0 ? b.minimum.y : b.maximum.y) +
+                       z * (z < 0 ? b.minimum.z : b.maximum.z) + t;
     }
-    return result;
+    return {{minimum[0], minimum[1], minimum[2]}, {maximum[0], maximum[1], maximum[2]}};
 }
 bool Visible(const Mat4& m, Bounds b)
 {

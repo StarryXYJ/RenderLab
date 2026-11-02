@@ -31,6 +31,7 @@ renderer::SceneRenderOptions RenderOptions(const Options& options)
                                                  : renderer::GeometrySubmission::Direct;
     render.reflectionTemporal = options.reflectionTemporal;
     render.profile = options.debugPanel || !options.profilePath.empty() || options.Benchmark();
+    render.cpuDiagnostics = options.cpuProfile;
     if (options.quality != "scene")
         render.shadowResolution = options.quality == "low"      ? 128u
                                   : options.quality == "medium" ? 512u
@@ -87,9 +88,20 @@ void Statistics::Add(const renderer::SceneReadback& frame, const rhi::Runtime& r
     if (sample)
     {
         sample->metricsMs.insert({{"cpuRenderMs", cpuMs},
+                                  {"scenePrepareMs", double(frame.scenePrepareNs) / 1e6},
                                   {"graphCompileMs", double(frame.compileNs) / 1e6},
                                   {"graphPrepareMs", double(frame.prepareNs) / 1e6},
                                   {"graphRecordMs", double(frame.recordNs) / 1e6}});
+        if (frame.cpuDiagnostics)
+        {
+            sample->metricsMs.insert(
+                {{"assetUpdateMs", double(frame.assetUpdateNs) / 1e6},
+                 {"sceneExtractMs", double(frame.sceneExtractNs) / 1e6},
+                 {"environmentUpdateMs", double(frame.environmentUpdateNs) / 1e6},
+                 {"scenePrepareOtherMs", double(frame.scenePrepareNs - frame.assetUpdateNs -
+                                                frame.sceneExtractNs - frame.environmentUpdateNs) /
+                                             1e6}});
+        }
         double gpuSumMs = 0;
         for (const auto& [name, ms] : sample->gpuPassesMs)
             gpuSumMs += ms;
@@ -117,14 +129,16 @@ void Statistics::Add(const renderer::SceneReadback& frame, const rhi::Runtime& r
 }
 std::string Statistics::Text(const scene::Snapshot& snapshot, rhi::MemoryStats memory) const
 {
-    auto text =
-        std::format("Completed samples: {}\nCPU render: {:.3f} ms (mean)\nGraph "
-                    "compile/prepare/record: {:.3f}/{:.3f}/{:.3f} ms\nVisible / total: {} / "
-                    "{}\nRHI used / peak: {:.1f} / {:.1f} MiB\n",
-                    cpu_.count, cpu_.Mean(), compile_.Mean(), prepare_.Mean(), record_.Mean(),
-                    snapshot.cpuVisibilityKnown ? std::to_string(snapshot.instances.size()) : "GPU",
-                    snapshot.totalInstances, double(memory.used) / (1024 * 1024),
-                    double(memory.highWater) / (1024 * 1024));
+    auto text = std::format(
+        "Completed samples: {}\nCPU render: {:.3f} ms (mean)\nGraph "
+        "compile/prepare/record: {:.3f}/{:.3f}/{:.3f} ms\nVisible / total: {} / "
+        "{}\nRHI allocated / peak: {:.1f} / {:.1f} MiB\n"
+        "RHI reserved / peak: {:.1f} / {:.1f} MiB | allocations / blocks: {} / {}\n",
+        cpu_.count, cpu_.Mean(), compile_.Mean(), prepare_.Mean(), record_.Mean(),
+        snapshot.cpuVisibilityKnown ? std::to_string(snapshot.instances.size()) : "GPU",
+        snapshot.totalInstances, double(memory.used) / (1024 * 1024),
+        double(memory.highWater) / (1024 * 1024), double(memory.reserved) / (1024 * 1024),
+        double(memory.reservedHighWater) / (1024 * 1024), memory.allocations, memory.blocks);
     if (reflectionSamples_)
         text += std::format("RT history: {} spp | observed resets: {}\n", reflectionSamples_,
                             reflectionResets_);
@@ -142,7 +156,8 @@ void Statistics::Save(const std::filesystem::path& path, const Options& options,
                       const rhi::CpuProfileSnapshot* cpuOperations,
                       const rhi::DescriptorStats* descriptors,
                       const rhi::UploadPool::Statistics* uploads,
-                      const renderer::RaySceneStatistics* rayScene) const
+                      const renderer::RaySceneStatistics* rayScene,
+                      const std::vector<rhi::DriverMemoryBudget>* driverBudgets) const
 {
     const auto summary = [](const Samples& samples)
     {
@@ -178,8 +193,27 @@ void Statistics::Save(const std::filesystem::path& path, const Options& options,
                           {"memory",
                            {{"usedBytes", memory.used},
                             {"highWaterBytes", memory.highWater},
-                            {"budgetBytes", memory.budget}}},
+                            {"budgetBytes", memory.budget},
+                            {"reservedBytes", memory.reserved},
+                            {"reservedHighWaterBytes", memory.reservedHighWater},
+                            {"allocationCount", memory.allocations},
+                            {"allocationHighWater", memory.allocationHighWater},
+                            {"blockCount", memory.blocks},
+                            {"blockHighWater", memory.blockHighWater},
+                            {"budgetScope", "tracked backing reservations; not driver residency"},
+                            {"driverBudgets", nullptr}}},
                           {"gpuPasses", nlohmann::json::object()}};
+    if (driverBudgets && !driverBudgets->empty())
+    {
+        auto& budgets = result["memory"]["driverBudgets"] = nlohmann::json::array();
+        for (const auto& segment : *driverBudgets)
+            budgets.push_back({{"name", segment.name},
+                               {"deviceLocal", segment.deviceLocal},
+                               {"usageBytes", segment.usage ? nlohmann::json(*segment.usage)
+                                                            : nlohmann::json(nullptr)},
+                               {"budgetBytes", segment.budget ? nlohmann::json(*segment.budget)
+                                                              : nlohmann::json(nullptr)}});
+    }
     result["reflectionHistory"] = {{"samples", reflectionSamples_},
                                    {"observedResets", reflectionResets_},
                                    {"temporalSourceFrames", reflectionTemporalFrames_}};

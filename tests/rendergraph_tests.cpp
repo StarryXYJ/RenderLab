@@ -980,6 +980,14 @@ void ProfilingContracts()
             {
                 ledger_->Remove(bytes);
             }
+            void Reserve(uint64_t bytes)
+            {
+                ledger_->ReserveBlock(bytes);
+            }
+            void ReleaseBlock(uint64_t bytes)
+            {
+                ledger_->ReleaseBlock(bytes);
+            }
         } budget;
         Fails([&] { budget.SetAllocationBudget(0); }, "nonzero");
         budget.SetAllocationBudget(1024);
@@ -992,10 +1000,22 @@ void ProfilingContracts()
         budget.Charge(1024);
         Require(budget.GetMemoryStats().used == 1536 && budget.GetMemoryStats().budget == 2048,
                 "Configured budget must cover tracked allocations");
-        std::thread worker([&]
-                           { Fails([&] { budget.SetAllocationBudget(4096); }, "owner thread"); });
+        std::thread worker(
+            [&]
+            {
+                Fails([&] { budget.SetAllocationBudget(4096); }, "owner thread");
+                Fails([&] { budget.TrimMemory(); }, "owner thread");
+            });
         worker.join();
-        budget.Release(1536);
+        budget.Release(1024);
+        budget.Release(512);
+        budget.Reserve(1024);
+        Require(budget.GetMemoryStats().used == 0 && budget.GetMemoryStats().reserved == 1024,
+                "Idle backing must be visible independently of resource allocations");
+        Fails([&] { budget.SetAllocationBudget(1023); }, "reserved backing");
+        budget.SetAllocationBudget(1024);
+        Fails([&] { budget.Charge(1); }, "reserved=1024 bytes");
+        budget.ReleaseBlock(1024);
     }
     Pool pool(runtime);
     {

@@ -14,7 +14,12 @@ public sealed partial class LogViewModel : ObservableObject
     [ObservableProperty] private string source = "";
     [ObservableProperty] private bool autoScroll = true;
     [ObservableProperty] private IReadOnlyList<LogRow> rows = Array.Empty<LogRow>();
-    [ObservableProperty] private LogRow? selected;
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasSelection))]
+    [NotifyPropertyChangedFor(nameof(SelectedDetails))]
+    private LogRow? selected;
+    public bool HasSelection => Selected is not null;
+    public string SelectedDetails => Selected is { } row ? row.Display + "\n\n" + row.Details : "";
     [ObservableProperty] private string counters = "";
     public LogViewModel(LogBuffer buffer) => this.buffer = buffer;
     partial void OnLevelIndexChanged(int value) => Refresh(true);

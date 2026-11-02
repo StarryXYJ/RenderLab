@@ -97,7 +97,7 @@ void RunRendering(platform::Window* window, rhi::Device& device, rhi::Runtime& r
             std::filesystem::path(platform::Utf8ToWide(options.outputPath)) / options.backend,
             logger);
     if (!window && !options.projectPath.empty() && !options.sceneTest)
-        CaptureScene(runtime, device.GetReport(), options, shaderRoot, logger);
+        CaptureScene(runtime, device, options, shaderRoot, logger);
     if (!window && !options.projectPath.empty() && options.sceneTest)
         samples::VerifyScene(
             runtime, options.backend == "dx12" ? shader::Target::Dxil : shader::Target::Spirv,
@@ -341,8 +341,12 @@ void RunRendering(platform::Window* window, rhi::Device& device, rhi::Runtime& r
             frame.rendered = {};
         }
     if (!options.profilePath.empty())
+    {
+        const auto driverBudgets = device.QueryMemoryBudget();
         statistics.Save(std::filesystem::path(platform::Utf8ToWide(options.profilePath)), options,
-                        device.GetReport(), runtime.GetMemoryStats());
+                        device.GetReport(), runtime.GetMemoryStats(), nullptr, nullptr, nullptr,
+                        nullptr, nullptr, &driverBudgets);
+    }
     if (options.windowTest && (!frameNumber || resizeCount < 8 || suspendedTicks < 2))
         throw std::runtime_error("In-flight presentation resize/minimize coverage incomplete");
     if (options.windowTest && scene && options.pipeline == "raytracing" &&

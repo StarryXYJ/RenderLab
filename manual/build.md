@@ -51,6 +51,9 @@ cmake --build --preset windows-debug --clean-first
 | WinPixEventRuntime | NuGet `1.0.240308001`，固定 SHA-256 见 `cmake/Dependencies.cmake` | DX12 GPU Marker |
 | SPIRV-Reflect | `e55086b044225f9b511ae44dbf9b079d3625943f` | SPIR-V 绑定与常量反射 |
 | nlohmann/json | `65ee68451d8eb2b5f3a30b410476ab83deb3289b`（v3.12.0） | 缓存、Schema 与材质序列化 |
+| DirectXMath | `93e6399d6d15e1e57f80b5cea04d5a8eb892d693`（3.21 / June 2026） | 两后端共用的 CPU SIMD 数学实现 |
+| ISPC（可选） | Windows x64 1.28.2；包与 exe SHA-256 见下文 | 默认关闭的环境卷积 SIMD 编译器 |
+| D3D12MA（试验，可选） | `0fa62ed3a0a69b73230a8ec1faa752d4061c8dc8`（3.1.0） | B4.5b 试验开关开启时才获取/链接 |
 
 Vulkan-Headers、volk 和 SPIRV-Reflect 对应 Vulkan SDK 1.4.321.0 源码版本，实际运行最低要求 Vulkan 1.3。首次配置需要 Git 和 GitHub 网络访问。依赖来源与授权说明位于各依赖源码的 LICENSE 文件，不在引擎源码中复制或修改它们。
 
@@ -70,9 +73,9 @@ cmake --build --preset windows-release --parallel 4
 ctest --preset windows-release
 ```
 
-输出分别在 `out/build/windows-debug` 和 `out/build/windows-release`。默认注册 14 项不需要创建设备的测试，包含实际 DXC 双目标编译的 `shader.contracts`、生成 C++ 契约的 `parameters.contracts` 和流式计时数据的 `benchmark.contracts`。预设与依赖版本纳入 Git，本机设置使用被忽略的 `CMakeUserPresets.json`。
+输出分别在 `out/build/windows-debug` 和 `out/build/windows-release`。默认注册不需要创建设备的测试，包含实际 DXC 双目标编译的 `shader.contracts`、生成 C++ 契约的 `parameters.contracts`、流式计时数据的 `benchmark.contracts` 和 `cpu_benchmark.contracts`；实际清单以 `ctest --preset windows-debug -N` 为准。预设与依赖版本纳入 Git，本机设置使用被忽略的 `CMakeUserPresets.json`。
 
-完整验收启用 GPU 测试，当前共 58 项（14 项 CPU/CLI、44 项 GPU）。GPU 测试要求验证层和桌面会话，会短暂打开原生窗口：
+完整验收启用 GPU 测试；配置后的实际清单以 `ctest --preset windows-debug -N` 为准。GPU 测试要求验证层和桌面会话，会短暂打开原生窗口：
 
 ```powershell
 cmake --preset windows-debug -DRENDERLAB_GPU_TESTS=ON
@@ -85,6 +88,103 @@ ctest --preset windows-release
 ```
 
 GPU 测试使用 `--validation on`，层不可用时失败，不静默降级。仅运行基础测试可使用 `ctest --preset windows-debug -LE gpu`，但这不能替代设备验收。
+
+## CPU 与基础优化基线
+
+构建正常目标后可运行独立 CPU 测量，不需要 GPU/桌面：
+
+```powershell
+./out/build/windows-release/renderlab_cpu_benchmark.exe out/benchmarks/cpu-baseline.json 5
+ctest --preset windows-debug -R 'cpu_benchmark.contracts|content.contracts|pbr.contracts'
+python tools/benchmark/run.py sample/benchmark/foundation.json --output out/benchmarks/foundation
+```
+
+输出路径不得已存在。CPU 工具调用真实实现，结果含所有重复和二进制/源码身份；单线程 kernel、
+环境重新生成与稳定帧不是同一种成本。指标、探针开关和误差边界见 [Benchmark](../docs/benchmark.md#场景准备分解与-cpu-kernel)。
+
+环境预计算的独立原始算法对照为 `ctest --preset windows-release -R '^environment.contracts$'`，
+Debug 同名测试也需运行。CPU 报告的 `warmupMs` 包含首次构建固定表/LUT，`samples` 是暖调用；
+BRDF 暖调用返回独立副本而非重新积分，不能把该成本与旧版每次重新积分混为同一种 kernel。
+
+### 可选环境 SIMD
+
+默认 `RENDERLAB_ENVIRONMENT_SIMD=OFF`，不要求 ISPC。可选路径固定官方 Windows x64
+ISPC 1.28.2；从 [官方发布](https://github.com/ispc/ispc/releases/tag/v1.28.2) 下载
+`ispc-v1.28.2-windows.zip`，SHA-256 为
+`25966868d97a6f9bc38501b864883558994189446476584e5e491476d540de17`。
+解压到忽略的 `out/tools` 等本机目录，不将编译器提交到仓库。
+CMake 再检查 `bin/ispc.exe` 的 SHA-256
+`886c7b3c82164dbcce02479a5a9e5880cd7f91b543c551eff561c57007b1f28d`；
+路径不匹配、内容不同或未安装会明确失败，不静默假装使用 SIMD。
+
+```powershell
+cmake --preset windows-release -DRENDERLAB_ENVIRONMENT_SIMD=ON -DRENDERLAB_ISPC="<解压目录>/bin/ispc.exe"
+cmake --build --preset windows-release
+ctest --preset windows-release -R '^environment.contracts$' --output-on-failure
+./out/build/windows-release/renderlab_cpu_benchmark.exe out/benchmarks/cpu-simd.json 5
+```
+
+默认生成 SSE2/AVX2 的运行时分派，不全局启用 AVX。验证 SSE2 实现时追加
+`-DRENDERLAB_ISPC_TARGETS=sse2-i32x4`；恢复分派时使用
+`"-DRENDERLAB_ISPC_TARGETS=sse2-i32x4;avx2-i32x8"`。只接受这两种组合，不支持强制 AVX2-only
+后悄悄在旧 CPU 上执行。Debug 同样可启用并运行测试；关闭时重新配置
+`-DRENDERLAB_ENVIRONMENT_SIMD=OFF`，不删除普通 C++ 路径。
+
+这是具有浮点误差的可选卷积实现，不是逐位等价替代；未滤波图块保持 C++。
+无 task/Job System、fast-math、FMA 或独立 SIMD 运行库，使用系统数学函数。
+ISPC 的 gather/scatter 性能提示保留；`cmake --install` 复制 ISPC 许可证和第三方声明。
+误差、CPU/ISA 与收益限制见 [基础优化实测](../docs/performance/b4-foundation.md)。
+本轮实际完整验证使用 NMake 构建树 `out/build/m5-{nmake,release}`；新 Ninja 构建目录的
+编译器探针受沙箱影响未完成，不将上述预设示例本身当作 Ninja 验收证据。
+
+## GPU 内存诊断
+
+普通 C++ 构建即可验证计费；实际本轮构建树为 `out/build/m5-{nmake,release}`：
+
+```powershell
+ctest --test-dir out/build/m5-release -R 'memory.contracts|rendergraph.contracts' --output-on-failure
+ctest --test-dir out/build/m5-release -R 'gpu\.(dx12|vulkan)\.(alias|rhi)$' --output-on-failure
+./out/build/m5-release/renderlab_player.exe --backend dx12 --headless --validation on --project sample/m4/Pbr.rlproject --width 640 --height 360 --benchmark 8 --warmup-frames 8 --output out/memory-probe --profile out/memory-probe/report.json
+```
+
+另以 Debug 和 Vulkan 运行同一入口；GPU 用例要求 `RENDERLAB_GPU_TESTS=ON`。
+报告 `memory` 中的 used/peak 是 tracked 分配范围，reserved/peak 是底层保留 backing；
+各自另有数量。`--gpu-budget-mib` 约束 reserved，空闲块也不能隐藏为零。
+`driverBudgets` 按 DXGI segment / Vulkan heap 返回驱动估计，未知为 null；process working set
+和 private bytes 分别是进程工作集与 private commit，不与 GPU 数字相加。
+导出时才显式查询驱动，逐帧 `GetMemoryStats()` 不查询 OS。
+
+关闭日志应核对 allocated、reserved、allocations、blocks，而非仅检查第一个零值。
+当前普通路径仍 committed/dedicated，二者通常相等；统计契约本身不是 D3D12MA/VMA 集成。
+字段与生命周期、预算边界见 [GPU 内存计费](../docs/gpu-memory.md)，实际验收只见阶段计划。
+
+### DX12 分配器试验入口
+
+`RENDERLAB_DX12_MEMORY_ALLOCATOR=OFF` 为默认值。其它阶段保持 OFF，不需要 D3D12MA；
+正常 DX12/Vulkan 分配仍分别是 committed/dedicated，原生 Alias 路径不变。
+当前 ON 代码是未完成验收的检查点，不作为正式性能或稳定性结论；恢复清单在阶段计划。
+先初始化本章的 MSVC 开发环境，建议在独立目录开启，不覆盖其它任务正在使用的默认构建：
+
+```powershell
+cmake -S . -B out/build/b4-allocator-release -G "NMake Makefiles" -DCMAKE_BUILD_TYPE=Release -DRENDERLAB_GPU_TESTS=ON -DRENDERLAB_DX12_MEMORY_ALLOCATOR=ON
+cmake --build out/build/b4-allocator-release
+ctest --test-dir out/build/b4-allocator-release -R 'memory.contracts|rendergraph.contracts|gpu.dx12.memory|gpu\.(dx12|vulkan)\.(alias|rhi)$' --output-on-failure
+./out/build/b4-allocator-release/renderlab_gpu_memory_tests.exe dx12 out/b4/dx12ma/measure-new --measure
+```
+
+另建 Debug 目录复验；随后仍需完整 GPU、窗口、编辑器和实际安装检查。
+可用本机忽略目录的源码缓存追加 `-DFETCHCONTENT_SOURCE_DIR_D3D12MA=<本机路径>`，
+但必须核对其 Git HEAD 是上述固定提交且没有本地改动；该缓存不是共享构建的必需条件。
+
+独立测量工具默认关闭验证层（`--measure`），区分每个新 Runtime 的初始化、首轮与五次暖
+资源创建/释放，输出实际 exe/source hash、allocated/reserved 和块数。它没有记录渲染命令，
+不是 GPU 执行时间、完整场景加载或 FPS。输出目录需使用新路径；没有成对运行前不宣称加速。
+普通 OFF 构建也可以运行该工具的 `--measure` 作为 committed 对照，allocator 合约用例只在 ON 注册。
+从历史源码 `36f6275` 构建同一测量文件时，只添加该测试目标并定义 `RENDERLAB_MEASURE_ONLY=1`；
+不将这些忽略的测量快照当作当前引擎源码，也不在主 checkout 回退其它人的变更。
+
+回到日常工作时在对应目录重新配置 `-DRENDERLAB_DX12_MEMORY_ALLOCATOR=OFF` 并重建。
+库的 MIT 许可证与 NOTICES 安装规则仅在 ON 时加入，尚需下次实际验证。
 
 ## 运行 Sandbox
 
@@ -396,6 +496,8 @@ M7.2b 的 Render Settings 已接入提交方式、录制线程/异步/Alias、�
 M7.2d 的 Render Graph 默认显示实际 Pass × Resource 矩阵。点击单元格查看版本/用途/范围、队列/录制块、依赖和 Alias；下方有生命周期条，可搜索、缩放、滚动与显示被剔除 Pass。Freeze 保留当前观察帧，Refresh 请求一次新帧，Export JSON 写到输出目录 snapshots；默认不读回 RT 像素。Live 最快 500 ms 请求，暂停时需恢复或 Single frame 才得到新图。
 
 M7.2e 的 Profiler 提供完成帧曲线/P50/P95/P99、CPU/GPU 分段、真实调用/批次/实例、内存和观测完成延迟。Freeze 后可从下拉框选择记录帧，Inspect graph 打开同帧图；Export JSON 保存配对数据。GPU visible readback 显式增加 Copy，GPU 模式默认可见数未知；关闭 timing 后 N/A，不沿用旧值。
+
+工作台排版修订后，暂停/恢复、单帧与重置相机位于顶部图标工具栏，悬停查看操作名称；API/Validation 在 Settings 的 Graphics device 分组。设置按属性行对齐、底部提供 Defaults 和预设操作。Profiler 的完整区间与导出路径在 Frame details，Graph 详情栏可拖动分隔线，日志选中后展开完整事件。已有保存布局会继续恢复；可用 Layout → Default/Diagnostics 查看新的默认分栏比例。
 
 观察成本可用 `--benchmark-seconds 8 --warmup-seconds 2 --target-fps 0 --observation basic|timing|graph|readback` 分别运行。四档均使用 GPU Culled 与同一默认视口尺寸，依次为基础计数、附加 RHI/GPU timing、附加 500 ms 图元数据投影、附加 GPU 可见数 Copy/500 ms Profiler 投影。诊断投影在后台执行，不打开 Dock 改变分辨率，因此不包括面板 Canvas 绘制成本；四档输出目录必须不同，比较 performance.json 中 options/源帧/分辨率/丢样。它是一次窗口短测，不代表稳定吞吐或显示器延迟。
 

@@ -1,9 +1,16 @@
 #include "rhi/dx12/dx12_runtime.hpp"
+#include "rhi/dx12/dx12_memory.hpp"
 
 #include <stdexcept>
 
 namespace renderlab::rhi::dx12
 {
+void DxRuntime::TrimMemoryNative()
+{
+#ifdef RENDERLAB_DX12_MEMORY_ALLOCATOR
+    TrimMemoryAllocator(*memoryAllocator_);
+#endif
+}
 void DxRuntime::EnableAsyncCompute()
 {
     if (computeQueue_)
@@ -81,6 +88,9 @@ DxRuntime::DxRuntime(ID3D12Device* device, ID3D12CommandQueue* queue, IDXGIFacto
     Check(device_->CreateCommandSignature(&signature, nullptr, IID_PPV_ARGS(&indexedIndirect_)),
           "Create indexed command signature");
     Check(queue_->GetTimestampFrequency(&frequency_), "GetTimestampFrequency");
+#ifdef RENDERLAB_DX12_MEMORY_ALLOCATOR
+    memoryAllocator_ = CreateMemoryAllocator(device_, factory_, ledger_);
+#endif
     event_ = CreateEventW(nullptr, FALSE, FALSE, nullptr);
     if (!event_)
         throw std::runtime_error("CreateEventW failed");

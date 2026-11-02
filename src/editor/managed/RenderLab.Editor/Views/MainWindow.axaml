@@ -1,29 +1,64 @@
 <Window xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
- xmlns:vm="using:RenderLab.Editor.ViewModels" xmlns:dock="using:Dock.Avalonia.Controls" xmlns:model="using:Dock.Model.Mvvm.Controls"
- x:Class="RenderLab.Editor.Views.MainWindow" x:DataType="vm:MainWindowViewModel" Title="{Binding Title}"
- Width="1440" Height="900" MinWidth="1000" MinHeight="680">
- <Window.DataTemplates>
-   <DataTemplate DataType="model:Document" x:DataType="model:Document"><ContentControl Content="{Binding Context}" /></DataTemplate>
- </Window.DataTemplates>
- <Grid RowDefinitions="Auto,*,Auto">
-   <Menu>
-     <MenuItem Header="Window">
-       <MenuItem x:Name="SceneMenu" Header="Scene" Click="ShowPanel" Tag="Scene" />
-       <MenuItem x:Name="SettingsMenu" Header="Render Settings" Click="ShowPanel" Tag="Settings" />
-       <Separator />
-       <MenuItem x:Name="GraphMenu" Header="Render Graph" Click="ShowPanel" Tag="Render Graph" />
-       <MenuItem x:Name="ProfilerMenu" Header="Profiler" Click="ShowPanel" Tag="Profiler" />
-       <MenuItem x:Name="LogMenu" Header="Log" Click="ShowPanel" Tag="Log" />
-     </MenuItem>
-     <MenuItem Header="Layout">
-       <MenuItem Header="Default" Click="DefaultLayout" /><MenuItem Header="Diagnostics" Click="DiagnosticLayout" />
-       <MenuItem x:Name="RestoreLayoutMenu" Header="Restore saved layout" Click="RestoreLayout" />
-     </MenuItem>
-     <MenuItem Header="Scene"><MenuItem Header="Pause / Resume" Command="{Binding TogglePauseCommand}" /><MenuItem Header="Reset camera" Command="{Binding ResetCameraCommand}" /></MenuItem>
-   </Menu>
-   <dock:DockControl x:Name="Workbench" Grid.Row="1" />
-   <Grid Grid.Row="2" ColumnDefinitions="*,Auto" Margin="8,4"><TextBlock Text="{Binding StatusText}" TextTrimming="CharacterEllipsis" />
-     <Button x:Name="LogStatus" Grid.Column="1" Content="Log" Click="OpenLog" Padding="8,2" />
-   </Grid>
- </Grid>
+        xmlns:vm="using:RenderLab.Editor.ViewModels" xmlns:dock="using:Dock.Avalonia.Controls" xmlns:model="using:Dock.Model.Mvvm.Controls"
+        x:Class="RenderLab.Editor.Views.MainWindow" x:DataType="vm:MainWindowViewModel" Title="{Binding Title}"
+        Width="1440" Height="900" MinWidth="1000" MinHeight="680">
+    <Window.DataTemplates>
+        <DataTemplate DataType="model:Document" x:DataType="model:Document"><ContentControl Content="{Binding Context}" /></DataTemplate>
+    </Window.DataTemplates>
+    <Grid RowDefinitions="Auto,Auto,*,Auto">
+        <Border Background="#252525" BorderBrush="{DynamicResource WorkbenchBorder}" BorderThickness="0,0,0,1">
+            <Grid ColumnDefinitions="Auto,*,Auto" Margin="12,0">
+                <TextBlock Text="RenderLab" FontWeight="SemiBold" Margin="0,0,16,0" />
+                <Menu Grid.Column="1" Background="Transparent">
+                    <MenuItem Header="Window">
+                        <MenuItem x:Name="SceneMenu" Header="Scene" Click="ShowPanel" Tag="Scene" />
+                        <MenuItem x:Name="SettingsMenu" Header="Render Settings" Click="ShowPanel" Tag="Settings" />
+                        <Separator />
+                        <MenuItem x:Name="GraphMenu" Header="Render Graph" Click="ShowPanel" Tag="Render Graph" />
+                        <MenuItem x:Name="ProfilerMenu" Header="Profiler" Click="ShowPanel" Tag="Profiler" />
+                        <MenuItem x:Name="LogMenu" Header="Log" Click="ShowPanel" Tag="Log" />
+                    </MenuItem>
+                    <MenuItem Header="Layout">
+                        <MenuItem Header="Default" Click="DefaultLayout" />
+                        <MenuItem Header="Diagnostics" Click="DiagnosticLayout" />
+                        <MenuItem x:Name="RestoreLayoutMenu" Header="Restore saved layout" Click="RestoreLayout" />
+                    </MenuItem>
+                    <MenuItem Header="Scene">
+                        <MenuItem Header="Pause / Resume" Command="{Binding TogglePauseCommand}" />
+                        <MenuItem Header="Reset camera" Command="{Binding ResetCameraCommand}" />
+                    </MenuItem>
+                </Menu>
+                <TextBlock Grid.Column="2" Classes="muted" Text="{Binding BackendName}" />
+            </Grid>
+        </Border>
+        <Border Grid.Row="1" Classes="toolbar">
+            <Grid ColumnDefinitions="*,Auto,*">
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                    <TextBlock Classes="glyph" Text="&#xE8B7;" Foreground="{DynamicResource WorkbenchMuted}" />
+                    <TextBlock Text="{Binding SceneName}" Classes="muted" />
+                </StackPanel>
+                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="2">
+                    <Button x:Name="PauseAction" Classes="tool" Command="{Binding TogglePauseCommand}" ToolTip.Tip="{Binding PauseLabel}" AutomationProperties.Name="{Binding PauseLabel}">
+                        <TextBlock Classes="glyph" Text="{Binding PauseGlyph}" />
+                    </Button>
+                    <Button Classes="tool" Command="{Binding SingleStepCommand}" IsEnabled="{Binding IsPaused}" ToolTip.Tip="Single frame" AutomationProperties.Name="Single frame">
+                        <TextBlock Classes="glyph" Text="&#xE893;" />
+                    </Button>
+                    <Border Classes="divider" />
+                    <Button x:Name="ResetAction" Classes="tool" Command="{Binding ResetCameraCommand}" ToolTip.Tip="Reset camera" AutomationProperties.Name="Reset camera">
+                        <TextBlock Classes="glyph" Text="&#xE72C;" />
+                    </Button>
+                </StackPanel>
+                <TextBlock Grid.Column="2" Text="{Binding Settings.Status}" Classes="muted" HorizontalAlignment="Right"
+                           MaxWidth="260" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding Settings.AppliedSummary}" />
+            </Grid>
+        </Border>
+        <dock:DockControl x:Name="Workbench" Grid.Row="2" Background="{DynamicResource WorkbenchBackground}" />
+        <Border Grid.Row="3" Background="#252525" BorderBrush="{DynamicResource WorkbenchBorder}" BorderThickness="0,1,0,0" Padding="10,2">
+            <Grid ColumnDefinitions="*,Auto">
+                <TextBlock Classes="muted" Text="{Binding StatusText}" TextTrimming="CharacterEllipsis" />
+                <Button x:Name="LogStatus" Grid.Column="1" Content="Log" Click="OpenLog" Padding="8,2" MinHeight="22" Background="Transparent" BorderThickness="0" />
+            </Grid>
+        </Border>
+    </Grid>
 </Window>

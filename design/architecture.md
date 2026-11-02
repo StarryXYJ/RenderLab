@@ -185,11 +185,24 @@ M1 采用拥有资源引用的命令包序列，在 Submit 时由后端生成原
 
 显存分配可以采用 VMA 和 D3D12 Memory Allocator；上传、描述符分配、驻留策略、资源池和图内复用仍由引擎管理。帧内临时分配器避免零散堆分配，按实际用途选择 std::pmr。上传、光追 scratch 和资源池记录当前占用与高水位，设置容量上限，并在相关提交完成后按预算或显式请求清理闲置分配。容量不足时明确扩容、分批处理或报错，避免无限增长及每帧缩扩容。
 
+统一账本区分资源分配范围与底层 reserved backing，普通分配和原生 Alias 共享同一个应用限额；
+Alias backing 不逐成员重复计费，空闲保留块不因 used 为零而隐藏。应用预算约束 reserved，
+驱动 usage/budget 按原生 segment/heap 显式查询，进程 working set/private commit 另计，
+不在每帧账本读取中调用 OS/driver。计数、拒绝、释放和导出口径见 [GPU 内存](../docs/gpu-memory.md)。
+
+DX12 的 D3D12MA 适配器当前保留为默认关闭的试验选项
+`RENDERLAB_DX12_MEMORY_ALLOCATOR`，不作为其它阶段的前置；正式默认仍 committed，
+Vulkan 仍 dedicated。具体 pool/allocation 仅在后端内拥有，不把库类型扩散到 RHI 公共数据或
+材质/场景。显式 `TrimMemory()` 只回收完全空闲池，不引入逐帧 DeviceIdle、搬迁或第二套状态机。
+是否启用及实际验收以阶段计划为准，存在实现不表示阶段完成。
+
 B2 实测发现常量、描述符与读回存在逐帧原生分配。[B3 复用方案](resource-reuse.md) 按帧数据、不可变材质和结果持有期分别管理。帧上传使用有界 UploadPool，以 CPU Buffer 引用、活动批次和实际提交完成共同保护整页复用；材质在包代际内有界缓存不可变常量版本。DX12 描述符从持久 heap 页分配不可变区间，Vulkan 复用无外部引用的同布局 pool/set 块；逻辑组与命令保活分配，缓存页/块不持有场景资源，容量与高水位独立统计。Timestamp 读回进入现有 Graph Pool，CPU profiling 结果继续保活读回；默认 View 由 Texture 弱缓存、物理分配/宿主/交换链分别持有，交换链在 resize 前清除自己的 View。接口见 [资源复用](../docs/resource-reuse.md)，实际验收与性能以阶段计划和测量结果为准。
 
 ## 场景数据与 GPU Driven
 
 Scene Document 使用稳定对象 ID，运行时使用类型明确的 Handle。每帧提取 RenderSceneSnapshot，Renderer 不在录制期间遍历可被 UI 修改的场景文档。
+
+Extractor 可缓存上次成功提取的已验证层级及实例几何投影，文档仍是唯一可编辑状态。直接编辑通过对象值比较、实际 world/localBounds 比较使缓存失效，不依赖调用方 dirty 标记；异常不发布缓存或推进 previousWorld，移除实例清除历史。首版对象变化仍整体验证/解析层级，不引入局部更新或 ECS；契约见 [CPU 提取缓存](../docs/m4-scene.md#cpu-提取缓存)。
 
 即使首期使用 CPU 提交，也提前建立可索引的渲染数据：
 
@@ -468,6 +481,13 @@ Assets 和元数据、ProjectSettings、Source、项目文件纳入版本管理�
 ## 坐标与数据约定
 
 首版统一右手世界坐标，Y 向上，相机前方为局部负 Z，长度单位为米。数学约定使用列向量，GPU 矩阵布局由明确生成与上传规则验证。两后端最终使用 0 到 1 的深度范围，采用 Reversed-Z，远端为 0，近端为 1。
+
+CPU math 保持轻量存储类型和显式上传布局，内部复用固定版本 DirectXMath 的已验证运算，不将 SIMD 寄存器类型或额外对齐泄漏至 Vertex、Scene 或 C ABI。TRS/投影、一般求逆的拒绝语义仍由项目契约约束；库的行向量辅助函数不改变上层列向量约定。具体采用范围见 [数学契约](../docs/m4-scene.md#场景与变换)。
+
+环境 CPU 烘焙复用只读方向/切线基/sRGB 表和固定 BRDF LUT，返回值保持独立所有权且不持有
+GPU 对象。卷积有默认关闭的固定版本 ISPC 选项，SSE2/AVX2 分派只在此内核发生，不扩展为
+通用 Job System 或全局 fast-math；未滤波层保留 C++ 精确采样，数值误差与实测边界见
+[环境光](../docs/m4-forward-pbr.md#环境光)。普通构建不依赖 SIMD 编译器。
 
 投影、Viewport Y、屏幕 UV 和正面绕序统一在平台适配规则中处理，上层不分散添加 Vulkan 或 DX12 修正。纹理上传、渲染附件和屏幕采样的原点转换用测试图验证。深度重建、阴影和 Hi-Z 都遵守相同约定。
 

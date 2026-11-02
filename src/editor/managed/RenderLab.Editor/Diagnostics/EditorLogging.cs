@@ -11,6 +11,8 @@ public sealed record LogRow(long Id, DateTimeOffset Time, LogEventLevel Level, s
     string Message, string Details)
 {
     public string Display => $"{Time.ToLocalTime():HH:mm:ss.fff}  {Level,-11}  {Source}  {Message}";
+    public string TimeText => Time.ToLocalTime().ToString("HH:mm:ss.fff", System.Globalization.CultureInfo.InvariantCulture);
+    public string LevelColor => Level >= LogEventLevel.Error ? "#F09B8F" : Level == LogEventLevel.Warning ? "#D9B779" : "#A7C6D8";
     public int Bytes => (Message.Length + Details.Length + Source.Length) * 2 + 128;
 }
 

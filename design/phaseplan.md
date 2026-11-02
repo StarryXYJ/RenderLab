@@ -4,9 +4,9 @@
 
 ## 当前状态
 
-- 当前实施阶段：M7 固定场景渲染工作台；M6 核心 M6.1–M6.5、M0–M5、R1、B1–B3 DONE。可选 M6.0 Forward+ 仍为 DEFERRED。
-- 当前工作项：用户授权实现到 M7.2f；M7.2a–e DONE，M7.2f 实现与自动集成验收已完成，当前人工输入/画质及混合 DPI 复验 IN_PROGRESS。M7.3–M7.6 本轮 DEFERRED。
-- 用户约定：每个子阶段验收完成即提交 Git，无阻塞时在当前授权范围内继续推进。此前 M7 修改已进入 Git，本轮开始时工作区干净。
+- 当前实施阶段：用户于 2026 年 10 月 30 日暂停 B4，先整理计划和提交检查点；当前不自动启动其它阶段。B4.1–B4.4、B4.5a、M6 核心 M6.1–M6.5、M0–M5、R1、B1–B3 DONE；可选 M6.0 仍为 DEFERRED。
+- 当前工作项：B4.5b 保留未验收实现并设为 DEFERRED，`RENDERLAB_DX12_MEMORY_ALLOCATOR` 默认 OFF；普通构建继续使用已验收 committed/dedicated 路径，Vulkan 分配与 Graph Alias 算法未改。B4.5c/B4.6 尚未开始。B4.5a 的一次 Debug 窗口超时仍需跟踪，不能将隔离复验写成首次全绿。
+- 用户约定：每个子阶段验收后精简计划、标注 DONE 并提交；暂停检查点不冒充子阶段完成。恢复或切换阶段时先更新本入口，不因整个计划存在就自动执行全部阶段，也不以引入依赖本身作为性能成果。
 
 | 阶段 | 目标 | 前置依赖 | 状态 |
 | --- | --- | --- | --- |
@@ -19,14 +19,24 @@
 | B1 | 样例整理与可扩展 Benchmark | M4、R1 | DONE |
 | B2 | 双后端性能差异调查 | B1 | DONE |
 | B3 | 逐帧资源复用优化 | B2 | DONE |
+| B4 | 基础库、CPU 计算与 GPU 内存分配优化 | B3、M6 核心 | DEFERRED（用户暂停；B4.1–B4.4、B4.5a DONE，b 实验默认关闭） |
 | M5 | Deferred 与光追基础 | M4 | DONE |
 | M6 | GPU Driven 与执行优化 | M4；光追调度测试另需 M5 | DONE（M6.1–M6.5；可选 M6.0 延期） |
-| M7 | C# 编辑器与完整项目工作流 | M4；默认在 M5、M6 的核心目标后开展 | IN_PROGRESS（M7.1a–g、M7.2a–e 已完成；M7.2f 实现/自动验收完成，人工复验未关闭） |
+| M7 | C# 编辑器与完整项目工作流 | M4；默认在 M5、M6 的核心目标后开展 | DEFERRED（已有实现保留，M7.2f 人工复验未关闭；可另行选定子阶段，不依赖 B4 实验完成） |
 | M8 | 一个深入的渲染专题与作品交付 | 所选专题依赖已满足 | NOT_STARTED |
 
 默认顺序为 M0 到 M8。M5 和 M6 在 M4 后可以独立推进；单阶段内按下列子阶段顺序执行，不同时建设多个高级系统。完整编辑器后置，M4 只实现运行内容所需的最小项目与资源能力。
 
 R1 契约修订、B1 样例整理/Benchmark、B2 调查和 B3 资源复用已完成，均按子阶段验证与提交。
+
+### 暂停后的工作入口
+
+- 继续 B4：直接从 B4.5b 检查点恢复，不重做已完成 a，不先改 Vulkan；恢复顺序见下方。
+- 切换 M7：当前桥接 ABI 为 v10，默认场景/原生宿主/工作台可复用；原生构建用默认 OFF。
+  `M7.2f` 继续真实输入、画质与混合 DPI 验收；如选择 `M7.3`，从原生材质事务/Undo 边界和 Schema Inspector 开始，不自动扩展成场景或资源编辑。
+- 切换 M8：M4–M6 核心前置已满足，可独立于分配器实验开始；仍须先选一个主专题，不能将四个候选同时启动。
+- 其它工作共用当前 checkout 时，不依赖忽略目录 `out` 中的草稿或旧 DLL。原生/托管使用同配置；
+  已验证构建树为 `out/build/m5-{nmake,release}`，编辑器脚本显式传对应 `-NativeBuildDir`。常规命令见 [手册](../manual/build.md)。
 
 ## 状态与维护规则
 
@@ -88,7 +98,112 @@ M0–M6 核心能力及 R1、B1–B3 已完成（2026 年 10 月 23–30 日）�
 
 状态：DEFERRED。不阻塞 M6 核心完成；需另行授权和建立灯光分块/剔除输入、正确性及性能对照，不能将现有 Forward 当作 Forward+。
 
+## B4 基础库与计算/分配优化
+
+状态：DEFERRED，2026 年 10 月 30 日按用户要求暂停并保存检查点。已完成部分保留简短验收记录，未完成部分在恢复授权后依次推进；不因计划存在而自动建设完整资产管线、通用 Job System 或新渲染功能。
+
+### B4.1 基线与可复现测量
+
+状态：DONE，2026 年 10 月 30 日。
+
+结果：独立 CPU kernel/64–4096 实例提取测量入口；可选 CPU 准备分解，关闭不读额外时钟；固定场景双后端基线与二进制/源码身份。
+验证：MSVC Debug/Release 全目标构建成功，所选 CPU/Graph/Core/Benchmark/双后端 PBR/Player 两配置各 10/10；Python Benchmark 15/15。Release/RTX 5060 基线 24 次、116445 帧，六组探针 PBR 截图一致，准备子区间求和正确；双后端固定帧预算光追参考 validation errors=0（仍有既有警告；报告 16 spp，测量外截图 17 spp）。
+文档：[指标与接口](../docs/benchmark.md#场景准备分解与-cpu-kernel)、[基线与限制](../docs/performance/b4-foundation.md)、[命令](../manual/build.md#cpu-与基础优化基线)。原始证据 `out/b4/baseline`。
+限制：CPU 校验消费计入 kernel，环境 case 是重新生成而非稳定帧；固定小场景、短测和串行 headless 不代表窗口 FPS 或其他设备收益。
+
+### B4.2 减少重复计算与几何算法
+
+状态：DONE，2026 年 10 月 30 日。
+
+结果：对象值比较复用已验证层级与 ID 索引；实际 world/localBounds 比较复用 normal/Bounds，失败不推进历史；TRS 仅做线性消元校验，Bounds 改为逐轴极值角以保持八角浮点结果。
+验证：Debug/Release 全目标构建成功，各 18/18 CPU/CLI + 10/10 双后端 Alias/索引/反射/PBR/Scene 回归；5000 组 shear/镜像 Bounds 与原参考一致，拒绝边界和直接编辑失效合约通过。五次 CPU 配对的十二项 checksum 相同，20 组静态/固定帧图像 hash 相同；Release 场景配对 24 次、119630 帧，validation errors=0，既有警告保留。
+文档：[缓存契约](../docs/m4-scene.md#cpu-提取缓存)、[测量与限制](../docs/performance/b4-foundation.md#b42-重复工作与-bounds)。证据 `out/b4/cache`。
+限制：任意对象改变仍整体验证/解析层级；快照字符串/表和实例 world 投影仍按帧生成。视锥保留原八角基线，未因本阶段引入新的平面剔除语义；小 PBR 没有明确整帧收益，时长预算光追不能当相同 spp/Pass 工作的配对比较。
+
+### B4.3 复用成熟数学实现
+
+状态：DONE，2026 年 10 月 30 日。
+
+结果：固定 DirectXMath 3.21（jun2026 / `93e6399`），math.cpp 内部复用乘法、转置、四元数组合；公共类型、对齐、列向量和 Pack 保持。Player 安装包含 MIT 许可证。一般求逆仍保留带原 pivot 诊断的实现，不把库的 Inf 返回行为当异常替代。
+验证：两配置全目标构建成功，各 18/18 CPU/CLI + 10/10 双后端 GPU 回归；5000 组双精度乘法误差参考、四元数顺序、shear/边界/缓存合约通过。六组固定 PBR/Shadow/光追画面 hash 相同；Release 五次 4096 乘法均值 0.080497→0.043204 ms，未推断完整帧同比加速。
+文档：[数学契约](../docs/m4-scene.md#场景与变换)、[测量与限制](../docs/performance/b4-foundation.md#b43-数学库)。证据 `out/b4/math`。
+限制：只采用已验证的三类运算；向量、TRS、投影与一般逆保留项目契约，未验证 AVX/其他 CPU/平台，也未为一般求逆宣称新增收益。
+
+### B4.4 批量 SIMD 与环境预计算
+
+状态：DONE，2026 年 10 月 30 日。a 预计算与 b 内核/SIMD 对照已独立验收并提交；原提交权限阻塞已解除，后续限制如下。
+
+结果：固定 sRGB/方向/切线基、BRDF 行样本与跨调用 LUT 复用；普通 C++ 局部分量计算保持原始逐元素结果。可选 ISPC 1.28.2 固定包/exe 校验，默认关闭，SSE2/AVX2 分派仅用于卷积，未滤波层/BRDF 保持精确 C++，无全局 fast-math 或 Job System。Highway 作为替代候选 DEFERRED。
+验证：NMake/MSVC Debug/Release 全目标构建，普通 C++ 与可选 SIMD 各配置均完成 19/19 CPU/CLI + 10/10 双后端 GPU 集合；SSE2 单目标、空/尾部/能量/并发/所有权和编译器/目标拒绝通过，Python 15/15，许可证实际安装。最终 C++ 与 SIMD 固定场景图像 hash 与基线相同，validation errors=0（既有警告保留）。Release 暖预滤波由 a 的 310.1239 降至普通 C++ 44.2981 ms，ISPC 24.8959 ms；后者相对公平 C++ 基线约 1.78 倍，非稳定帧收益。
+文档：[环境契约](../docs/m4-forward-pbr.md#环境光)、[预计算与 SIMD 实测](../docs/performance/b4-foundation.md#b44a-环境预计算)、[构建](../manual/build.md#可选环境-simd)；证据 `out/b4/{precompute,simd}`。
+限制：SIMD 非逐位替代，常规/8192 轴向极端输入界为 2e-6/2e-4；未验证其他 CPU、真实无 AVX2 硬件、8192² 或长期压力。Ninja 沙箱 ABI 探针未完成并已取消，不冒充通过。两配置已恢复默认 C++；GPU 分配与资产库仍属后续未完成项。
+
+### B4.5 GPU 内存分配
+
+状态：DEFERRED（b 用户暂停；a DONE）。恢复后按 a–c 边界独立验收和提交，不同时改两个后端的分配实现及 Graph Alias 算法。
+
+a 状态：DONE，2026 年 10 月 30 日。范围/保留块字节与数量分离，统一限额约束 reserved；
+普通与 Alias 共用账本，驱动 segment/heap 与进程内存独立导出，未知为 null，热路径不查询 OS。
+验证：两配置 clean-first 全目标构建；Release CTest 66/66，Debug 65/66（Vulkan 光追窗口超时）后
+该用例隔离连续 3/3；托管各 22/22、Python 15/15，两起始后端工作台各 23 项及各 30 次关闭四项计数全零。
+双后端 PBR 参考 hash 不变、driver budget 实际可用，validation errors=0。契约见 [GPU 内存](../docs/gpu-memory.md)，
+数据与未复现超时限制见 [验证](../docs/performance/b4-memory.md)，证据 `out/b4/memory-accounting`。
+限制：本步尚未接入分配库，未进行其它 GPU/长期压力；首轮窗口超时不被复验隐去。
+
+#### b 检查点与恢复顺序
+
+状态：DEFERRED，未完成验收。实验开关默认 OFF；默认构建不下载/链接 D3D12MA，
+不把试验路径作为其它阶段的前置或生产默认。
+
+已保存：D3D12MA 3.1.0 / `0fa62ed3a0a69b73230a8ec1faa752d4061c8dc8` 固定依赖；
+`dx12_memory.cpp/.hpp` 的具体适配层、16 MiB 固定池、整块准入、committed 回退、
+资源/块分离计费和仅回收空闲池的 `Runtime::TrimMemory()`；上传、描述符和原生 Alias 路径保留。
+普通资源拥有库 allocation，命令和完成点继续保活原资源；关闭时显式 Trim。
+
+实际验证边界：开关隔离前，Release 的独立 `renderlab_gpu_memory_tests` 初次通过一次，
+覆盖共享块/映射、小预算回退、拒绝不改计数、取消/提交保活与回收、超块大小资源。
+这不是最终开关 ON 的整体验收。原 b 的 Release/Debug 全目标构建被用户中断，不能记为成功；
+基线测量目标已构建，但尚未运行成对测量、完整 GPU/窗口/编辑器回归或许可证安装检查。
+暂停收尾恢复 OFF 后的构建/检查另见本次检查点记录，不转记为 ON 通过。
+检查点：OFF 模式的 Debug/Release 全目标构建成功，各 24/24（20 项 CPU/CLI + 双后端
+Alias/RHI 共 4 项）通过；两棵日常构建树均已恢复 OFF，格式、UTF-8/LF 和 Git 差异检查通过。
+证据 `out/b4/dx12ma/checkpoint-default-{debug,release}-{build,tests}.log`；
+没有在暂停收尾中重跑完整窗口/托管验收或运行性能对照。
+
+恢复时：
+
+1. 阅读 [内存契约](../docs/gpu-memory.md)、`src/rhi/dx12/dx12_memory.cpp` 和
+   `tests/gpu_memory_tests.cpp`；确认普通构建仍 OFF，再按 [试验命令](../manual/build.md#dx12-分配器试验入口) 使用独立构建目录开启 ON。
+2. 先完成两配置构建和 `gpu.dx12.memory`、CPU/Graph、双后端 RHI/Alias。
+   重点审查失败后空闲块保留/回收、整块硬预算、范围销毁先于块释放、tight alignment 关闭及 AS 地址对齐，
+   不以初次单用例通过替代这些项。
+3. 再跑索引/间接、多队列/并行、AS/Ray Query/反射、PBR/窗口 Resize 和工作台后端重建；
+   首轮 a 的 Debug/Vulkan 光追窗口超时需串行复查并保留结果，不简单延长超时掩盖问题。
+4. 用同一测量工具对照 `36f6275` 的 committed 基线与 ON：冷启动/动态创建释放、稳定帧、
+   allocated/reserved、块数/峰值/空闲回收；固定帧图像与关闭四项计数必须核对。
+   `out/b4/dx12ma/baseline-a-bin-36f6275` 是保存的旧 Player/Sandbox，
+   `baseline-a-source-36f6275` / `a-measure-build` 是忽略的源快照与测量目标，不是权威源码。
+   若 out 缺失，用 `git archive 36f6275` 重建，仅加入同一测量源码/目标并定义 `RENDERLAB_MEASURE_ONLY=1`，
+   记录真实 exe/source hash；不要在主 checkout 来回切版本或回退他人的修改。
+5. 完成数据、文档、安装检查后才将 b 标 DONE 并提交。是否默认启用由正确性和实测决定；
+   无足够收益可以保留 opt-in/延期，不因依赖存在就强行启用。之后才开始 c。
+
+- [ ] c：固定版本 VMA 并接入 Vulkan 普通资源，处理映射、coherent 要求、device address/AS、分配对齐与销毁顺序；保留 Alias 原生路径的合法性与同步。
+- [ ] 两后端 Debug/Validation、Release、Alias/多队列/光追及编辑器重建回归；对比加载、动态分配、稳定帧、底层块数/峰值/空闲回收。关闭后存活分配与最终保留块分别检查，不能将缓存容量隐藏为零。
+- [ ] 首轮不实现 defragmentation、资源搬迁或自动驻留系统，不宣称减少 Shader 工作量或纹理本体大小。
+
+### B4.6 资产处理库与整体验收
+
+状态：NOT_STARTED。
+
+- [ ] 评估 meshoptimizer 的导入后 cache/fetch 优化，保持顶点属性、三角形绕序、子资源身份和缓存版本；采用时覆盖光栅/光追及退化网格。
+- [ ] 对照 cgltf 与当前解析、DirectXTex 与当前纹理契约，给出采用边界；完整 importer 迁移、mip/BC 的 RHI 扩展仅在具体需求和验证支持时实施，否则明确 DEFERRED。
+- [ ] 汇总实际采用/未采用库、基线对照和限制；更新 docs/manual/总体设计，完成相关原生与托管回归。所有已采用路径验证完成才标记 B4 DONE；延期能力不算已实现。
+
 ## M7 C# 编辑器与完整项目工作流
+
+本轮状态：DEFERRED，尚未指定恢复哪个子阶段；不依赖默认关闭的 B4.5b 实验完成。
+以下实现证据保留；M7.2/M7.2f 中的 IN_PROGRESS 表示未关闭的既有验收，不代表当前正在实施。
 
 按 2026 年 10 月 30 日用户调整，先做给定固定场景下的 Dock 渲染工作台，暂不修改资源、材质或场景数据。后续再进入材质编辑与完整项目工作流。运行时规则继续由 C++ 服务维护。
 
@@ -124,6 +239,12 @@ M0–M6 核心能力及 R1、B1–B3 已完成（2026 年 10 月 23–30 日）�
 验证：最终 Debug/Release 日常构建均零警告、托管各 22/22；原生 Core 两配置通过。Release/DX12、Debug/Vulkan 最终自检各 23 项，含配置/API、Dock 浮动/恢复、同帧 Graph/Profiler、末尾 drain；各 30 次正常 Session 及初始化中关闭账本/验证错误/worker_failed 为 0。文件实际写失败、滚动/消息洪峰有独立用例。Release 双后端实际运行 1800.87/1800.98 秒，观察到 53776/53779 帧，无丢样；各 4 次关闭全为 0，23 份源 hash 不变，所有历史/内存预算检查通过。两块实屏均 100%/96 DPI，根窗口跨屏后的像素尺寸匹配。证据 `out/m72f/{final-release-dx12,final-debug-vulkan,soak-dx12,soak-vulkan,tests}`；方法、内存峰值和版本边界见 [实测](../docs/performance/editor-workbench.md)，命令见 [手册](../manual/build.md#avalonia-嵌入原型)。
 
 待验收：可见桌面已观察默认固定场景、Graph/Profiler，系统点击菜单/诊断页可用；持续按键、右键拖动/捕获释放、完整浮动窗口的系统输入与用户画质认可，以及 150%/混合 DPI 仍未验证。合成输入、自动 Present 与两个 96 DPI 屏幕不替代这些项。真实设备丢失、其他 GPU、资源/场景编辑不属于本轮验收覆盖。
+
+#### M7.2 工作台 UI/UX 修订
+
+状态：DONE（2026 年 10 月 30 日，用户追加授权并确认按当前版本收尾）。结果：中性灰紧凑主题、双列属性 Inspector、精确曝光输入、顶部图标工具栏、固定预设操作、Profiler 指标/曲线/可滚动 Pass 表、Graph 工具栏/访问图例/可调详情栏及 Live 选择保留、分列/分级着色日志与完整事件详情。默认仍只有 Scene/Settings；已有保存布局继续恢复。
+
+验证：最终 Debug/Release 构建零警告、托管各 22/22。Release/DX12 窗口自检与末轮排版后的 Debug/Vulkan 自检各 23 项、各 30 次正常 Session 及启动中关闭账本/验证错误/worker_failed 为 0；修订焦点自检以实际展开后的控件接收焦点，暂停命令检查图标与 tooltip。可见窗口检查了默认场景、分组/滑条/关闭按钮，以及 Graph 与 Profiler 的真实渲染；用户停止 computer-use 后未继续界面操作。证据 `out/ui-workbench/{verified-release-dx12,final-debug-vulkan,tests}`。本轮未重跑 30 分钟长测或混合 DPI，M7.2f 的既有限制继续保留。设计见 [工作台](../docs/editor-workbench.md#工作台视觉与布局)，操作见 [手册](../manual/build.md#avalonia-嵌入原型)。
 
 ### M7.3 材质编辑与事务
 

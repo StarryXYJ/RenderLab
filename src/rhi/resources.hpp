@@ -135,9 +135,15 @@ struct VertexAttribute
 
 struct MemoryStats
 {
+    /// Admitted allocation ranges, including alignment; one range per native Alias backing.
     uint64_t used = 0;
     uint64_t highWater = 0;
+    /// Application limit on reserved backing bytes, not a driver residency budget.
     uint64_t budget = 256ull * 1024 * 1024;
+    uint64_t reserved = 0, reservedHighWater = 0;
+    uint64_t allocations = 0, allocationHighWater = 0;
+    uint64_t blocks = 0, blockHighWater = 0;
+    bool operator==(const MemoryStats&) const = default;
 };
 
 /// Descriptor slots, not allocation bytes. Shared bookkeeping outlives the allocator's leases.
@@ -146,13 +152,21 @@ struct DescriptorStats
     uint64_t pages = 0, capacity = 0, inUse = 0, highWater = 0, creations = 0;
 };
 
-/** @brief Dedicated allocations in M1; budget counts native allocation sizes, not requested sizes.
+/** @brief Owner-thread accounting for allocation ranges and their backing blocks.
+ * Native Alias members share one charge. Peaks include admitted reservations that later fail
+ * native creation; rejected admission changes no counters. Release requires a matching charge.
  */
 struct AllocationLedger
 {
     MemoryStats stats;
+    /// Dedicated backing: atomically admit one range and one equally sized block.
     void Add(uint64_t bytes);
     void Remove(uint64_t bytes) noexcept;
+    void ReserveBlock(uint64_t bytes);
+    void ReleaseBlock(uint64_t bytes) noexcept;
+    /// Charge a suballocation against already reserved backing; never reserve twice.
+    void AddAllocation(uint64_t bytes);
+    void RemoveAllocation(uint64_t bytes) noexcept;
 };
 
 /** @brief GPU objects must be released before their Runtime and Device. Commands retain uses. */

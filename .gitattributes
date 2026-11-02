@@ -8,6 +8,7 @@
 .clang-format text
 *.md text
 *.cpp text
+*.ispc text
 *.hpp text
 *.h text
 *.hlsl text

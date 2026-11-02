@@ -33,7 +33,8 @@ public:
               const rhi::CpuProfileSnapshot* cpuOperations = nullptr,
               const rhi::DescriptorStats* descriptors = nullptr,
               const rhi::UploadPool::Statistics* uploads = nullptr,
-              const renderer::RaySceneStatistics* rayScene = nullptr) const;
+              const renderer::RaySceneStatistics* rayScene = nullptr,
+              const std::vector<rhi::DriverMemoryBudget>* driverBudgets = nullptr) const;
 
 private:
     std::vector<rendergraph::Submission::GpuProfile::Timing> queueTimeline_;

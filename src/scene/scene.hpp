@@ -18,12 +18,14 @@ struct Transform
 {
     math::Vec3 position{}, scale{1, 1, 1};
     math::Quaternion rotation{};
+    bool operator==(const Transform&) const = default;
     math::Mat4 Matrix() const;
 };
 /// @brief Perspective camera looking along local -Z; vertical FOV is in degrees.
 struct Camera
 {
     float fov = 60, nearPlane = .1f, farPlane = 100;
+    bool operator==(const Camera&) const = default;
 };
 /// @brief Model asset UUID, optional primitive UUID and explicit user material overrides.
 struct MeshRenderer
@@ -31,6 +33,7 @@ struct MeshRenderer
     std::string model, mesh;
     /// Imported material subresource UUID -> user .material asset UUID.
     std::map<std::string, std::string> materials;
+    bool operator==(const MeshRenderer&) const = default;
 };
 /// @brief Linear color/intensity; the owning transform emits light along local -Z.
 struct DirectionalLight
@@ -41,6 +44,7 @@ struct DirectionalLight
     bool shadows = false;
     uint32_t shadowResolution = 512;
     float shadowBias = .001f, shadowNormalBias = .01f;
+    bool operator==(const DirectionalLight&) const = default;
 };
 /// @brief Stable scene identity with optional components and inherited parent enable state.
 struct Object
@@ -51,6 +55,7 @@ struct Object
     std::optional<Camera> camera;
     std::optional<MeshRenderer> mesh;
     std::optional<DirectionalLight> light;
+    bool operator==(const Object&) const = default;
 };
 /// @brief Resolved hierarchy pose; rotation excludes scale for camera and light orientation.
 struct WorldTransform
@@ -120,11 +125,31 @@ struct Snapshot
 class Extractor
 {
 public:
+    struct Statistics
+    {
+        bool hierarchyRebuilt = false;
+        size_t geometryComputed = 0, geometryReused = 0;
+    };
     /// @brief Selects the light by UUID, optionally culls bounds and advances extraction history.
     Snapshot Extract(const Scene&, float aspect, const std::map<std::string, assets::Model>& models,
                      bool cpuCulling = true);
+    /// Last successful extraction; counters do not read clocks.
+    Statistics LastStatistics() const
+    {
+        return statistics_;
+    }
 
 private:
-    std::map<std::string, math::Mat4> previous_;
+    struct Geometry
+    {
+        math::Mat4 world, normal;
+        math::Bounds localBounds, bounds;
+    };
+    bool initialized_ = false;
+    std::vector<Object> objects_;
+    std::map<std::string, WorldTransform> transforms_;
+    std::map<std::string, size_t> objectIndices_;
+    std::map<std::string, Geometry> previous_;
+    Statistics statistics_;
 };
 } // namespace renderlab::scene

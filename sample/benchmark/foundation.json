@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "executable": "../../out/build/windows-release/renderlab_player.exe",
+  "backends": ["dx12", "vulkan"],
+  "repeats": 3,
+  "defaults": {
+    "seconds": 5,
+    "warmupSeconds": 1,
+    "warmupFrames": 8,
+    "width": 640,
+    "height": 360,
+    "quality": "medium",
+    "view": "final",
+    "validation": "off"
+  },
+  "cases": [
+    {"name": "pbr", "project": "../m4/Pbr.rlproject"},
+    {"name": "pbr-diagnostics", "project": "../m4/Pbr.rlproject", "cpuProfiling": true},
+    {"name": "shadow", "project": "../m4/Shadow.rlproject"},
+    {"name": "raytracing", "project": "../m4/RayTracing.rlproject", "pipeline": "raytracing"}
+  ]
+}
