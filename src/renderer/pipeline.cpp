@@ -128,7 +128,8 @@ RenderPipeline RenderPipelineBuilder::Create() const
 RenderPipelineBuilder CreatePipeline(PipelineType type, PipelineOptions options)
 {
     if (type != PipelineType::Custom && type != PipelineType::Forward &&
-        type != PipelineType::Deferred && type != PipelineType::RayTracing)
+        type != PipelineType::Deferred && type != PipelineType::RayTracing &&
+        type != PipelineType::PathTracing)
         throw std::invalid_argument("Unknown or unimplemented pipeline type");
     if (type == PipelineType::Custom &&
         (options.copyOpaqueColor || options.copyAfterTransparentColor))
@@ -162,6 +163,8 @@ RenderPipelineBuilder CreatePipeline(PipelineType type, PipelineOptions options)
                                                                  : "Deferred.Lighting"),
                         5);
     }
+    else if (type == PipelineType::PathTracing)
+        pipeline.Append(std::make_shared<PathTracingFeature>(), 1);
     return pipeline;
 }
 } // namespace renderlab::renderer

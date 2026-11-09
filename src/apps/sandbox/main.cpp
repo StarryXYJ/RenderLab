@@ -42,7 +42,7 @@ std::string_view ApplicationUsage()
            "  --memory-alias             Optional transient attachment memory reuse (scene only)\n"
            "  --async-compute            Optional buffer feeder Compute Queue (scene only)\n"
            "  --submission direct|indexed-direct|cpu-indirect|gpu-culled  Geometry submission\n"
-           "  --pipeline forward|deferred|raytracing  Scene rendering path\n"
+           "  --pipeline forward|deferred|raytracing|pathtracing  Scene rendering path\n"
            "  --fixed-camera --debug-panel  Camera and native controls\n"
            "  --headless --benchmark N    Capture or measure a fixed scene\n"
            "  --benchmark-seconds S       Measure for a duration instead of a frame count\n"

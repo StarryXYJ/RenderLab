@@ -17,7 +17,8 @@ namespace renderlab::sandbox
 renderer::SceneRenderOptions RenderOptions(const Options& options)
 {
     renderer::SceneRenderOptions render;
-    render.pipeline = options.pipeline == "deferred"     ? renderer::PipelineType::Deferred
+    render.pipeline = options.pipeline == "pathtracing"  ? renderer::PipelineType::PathTracing
+                      : options.pipeline == "deferred"   ? renderer::PipelineType::Deferred
                       : options.pipeline == "raytracing" ? renderer::PipelineType::RayTracing
                                                          : renderer::PipelineType::Forward;
     render.reflectionDenoise = options.reflectionDenoise;

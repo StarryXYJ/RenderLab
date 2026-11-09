@@ -108,7 +108,7 @@ struct SceneRenderer::Impl
     AccelerationScene accelerationScene;
     std::unique_ptr<IndexedScene> indexedScene;
     std::shared_ptr<rhi::Pipeline> rayQueryShadow;
-    std::shared_ptr<rhi::ShaderTable> reflectionTable, reflectionTableWithoutGuide;
+    std::shared_ptr<rhi::ShaderTable> reflectionTable, reflectionTableWithoutGuide, pathTable;
     std::shared_ptr<rhi::Pipeline> reflectionHistory, reflectionStatistics, reflectionCombine,
         reflectionDenoise, reflectionTemporal;
     std::shared_ptr<rhi::Buffer> emptyReflectionStatistics;
@@ -201,6 +201,7 @@ struct SceneRenderer::Impl
         CreatePipeline(PipelineType::RayTracing)
             .AddFeature(std::make_shared<ShadowFeature>(), RenderStage::BeforeOpaque)
             .Create();
+    RenderPipeline pathTracingPipeline = CreatePipeline(PipelineType::PathTracing).Create();
     math::Mat4 shadowMatrix = math::Mat4::Identity();
     scene::Extractor extractor;
     scene::Snapshot snapshot;
@@ -426,6 +427,38 @@ struct SceneRenderer::Impl
         description.compute =
             runtime.CreateShader(rhi::ShaderStage::Compute, compiler.Compile(request), "CSMain");
         rayQueryShadow = runtime.CreatePipeline(std::move(description));
+    }
+    void EnsurePathProgram()
+    {
+        if (pathTable)
+            return;
+        shader::DxcCompiler compiler;
+        const auto module = [&](rhi::ShaderStage stage, const char* entry)
+        {
+            shader::ProgramRequest request;
+            request.entry = {stage, project.engine / "RenderLab" / "PathTrace.hlsl", entry};
+            request.target = shaderTarget;
+            if (shaderTarget == shader::Target::Spirv)
+                request.defines["SPIRV"] = "1";
+            return runtime.CreateShader(stage, compiler.Compile(request), entry);
+        };
+        rhi::PipelineDesc desc;
+        desc.layout = runtime.CreateLayout({{0, rhi::BindingKind::AccelerationStructure},
+                                            {1, rhi::BindingKind::StorageTexture},
+                                            {4, rhi::BindingKind::ConstantBuffer},
+                                            {5, rhi::BindingKind::ReadOnlyBuffer},
+                                            {6, rhi::BindingKind::ReadOnlyBuffer},
+                                            {7, rhi::BindingKind::ReadOnlyBuffer},
+                                            {8, rhi::BindingKind::ReadOnlyBuffer},
+                                            {9, rhi::BindingKind::ReadOnlyBuffer},
+                                            {10, rhi::BindingKind::SampledTexture},
+                                            {11, rhi::BindingKind::Sampler},
+                                            {13, rhi::BindingKind::SampledTexture}});
+        desc.rayPayloadSize = 64;
+        desc.rayGeneration = module(rhi::ShaderStage::RayGeneration, "RayGeneration");
+        desc.miss = module(rhi::ShaderStage::Miss, "Miss");
+        desc.closestHit = module(rhi::ShaderStage::ClosestHit, "ClosestHit");
+        pathTable = runtime.CreateShaderTable(runtime.CreatePipeline(desc));
     }
     void EnsureReflectionPrograms()
     {
@@ -855,9 +888,10 @@ void SceneRenderer::ValidatePipeline(PipelineType pipeline)
     auto& self = *impl_;
     if (pipeline == PipelineType::Forward)
         return;
-    if (pipeline != PipelineType::Deferred && pipeline != PipelineType::RayTracing)
+    if (pipeline != PipelineType::Deferred && pipeline != PipelineType::RayTracing &&
+        pipeline != PipelineType::PathTracing)
         throw std::invalid_argument("Unknown rendering pipeline");
-    if (pipeline == PipelineType::RayTracing &&
+    if ((pipeline == PipelineType::RayTracing || pipeline == PipelineType::PathTracing) &&
         (!self.runtime.SupportsAccelerationStructures() || !self.runtime.SupportsRayQuery() ||
          !self.runtime.SupportsRayTracingPipeline()))
         throw std::invalid_argument(
@@ -871,12 +905,15 @@ void SceneRenderer::ValidatePipeline(PipelineType pipeline)
         const auto mesh = std::ranges::find(model.meshes, instance.mesh, &assets::Mesh::id);
         const auto material = self.MaterialFor(instance, model.materials.at(mesh->material));
         const auto policy = material::ResolvePolicy(material.package->definition, material.asset);
+        if (policy.surface == shader::SurfaceType::Transparent &&
+            pipeline == PipelineType::PathTracing)
+            throw std::invalid_argument("Path tracing does not support transparent geometry");
         if (policy.surface == shader::SurfaceType::Transparent)
             continue;
         if (!material.package->HasRole(shader::PassRole::GBuffer))
             throw std::invalid_argument("Deferred rendering requires a GBuffer role in " +
                                         material.package->definition.name);
-        if (pipeline == PipelineType::RayTracing)
+        if (pipeline == PipelineType::RayTracing || pipeline == PipelineType::PathTracing)
         {
             if (policy.alphaClip)
                 throw std::invalid_argument("Ray Tracing currently supports opaque geometry; "
@@ -982,12 +1019,19 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
         self.pool.Trim();
         self.memoryAlias = options.memoryAlias;
     }
-    const bool rayTracing = options.pipeline == PipelineType::RayTracing;
+    const bool pathTracing = options.pipeline == PipelineType::PathTracing;
+    const bool rayTracing = options.pipeline == PipelineType::RayTracing || pathTracing;
     if (options.pipeline != PipelineType::Forward && options.pipeline != PipelineType::Deferred &&
         !rayTracing)
         throw std::invalid_argument("Unknown or unavailable scene render pipeline");
-    const bool deferred = options.pipeline != PipelineType::Forward;
+    const bool deferred =
+        options.pipeline == PipelineType::Deferred || options.pipeline == PipelineType::RayTracing;
     const bool indexed = options.submission != GeometrySubmission::Direct;
+    if (pathTracing && (indexed || options.reflectionDiagnostics ||
+                        (options.view != SceneView::Final && options.view != SceneView::Hdr)))
+        throw std::invalid_argument(
+            "Path tracing supports direct submission and final/HDR views only; reflection "
+            "diagnostics are unavailable");
     if (indexed && options.submission != GeometrySubmission::IndexedDirect &&
         options.submission != GeometrySubmission::CpuIndirect &&
         options.submission != GeometrySubmission::GpuCulled)
@@ -1055,10 +1099,11 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
         return framePolicies.at(&material);
     };
     const bool reflections =
-        rayTracing && options.reflections &&
-        (options.view == SceneView::Final || options.view == SceneView::Hdr ||
-         options.view == SceneView::ReflectionRaw || options.view == SceneView::ReflectionHistory ||
-         options.view == SceneView::ReflectionDenoised);
+        pathTracing || (rayTracing && options.reflections &&
+                        (options.view == SceneView::Final || options.view == SceneView::Hdr ||
+                         options.view == SceneView::ReflectionRaw ||
+                         options.view == SceneView::ReflectionHistory ||
+                         options.view == SceneView::ReflectionDenoised));
     if (!reflections)
         self.reflectionViews.clear();
     if ((options.view == SceneView::ReflectionRaw || options.view == SceneView::ReflectionHistory ||
@@ -1088,6 +1133,8 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
                 throw std::logic_error("Ray Tracing snapshot references a missing mesh");
             const auto& material = materialForFrame(instance, model.materials.at(mesh->material));
             const auto policy = policyForFrame(material);
+            if (policy.surface == shader::SurfaceType::Transparent && pathTracing)
+                throw std::invalid_argument("Path tracing does not support transparent geometry");
             if (policy.surface == shader::SurfaceType::Transparent)
                 continue;
             if (policy.alphaClip)
@@ -1136,6 +1183,8 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
         if (reflections)
         {
             self.EnsureReflectionPrograms();
+            if (pathTracing)
+                self.EnsurePathProgram();
             const bool geometryChanged =
                 rayGeometryKeys != self.packedRayMeshes || !self.raySurfaceBuffers[0];
             if (geometryChanged)
@@ -1223,11 +1272,13 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
     };
     const auto& cameraCandidates =
         self.snapshot.cpuVisibilityKnown ? self.snapshot.instances : self.snapshot.allInstances;
-    scan(cameraCandidates, deferred ? shader::PassRole::GBuffer : shader::PassRole::Forward,
-         cameraDepthFormat);
+    if (!pathTracing)
+        scan(cameraCandidates, deferred ? shader::PassRole::GBuffer : shader::PassRole::Forward,
+             cameraDepthFormat);
     if (deferred)
         scan(cameraCandidates, shader::PassRole::Forward, cameraDepthFormat);
-    scan(self.snapshot.shadowCasters, shader::PassRole::ShadowCaster, frame.shadowDepthFormat);
+    if (!pathTracing)
+        scan(self.snapshot.shadowCasters, shader::PassRole::ShadowCaster, frame.shadowDepthFormat);
     graph.CreateTexture("CameraDepth",
                         {target->desc.width, target->desc.height, cameraDepthFormat, false, true});
     frame.clearColor = {.02f, .02f, .02f, 1};
@@ -1336,12 +1387,13 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
             append(instance.mask);
             appendTemporal(instance.mask);
         }
-        const auto& viewId = self.document.activeCamera;
+        const auto viewId =
+            pathTracing ? "path/" + self.document.activeCamera : self.document.activeCamera;
         auto& history =
             self.AcquireReflectionHistory(viewId, target->desc.width, target->desc.height);
         reflectionHistory = &history;
         const bool accumulate =
-            options.reflectionHistory && options.view != SceneView::ReflectionRaw;
+            pathTracing || (options.reflectionHistory && options.view != SceneView::ReflectionRaw);
         const bool valid =
             accumulate && history.signature == reflectionSignature && history.samples > 0;
         reflectionSamples = valid ? history.samples : 0;
@@ -1399,12 +1451,13 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
         frame.rayTracing.historyPipeline = self.reflectionHistory;
         frame.rayTracing.statisticsPipeline = self.reflectionStatistics;
         frame.rayTracing.combinePipeline = self.reflectionCombine;
-        if (reflectionSamples + 1 < 2048 &&
+        if (!pathTracing && reflectionSamples + 1 < 2048 &&
             ((options.reflectionDenoise &&
               (options.view == SceneView::Final || options.view == SceneView::Hdr)) ||
              options.view == SceneView::ReflectionDenoised))
             frame.rayTracing.denoisePipeline = self.reflectionDenoise;
-        frame.rayTracing.reflectionTable = frame.rayTracing.denoisePipeline
+        frame.rayTracing.reflectionTable = pathTracing ? self.pathTable
+                                           : frame.rayTracing.denoisePipeline
                                                ? self.reflectionTable
                                                : self.reflectionTableWithoutGuide;
         if (frame.rayTracing.denoisePipeline && options.reflectionTemporal && accumulate)
@@ -1483,6 +1536,8 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
         frame.rayTracing.reflectionTextures = {{10, importTexture(self.rayAtlasView)},
                                                {13, importTexture(self.environmentAtlas)},
                                                {15, importTexture(self.brdfLut)}};
+        if (pathTracing)
+            frame.rayTracing.reflectionTextures.pop_back();
     }
     const material::ResourceResolver resolve =
         [&](const shader::Property& property, const std::string& reference)
@@ -1733,10 +1788,13 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
         else
             frame.opaque.push_back(std::move(draw));
     };
-    for (const auto& instance : self.snapshot.shadowCasters)
-        prepareDraw(instance, shader::PassRole::ShadowCaster);
-    for (const auto& instance : indexed ? self.snapshot.allInstances : self.snapshot.instances)
-        prepareDraw(instance, deferred ? shader::PassRole::GBuffer : shader::PassRole::Forward);
+    if (!pathTracing)
+    {
+        for (const auto& instance : self.snapshot.shadowCasters)
+            prepareDraw(instance, shader::PassRole::ShadowCaster);
+        for (const auto& instance : indexed ? self.snapshot.allInstances : self.snapshot.instances)
+            prepareDraw(instance, deferred ? shader::PassRole::GBuffer : shader::PassRole::Forward);
+    }
     if (indexed)
     {
         IndexedFrameBindings bindings;
@@ -1845,7 +1903,9 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
                 {resource.slot, found->second, static_cast<uint32_t>(resource.scope)});
         }
     }
-    if (rayTracing)
+    if (pathTracing)
+        self.pathTracingPipeline.Build(graph, frame);
+    else if (rayTracing)
         self.rayTracingPipeline.Build(graph, frame);
     else if (deferred)
         self.deferredPipeline.Build(graph, frame);
@@ -1854,12 +1914,14 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
     if (reflections)
     {
         graph.Export(graph.GetTexture(frame.rayTracing.historyRadiance), rhi::State::Sampled);
-        graph.Export(graph.GetBuffer(frame.rayTracing.historyStatistics), rhi::State::ShaderRead);
+        if (!pathTracing)
+            graph.Export(graph.GetBuffer(frame.rayTracing.historyStatistics),
+                         rhi::State::ShaderRead);
     }
     if (frame.rayTracing.temporalPipeline)
         for (const auto& name : frame.rayTracing.temporalOutputs)
             graph.Export(graph.GetTexture(name), rhi::State::Sampled);
-    std::string displaySource = "CameraColor";
+    std::string displaySource = pathTracing ? frame.rayTracing.historyRadiance : "CameraColor";
     if (options.view == SceneView::ReflectionRaw)
         displaySource = "RayTracing.RawRadiance";
     else if (options.view == SceneView::ReflectionHistory)
@@ -2010,7 +2072,7 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
         reflectionHistory->sequenceSignature = temporalSignature;
         reflectionHistory->index = reflectionOutput;
         reflectionHistory->initialized[reflectionOutput] = true;
-        reflectionHistory->statisticsInitialized[reflectionOutput] = true;
+        reflectionHistory->statisticsInitialized[reflectionOutput] = !pathTracing;
         reflectionHistory->samples = std::min(reflectionSamples + 1, MaxReflectionSamples);
         reflectionHistory->sequence = (reflectionSequence + 1) % MaxReflectionSamples;
         reflectionHistory->completion = submitted.completion;

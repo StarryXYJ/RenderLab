@@ -1,0 +1,834 @@
+{
+  "version": 1,
+  "activeCamera": "d956b425af915f83a4d4dbb5d2be31dc",
+  "ambient": [
+    0.03,
+    0.03,
+    0.03
+  ],
+  "environment": {
+    "rotation": 0,
+    "image": "a118d11d917852f38828d8428f3f6d28",
+    "intensity": 1.5
+  },
+  "exposure": 0,
+  "objects": [
+    {
+      "id": "d956b425af915f83a4d4dbb5d2be31dc",
+      "name": "camera",
+      "enabled": true,
+      "transform": {
+        "position": [
+          5,
+          4,
+          9
+        ],
+        "scale": [
+          1,
+          1,
+          1
+        ],
+        "rotation": [
+          -0.16849008466583743,
+          0.23824655840996276,
+          0.04200929630861167,
+          0.9555547539512126
+        ]
+      },
+      "camera": {
+        "fov": 50,
+        "near": 0.1,
+        "far": 100
+      }
+    },
+    {
+      "id": "ac8f98af54075be1a80acfb97615f61a",
+      "name": "sun",
+      "enabled": true,
+      "transform": {
+        "position": [
+          0,
+          0,
+          0
+        ],
+        "scale": [
+          1,
+          1,
+          1
+        ],
+        "rotation": [
+          -0.3696438106143861,
+          -0.23911761839433449,
+          -0.09904576054128762,
+          0.8923991008325228
+        ]
+      },
+      "directionalLight": {
+        "color": [
+          1,
+          0.96,
+          0.88
+        ],
+        "intensity": 3,
+        "shadows": true,
+        "shadowResolution": 512,
+        "shadowBias": 0.001,
+        "shadowNormalBias": 0.01
+      }
+    },
+    {
+      "id": "7acd89dea34354a3ad757e02b07b2767",
+      "name": "floor",
+      "enabled": true,
+      "transform": {
+        "position": [
+          0,
+          -1,
+          0
+        ],
+        "scale": [
+          6,
+          0.1,
+          5
+        ],
+        "rotation": [
+          0,
+          0,
+          0,
+          1
+        ]
+      },
+      "meshRenderer": {
+        "model": "b4748e75e72a5dba8d4439fa86854c92",
+        "materials": {
+          "724bed1a90285b9d933f9a5abbe5e9af": "dfb84be518f84b2eab13a4863a0c720d"
+        }
+      }
+    },
+    {
+      "id": "6453f4ca137f5a7c979d7ed1a42c7aca",
+      "name": "gallery-0-0",
+      "enabled": true,
+      "transform": {
+        "position": [
+          -2.5,
+          -0.3,
+          -2.5
+        ],
+        "scale": [
+          0.55,
+          0.55,
+          0.55
+        ],
+        "rotation": [
+          0,
+          0,
+          0,
+          1
+        ]
+      },
+      "meshRenderer": {
+        "model": "8cb75671f1c7525abe1c98eeede99855",
+        "materials": {
+          "18609d7bc4b25b3094ca40a95c490f5a": "a4f56355e1035c3c8e1912bd9b11c6c4"
+        }
+      }
+    },
+    {
+      "id": "c4e1a4eb19025e5da815e438106b33e3",
+      "name": "gallery-1-0",
+      "enabled": true,
+      "transform": {
+        "position": [
+          -1.25,
+          -0.3,
+          -2.5
+        ],
+        "scale": [
+          0.55,
+          0.55,
+          0.55
+        ],
+        "rotation": [
+          0,
+          0,
+          0,
+          1
+        ]
+      },
+      "meshRenderer": {
+        "model": "8cb75671f1c7525abe1c98eeede99855",
+        "materials": {
+          "18609d7bc4b25b3094ca40a95c490f5a": "dfb84be518f84b2eab13a4863a0c720d"
+        }
+      }
+    },
+    {
+      "id": "175886aa5cb2581cb7aa4d2931736c05",
+      "name": "gallery-2-0",
+      "enabled": true,
+      "transform": {
+        "position": [
+          0.0,
+          -0.3,
+          -2.5
+        ],
+        "scale": [
+          0.55,
+          0.55,
+          0.55
+        ],
+        "rotation": [
+          0,
+          0,
+          0,
+          1
+        ]
+      },
+      "meshRenderer": {
+        "model": "8cb75671f1c7525abe1c98eeede99855",
+        "materials": {
+          "18609d7bc4b25b3094ca40a95c490f5a": "a4f56355e1035c3c8e1912bd9b11c6c4"
+        }
+      }
+    },
+    {
+      "id": "b47aef8544a857acacdd643dcb9cebd1",
+      "name": "gallery-3-0",
+      "enabled": true,
+      "transform": {
+        "position": [
+          1.25,
+          -0.3,
+          -2.5
+        ],
+        "scale": [
+          0.55,
+          0.55,
+          0.55
+        ],
+        "rotation": [
+          0,
+          0,
+          0,
+          1
+        ]
+      },
+      "meshRenderer": {
+        "model": "8cb75671f1c7525abe1c98eeede99855",
+        "materials": {
+          "18609d7bc4b25b3094ca40a95c490f5a": "dfb84be518f84b2eab13a4863a0c720d"
+        }
+      }
+    },
+    {
+      "id": "e154c11c659a5441aa6966775618bfce",
+      "name": "gallery-4-0",
+      "enabled": true,
+      "transform": {
+        "position": [
+          2.5,
+          -0.3,
+          -2.5
+        ],
+        "scale": [
+          0.55,
+          0.55,
+          0.55
+        ],
+        "rotation": [
+          0,
+          0,
+          0,
+          1
+        ]
+      },
+      "meshRenderer": {
+        "model": "8cb75671f1c7525abe1c98eeede99855",
+        "materials": {
+          "18609d7bc4b25b3094ca40a95c490f5a": "a4f56355e1035c3c8e1912bd9b11c6c4"
+        }
+      }
+    },
+    {
+      "id": "2a59b00ef1435f50aa21c5734a912297",
+      "name": "gallery-0-1",
+      "enabled": true,
+      "transform": {
+        "position": [
+          -2.5,
+          -0.3,
+          -1.25
+        ],
+        "scale": [
+          0.55,
+          0.55,
+          0.55
+        ],
+        "rotation": [
+          0,
+          0,
+          0,
+          1
+        ]
+      },
+      "meshRenderer": {
+        "model": "8cb75671f1c7525abe1c98eeede99855",
+        "materials": {
+          "18609d7bc4b25b3094ca40a95c490f5a": "dfb84be518f84b2eab13a4863a0c720d"
+        }
+      }
+    },
+    {
+      "id": "7de44dcbb9db5111b2ef6cf690ea89f0",
+      "name": "gallery-1-1",
+      "enabled": true,
+      "transform": {
+        "position": [
+          -1.25,
+          -0.3,
+          -1.25
+        ],
+        "scale": [
+          0.55,
+          0.55,
+          0.55
+        ],
+        "rotation": [
+          0,
+          0,
+          0,
+          1
+        ]
+      },
+      "meshRenderer": {
+        "model": "8cb75671f1c7525abe1c98eeede99855",
+        "materials": {
+          "18609d7bc4b25b3094ca40a95c490f5a": "a4f56355e1035c3c8e1912bd9b11c6c4"
+        }
+      }
+    },
+    {
+      "id": "5c301b68cd8d5d39ad8f23342f6f1f33",
+      "name": "gallery-2-1",
+      "enabled": true,
+      "transform": {
+        "position": [
+          0.0,
+          -0.3,
+          -1.25
+        ],
+        "scale": [
+          0.55,
+          0.55,
+          0.55
+        ],
+        "rotation": [
+          0,
+          0,
+          0,
+          1
+        ]
+      },
+      "meshRenderer": {
+        "model": "8cb75671f1c7525abe1c98eeede99855",
+        "materials": {
+          "18609d7bc4b25b3094ca40a95c490f5a": "dfb84be518f84b2eab13a4863a0c720d"
+        }
+      }
+    },
+    {
+      "id": "7452bfad8ca951b6a86c70975648fdae",
+      "name": "gallery-3-1",
+      "enabled": true,
+      "transform": {
+        "position": [
+          1.25,
+          -0.3,
+          -1.25
+        ],
+        "scale": [
+          0.55,
+          0.55,
+          0.55
+        ],
+        "rotation": [
+          0,
+          0,
+          0,
+          1
+        ]
+      },
+      "meshRenderer": {
+        "model": "8cb75671f1c7525abe1c98eeede99855",
+        "materials": {
+          "18609d7bc4b25b3094ca40a95c490f5a": "a4f56355e1035c3c8e1912bd9b11c6c4"
+        }
+      }
+    },
+    {
+      "id": "08d7f1a0fcc254fdbbe76e53e5ddad73",
+      "name": "gallery-4-1",
+      "enabled": true,
+      "transform": {
+        "position": [
+          2.5,
+          -0.3,
+          -1.25
+        ],
+        "scale": [
+          0.55,
+          0.55,
+          0.55
+        ],
+        "rotation": [
+          0,
+          0,
+          0,
+          1
+        ]
+      },
+      "meshRenderer": {
+        "model": "8cb75671f1c7525abe1c98eeede99855",
+        "materials": {
+          "18609d7bc4b25b3094ca40a95c490f5a": "dfb84be518f84b2eab13a4863a0c720d"
+        }
+      }
+    },
+    {
+      "id": "bee67aa28e19564e91044d30669a4346",
+      "name": "gallery-0-2",
+      "enabled": true,
+      "transform": {
+        "position": [
+          -2.5,
+          -0.3,
+          0.0
+        ],
+        "scale": [
+          0.55,
+          0.55,
+          0.55
+        ],
+        "rotation": [
+          0,
+          0,
+          0,
+          1
+        ]
+      },
+      "meshRenderer": {
+        "model": "8cb75671f1c7525abe1c98eeede99855",
+        "materials": {
+          "18609d7bc4b25b3094ca40a95c490f5a": "a4f56355e1035c3c8e1912bd9b11c6c4"
+        }
+      }
+    },
+    {
+      "id": "8676360c29da512092e2c9da26ac7c53",
+      "name": "gallery-1-2",
+      "enabled": true,
+      "transform": {
+        "position": [
+          -1.25,
+          -0.3,
+          0.0
+        ],
+        "scale": [
+          0.55,
+          0.55,
+          0.55
+        ],
+        "rotation": [
+          0,
+          0,
+          0,
+          1
+        ]
+      },
+      "meshRenderer": {
+        "model": "8cb75671f1c7525abe1c98eeede99855",
+        "materials": {
+          "18609d7bc4b25b3094ca40a95c490f5a": "dfb84be518f84b2eab13a4863a0c720d"
+        }
+      }
+    },
+    {
+      "id": "644db5e9cd7d55a1b7eadac4ab62f07d",
+      "name": "gallery-2-2",
+      "enabled": true,
+      "transform": {
+        "position": [
+          0.0,
+          -0.3,
+          0.0
+        ],
+        "scale": [
+          0.55,
+          0.55,
+          0.55
+        ],
+        "rotation": [
+          0,
+          0,
+          0,
+          1
+        ]
+      },
+      "meshRenderer": {
+        "model": "8cb75671f1c7525abe1c98eeede99855",
+        "materials": {
+          "18609d7bc4b25b3094ca40a95c490f5a": "a4f56355e1035c3c8e1912bd9b11c6c4"
+        }
+      }
+    },
+    {
+      "id": "c112b3e18f8e5799a8bb2966badc7553",
+      "name": "gallery-3-2",
+      "enabled": true,
+      "transform": {
+        "position": [
+          1.25,
+          -0.3,
+          0.0
+        ],
+        "scale": [
+          0.55,
+          0.55,
+          0.55
+        ],
+        "rotation": [
+          0,
+          0,
+          0,
+          1
+        ]
+      },
+      "meshRenderer": {
+        "model": "8cb75671f1c7525abe1c98eeede99855",
+        "materials": {
+          "18609d7bc4b25b3094ca40a95c490f5a": "dfb84be518f84b2eab13a4863a0c720d"
+        }
+      }
+    },
+    {
+      "id": "c27fd5d9285a5e64904b342c2a4cbe56",
+      "name": "gallery-4-2",
+      "enabled": true,
+      "transform": {
+        "position": [
+          2.5,
+          -0.3,
+          0.0
+        ],
+        "scale": [
+          0.55,
+          0.55,
+          0.55
+        ],
+        "rotation": [
+          0,
+          0,
+          0,
+          1
+        ]
+      },
+      "meshRenderer": {
+        "model": "8cb75671f1c7525abe1c98eeede99855",
+        "materials": {
+          "18609d7bc4b25b3094ca40a95c490f5a": "a4f56355e1035c3c8e1912bd9b11c6c4"
+        }
+      }
+    },
+    {
+      "id": "23908c1533625163a03d1cf89439599f",
+      "name": "gallery-0-3",
+      "enabled": true,
+      "transform": {
+        "position": [
+          -2.5,
+          -0.3,
+          1.25
+        ],
+        "scale": [
+          0.55,
+          0.55,
+          0.55
+        ],
+        "rotation": [
+          0,
+          0,
+          0,
+          1
+        ]
+      },
+      "meshRenderer": {
+        "model": "8cb75671f1c7525abe1c98eeede99855",
+        "materials": {
+          "18609d7bc4b25b3094ca40a95c490f5a": "dfb84be518f84b2eab13a4863a0c720d"
+        }
+      }
+    },
+    {
+      "id": "e45eeef1a8e95b7b92cea6d954745a1f",
+      "name": "gallery-1-3",
+      "enabled": true,
+      "transform": {
+        "position": [
+          -1.25,
+          -0.3,
+          1.25
+        ],
+        "scale": [
+          0.55,
+          0.55,
+          0.55
+        ],
+        "rotation": [
+          0,
+          0,
+          0,
+          1
+        ]
+      },
+      "meshRenderer": {
+        "model": "8cb75671f1c7525abe1c98eeede99855",
+        "materials": {
+          "18609d7bc4b25b3094ca40a95c490f5a": "a4f56355e1035c3c8e1912bd9b11c6c4"
+        }
+      }
+    },
+    {
+      "id": "bcb1e816eb4253a786d13de0edb5c18a",
+      "name": "gallery-2-3",
+      "enabled": true,
+      "transform": {
+        "position": [
+          0.0,
+          -0.3,
+          1.25
+        ],
+        "scale": [
+          0.55,
+          0.55,
+          0.55
+        ],
+        "rotation": [
+          0,
+          0,
+          0,
+          1
+        ]
+      },
+      "meshRenderer": {
+        "model": "8cb75671f1c7525abe1c98eeede99855",
+        "materials": {
+          "18609d7bc4b25b3094ca40a95c490f5a": "dfb84be518f84b2eab13a4863a0c720d"
+        }
+      }
+    },
+    {
+      "id": "e0462b4917a656ed91acef6b2a96db0c",
+      "name": "gallery-3-3",
+      "enabled": true,
+      "transform": {
+        "position": [
+          1.25,
+          -0.3,
+          1.25
+        ],
+        "scale": [
+          0.55,
+          0.55,
+          0.55
+        ],
+        "rotation": [
+          0,
+          0,
+          0,
+          1
+        ]
+      },
+      "meshRenderer": {
+        "model": "8cb75671f1c7525abe1c98eeede99855",
+        "materials": {
+          "18609d7bc4b25b3094ca40a95c490f5a": "a4f56355e1035c3c8e1912bd9b11c6c4"
+        }
+      }
+    },
+    {
+      "id": "70a47965ed7b549fab9cdea1ee034179",
+      "name": "gallery-4-3",
+      "enabled": true,
+      "transform": {
+        "position": [
+          2.5,
+          -0.3,
+          1.25
+        ],
+        "scale": [
+          0.55,
+          0.55,
+          0.55
+        ],
+        "rotation": [
+          0,
+          0,
+          0,
+          1
+        ]
+      },
+      "meshRenderer": {
+        "model": "8cb75671f1c7525abe1c98eeede99855",
+        "materials": {
+          "18609d7bc4b25b3094ca40a95c490f5a": "dfb84be518f84b2eab13a4863a0c720d"
+        }
+      }
+    },
+    {
+      "id": "1b2fadd4bac05310b92a24844840a2a7",
+      "name": "gallery-0-4",
+      "enabled": true,
+      "transform": {
+        "position": [
+          -2.5,
+          -0.3,
+          2.5
+        ],
+        "scale": [
+          0.55,
+          0.55,
+          0.55
+        ],
+        "rotation": [
+          0,
+          0,
+          0,
+          1
+        ]
+      },
+      "meshRenderer": {
+        "model": "8cb75671f1c7525abe1c98eeede99855",
+        "materials": {
+          "18609d7bc4b25b3094ca40a95c490f5a": "a4f56355e1035c3c8e1912bd9b11c6c4"
+        }
+      }
+    },
+    {
+      "id": "5a890aa6d33753909c590c237a6a5fc3",
+      "name": "gallery-1-4",
+      "enabled": true,
+      "transform": {
+        "position": [
+          -1.25,
+          -0.3,
+          2.5
+        ],
+        "scale": [
+          0.55,
+          0.55,
+          0.55
+        ],
+        "rotation": [
+          0,
+          0,
+          0,
+          1
+        ]
+      },
+      "meshRenderer": {
+        "model": "8cb75671f1c7525abe1c98eeede99855",
+        "materials": {
+          "18609d7bc4b25b3094ca40a95c490f5a": "dfb84be518f84b2eab13a4863a0c720d"
+        }
+      }
+    },
+    {
+      "id": "f14e5eebbd3f59e282a24de1ceb74ef6",
+      "name": "gallery-2-4",
+      "enabled": true,
+      "transform": {
+        "position": [
+          0.0,
+          -0.3,
+          2.5
+        ],
+        "scale": [
+          0.55,
+          0.55,
+          0.55
+        ],
+        "rotation": [
+          0,
+          0,
+          0,
+          1
+        ]
+      },
+      "meshRenderer": {
+        "model": "8cb75671f1c7525abe1c98eeede99855",
+        "materials": {
+          "18609d7bc4b25b3094ca40a95c490f5a": "a4f56355e1035c3c8e1912bd9b11c6c4"
+        }
+      }
+    },
+    {
+      "id": "6339252541ed540086cf85008b5c659d",
+      "name": "gallery-3-4",
+      "enabled": true,
+      "transform": {
+        "position": [
+          1.25,
+          -0.3,
+          2.5
+        ],
+        "scale": [
+          0.55,
+          0.55,
+          0.55
+        ],
+        "rotation": [
+          0,
+          0,
+          0,
+          1
+        ]
+      },
+      "meshRenderer": {
+        "model": "8cb75671f1c7525abe1c98eeede99855",
+        "materials": {
+          "18609d7bc4b25b3094ca40a95c490f5a": "dfb84be518f84b2eab13a4863a0c720d"
+        }
+      }
+    },
+    {
+      "id": "a2820f0a73c15edf9db9606f115a3425",
+      "name": "gallery-4-4",
+      "enabled": true,
+      "transform": {
+        "position": [
+          2.5,
+          -0.3,
+          2.5
+        ],
+        "scale": [
+          0.55,
+          0.55,
+          0.55
+        ],
+        "rotation": [
+          0,
+          0,
+          0,
+          1
+        ]
+      },
+      "meshRenderer": {
+        "model": "8cb75671f1c7525abe1c98eeede99855",
+        "materials": {
+          "18609d7bc4b25b3094ca40a95c490f5a": "a4f56355e1035c3c8e1912bd9b11c6c4"
+        }
+      }
+    }
+  ]
+}

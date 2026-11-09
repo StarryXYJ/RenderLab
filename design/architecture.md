@@ -42,7 +42,7 @@ RenderLab 是面向引擎岗和渲染岗求职的渲染引擎项目。核心采�
 ```mermaid
 flowchart TD
     Editor["C# Editor：项目界面和面板"] --> Bridge["Editor Bridge：C ABI"]
-    Bridge --> Services["C++ Editor Services"]
+    Bridge --> Services["C++ 应用服务：编辑与运行会话"]
     Services --> Assets["Project 和 Asset Services"]
     Services --> Scene["Scene Document"]
     Host["C++ Sandbox 和 Player"] --> Assets
@@ -61,6 +61,8 @@ flowchart TD
 ```
 
 RHI 定义 GPU 对象与命令语义。Render Graph 编译一帧工作的资源访问和调度。Renderer 决定采用哪些渲染算法。Shader 和 Material 提供 GPU 程序、参数接口与数据。Scene 向渲染系统提取快照，不直接录制 GPU 命令。
+
+C++ 引擎核心提供场景、资源、材质、渲染与底层能力；原生应用服务组织项目会话、视口、编辑事务和保存等用例，调用核心而不依赖 Avalonia。运行时服务可供 Player、Sandbox 与编辑器复用，Undo 和未保存文档等编辑专用服务不成为 Player 的强制依赖。C# 负责窗口、交互和界面投影，按用例通过桥接调用原生服务；运行时不反向依赖编辑器。服务边界随实际工作项逐步抽取，不为分层一次性迁移全部模块或建立全局注册/插件框架。现有桥接主要提供视口会话，完整项目、材质与场景编辑服务尚未实现。
 
 依赖保持单向：RHI 不依赖 Render Graph，Render Graph 不依赖具体 Renderer，运行时不依赖 C# 编辑器。调试数据通过快照和事件向上暴露。
 

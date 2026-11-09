@@ -1,0 +1,116 @@
+#include "RaySurface.hlsli"
+#include "PathBsdf.hlsli"
+#include "ImageBasedLighting.hlsli"
+
+RaytracingAccelerationStructure Scene : register(t0);
+#ifdef SPIRV
+[[vk::image_format("rgba32f")]]
+#endif
+RWTexture2D<float4> Radiance : register(u1);
+cbuffer PathParameters : register(b4)
+{
+    row_major float4x4 InverseViewProjection;
+    float4 CameraPosition, DirectionToLight, LightColor, Environment;
+    float4 Options;
+};
+Texture2D<float4> EnvironmentAtlas : register(t13);
+
+struct PathPayload
+{
+    float3 position;
+    uint hit;
+    float3 normal;
+    uint unlit;
+    float3 albedo;
+    float metallic;
+    float3 emission;
+    float roughness;
+};
+
+[shader("raygeneration")]
+void RayGeneration()
+{
+    uint2 pixel = DispatchRaysIndex().xy;
+    uint2 size = DispatchRaysDimensions().xy;
+    uint pixelIndex = pixel.x + pixel.y * size.x;
+    uint sampleIndex = uint(Options.x);
+    float2 jitter = PathSample(sampleIndex, pixelIndex, 0);
+    float2 ndc = float2((pixel.x + jitter.x) * 2 / size.x - 1,
+                        1 - (pixel.y + jitter.y) * 2 / size.y);
+    float4 world = mul(InverseViewProjection, float4(ndc, .0001, 1));
+    RayDesc ray;
+    ray.Origin = CameraPosition.xyz;
+    ray.Direction = SafeNormalize(world.xyz / world.w - ray.Origin);
+    ray.TMin = .001;
+    ray.TMax = 10000;
+    float3 throughput = 1;
+    float3 result = 0;
+    [loop] for (uint bounce = 0; bounce < 4; ++bounce)
+    {
+        PathPayload payload = (PathPayload)0;
+        TraceRay(Scene, RAY_FLAG_NONE, 0x02, 0, 1, 0, ray, payload);
+        if (payload.hit == 0)
+        {
+            result += throughput * EnvironmentTile(ray.Direction, 0, EnvironmentAtlas, Environment);
+            break;
+        }
+        if (payload.unlit != 0)
+        {
+            result += throughput * payload.albedo;
+            break;
+        }
+        result += throughput * payload.emission;
+        float3 lightDirection = SafeNormalize(DirectionToLight.xyz);
+        float nl = saturate(dot(payload.normal, lightDirection));
+        if (nl > 0 && LightColor.w > 0)
+        {
+            bool visible = true;
+            if (Options.z > 0)
+            {
+                RayDesc shadow;
+                shadow.Origin = payload.position + payload.normal * .002;
+                shadow.Direction = lightDirection;
+                shadow.TMin = .001;
+                shadow.TMax = 10000;
+                RayQuery<RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH> query;
+                query.TraceRayInline(Scene, RAY_FLAG_NONE, 0x01, shadow);
+                while (query.Proceed()) {}
+                visible = query.CommittedStatus() != COMMITTED_TRIANGLE_HIT;
+            }
+            if (visible)
+                result += throughput * EvaluateBRDF(payload.albedo, payload.metallic,
+                    payload.roughness, payload.normal, -ray.Direction, lightDirection) *
+                    LightColor.rgb * LightColor.w;
+        }
+        float2 xi = PathSample(sampleIndex, pixelIndex, bounce + 1);
+        float choice = PathSample(sampleIndex, pixelIndex, bounce + 5).x;
+        float3 direction = SamplePathBsdf(payload.normal, -ray.Direction, payload.roughness,
+                                          xi, choice);
+        float pdf = PathBsdfPdf(payload.normal, -ray.Direction, direction, payload.roughness);
+        if (pdf <= 0) break;
+        throughput *= EvaluateBRDF(payload.albedo, payload.metallic, payload.roughness,
+                                   payload.normal, -ray.Direction, direction) / pdf;
+        ray.Origin = payload.position + payload.normal * .002;
+        ray.Direction = direction;
+    }
+    Radiance[pixel] = float4(result, 1);
+}
+
+[shader("miss")]
+void Miss(inout PathPayload payload) { payload.hit = 0; }
+
+[shader("closesthit")]
+void ClosestHit(inout PathPayload payload, BuiltInTriangleIntersectionAttributes attributes)
+{
+    bool unlit;
+    MaterialSurface surface = EvaluateRaySurface(InstanceID(), PrimitiveIndex(),
+                                                  attributes.barycentrics, unlit);
+    payload.hit = 1;
+    payload.position = WorldRayOrigin() + RayTCurrent() * WorldRayDirection();
+    payload.normal = surface.normalWS;
+    payload.unlit = unlit ? 1 : 0;
+    payload.albedo = surface.baseColor;
+    payload.metallic = surface.metallic;
+    payload.roughness = surface.perceptualRoughness;
+    payload.emission = surface.emission;
+}

@@ -11,6 +11,7 @@
 #include "rhi/runtime.hpp"
 #include "shader/dxc_compiler.hpp"
 
+#include <algorithm>
 #include <array>
 #include <cmath>
 #include <cstring>
@@ -474,6 +475,75 @@ void VerifyRaySampling(Runtime& runtime, shader::Target target, const std::files
             value[2] != 0 || value[3] != 0)
             throw std::runtime_error(
                 "Visible GGX/Sobol sampling failed its bounded-weight/stratification contract");
+    }
+    request.entry = {ShaderStage::Compute, source.parent_path() / "path_bsdf_acceptance.hlsl",
+                     "CSMain"};
+    desc.compute = runtime.CreateShader(ShaderStage::Compute, compiler.Compile(request), "CSMain");
+    pipeline = runtime.CreatePipeline(desc);
+    auto bsdfCommands = runtime.CreateCommands();
+    bsdfCommands->Barrier(result, State::CopySource, State::Storage);
+    bsdfCommands->Barrier(readback, State::HostRead, State::CopyDest);
+    bsdfCommands->Bind(pipeline);
+    bsdfCommands->Bind(runtime.CreateGroup(desc.layout, {binding}));
+    bsdfCommands->Compute(6, 1);
+    bsdfCommands->Barrier(result, State::Storage, State::CopySource);
+    bsdfCommands->Copy(result, readback, bytes);
+    bsdfCommands->Barrier(readback, State::CopyDest, State::HostRead);
+    runtime.Wait(runtime.Submit(std::move(bsdfCommands)));
+    std::memcpy(values.data(), readback->Map().data(), bytes);
+    // Independent midpoint quadrature of the BRDF over the incident hemisphere.
+    constexpr double pi = 3.14159265358979323846;
+    constexpr uint32_t steps = 512;
+    constexpr std::array<double, 3> base{.7, .4, .2};
+    for (uint32_t scenario = 0; scenario < 6; ++scenario)
+    {
+        const double nv = scenario / 2 == 0 ? 1.0 : scenario / 2 == 1 ? .5 : .1;
+        const double roughness = scenario % 2 ? .8 : .25;
+        const double metallic = scenario % 3 == 0 ? 1.0 : 0.0;
+        const double vx = std::sqrt(1 - nv * nv);
+        const double alpha = roughness * roughness;
+        const double alpha2 = alpha * alpha;
+        std::array<double, 3> integral{};
+        for (uint32_t z = 0; z < steps; ++z)
+        {
+            const double nl = (z + .5) / steps;
+            const double radius = std::sqrt(1 - nl * nl);
+            for (uint32_t p = 0; p < steps; ++p)
+            {
+                const double angle = 2 * pi * (p + .5) / steps;
+                const double lx = radius * std::cos(angle), ly = radius * std::sin(angle);
+                const double hx = vx + lx, hy = ly, hz = nv + nl;
+                const double length = std::sqrt(hx * hx + hy * hy + hz * hz);
+                const double nh = hz / length;
+                const double vh = std::clamp((vx * hx + nv * hz) / length, 0.0, 1.0);
+                const double d = nh * nh * (alpha2 - 1) + 1;
+                const double distribution = alpha2 / std::max(pi * d * d, 1e-8);
+                const double visibility =
+                    .5 / std::max(nl * std::sqrt(nv * nv * (1 - alpha2) + alpha2) +
+                                      nv * std::sqrt(nl * nl * (1 - alpha2) + alpha2),
+                                  1e-6);
+                for (size_t c = 0; c < base.size(); ++c)
+                {
+                    const double f0 = .04 * (1 - metallic) + base[c] * metallic;
+                    const double fresnel = f0 + (1 - f0) * std::pow(1 - vh, 5);
+                    integral[c] += ((1 - fresnel) * (1 - metallic) * base[c] / pi +
+                                    fresnel * distribution * visibility) *
+                                   nl;
+                }
+            }
+        }
+        for (size_t c = 0; c < base.size(); ++c)
+        {
+            const double expected = integral[c] * (2 * pi / (steps * steps));
+            const double actual = values[scenario * 4 + c];
+            if (!std::isfinite(actual) || std::abs(actual - expected) > .025 + expected * .04)
+                throw std::runtime_error("Path BSDF sampling differs from hemisphere quadrature");
+            logger.Write(LogLevel::Info,
+                         std::format("Path BSDF scenario {} channel {}: GPU {:.6f}, CPU {:.6f}",
+                                     scenario, c, actual, expected));
+        }
+        if (values[scenario * 4 + 3] != 0)
+            throw std::runtime_error("Path BSDF sampling produced invalid weights");
     }
     request.entry = {ShaderStage::Compute,
                      source.parent_path().parent_path() / "RenderLab" / "ReflectionPost.hlsl",

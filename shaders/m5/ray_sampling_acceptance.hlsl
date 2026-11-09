@@ -7,11 +7,24 @@ void CSMain(uint3 id : SV_DispatchThreadID)
     float nv = scenario / 2 == 0 ? 1 : scenario / 2 == 1 ? .1 : .001;
     float roughness = (scenario & 1) != 0 ? .8 : .045;
     float3 view = float3(sqrt(1 - nv * nv), 0, nv);
-    float total = 0, maximum = 0, invalid = 0;
+    float total = 0, maximum = 0, invalid = 0, cosineMean = 0;
+    float pathMeanX = 0, pathMeanY = 0, pathCross = 0, pathCrossBounce = 0;
     uint quadrants[4] = {0,0,0,0};
     [loop] for (uint i = 0; i < 4096; ++i)
     {
         float2 xi = ReflectionSample(i, scenario);
+        float2 path = PathSample(i, scenario, 0);
+        float2 nextPath = PathSample(i, scenario, 1);
+        pathMeanX += path.x;
+        pathMeanY += path.y;
+        pathCross += path.x * path.y;
+        pathCrossBounce += path.x * nextPath.x;
+        invalid += any(path < 0) || any(path >= 1) || any(nextPath < 0) ||
+            any(nextPath >= 1) ? 1 : 0;
+        float3 cosineDirection = SampleCosineHemisphere(xi);
+        cosineMean += cosineDirection.z;
+        invalid += !all(isfinite(cosineDirection)) || cosineDirection.z < 0 ||
+            abs(dot(cosineDirection, cosineDirection) - 1) > 1e-4 ? 1 : 0;
         quadrants[(xi.x >= .5 ? 1 : 0) + (xi.y >= .5 ? 2 : 0)]++;
         float3 normal = SampleVisibleGGX(view, roughness * roughness, xi);
         float nl = reflect(-view, normal).z;
@@ -23,5 +36,9 @@ void CSMain(uint3 id : SV_DispatchThreadID)
     }
     float discrepancy = 0;
     [unroll] for (uint q = 0; q < 4; ++q) discrepancy += abs(int(quadrants[q]) - 1024);
+    // E[cos(theta)] = 2/3 for cosine-weighted hemisphere sampling.
+    invalid += abs(cosineMean / 4096 - 2.0 / 3.0) > .001 ? 1 : 0;
+    invalid += abs(pathMeanX / 4096 - .5) > .02 || abs(pathMeanY / 4096 - .5) > .02 ||
+        abs(pathCross / 4096 - .25) > .02 || abs(pathCrossBounce / 4096 - .25) > .02 ? 1 : 0;
     Result[scenario] = float4(total / 4096, maximum, invalid, discrepancy);
 }

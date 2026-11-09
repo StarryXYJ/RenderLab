@@ -245,8 +245,9 @@ Options ParseOptions(std::span<const std::string_view> arguments)
     if (options.asyncCompute && options.projectPath.empty())
         throw std::invalid_argument("--async-compute requires --project");
     if (options.pipeline != "forward" && options.pipeline != "deferred" &&
-        options.pipeline != "raytracing")
-        throw std::invalid_argument("--pipeline must be forward, deferred or raytracing");
+        options.pipeline != "raytracing" && options.pipeline != "pathtracing")
+        throw std::invalid_argument(
+            "--pipeline must be forward, deferred, raytracing or pathtracing");
     if (options.headless && options.debugPanel)
         throw std::invalid_argument("--debug-panel requires a window");
     if ((options.debugPanel || options.fixedCamera || options.Benchmark() ||
@@ -300,7 +301,7 @@ std::string_view Usage()
            "  --memory-alias             Optional transient attachment memory reuse (scene only)\n"
            "  --async-compute            Optional buffer feeder Compute Queue (scene only)\n"
            "  --submission direct|indexed-direct|cpu-indirect|gpu-culled  Geometry submission\n"
-           "  --pipeline forward|deferred|raytracing  Select scene rendering path\n"
+           "  --pipeline forward|deferred|raytracing|pathtracing  Select scene rendering path\n"
            "  --debug-panel               Open native scene controls (F1 toggles)\n"
            "  --fixed-camera              Ignore camera movement keys\n"
            "  --profile PATH              Save CPU/GPU pass timing and memory JSON\n"

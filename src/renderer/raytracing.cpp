@@ -7,6 +7,66 @@
 
 namespace renderlab::renderer
 {
+void PathTracingFeature::Build(rendergraph::Graph& graph, const RenderFrame& frame)
+{
+    using namespace rendergraph;
+    const auto& input = frame.rayTracing;
+    if (!input.scene || !input.reflectionTable || !input.historyPipeline ||
+        input.historyRadiance.empty())
+        throw std::invalid_argument("Path tracing requires a scene, shader table and history");
+    const auto camera = graph.GetTextureDesc(graph.GetTexture("CameraColor"));
+    graph.CreateTexture("PathTracing.RawRadiance",
+                        {camera.width, camera.height, rhi::Format::Rgba32Float, true, false});
+    const auto records = graph.ImportBuffer(
+        "PathTracing.ShaderTable", input.reflectionTable->buffer, {rhi::State::HostWrite, true});
+    auto trace = graph.AddRayTracingPass("PathTracing.Trace");
+    const auto scene = trace.ReadBuffer(input.storage, Use::AccelerationStructureRead);
+    const auto table = trace.ReadBuffer(records, Use::ShaderTableRead);
+    const auto parameters = input.reflectionParameters;
+    const auto constants = trace.ReadBuffer(parameters.buffer, Use::Uniform, parameters.range);
+    std::vector<BufferHandle> surfaces;
+    for (const auto& binding : input.surfaces)
+        surfaces.push_back(trace.ReadBuffer(binding.buffer, binding.use, binding.range));
+    std::vector<TextureHandle> textures;
+    for (const auto& binding : input.reflectionTextures)
+        textures.push_back(trace.ReadTexture(binding.texture));
+    const auto raw = trace.WriteTexture("PathTracing.RawRadiance");
+    trace.Execute(
+        [=](RayTracingContext& context)
+        {
+            context.Bind(input.reflectionTable->pipeline);
+            context.BindAccelerationStructure(0, input.scene, scene);
+            context.BindTexture(1, raw);
+            context.BindBuffer(4, constants, parameters.range.offset, parameters.range.size);
+            for (size_t i = 0; i < surfaces.size(); ++i)
+            {
+                const auto& binding = input.surfaces[i];
+                context.BindBuffer(binding.slot, surfaces[i], binding.range.offset,
+                                   binding.range.size, binding.stride);
+            }
+            for (size_t i = 0; i < textures.size(); ++i)
+                context.BindTexture(input.reflectionTextures[i].slot, textures[i]);
+            context.BindSampler(11, input.sampler);
+            context.TraceRays(input.reflectionTable, table, camera.width, camera.height);
+        });
+    auto history = graph.AddComputePass("PathTracing.Accumulate");
+    const auto current = history.ReadTexture(raw);
+    const auto previous =
+        input.previousRadiance.empty() ? current : history.ReadTexture(input.previousRadiance);
+    const auto historyConstants =
+        history.ReadBuffer(parameters.buffer, Use::Uniform, parameters.range);
+    const auto accumulated = history.WriteTexture(input.historyRadiance);
+    history.Execute(
+        [=](ComputeContext& context)
+        {
+            context.Bind(input.historyPipeline);
+            context.BindTexture(0, current);
+            context.BindTexture(1, previous);
+            context.BindTexture(2, accumulated);
+            context.BindBuffer(3, historyConstants, parameters.range.offset, parameters.range.size);
+            context.Dispatch((camera.width + 7) / 8, (camera.height + 7) / 8);
+        });
+}
 void RayQueryShadowFeature::Build(rendergraph::Graph& graph, const RenderFrame& frame)
 {
     using namespace rendergraph;

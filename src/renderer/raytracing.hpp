@@ -54,4 +54,11 @@ public:
     RayReflectionFeature() : RenderFeature("RayTracing.Reflections", {"Deferred.Lighting"}) {}
     void Build(rendergraph::Graph&, const RenderFrame&) override;
 };
+/** @brief Independent primary-ray tracing and progressive HDR accumulation. */
+class PathTracingFeature final : public RenderFeature
+{
+public:
+    PathTracingFeature() : RenderFeature("PathTracing") {}
+    void Build(rendergraph::Graph&, const RenderFrame&) override;
+};
 } // namespace renderlab::renderer

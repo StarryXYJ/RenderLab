@@ -2,6 +2,22 @@
 
 RenderLab 支持 Windows x64，使用 C++20、MSVC、Windows SDK、CMake 和 Ninja。Sandbox 在 DX12/Vulkan 上展示三角形与 Compute 噪声纹理，支持独立的设备报告和 RHI 读回验收。
 
+路径追踪入口（要求支持 TraceRays 和 Ray Query 的设备）：
+
+```powershell
+./out/build/m5-release/renderlab_player.exe --backend dx12 --headless --validation on --project sample/m4/RayTracing.rlproject --pipeline pathtracing --width 640 --height 360 --benchmark 64 --warmup-frames 8 --output out/path-tracing --profile out/path-tracing/report.json
+```
+
+可将 `--backend` 改为 `vulkan`。此版本只支持不透明、非 Masked 的内置 Lit/Unlit 材质，最多四段路径；不支持透明、降噪或通用面光源采样。验证范围和未覆盖项见 [阶段计划](../design/phaseplan.md)。
+
+安装包中包含 `project/RayTracing.rlproject` 和 26 实例的
+`project/PathTracingGallery.rlproject`；从安装目录运行以下命令可打开窗口，详细操作和依赖见
+安装目录 `PathTracing-README.txt`。
+
+```powershell
+./renderlab_player.exe --backend dx12 --project project/PathTracingGallery.rlproject --pipeline pathtracing
+```
+
 ## 工具链
 
 固定功能状态与模板附件的独立 GPU 回归可运行 `ctest --preset windows-debug -R 'render_state|rendergraph.contracts' --output-on-failure`，需配置 `RENDERLAB_GPU_TESTS=ON`；状态与逐面访问接口见 [渲染状态](../docs/render-states.md)。

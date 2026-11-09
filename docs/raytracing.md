@@ -2,8 +2,24 @@
 
 The `RayTracing` scene composition uses the Deferred GBuffer and an independent Ray Query shadow
 feature, followed by independent TraceRays specular reflections. Select `--pipeline raytracing`, or **Ray Tracing** in the native debug panel on a supported
-device. Forward and Deferred remain available as raster references. Path tracing and Forward+ are
-separate planned compositions and are not exposed as placeholder menu entries.
+device. Forward and Deferred remain available as raster references. A separate experimental
+`--pipeline pathtracing` composition is available through the command-line host; it is not yet
+an editor option and remains limited to the material and geometry subset below. Forward+ remains
+a planned composition.
+
+The experimental path graph traces camera rays and up to four path segments, then progressively
+accumulates HDR radiance before tone mapping. It evaluates the built-in metallic-roughness BRDF
+with a mixture of cosine diffuse and visible-GGX sampling, plus emission, a directional light and
+the existing environment atlas. Transparent and masked geometry, a denoiser and general
+textured-emitter sampling are not implemented. It uses fixed ray offsets and the existing ray material atlas; these have the same
+scale and texture-footprint limitations as the reflection path. The per-pixel sample stream is
+deterministically keyed by pixel, sample and dimension. Distinct hashed dimensions and the basic
+GPU moment checks are not proof of unbiased integration or statistical independence. Camera,
+scene, material, light, environment and dimensions participate in the history signature;
+exposure only changes display. Commands, validation
+evidence and pending work are in the [build manual](../manual/build.md) and
+[phase plan](../design/phaseplan.md#m8-专题深化与作品交付); its graph, sampling and limits are
+described in [path tracing](path-tracing.md).
 
 ## Capabilities and RHI
 

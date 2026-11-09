@@ -236,7 +236,9 @@ if(RENDERLAB_DX12_MEMORY_ALLOCATOR)
     install(FILES "${d3d12ma_SOURCE_DIR}/NOTICES.txt" DESTINATION licenses RENAME D3D12MA-NOTICES.txt)
 endif()
 install(DIRECTORY sample/m4/Assets DESTINATION project)
-install(FILES sample/m4/RenderLab.rlproject sample/m4/Pbr.rlproject sample/m4/Shadow.rlproject DESTINATION project)
+install(FILES sample/m4/RenderLab.rlproject sample/m4/Pbr.rlproject sample/m4/Shadow.rlproject
+    sample/m4/RayTracing.rlproject sample/m4/PathTracingGallery.rlproject DESTINATION project)
+install(FILES sample/m4/PathTracing-README.txt DESTINATION .)
 
 if(BUILD_TESTING)
     add_executable(renderlab_gpu_memory_tests tests/gpu_memory_tests.cpp)

@@ -17,6 +17,7 @@
 #include <cstring>
 #include <format>
 #include <set>
+#include <stdexcept>
 
 namespace renderlab::samples
 {
@@ -36,6 +37,106 @@ void VerifyScene(rhi::Runtime& runtime, shader::Target target, const std::filesy
         std::filesystem::copy_file(project, fixture);
     }
     renderer::SceneRenderer renderer(runtime, target, fixture, engine);
+    if (validate && pipeline == renderer::PipelineType::RayTracing &&
+        project.stem() == "RayTracing")
+    {
+        renderer::SceneRenderer pathRenderer(runtime, target, fixture, engine);
+        const auto original = pathRenderer.Document();
+        auto pathTarget = runtime.CreateTexture(
+            {64, 48, rhi::Format::Rgba8Srgb, false, true, "PathTracing.Acceptance"});
+        renderer::SceneRenderOptions pathOptions;
+        pathOptions.pipeline = renderer::PipelineType::PathTracing;
+        pathOptions.captureGraph = true;
+        auto state = rhi::State::Undefined;
+        const auto pathFrame = [&]()
+        {
+            auto frame = pathRenderer.Render(pathTarget, state, nullptr, true, {}, pathOptions);
+            state = rhi::State::CopySource;
+            runtime.Wait(frame.completion);
+            return frame;
+        };
+        const auto first = pathFrame();
+        const auto second = pathFrame();
+        detail::Require(first.reflectionSamples == 1 && first.reflectionHistoryReset &&
+                            second.reflectionSamples == 2 && !second.reflectionHistoryReset,
+                        "Path tracing did not accumulate successive samples");
+        bool trace = false, accumulate = false, raster = false;
+        for (const auto& pass : first.graphSnapshot->passes)
+        {
+            trace |= pass.name == "PathTracing.Trace";
+            accumulate |= pass.name == "PathTracing.Accumulate";
+            raster |= pass.name == "Deferred.GBuffer" || pass.name == "Forward.Opaque";
+        }
+        detail::Require(trace && accumulate && !raster, "Path tracing graph composition mismatch");
+        pathRenderer.Document().MoveCamera({.5f, 0, 0}, {0, 5, 0});
+        const auto moved = pathFrame();
+        detail::Require(moved.reflectionSamples == 1 && moved.reflectionHistoryReset,
+                        "Path tracing camera change did not reset history");
+        pathRenderer.Document() = original;
+        const auto restored = pathFrame();
+        detail::Require(restored.reflectionSamples == 1 && restored.reflectionHistoryReset,
+                        "Path tracing camera restoration did not reset history");
+        const auto light = pathRenderer.LastSnapshot().light.object;
+        detail::Require(!light.empty(), "Path tracing fixture needs a directional light");
+        pathRenderer.Document().Get(light).light->intensity *= .5f;
+        const auto changedLight = pathFrame();
+        detail::Require(changedLight.reflectionSamples == 1 && changedLight.reflectionHistoryReset,
+                        "Path tracing light change did not reset history");
+        pathTarget = runtime.CreateTexture(
+            {65, 48, rhi::Format::Rgba8Srgb, false, true, "PathTracing.Resized"});
+        state = rhi::State::Undefined;
+        const auto resized = pathFrame();
+        detail::Require(resized.reflectionSamples == 1 && resized.reflectionHistoryReset,
+                        "Path tracing resize did not reset history");
+        pathOptions.exposure = 1.5f;
+        const auto exposure = pathFrame();
+        detail::Require(exposure.reflectionSamples == 2 && !exposure.reflectionHistoryReset,
+                        "Path tracing display exposure discarded history");
+        pathOptions.reflectionDiagnostics = true;
+        bool rejectedDiagnostics = false;
+        try
+        {
+            pathFrame();
+        }
+        catch (const std::invalid_argument&)
+        {
+            rejectedDiagnostics = true;
+        }
+        detail::Require(rejectedDiagnostics,
+                        "Path tracing accepted unsupported reflection diagnostics");
+        pathOptions.reflectionDiagnostics = false;
+        auto& pathDocument = pathRenderer.Document();
+        auto changedObject = std::ranges::find_if(pathDocument.objects, [](const auto& object)
+                                                  { return object.mesh.has_value(); });
+        detail::Require(changedObject != pathDocument.objects.end(),
+                        "Path tracing fixture needs a mesh");
+        changedObject->transform.position.x += .3f;
+        const auto changedScene = pathFrame();
+        detail::Require(changedScene.reflectionSamples == 1 && changedScene.reflectionHistoryReset,
+                        "Path tracing scene change did not reset history");
+        pathDocument = original;
+        pathFrame();
+        const auto materialSource =
+            std::ranges::find_if(pathDocument.objects, [](const auto& value)
+                                 { return value.mesh && !value.mesh->materials.empty(); });
+        detail::Require(materialSource != pathDocument.objects.end(),
+                        "Path tracing fixture needs a material override");
+        const auto materialId = materialSource->mesh->materials.begin()->second;
+        bool replaced = false;
+        for (auto& entity : pathDocument.objects)
+            if (entity.mesh && entity.id != materialSource->id)
+            {
+                for (const auto& surface : pathRenderer.Models().at(entity.mesh->model).materials)
+                    entity.mesh->materials[surface.id] = materialId;
+                replaced = true;
+                break;
+            }
+        detail::Require(replaced, "Path tracing fixture needs multiple mesh objects");
+        const auto changedMaterial = pathFrame();
+        detail::Require(changedMaterial.reflectionSamples == 1 &&
+                            changedMaterial.reflectionHistoryReset,
+                        "Path tracing material change did not reset history");
+    }
     if (pipeline == renderer::PipelineType::RayTracing)
         for (auto& object : renderer.Document().objects)
             if (object.light)
