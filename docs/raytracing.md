@@ -10,8 +10,9 @@ a planned composition.
 The experimental path graph traces camera rays and up to four path segments, then progressively
 accumulates HDR radiance before tone mapping. It evaluates the built-in metallic-roughness BRDF
 with a mixture of cosine diffuse and visible-GGX sampling, plus emission, a directional light and
-the existing environment atlas. Transparent and masked geometry, a denoiser and general
-textured-emitter sampling are not implemented. It uses fixed ray offsets and the existing ray material atlas; these have the same
+the existing environment atlas. Its optional display-space spatial filter preserves the unfiltered
+accumulation but can blur details and bias highlights; see [validation](performance/m8-path-denoise.md).
+Transparent and masked geometry and general textured-emitter sampling are not implemented. It uses fixed ray offsets and the existing ray material atlas; these have the same
 scale and texture-footprint limitations as the reflection path. The per-pixel sample stream is
 deterministically keyed by pixel, sample and dimension. Distinct hashed dimensions and the basic
 GPU moment checks are not proof of unbiased integration or statistical independence. Camera,

@@ -2,6 +2,7 @@
 
 import argparse
 import math
+import statistics
 import struct
 from pathlib import Path
 
@@ -32,6 +33,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("reference")
     parser.add_argument("images", nargs="+")
+    parser.add_argument("--outliers", action="store_true", help="Count isolated bright RGB outliers")
     args = parser.parse_args()
     size, reference = read_bmp(args.reference)
     for path in args.images:
@@ -42,6 +44,18 @@ def main():
         mse = sum(value * value for value in errors) / len(errors)
         mae = sum(abs(value) for value in errors) / len(errors)
         print(f"{path}: {size[0]}x{size[1]} MSE={mse:.6f} MAE={mae:.6f} RMSE={math.sqrt(mse):.6f}")
+        if args.outliers:
+            width, height = size
+            light = [.0722 * image[i] + .7152 * image[i + 1] + .2126 * image[i + 2]
+                     for i in range(0, len(image), 3)]
+            count = 0
+            for y in range(1, height - 1):
+                for x in range(1, width - 1):
+                    value = light[y * width + x]
+                    median = statistics.median(light[(y + dy) * width + x + dx]
+                                               for dy in (-1, 0, 1) for dx in (-1, 0, 1))
+                    count += value > 120 and value - median > 50
+            print(f"  isolated bright pixels={count} (sRGB luma > 120 and > median + 50)")
 
 
 if __name__ == "__main__":

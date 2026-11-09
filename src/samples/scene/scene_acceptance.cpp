@@ -60,14 +60,37 @@ void VerifyScene(rhi::Runtime& runtime, shader::Target target, const std::filesy
         detail::Require(first.reflectionSamples == 1 && first.reflectionHistoryReset &&
                             second.reflectionSamples == 2 && !second.reflectionHistoryReset,
                         "Path tracing did not accumulate successive samples");
-        bool trace = false, accumulate = false, raster = false;
+        bool trace = false, accumulate = false, filter = false, raster = false;
         for (const auto& pass : first.graphSnapshot->passes)
         {
             trace |= pass.name == "PathTracing.Trace";
             accumulate |= pass.name == "PathTracing.Accumulate";
+            filter |= pass.name == "PathTracing.Denoise";
             raster |= pass.name == "Deferred.GBuffer" || pass.name == "Forward.Opaque";
         }
-        detail::Require(trace && accumulate && !raster, "Path tracing graph composition mismatch");
+        detail::Require(trace && accumulate && filter && !raster,
+                        "Path tracing graph composition mismatch");
+        pathOptions.reflectionDenoise = false;
+        const auto switchedOff = pathFrame();
+        detail::Require(switchedOff.reflectionSamples == 3 && !switchedOff.reflectionHistoryReset,
+                        "Path filter toggle reset the raw accumulation");
+        for (const auto& pass : switchedOff.graphSnapshot->passes)
+            detail::Require(pass.name != "PathTracing.Denoise",
+                            "Disabled path filter still entered the graph");
+        renderer::SceneRenderer rawRenderer(runtime, target, fixture, engine);
+        auto rawTarget = runtime.CreateTexture(
+            {64, 48, rhi::Format::Rgba8Srgb, false, true, "PathTracing.RawReference"});
+        auto rawState = rhi::State::Undefined;
+        renderer::SceneReadback raw;
+        for (int i = 0; i < 3; ++i)
+        {
+            raw = rawRenderer.Render(rawTarget, rawState, nullptr, true, {}, pathOptions);
+            rawState = rhi::State::CopySource;
+            runtime.Wait(raw.completion);
+        }
+        detail::Require(std::ranges::equal(switchedOff.pixels->Map(), raw.pixels->Map()),
+                        "Path filtering changed the accumulated raw history");
+        pathOptions.reflectionDenoise = true;
         pathRenderer.Document().MoveCamera({.5f, 0, 0}, {0, 5, 0});
         const auto moved = pathFrame();
         detail::Require(moved.reflectionSamples == 1 && moved.reflectionHistoryReset,

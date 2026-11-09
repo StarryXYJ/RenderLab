@@ -8,7 +8,7 @@ RenderLab 支持 Windows x64，使用 C++20、MSVC、Windows SDK、CMake 和 Nin
 ./out/build/m5-release/renderlab_player.exe --backend dx12 --headless --validation on --project sample/m4/RayTracing.rlproject --pipeline pathtracing --width 640 --height 360 --benchmark 64 --warmup-frames 8 --output out/path-tracing --profile out/path-tracing/report.json
 ```
 
-可将 `--backend` 改为 `vulkan`。此版本只支持不透明、非 Masked 的内置 Lit/Unlit 材质，最多四段路径；不支持透明、降噪或通用面光源采样。验证范围和未覆盖项见 [阶段计划](../design/phaseplan.md)。
+可将 `--backend` 改为 `vulkan`。此版本只支持不透明、非 Masked 的内置 Lit/Unlit 材质，最多四段路径；不支持透明或通用面光源采样。默认启用有偏显示滤波，`--denoise off` 查看未滤波累积；细节和验证范围见 [降噪记录](../docs/performance/m8-path-denoise.md) 与 [阶段计划](../design/phaseplan.md)。
 
 安装包中包含 `project/RayTracing.rlproject` 和 26 实例的
 `project/PathTracingGallery.rlproject`；从安装目录运行以下命令可打开窗口，详细操作和依赖见

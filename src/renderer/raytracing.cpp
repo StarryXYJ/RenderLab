@@ -17,6 +17,10 @@ void PathTracingFeature::Build(rendergraph::Graph& graph, const RenderFrame& fra
     const auto camera = graph.GetTextureDesc(graph.GetTexture("CameraColor"));
     graph.CreateTexture("PathTracing.RawRadiance",
                         {camera.width, camera.height, rhi::Format::Rgba32Float, true, false});
+    graph.CreateTexture("PathTracing.SurfaceGuide",
+                        {camera.width, camera.height, rhi::Format::Rgba32Float, true, false});
+    graph.CreateTexture("PathTracing.MaterialGuide",
+                        {camera.width, camera.height, rhi::Format::Rgba32Float, true, false});
     const auto records = graph.ImportBuffer(
         "PathTracing.ShaderTable", input.reflectionTable->buffer, {rhi::State::HostWrite, true});
     auto trace = graph.AddRayTracingPass("PathTracing.Trace");
@@ -31,12 +35,16 @@ void PathTracingFeature::Build(rendergraph::Graph& graph, const RenderFrame& fra
     for (const auto& binding : input.reflectionTextures)
         textures.push_back(trace.ReadTexture(binding.texture));
     const auto raw = trace.WriteTexture("PathTracing.RawRadiance");
+    const auto surfaceGuide = trace.WriteTexture("PathTracing.SurfaceGuide");
+    const auto materialGuide = trace.WriteTexture("PathTracing.MaterialGuide");
     trace.Execute(
         [=](RayTracingContext& context)
         {
             context.Bind(input.reflectionTable->pipeline);
             context.BindAccelerationStructure(0, input.scene, scene);
             context.BindTexture(1, raw);
+            context.BindTexture(2, surfaceGuide);
+            context.BindTexture(3, materialGuide);
             context.BindBuffer(4, constants, parameters.range.offset, parameters.range.size);
             for (size_t i = 0; i < surfaces.size(); ++i)
             {
@@ -66,6 +74,32 @@ void PathTracingFeature::Build(rendergraph::Graph& graph, const RenderFrame& fra
             context.BindBuffer(3, historyConstants, parameters.range.offset, parameters.range.size);
             context.Dispatch((camera.width + 7) / 8, (camera.height + 7) / 8);
         });
+    if (!input.pathDenoisePipeline)
+    {
+        graph.SetTexture("PathTracing.DisplayRadiance", accumulated);
+        return;
+    }
+    graph.CreateTexture("PathTracing.FilteredRadiance",
+                        {camera.width, camera.height, rhi::Format::Rgba32Float, true, false});
+    auto denoise = graph.AddComputePass("PathTracing.Denoise");
+    const auto source = denoise.ReadTexture(accumulated);
+    const auto surface = denoise.ReadTexture(surfaceGuide);
+    const auto material = denoise.ReadTexture(materialGuide);
+    const auto filterConstants =
+        denoise.ReadBuffer(parameters.buffer, Use::Uniform, parameters.range);
+    const auto filtered = denoise.WriteTexture("PathTracing.FilteredRadiance");
+    denoise.Execute(
+        [=](ComputeContext& context)
+        {
+            context.Bind(input.pathDenoisePipeline);
+            context.BindTexture(0, source);
+            context.BindTexture(1, surface);
+            context.BindTexture(2, filtered);
+            context.BindBuffer(3, filterConstants, parameters.range.offset, parameters.range.size);
+            context.BindTexture(4, material);
+            context.Dispatch((camera.width + 7) / 8, (camera.height + 7) / 8);
+        });
+    graph.SetTexture("PathTracing.DisplayRadiance", filtered);
 }
 void RayQueryShadowFeature::Build(rendergraph::Graph& graph, const RenderFrame& frame)
 {

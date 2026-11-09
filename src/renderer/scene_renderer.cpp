@@ -109,6 +109,7 @@ struct SceneRenderer::Impl
     std::unique_ptr<IndexedScene> indexedScene;
     std::shared_ptr<rhi::Pipeline> rayQueryShadow;
     std::shared_ptr<rhi::ShaderTable> reflectionTable, reflectionTableWithoutGuide, pathTable;
+    std::shared_ptr<rhi::Pipeline> pathDenoise;
     std::shared_ptr<rhi::Pipeline> reflectionHistory, reflectionStatistics, reflectionCombine,
         reflectionDenoise, reflectionTemporal;
     std::shared_ptr<rhi::Buffer> emptyReflectionStatistics;
@@ -445,6 +446,8 @@ struct SceneRenderer::Impl
         rhi::PipelineDesc desc;
         desc.layout = runtime.CreateLayout({{0, rhi::BindingKind::AccelerationStructure},
                                             {1, rhi::BindingKind::StorageTexture},
+                                            {2, rhi::BindingKind::StorageTexture},
+                                            {3, rhi::BindingKind::StorageTexture},
                                             {4, rhi::BindingKind::ConstantBuffer},
                                             {5, rhi::BindingKind::ReadOnlyBuffer},
                                             {6, rhi::BindingKind::ReadOnlyBuffer},
@@ -458,7 +461,24 @@ struct SceneRenderer::Impl
         desc.rayGeneration = module(rhi::ShaderStage::RayGeneration, "RayGeneration");
         desc.miss = module(rhi::ShaderStage::Miss, "Miss");
         desc.closestHit = module(rhi::ShaderStage::ClosestHit, "ClosestHit");
-        pathTable = runtime.CreateShaderTable(runtime.CreatePipeline(desc));
+        auto table = runtime.CreateShaderTable(runtime.CreatePipeline(desc));
+        shader::ProgramRequest request;
+        request.entry = {rhi::ShaderStage::Compute,
+                         project.engine / "RenderLab" / "PathDenoise.hlsl", "Denoise"};
+        request.target = shaderTarget;
+        if (shaderTarget == shader::Target::Spirv)
+            request.defines["SPIRV"] = "1";
+        desc = {};
+        desc.layout = runtime.CreateLayout({{0, rhi::BindingKind::SampledTexture},
+                                            {1, rhi::BindingKind::SampledTexture},
+                                            {2, rhi::BindingKind::StorageTexture},
+                                            {3, rhi::BindingKind::ConstantBuffer},
+                                            {4, rhi::BindingKind::SampledTexture}});
+        desc.compute =
+            runtime.CreateShader(rhi::ShaderStage::Compute, compiler.Compile(request), "Denoise");
+        auto filter = runtime.CreatePipeline(desc);
+        pathTable = std::move(table);
+        pathDenoise = std::move(filter);
     }
     void EnsureReflectionPrograms()
     {
@@ -1455,6 +1475,8 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
             rendergraph::Use::Uniform,
             {slice.offset, slice.size}};
         frame.rayTracing.historyPipeline = self.reflectionHistory;
+        if (pathTracing && options.reflectionDenoise)
+            frame.rayTracing.pathDenoisePipeline = self.pathDenoise;
         frame.rayTracing.statisticsPipeline = self.reflectionStatistics;
         frame.rayTracing.combinePipeline = self.reflectionCombine;
         if (!pathTracing && reflectionSamples + 1 < 2048 &&
@@ -1927,7 +1949,7 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
     if (frame.rayTracing.temporalPipeline)
         for (const auto& name : frame.rayTracing.temporalOutputs)
             graph.Export(graph.GetTexture(name), rhi::State::Sampled);
-    std::string displaySource = pathTracing ? frame.rayTracing.historyRadiance : "CameraColor";
+    std::string displaySource = pathTracing ? "PathTracing.DisplayRadiance" : "CameraColor";
     if (options.view == SceneView::ReflectionRaw)
         displaySource = "RayTracing.RawRadiance";
     else if (options.view == SceneView::ReflectionHistory)

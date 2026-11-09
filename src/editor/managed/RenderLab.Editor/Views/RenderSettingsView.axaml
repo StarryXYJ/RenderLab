@@ -89,12 +89,12 @@
                         <Grid Classes="property" ColumnDefinitions="112,*"><TextBlock Classes="label" Text="Normal bias" /><NumericUpDown Grid.Column="1" Minimum="0" Maximum="10" Increment="0.001" FormatString="F3" Value="{Binding Settings.ShadowNormalBias}" /></Grid>
                     </StackPanel>
                 </Expander>
-                <Expander Classes="inspector" Header="Reflections" IsEnabled="{Binding Settings.Ready}">
+                <Expander Classes="inspector" Header="Ray tracing" IsEnabled="{Binding Settings.Ready}">
                     <StackPanel Margin="12,0,12,12" Spacing="6">
-                        <Grid Classes="property" ColumnDefinitions="112,*"><TextBlock Classes="label" Text="Enabled" /><CheckBox Grid.Column="1" IsChecked="{Binding Settings.Reflections}" AutomationProperties.Name="Reflections" /></Grid>
-                        <Grid Classes="property" ColumnDefinitions="112,*"><TextBlock Classes="label" Text="Accumulate" /><CheckBox Grid.Column="1" IsChecked="{Binding Settings.History}" AutomationProperties.Name="Progressive accumulation" /></Grid>
-                        <Grid Classes="property" ColumnDefinitions="112,*"><TextBlock Classes="label" Text="Spatial denoise" /><CheckBox Grid.Column="1" IsChecked="{Binding Settings.Denoise}" AutomationProperties.Name="Spatial denoising" /></Grid>
-                        <Grid Classes="property" ColumnDefinitions="112,*"><TextBlock Classes="label" Text="Reprojection" /><CheckBox Grid.Column="1" IsChecked="{Binding Settings.Temporal}" AutomationProperties.Name="Temporal reprojection" /></Grid>
+                        <Grid Classes="property" ColumnDefinitions="112,*"><TextBlock Classes="label" Text="Reflections" /><CheckBox Grid.Column="1" IsChecked="{Binding Settings.Reflections}" AutomationProperties.Name="Reflections" ToolTip.Tip="Applies to the hybrid Ray Tracing pipeline" /></Grid>
+                        <Grid Classes="property" ColumnDefinitions="112,*"><TextBlock Classes="label" Text="Reflect history" /><CheckBox Grid.Column="1" IsChecked="{Binding Settings.History}" AutomationProperties.Name="Progressive accumulation" ToolTip.Tip="Hybrid reflection history; Path Tracing always accumulates" /></Grid>
+                        <Grid Classes="property" ColumnDefinitions="112,*"><TextBlock Classes="label" Text="Spatial denoise" /><CheckBox Grid.Column="1" IsChecked="{Binding Settings.Denoise}" AutomationProperties.Name="Spatial denoising" ToolTip.Tip="Filters the display; Path Tracing raw history is preserved" /></Grid>
+                        <Grid Classes="property" ColumnDefinitions="112,*"><TextBlock Classes="label" Text="Reprojection" /><CheckBox Grid.Column="1" IsChecked="{Binding Settings.Temporal}" AutomationProperties.Name="Temporal reprojection" ToolTip.Tip="Hybrid reflection reprojection" /></Grid>
                     </StackPanel>
                 </Expander>
                 <Expander Classes="inspector" Header="Camera &amp; scheduling" IsEnabled="{Binding Settings.Ready}">

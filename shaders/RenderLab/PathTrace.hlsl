@@ -7,6 +7,14 @@ RaytracingAccelerationStructure Scene : register(t0);
 [[vk::image_format("rgba32f")]]
 #endif
 RWTexture2D<float4> Radiance : register(u1);
+#ifdef SPIRV
+[[vk::image_format("rgba32f")]]
+#endif
+RWTexture2D<float4> SurfaceGuide : register(u2);
+#ifdef SPIRV
+[[vk::image_format("rgba32f")]]
+#endif
+RWTexture2D<float4> MaterialGuide : register(u3);
 cbuffer PathParameters : register(b4)
 {
     row_major float4x4 InverseViewProjection;
@@ -45,10 +53,19 @@ void RayGeneration()
     ray.TMax = 10000;
     float3 throughput = 1;
     float3 result = 0;
+    SurfaceGuide[pixel] = 0;
+    MaterialGuide[pixel] = 0;
     [loop] for (uint bounce = 0; bounce < 4; ++bounce)
     {
         PathPayload payload = (PathPayload)0;
         TraceRay(Scene, RAY_FLAG_NONE, 0x02, 0, 1, 0, ray, payload);
+        if (bounce == 0 && payload.hit != 0)
+        {
+            // Negative distance bypasses filtering for Unlit surfaces.
+            SurfaceGuide[pixel] = float4(payload.normal,
+                length(payload.position - CameraPosition.xyz) * (payload.unlit != 0 ? -1 : 1));
+            MaterialGuide[pixel] = float4(payload.albedo, payload.roughness);
+        }
         if (payload.hit == 0)
         {
             result += throughput * EnvironmentTile(ray.Direction, 0, EnvironmentAtlas, Environment);

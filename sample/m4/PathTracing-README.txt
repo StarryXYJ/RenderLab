@@ -13,6 +13,8 @@ accumulates while the camera is still. Use --frames 120 to exit automatically. F
 
 The screenshot is results/dx12/scene.bmp. First launch builds a local project/Library
 shader cache. The renderer supports opaque built-in Lit/Unlit triangles and a maximum
-of four path segments. Transparent/masked surfaces, denoising, textured-emitter light
-sampling and dynamic geometry are not supported. Noise, fixed-offset artifacts and
-finite-path bias remain. The output is an experimental reference, not a finished editor.
+of four path segments. Spatial display denoising is on by default; add --denoise off
+to view the unfiltered accumulation. Denoising can blur details and suppress real
+highlights. Transparent/masked surfaces, textured-emitter light sampling and dynamic
+geometry are not supported. Noise, fixed-offset artifacts and finite-path bias remain.
+The output is an experimental reference, not a finished editor.

@@ -77,13 +77,14 @@ tracked native allocated 峰值，不含完整驱动/进程内存。数值单位
 
 ## 运行包与录像
 
-Release 安装产物打包为 `out/RenderLab-PathTracing-demo.zip`（10,893,913 字节，SHA-256
+首次完成版本的 Release 安装产物保存在 `out/RenderLab-PathTracing-demo-baseline.zip`（10,893,913 字节，SHA-256
 `50304a37862166e19f35c306ff5112395a9ffddfd5167a05acf6e202e5b69f5e`）。解压到独立目录后，
 从包内使用 Gallery 项目运行 DX12/Vulkan、160×90、8 帧，validation errors 和关闭账本为零；
 运行使用包内可执行文件、Shader 与项目文件，首次重建 Library。未在第二台机器实测。
 
 `out/RenderLab-PathTracing-window.mp4` 是该安装包 DX12 窗口 640×360 的 8 秒实际录屏，
-固定相机，录制开始时已有累积，用户无相机交互；最终窗口运行 1767 帧，validation errors
+固定相机，录制开始时已有累积，用户无相机交互；录像使用初版、尚未启用后续显示降噪。
+最终窗口运行 1767 帧，validation errors
 和关闭账本为零。另有 `out/RenderLab-PathTracing-progress.mp4`，它由离线保存的
 17、65、257、2049 spp 图像拼成，**不是实时录屏**。两者是本机生成的交付文件，不由 Git
 追踪；重新生成需要相应输出及编码工具。

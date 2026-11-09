@@ -33,7 +33,7 @@ std::string_view ApplicationUsage()
            "  --gpu-budget-mib N          Tracked allocation limit (default: 2048 MiB)\n"
            "  --quality scene|low|medium|high  Shadow quality override\n"
            "  --temporal-denoise on|off        Camera reprojection denoising (default on)\n"
-           "  --denoise on|off                 Spatial reflection denoising (default on)\n"
+           "  --denoise on|off                 Spatial ray-tracing denoising (default on)\n"
            "  --view "
            "final|hdr|shadow|environment|brdf|reflection-raw|reflection-history|reflection-"
            "denoised  Texture "
