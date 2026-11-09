@@ -312,9 +312,16 @@ internal sealed class SmokeTest
                     {
                         Require(configState.AppliedId == configurationRequest, "Submission configuration was not confirmed by a successful frame.");
                     }
-                    if (configurationCase >= 12)
+                    if (configurationCase >= 13)
                     {
-                        checks.Add("all supported pipeline/submission modes, threaded/async/alias options and frame configuration identity");
+                        using var finalCapabilities = JsonDocument.Parse(service.Capabilities);
+                        if (finalCapabilities.RootElement.GetProperty("pipelines")[3].GetProperty("available").GetBoolean())
+                        {
+                            if (stats.Pipeline != 4 || stats.ReflectionSamples < 2) { --stage; break; }
+                            Require(configState.Applied.Pipeline == 4 && stats.Pipeline == 4 && stats.ReflectionSamples >= 2,
+                                "Path tracing configuration did not present and accumulate.");
+                        }
+                        checks.Add("supported pipeline/submission modes including path tracing, threaded/async/alias options and frame configuration identity");
                         var invalid = service.EditableConfig; invalid.ShadowResolution = 192; invalid.RequestId = configState.RequestedId + 1;
                         Require(NativeMethods.ConfigureV2(host.Session, in invalid) == 1, "Non-power-of-two shadow resolution accepted.");
                         invalid = service.EditableConfig; invalid.LightX = float.NaN; invalid.RequestId = configState.RequestedId + 1;

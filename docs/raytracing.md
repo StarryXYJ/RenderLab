@@ -3,8 +3,8 @@
 The `RayTracing` scene composition uses the Deferred GBuffer and an independent Ray Query shadow
 feature, followed by independent TraceRays specular reflections. Select `--pipeline raytracing`, or **Ray Tracing** in the native debug panel on a supported
 device. Forward and Deferred remain available as raster references. A separate experimental
-`--pipeline pathtracing` composition is available through the command-line host; it is not yet
-an editor option and remains limited to the material and geometry subset below. Forward+ remains
+`--pipeline pathtracing` composition is available in the command-line host and editor; it remains
+limited to the material and geometry subset below. Forward+ remains
 a planned composition.
 
 The experimental path graph traces camera rays and up to four path segments, then progressively

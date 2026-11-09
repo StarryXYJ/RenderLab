@@ -111,7 +111,8 @@ extern "C"
     /* All session calls run on its creating thread. No message loop is pumped by the bridge. */
     RENDERLAB_EDITOR_API rl_status RENDERLAB_EDITOR_CALL
     rl_viewport_update(rl_viewport_handle session, uint32_t paused);
-    /* pipeline: 1 Forward, 2 Deferred, 3 RayTracing. Failed selection retains the prior pipeline.
+    /* pipeline: 1 Forward, 2 Deferred, 3 RayTracing, 4 PathTracing. Failed selection retains the
+     * prior pipeline.
      */
     RENDERLAB_EDITOR_API rl_status RENDERLAB_EDITOR_CALL rl_viewport_configure(
         rl_viewport_handle session, uint32_t pipeline, float exposure, uint32_t reset_camera);

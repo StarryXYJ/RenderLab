@@ -933,6 +933,12 @@ void SceneRenderer::ValidateOptions(const SceneRenderOptions& options)
 {
     ValidatePipeline(options.pipeline);
     auto& self = *impl_;
+    if (options.pipeline == PipelineType::PathTracing &&
+        (options.submission != GeometrySubmission::Direct || options.reflectionDiagnostics ||
+         (options.view != SceneView::Final && options.view != SceneView::Hdr)))
+        throw std::invalid_argument(
+            "Path tracing supports direct submission and final/HDR views only; reflection "
+            "diagnostics are unavailable");
     if (options.recordingThreads < 1 || options.recordingThreads > 16)
         throw std::invalid_argument("Recording threads must be in [1,16]");
     if (options.asyncCompute && !self.runtime.SupportsAsyncCompute())

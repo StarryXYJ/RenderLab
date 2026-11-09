@@ -71,7 +71,7 @@ public sealed class NativeViewportService : IDisposable
             Close(Session);
         }
         AbiVersion = NativeMethods.AbiVersion();
-        if (AbiVersion != 10 || Marshal.SizeOf<ViewportStats>() != 256 || Marshal.SizeOf<CloseReport>() != 24 ||
+        if (AbiVersion != 11 || Marshal.SizeOf<ViewportStats>() != 256 || Marshal.SizeOf<CloseReport>() != 24 ||
             Marshal.SizeOf<ViewportConfig>() != 112 || Marshal.SizeOf<ViewportConfigState>() != 272)
         {
             throw new InvalidOperationException("Managed/native bridge ABI mismatch.");
@@ -113,6 +113,12 @@ public sealed class NativeViewportService : IDisposable
             {
                 var config = EditableConfig;
                 config.Pipeline = pipeline; config.Exposure = exposure;
+                if (pipeline == 4)
+                {
+                    config.Submission = 0;
+                    if (config.View > 1) { config.View = 0; }
+                    config.Flags &= ~32u;
+                }
                 Submit(config);
             }
             else

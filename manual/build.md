@@ -503,6 +503,10 @@ cmake --preset windows-release
 
 默认加载源码仓库的 `sample/m4/RayTracing.rlproject`，初始为 Deferred。`--project` 可以指定其他项目，`--shaders` 可指定引擎 Shader 根目录；默认使用 exe 同目录的 shaders。点击原生视口后使用 WASD/QE、方向键或右键拖动。此宿主未打包示例项目，移出仓库运行时必须显式提供项目路径。
 
+工作台的管线选择支持 Path Tracing，也可通过 `--pipeline pathtracing` 启动；当前场景需要
+受支持的设备以及不透明、非 Masked 的内置材质。切换时提交方式归为 Direct，视图归为
+Final/HDR；不支持的组合会拒绝并保留已生效配置。静止时按目标帧率持续累积。
+
 M7.2a 接入 Dock.Avalonia 12.0.0.2 与 Serilog：首次启动只显示 Scene 与 Render Settings，Window 菜单打开 Log、Profiler 与 Render Graph；Profiler 现提供实际计数与完成帧诊断。Layout 提供 Default、Diagnostics 与恢复保存布局；普通运行将布局写到项目旁的 UserSettings/Editor/layout.json，自检/基准使用各自输出目录，不覆盖日常布局。Scene 浮动/停回会安全重建原生视口并保留相机与管线/曝光。Log 支持筛选、搜索、复制、清空显示和打开日志目录；关闭面板仍写输出目录 logs 下的滚动 JSONL，原生日志保留独立文件。相关包与测试依赖均进入锁文件。
 
 M7.2b 的 Render Settings 已接入提交方式、录制线程/异步/Alias、已有调试视图、光照/环境、阴影、反射、导航速度、帧率/连续刷新和 GPU profiling。面板显示 Pending/Applied/Rejected 及配置 ID；暂停后可继续改参数，但须恢复或点击 Single frame 才确认生效。Defaults 恢复本次载入默认值，Save/Load preset 使用 UserSettings/Editor/render-preset.json，不改 Scene/Material。Scene 浮动/重建保留整份运行配置。M7.2c 支持在同一面板选择 API/Validation 并点击 Apply API / Retry，等待退休/创建/首帧确认；失败会尝试一次原后端，双重失败可显式 Retry。布局、相机和覆盖保留，GPU 历史重建。
