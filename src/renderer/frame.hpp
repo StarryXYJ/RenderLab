@@ -73,7 +73,7 @@ struct RenderFrame
         std::shared_ptr<rhi::Pipeline> historyPipeline, statisticsPipeline, combinePipeline,
             denoisePipeline;
         std::shared_ptr<rhi::Pipeline> temporalPipeline;
-        std::shared_ptr<rhi::Pipeline> pathDenoisePipeline;
+        std::shared_ptr<rhi::Pipeline> pathDenoisePipeline, pathStatisticsPipeline;
         // Prepare, three variance-guided scales and material/display resolve.
         std::array<std::shared_ptr<rhi::Pipeline>, 5> reconstructionPipelines;
         bool reflectionDiagnostics = false;

@@ -9,6 +9,7 @@
 namespace renderlab::renderer
 {
 inline constexpr uint32_t MaxReflectionSamples = 1u << 24;
+inline constexpr uint32_t PathSamplesPerFrame = 8;
 /// Raw engine-program ABI: row-major matrix followed by two float4 values in a 256-byte slice.
 struct RayQueryParameters
 {

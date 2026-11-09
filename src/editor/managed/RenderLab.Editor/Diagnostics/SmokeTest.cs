@@ -373,7 +373,7 @@ internal sealed class SmokeTest
                     if (stats.Activity != 3 || stats.Frames == savedFrames) { --stage; break; }
                     Require(stats.Frames == savedFrames + 1 && window.ViewportService.Configuration.AppliedId == configurationRequest,
                         "Single step did not apply exactly one paused frame.");
-                    Require(stats.ReflectionSamples == savedReflectionSamples + 1,
+                    Require(stats.ReflectionSamples == savedReflectionSamples + (stats.Pipeline == 4 ? 8u : 1u),
                         "Exposure-only edit incorrectly discarded progressive HDR history.");
                     checks.Add("invalid ABI/scalars rejected; rapid requests superseded; paused settings wait for exactly one single step");
                     var preset = window.ViewportService.EditableConfig;
@@ -395,7 +395,7 @@ internal sealed class SmokeTest
                     Require(Math.Abs(applied.Exposure - expectedConfig.Exposure) < .001 && Math.Abs(applied.LightR - .7) < .001 &&
                         applied.ShadowResolution == 256 && Math.Abs(applied.EnvironmentRotation - 15) < .001,
                         "Render preset did not restore lighting/shadow/display overrides.");
-                    Require(stats.ReflectionSamples == 1, "Lighting changes failed to invalidate progressive history.");
+                    Require(stats.ReflectionSamples == (stats.Pipeline == 4 ? 8u : 1u), "Lighting changes failed to invalidate progressive history.");
                     checks.Add("runtime lighting/environment/shadow overrides and preset restoration");
                     window.ViewModel.IsPaused = false;
                     oldHandle = host.Session;

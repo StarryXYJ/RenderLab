@@ -11,6 +11,7 @@ cbuffer PathParameters : register(b3)
     float4 Options;
 };
 Texture2D<float4> MaterialGuide : register(t4);
+StructuredBuffer<float2> Moments : register(t5);
 
 float Luminance(float3 color) { return dot(color, float3(.2126, .7152, .0722)); }
 
@@ -24,7 +25,11 @@ void Denoise(uint3 id : SV_DispatchThreadID)
     float4 center = Radiance.Load(int3(pixel, 0));
     float4 guide = SurfaceGuide.Load(int3(pixel, 0));
     float4 material = MaterialGuide.Load(int3(pixel, 0));
-    float strength = 1 - smoothstep(256, 2048, min(Options.y + 1, Options.w));
+    float samples = min(Options.y + Environment.z, Options.w);
+    float2 moments = Moments[id.x + id.y * width];
+    float stderr = samples > 1 ? sqrt(max(0, moments.y) / (samples - 1) / samples) : 1e10;
+    // Fade by measured uncertainty, not a fixed sample-count cutoff.
+    float strength = saturate(stderr / max(.03 * abs(moments.x), .002)) * min(1, 512.0 / samples);
     if (guide.w <= 0 || strength <= 0)
     {
         Output[pixel] = center;

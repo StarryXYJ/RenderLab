@@ -6,7 +6,7 @@
 ## 图与所有权
 
 `PipelineType::PathTracing` 注册独立的 `PathTracingFeature`：场景准备复用现有静态 Mesh
-BLAS、场景 TLAS 和索引材质表；`PathTracing.Trace` 输出一帧 HDR 样本，
+BLAS、场景 TLAS 和索引材质表；`PathTracing.Trace` 输出每帧一批 HDR 样本，
 `PathTracing.Accumulate` 写入跨帧 HDR 历史，显示 Pass 再做曝光和 Tone Mapping。
 逐路径循环在 RayGeneration 中，不按每次反弹生成 Graph Pass。
 
@@ -17,11 +17,11 @@ BLAS、场景 TLAS 和索引材质表；`PathTracing.Trace` 输出一帧 HDR 样
 
 ## 积分与材质
 
-每像素每帧一条带抖动的主射线，最多追踪四段路径。命中 Lit 表面累加自发光及有可选阴影的
+每像素每帧最多追踪 8 条独立抖动的主射线，每条最多追踪四段路径；样本计数表示真实路径数，末批按上限裁剪。命中 Lit 表面累加自发光及有可选阴影的
 方向光，再用 50% 余弦半球、50% visible-GGX 混合分布采样方向；按完整混合 PDF 除以项目
 metallic-roughness BRDF 乘余弦更新 throughput。未命中读取环境图，Unlit 命中返回基础色并结束。
 采样按像素、样本及维度确定，原始累积不做降噪或亮度截断。默认对显示结果进行独立的
-引导空间降噪，中位数限制与空间平均会产生偏差并在 2048 spp 时完全旁路；可用编辑器的
+引导空间降噪，按亮度方差估计与样本数逐渐降低强度；中位数限制与空间平均会产生偏差。可用编辑器的
 Spatial denoise 或命令行 `--denoise off` 关闭。引导、性能、对照及细节损失见
 [降噪验证](performance/m8-path-denoise.md)。四段上限截断更长的间接路径，
 不使用俄罗斯轮盘，也不做面光源或环境重要性采样。

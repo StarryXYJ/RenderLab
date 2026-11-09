@@ -109,7 +109,7 @@ struct SceneRenderer::Impl
     std::unique_ptr<IndexedScene> indexedScene;
     std::shared_ptr<rhi::Pipeline> rayQueryShadow;
     std::shared_ptr<rhi::ShaderTable> reflectionTable, reflectionTableWithoutGuide, pathTable;
-    std::shared_ptr<rhi::Pipeline> pathDenoise;
+    std::shared_ptr<rhi::Pipeline> pathDenoise, pathHistory, pathStatistics;
     std::shared_ptr<rhi::Pipeline> reflectionHistory, reflectionStatistics, reflectionCombine,
         reflectionDenoise, reflectionTemporal;
     std::shared_ptr<rhi::Buffer> emptyReflectionStatistics;
@@ -456,7 +456,8 @@ struct SceneRenderer::Impl
                                             {9, rhi::BindingKind::ReadOnlyBuffer},
                                             {10, rhi::BindingKind::SampledTexture},
                                             {11, rhi::BindingKind::Sampler},
-                                            {13, rhi::BindingKind::SampledTexture}});
+                                            {13, rhi::BindingKind::SampledTexture},
+                                            {17, rhi::BindingKind::StorageBuffer}});
         desc.rayPayloadSize = 64;
         desc.rayGeneration = module(rhi::ShaderStage::RayGeneration, "RayGeneration");
         desc.miss = module(rhi::ShaderStage::Miss, "Miss");
@@ -473,12 +474,35 @@ struct SceneRenderer::Impl
                                             {1, rhi::BindingKind::SampledTexture},
                                             {2, rhi::BindingKind::StorageTexture},
                                             {3, rhi::BindingKind::ConstantBuffer},
-                                            {4, rhi::BindingKind::SampledTexture}});
+                                            {4, rhi::BindingKind::SampledTexture},
+                                            {5, rhi::BindingKind::ReadOnlyBuffer}});
         desc.compute =
             runtime.CreateShader(rhi::ShaderStage::Compute, compiler.Compile(request), "Denoise");
         auto filter = runtime.CreatePipeline(desc);
+        request.entry = {rhi::ShaderStage::Compute, project.engine / "RenderLab" / "PathPost.hlsl",
+                         "Accumulate"};
+        desc = {};
+        desc.layout = runtime.CreateLayout({{0, rhi::BindingKind::SampledTexture},
+                                            {1, rhi::BindingKind::SampledTexture},
+                                            {2, rhi::BindingKind::StorageTexture},
+                                            {3, rhi::BindingKind::ConstantBuffer}});
+        desc.compute = runtime.CreateShader(rhi::ShaderStage::Compute, compiler.Compile(request),
+                                            "Accumulate");
+        auto history = runtime.CreatePipeline(desc);
+        request.entry.function = "Statistics";
+        desc = {};
+        desc.layout = runtime.CreateLayout({{0, rhi::BindingKind::SampledTexture},
+                                            {3, rhi::BindingKind::ConstantBuffer},
+                                            {4, rhi::BindingKind::ReadOnlyBuffer},
+                                            {5, rhi::BindingKind::ReadOnlyBuffer},
+                                            {6, rhi::BindingKind::StorageBuffer}});
+        desc.compute = runtime.CreateShader(rhi::ShaderStage::Compute, compiler.Compile(request),
+                                            "Statistics");
+        auto statistics = runtime.CreatePipeline(desc);
         pathTable = std::move(table);
         pathDenoise = std::move(filter);
+        pathHistory = std::move(history);
+        pathStatistics = std::move(statistics);
     }
     void EnsureReflectionPrograms()
     {
@@ -1373,6 +1397,8 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
         parameters.environment = {
             self.snapshot.environmentIntensity,
             self.snapshot.environmentRotation * float(3.141592653589793 / 180), 0, 0};
+        if (pathTracing)
+            parameters.environment[2] = float(PathSamplesPerFrame);
         parameters.options[2] = self.snapshot.light.shadows ? 1.f : 0.f;
         parameters.options[3] = static_cast<float>(MaxReflectionSamples);
         const auto append = [&](const auto& value)
@@ -1474,9 +1500,11 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
             importBuffer(slice.buffer, "RayTracing.ReflectionParameters", rhi::State::HostWrite),
             rendergraph::Use::Uniform,
             {slice.offset, slice.size}};
-        frame.rayTracing.historyPipeline = self.reflectionHistory;
+        frame.rayTracing.historyPipeline = pathTracing ? self.pathHistory : self.reflectionHistory;
         if (pathTracing && options.reflectionDenoise)
             frame.rayTracing.pathDenoisePipeline = self.pathDenoise;
+        if (pathTracing)
+            frame.rayTracing.pathStatisticsPipeline = self.pathStatistics;
         frame.rayTracing.statisticsPipeline = self.reflectionStatistics;
         frame.rayTracing.combinePipeline = self.reflectionCombine;
         if (!pathTracing && reflectionSamples + 1 < 2048 &&
@@ -1942,9 +1970,7 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
     if (reflections)
     {
         graph.Export(graph.GetTexture(frame.rayTracing.historyRadiance), rhi::State::Sampled);
-        if (!pathTracing)
-            graph.Export(graph.GetBuffer(frame.rayTracing.historyStatistics),
-                         rhi::State::ShaderRead);
+        graph.Export(graph.GetBuffer(frame.rayTracing.historyStatistics), rhi::State::ShaderRead);
     }
     if (frame.rayTracing.temporalPipeline)
         for (const auto& name : frame.rayTracing.temporalOutputs)
@@ -2100,9 +2126,12 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
         reflectionHistory->sequenceSignature = temporalSignature;
         reflectionHistory->index = reflectionOutput;
         reflectionHistory->initialized[reflectionOutput] = true;
-        reflectionHistory->statisticsInitialized[reflectionOutput] = !pathTracing;
-        reflectionHistory->samples = std::min(reflectionSamples + 1, MaxReflectionSamples);
-        reflectionHistory->sequence = (reflectionSequence + 1) % MaxReflectionSamples;
+        reflectionHistory->statisticsInitialized[reflectionOutput] = true;
+        const auto samples =
+            pathTracing ? std::min(PathSamplesPerFrame, MaxReflectionSamples - reflectionSamples)
+                        : 1u;
+        reflectionHistory->samples = std::min(reflectionSamples + samples, MaxReflectionSamples);
+        reflectionHistory->sequence = (reflectionSequence + samples) % MaxReflectionSamples;
         reflectionHistory->completion = submitted.completion;
         reflectionHistory->lastUse = ++self.reflectionUseSequence;
     }

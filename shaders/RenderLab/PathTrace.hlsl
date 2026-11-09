@@ -15,6 +15,7 @@ RWTexture2D<float4> SurfaceGuide : register(u2);
 [[vk::image_format("rgba32f")]]
 #endif
 RWTexture2D<float4> MaterialGuide : register(u3);
+RWStructuredBuffer<float2> BatchMoments : register(u17);
 cbuffer PathParameters : register(b4)
 {
     row_major float4x4 InverseViewProjection;
@@ -35,13 +36,10 @@ struct PathPayload
     float roughness;
 };
 
-[shader("raygeneration")]
-void RayGeneration()
+float3 TracePath(uint2 pixel, uint2 size, uint sampleIndex, out float4 surfaceGuide,
+                 out float4 materialGuide)
 {
-    uint2 pixel = DispatchRaysIndex().xy;
-    uint2 size = DispatchRaysDimensions().xy;
     uint pixelIndex = pixel.x + pixel.y * size.x;
-    uint sampleIndex = uint(Options.x);
     float2 jitter = PathSample(sampleIndex, pixelIndex, 0);
     float2 ndc = float2((pixel.x + jitter.x) * 2 / size.x - 1,
                         1 - (pixel.y + jitter.y) * 2 / size.y);
@@ -53,8 +51,8 @@ void RayGeneration()
     ray.TMax = 10000;
     float3 throughput = 1;
     float3 result = 0;
-    SurfaceGuide[pixel] = 0;
-    MaterialGuide[pixel] = 0;
+    surfaceGuide = 0;
+    materialGuide = 0;
     [loop] for (uint bounce = 0; bounce < 4; ++bounce)
     {
         PathPayload payload = (PathPayload)0;
@@ -62,9 +60,9 @@ void RayGeneration()
         if (bounce == 0 && payload.hit != 0)
         {
             // Negative distance bypasses filtering for Unlit surfaces.
-            SurfaceGuide[pixel] = float4(payload.normal,
+            surfaceGuide = float4(payload.normal,
                 length(payload.position - CameraPosition.xyz) * (payload.unlit != 0 ? -1 : 1));
-            MaterialGuide[pixel] = float4(payload.albedo, payload.roughness);
+            materialGuide = float4(payload.albedo, payload.roughness);
         }
         if (payload.hit == 0)
         {
@@ -110,7 +108,34 @@ void RayGeneration()
         ray.Origin = payload.position + payload.normal * .002;
         ray.Direction = direction;
     }
-    Radiance[pixel] = float4(result, 1);
+    return result;
+}
+
+[shader("raygeneration")]
+void RayGeneration()
+{
+    uint2 pixel = DispatchRaysIndex().xy;
+    uint2 size = DispatchRaysDimensions().xy;
+    uint pixelIndex = pixel.x + pixel.y * size.x;
+    uint count = min(uint(Environment.z), uint(Options.w) - min(uint(Options.y), uint(Options.w)));
+    float3 sum = 0;
+    float mean = 0, m2 = 0;
+    float4 guide = 0, material = 0;
+    [loop] for (uint i = 0; i < count; ++i)
+    {
+        float4 sampleGuide, sampleMaterial;
+        float3 sample = TracePath(pixel, size, uint(Options.x) + i, sampleGuide, sampleMaterial);
+        if (i == 0) { guide = sampleGuide; material = sampleMaterial; }
+        sum += sample;
+        float lum = dot(sample, float3(.2126, .7152, .0722));
+        float delta = lum - mean;
+        mean += delta / (i + 1);
+        m2 += delta * (lum - mean);
+    }
+    SurfaceGuide[pixel] = guide;
+    MaterialGuide[pixel] = material;
+    Radiance[pixel] = float4(count > 0 ? sum / count : 0, 1);
+    BatchMoments[pixelIndex] = float2(mean, m2);
 }
 
 [shader("miss")]

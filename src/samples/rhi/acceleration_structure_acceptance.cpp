@@ -620,6 +620,121 @@ void VerifyRaySampling(Runtime& runtime, shader::Target target, const std::files
     }
     logger.Write(LogLevel::Info, "Progressive reflection mean passed: reset, 1/128 and 1/2048 "
                                  "weights, and sample count limit");
+    request.entry = {ShaderStage::Compute,
+                     source.parent_path().parent_path() / "RenderLab" / "PathPost.hlsl",
+                     "Accumulate"};
+    desc.compute =
+        runtime.CreateShader(ShaderStage::Compute, compiler.Compile(request), "Accumulate");
+    pipeline = runtime.CreatePipeline(desc);
+    for (uint32_t count :
+         {0u, 1u, 127u, renderer::MaxReflectionSamples - 3, renderer::MaxReflectionSamples})
+    {
+        renderer::ReflectionParameters parameters;
+        parameters.environment[2] = float(renderer::PathSamplesPerFrame);
+        parameters.options[1] = float(count);
+        parameters.options[3] = float(renderer::MaxReflectionSamples);
+        auto constants =
+            runtime.CreateBuffer({sizeof(parameters), Memory::Upload, "Path.Mean.Parameters"});
+        std::memcpy(constants->Map().data(), &parameters, sizeof(parameters));
+        Binding uniform{3};
+        uniform.buffer = constants;
+        uniform.size = sizeof(parameters);
+        auto dispatch = runtime.CreateCommands();
+        dispatch->Barrier(image, State::CopySource, State::Storage);
+        dispatch->Barrier(constants, State::HostWrite, State::UniformRead);
+        dispatch->Barrier(pixels, State::HostRead, State::CopyDest);
+        dispatch->Bind(pipeline);
+        dispatch->Bind(runtime.CreateGroup(desc.layout,
+                                           {{0, current}, {1, previous}, {2, imageView}, uniform}));
+        dispatch->Compute(1, 1);
+        dispatch->Barrier(image, State::Storage, State::CopySource);
+        dispatch->CopyTexture(pixels, image, 256, false);
+        dispatch->Barrier(pixels, State::CopyDest, State::HostRead);
+        runtime.Wait(runtime.Submit(std::move(dispatch)));
+        std::array<float, 4> actual{};
+        std::memcpy(actual.data(), pixels->Map().data(), sizeof(actual));
+        const auto batch =
+            std::min(renderer::PathSamplesPerFrame, renderer::MaxReflectionSamples - count);
+        const float blend = count == 0   ? 1.f
+                            : batch == 0 ? 0.f
+                                         : float(batch) / float(count + batch);
+        for (uint32_t channel = 0; channel < 4; ++channel)
+        {
+            const float expected =
+                previousPixel[channel] + (currentPixel[channel] - previousPixel[channel]) * blend;
+            if (!std::isfinite(actual[channel]) ||
+                std::abs(actual[channel] - expected) > 1e-5f * std::max(1.f, std::abs(expected)))
+                throw std::runtime_error("Path batch mean or sample cap mismatch");
+        }
+    }
+    request.entry.function = "Statistics";
+    desc = {};
+    desc.layout = runtime.CreateLayout({{0, BindingKind::SampledTexture},
+                                        {3, BindingKind::ConstantBuffer},
+                                        {4, BindingKind::ReadOnlyBuffer},
+                                        {5, BindingKind::ReadOnlyBuffer},
+                                        {6, BindingKind::StorageBuffer}});
+    desc.compute =
+        runtime.CreateShader(ShaderStage::Compute, compiler.Compile(request), "Statistics");
+    pipeline = runtime.CreatePipeline(desc);
+    constexpr std::array<float, 2> batchValues{3, 8}, previousValues{2, 5};
+    auto batchBuffer = runtime.CreateBuffer({8, Memory::Upload, "Path.Batch.Input"});
+    auto previousBuffer = runtime.CreateBuffer({8, Memory::Upload, "Path.Previous.Input"});
+    std::memcpy(batchBuffer->Map().data(), batchValues.data(), 8);
+    std::memcpy(previousBuffer->Map().data(), previousValues.data(), 8);
+    auto prepareMoments = runtime.CreateCommands();
+    prepareMoments->Barrier(batchBuffer, State::HostWrite, State::ShaderRead);
+    prepareMoments->Barrier(previousBuffer, State::HostWrite, State::ShaderRead);
+    runtime.Wait(runtime.Submit(std::move(prepareMoments)));
+    for (uint32_t count : {0u, 10u, renderer::MaxReflectionSamples})
+    {
+        renderer::ReflectionParameters parameters;
+        parameters.environment[2] = float(renderer::PathSamplesPerFrame);
+        parameters.options[1] = float(count);
+        parameters.options[3] = float(renderer::MaxReflectionSamples);
+        auto constants =
+            runtime.CreateBuffer({sizeof(parameters), Memory::Upload, "Path.Moments.Parameters"});
+        std::memcpy(constants->Map().data(), &parameters, sizeof(parameters));
+        auto output = runtime.CreateBuffer({8, Memory::Device, "Path.Moments.Output", true});
+        auto resultReadback = runtime.CreateBuffer({8, Memory::Readback, "Path.Moments.Readback"});
+        Binding uniform{3};
+        uniform.buffer = constants;
+        uniform.size = sizeof(parameters);
+        Binding batchBinding{4};
+        batchBinding.buffer = batchBuffer;
+        batchBinding.size = 8;
+        batchBinding.stride = 8;
+        Binding previousBinding{5};
+        previousBinding.buffer = previousBuffer;
+        previousBinding.size = 8;
+        previousBinding.stride = 8;
+        Binding outputBinding{6};
+        outputBinding.buffer = output;
+        outputBinding.size = 8;
+        outputBinding.stride = 8;
+        auto momentCommands = runtime.CreateCommands();
+        momentCommands->Barrier(constants, State::HostWrite, State::UniformRead);
+        momentCommands->Barrier(output, State::Undefined, State::Storage);
+        momentCommands->Bind(pipeline);
+        momentCommands->Bind(runtime.CreateGroup(
+            desc.layout, {{0, current}, uniform, batchBinding, previousBinding, outputBinding}));
+        momentCommands->Compute(1, 1);
+        momentCommands->Barrier(output, State::Storage, State::CopySource);
+        momentCommands->Copy(output, resultReadback, 8);
+        momentCommands->Barrier(resultReadback, State::CopyDest, State::HostRead);
+        runtime.Wait(runtime.Submit(std::move(momentCommands)));
+        std::array<float, 2> actual{};
+        std::memcpy(actual.data(), resultReadback->Map().data(), 8);
+        const std::array<float, 2> expected =
+            count == 0 ? batchValues
+            : count == renderer::MaxReflectionSamples
+                ? previousValues
+                : std::array<float, 2>{22.f / 9.f, 13.f + 40.f / 9.f};
+        for (size_t i = 0; i < actual.size(); ++i)
+            if (!std::isfinite(actual[i]) || std::abs(actual[i] - expected[i]) > 1e-5f)
+                throw std::runtime_error("Path batched Welford merge mismatch");
+    }
+    logger.Write(LogLevel::Info, "Path batch mean/cap and Welford merge passed");
     logger.Write(LogLevel::Info, "Visible GGX sampling passed: 6 roughness/view cases, 4096 "
                                  "samples each; finite weights <= 1, stratified quadrants");
     VerifyReflectionDenoise(

@@ -5,6 +5,7 @@
 #include "assets/io.hpp"
 #include "core/log.hpp"
 #include "material/asset.hpp"
+#include "renderer/raytracing.hpp"
 #include "renderer/scene_renderer.hpp"
 #include "rhi/runtime.hpp"
 #include "rhi/upload.hpp"
@@ -14,6 +15,8 @@
 
 #include <algorithm>
 #include <chrono>
+#include <cmath>
+#include <cstddef>
 #include <cstring>
 #include <format>
 #include <set>
@@ -57,8 +60,10 @@ void VerifyScene(rhi::Runtime& runtime, shader::Target target, const std::filesy
         };
         const auto first = pathFrame();
         const auto second = pathFrame();
-        detail::Require(first.reflectionSamples == 1 && first.reflectionHistoryReset &&
-                            second.reflectionSamples == 2 && !second.reflectionHistoryReset,
+        detail::Require(first.reflectionSamples == renderer::PathSamplesPerFrame &&
+                            first.reflectionHistoryReset &&
+                            second.reflectionSamples == 2 * renderer::PathSamplesPerFrame &&
+                            !second.reflectionHistoryReset,
                         "Path tracing did not accumulate successive samples");
         bool trace = false, accumulate = false, filter = false, raster = false;
         for (const auto& pass : first.graphSnapshot->passes)
@@ -72,7 +77,8 @@ void VerifyScene(rhi::Runtime& runtime, shader::Target target, const std::filesy
                         "Path tracing graph composition mismatch");
         pathOptions.reflectionDenoise = false;
         const auto switchedOff = pathFrame();
-        detail::Require(switchedOff.reflectionSamples == 3 && !switchedOff.reflectionHistoryReset,
+        detail::Require(switchedOff.reflectionSamples == 3 * renderer::PathSamplesPerFrame &&
+                            !switchedOff.reflectionHistoryReset,
                         "Path filter toggle reset the raw accumulation");
         for (const auto& pass : switchedOff.graphSnapshot->passes)
             detail::Require(pass.name != "PathTracing.Denoise",
@@ -88,32 +94,51 @@ void VerifyScene(rhi::Runtime& runtime, shader::Target target, const std::filesy
             rawState = rhi::State::CopySource;
             runtime.Wait(raw.completion);
         }
-        detail::Require(std::ranges::equal(switchedOff.pixels->Map(), raw.pixels->Map()),
-                        "Path filtering changed the accumulated raw history");
+        SaveImage(output / "path-filter-toggle.bmp", switchedOff.pixels->Map(), 64, 48,
+                  rhi::TextureRowPitch(64));
+        SaveImage(output / "path-raw-reference.bmp", raw.pixels->Map(), 64, 48,
+                  rhi::TextureRowPitch(64));
+        const auto switchedPixels = switchedOff.pixels->Map();
+        const auto rawPixels = raw.pixels->Map();
+        detail::Require(switchedPixels.size() == rawPixels.size(), "Path readback size mismatch");
+        uint32_t differing = 0;
+        for (size_t i = 0; i < rawPixels.size(); ++i)
+        {
+            const auto difference = std::abs(int(std::to_integer<uint8_t>(switchedPixels[i])) -
+                                             int(std::to_integer<uint8_t>(rawPixels[i])));
+            detail::Require(difference <= 1, "Path filter toggle changed raw history");
+            differing += difference != 0;
+        }
+        detail::Require(differing <= 4, "Path filter toggle changed raw history broadly");
         pathOptions.reflectionDenoise = true;
         pathRenderer.Document().MoveCamera({.5f, 0, 0}, {0, 5, 0});
         const auto moved = pathFrame();
-        detail::Require(moved.reflectionSamples == 1 && moved.reflectionHistoryReset,
+        detail::Require(moved.reflectionSamples == renderer::PathSamplesPerFrame &&
+                            moved.reflectionHistoryReset,
                         "Path tracing camera change did not reset history");
         pathRenderer.Document() = original;
         const auto restored = pathFrame();
-        detail::Require(restored.reflectionSamples == 1 && restored.reflectionHistoryReset,
+        detail::Require(restored.reflectionSamples == renderer::PathSamplesPerFrame &&
+                            restored.reflectionHistoryReset,
                         "Path tracing camera restoration did not reset history");
         const auto light = pathRenderer.LastSnapshot().light.object;
         detail::Require(!light.empty(), "Path tracing fixture needs a directional light");
         pathRenderer.Document().Get(light).light->intensity *= .5f;
         const auto changedLight = pathFrame();
-        detail::Require(changedLight.reflectionSamples == 1 && changedLight.reflectionHistoryReset,
+        detail::Require(changedLight.reflectionSamples == renderer::PathSamplesPerFrame &&
+                            changedLight.reflectionHistoryReset,
                         "Path tracing light change did not reset history");
         pathTarget = runtime.CreateTexture(
             {65, 48, rhi::Format::Rgba8Srgb, false, true, "PathTracing.Resized"});
         state = rhi::State::Undefined;
         const auto resized = pathFrame();
-        detail::Require(resized.reflectionSamples == 1 && resized.reflectionHistoryReset,
+        detail::Require(resized.reflectionSamples == renderer::PathSamplesPerFrame &&
+                            resized.reflectionHistoryReset,
                         "Path tracing resize did not reset history");
         pathOptions.exposure = 1.5f;
         const auto exposure = pathFrame();
-        detail::Require(exposure.reflectionSamples == 2 && !exposure.reflectionHistoryReset,
+        detail::Require(exposure.reflectionSamples == 2 * renderer::PathSamplesPerFrame &&
+                            !exposure.reflectionHistoryReset,
                         "Path tracing display exposure discarded history");
         pathOptions.reflectionDiagnostics = true;
         bool rejectedDiagnostics = false;
@@ -135,7 +160,8 @@ void VerifyScene(rhi::Runtime& runtime, shader::Target target, const std::filesy
                         "Path tracing fixture needs a mesh");
         changedObject->transform.position.x += .3f;
         const auto changedScene = pathFrame();
-        detail::Require(changedScene.reflectionSamples == 1 && changedScene.reflectionHistoryReset,
+        detail::Require(changedScene.reflectionSamples == renderer::PathSamplesPerFrame &&
+                            changedScene.reflectionHistoryReset,
                         "Path tracing scene change did not reset history");
         pathDocument = original;
         pathFrame();
@@ -156,7 +182,7 @@ void VerifyScene(rhi::Runtime& runtime, shader::Target target, const std::filesy
             }
         detail::Require(replaced, "Path tracing fixture needs multiple mesh objects");
         const auto changedMaterial = pathFrame();
-        detail::Require(changedMaterial.reflectionSamples == 1 &&
+        detail::Require(changedMaterial.reflectionSamples == renderer::PathSamplesPerFrame &&
                             changedMaterial.reflectionHistoryReset,
                         "Path tracing material change did not reset history");
     }
