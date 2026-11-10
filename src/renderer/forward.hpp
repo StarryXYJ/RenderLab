@@ -15,6 +15,12 @@ public:
     ShadowFeature() : RenderFeature("MainLight.Shadow") {}
     void Build(rendergraph::Graph&, const RenderFrame&) override;
 };
+class AreaShadowFeature final : public RenderFeature
+{
+public:
+    AreaShadowFeature() : RenderFeature("AreaLight.Shadows") {}
+    void Build(rendergraph::Graph&, const RenderFrame&) override;
+};
 class OpaqueFeature final : public RenderFeature
 {
 public:

@@ -33,6 +33,8 @@ shader "RenderLab/Lit"
             [binding(BrdfLut)] Texture2D<float4> BrdfLut;
             [binding(LtcMatrix)] Texture2D<float4> LtcMatrix;
             [binding(LtcAmplitude)] Texture2D<float4> LtcAmplitude;
+            [binding(AreaShadow0)] Texture2D<float4> AreaShadow0;
+            [binding(AreaShadow1)] Texture2D<float4> AreaShadow1;
             [binding(MainLightShadow)] Texture2D<float4> MainLightShadow;
         }
         vertex = "Lit.hlsl:VSMain";

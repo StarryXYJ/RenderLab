@@ -2,6 +2,7 @@
 #include "Core.hlsli"
 #include "Lighting.hlsli"
 #include "AreaLighting.hlsli"
+#include "AreaShadow.hlsli"
 #include "ImageBasedLighting.hlsli"
 #include "Shadows.hlsli"
 
@@ -63,7 +64,8 @@ float4 PSMain(Varyings input) : SV_Target
         surface.perceptualRoughness, surface.normalWS, SafeNormalize(viewDirWS), light.direction)
         * light.color * visibility;
     float2 areaVisibility = DeferredLightingParameters.RayTracedShadows != 0
-        ? ShadowVisibility.Load(int3(pixel, 0)).yz : 1.xx;
+        ? ShadowVisibility.Load(int3(pixel, 0)).yz
+        : AreaShadowVisibility(SceneAreaShadow, AreaShadow0, AreaShadow1, positionWS, surface.normalWS);
     direct += EvaluateAreaLights(SceneAreaLighting, positionWS, surface.normalWS,
                                  SafeNormalize(viewDirWS), surface.baseColor, surface.metallic,
                                  surface.perceptualRoughness, LtcMatrix, LtcAmplitude, areaVisibility);

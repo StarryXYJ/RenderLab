@@ -66,6 +66,54 @@ void Check(rhi::Runtime& runtime, shader::Target target, const std::filesystem::
     compare(forward, capture(P::Deferred, S::Direct));
     compare(forward, capture(P::Forward, S::IndexedDirect));
     compare(forward, capture(P::Forward, S::GpuCulled));
+    scene::Object shadowBlocker;
+    shadowBlocker.id = "e4f0a5640d4d41f39dd49fa3b4e96abb";
+    shadowBlocker.transform.position = {0, 2.84f, -.1f};
+    shadowBlocker.transform.scale = {1.5f, .04f, 1.5f};
+    shadowBlocker.mesh = scene::MeshRenderer{"b4748e75e72a5dba8d4439fa86854c92"};
+    document.objects.push_back(shadowBlocker);
+    const auto shadowed = capture(P::Forward, S::Direct);
+    compare(shadowed, capture(P::Deferred, S::Direct));
+    compare(shadowed, capture(P::Forward, S::IndexedDirect));
+    uint64_t openSum = 0, shadowSum = 0;
+    for (size_t i = 0; i < forward.size(); i += 4)
+        for (size_t c = 0; c < 3; ++c)
+        {
+            openSum += forward[i + c];
+            shadowSum += shadowed[i + c];
+        }
+    std::cout << "Raster area-shadow sum: open=" << openSum << " blocked=" << shadowSum << '\n';
+    Require(shadowSum * 2 < openSum, "Area shadow map did not block light");
+    document.objects.pop_back();
+    auto& splitFirst = document.Get(lightId);
+    const auto originalFirst = splitFirst;
+    splitFirst.transform.position.x = -.65f;
+    splitFirst.areaLight->width = splitFirst.areaLight->height = .4f;
+    auto splitSecond = splitFirst;
+    splitSecond.id = "e5f0a5640d4d41f39dd49fa3b4e96abb";
+    splitSecond.transform.position.x = .65f;
+    document.objects.push_back(splitSecond);
+    shadowBlocker.transform.position.x = -.65f;
+    shadowBlocker.transform.scale = {.55f, .04f, .55f};
+    document.objects.push_back(shadowBlocker);
+    const auto splitBoth = capture(P::Forward, S::Direct);
+    compare(splitBoth, capture(P::Deferred, S::Direct));
+    document.Get(splitSecond.id).areaLight->enabled = false;
+    const auto splitBlocked = capture(P::Forward, S::Direct);
+    document.Get(lightId).areaLight->enabled = false;
+    document.Get(splitSecond.id).areaLight->enabled = true;
+    const auto splitOpen = capture(P::Forward, S::Direct);
+    uint64_t blockedSum = 0, secondSum = 0;
+    for (size_t i = 0; i < splitOpen.size(); i += 4)
+        for (size_t c = 0; c < 3; ++c)
+        {
+            blockedSum += splitBlocked[i + c];
+            secondSum += splitOpen[i + c];
+        }
+    Require(secondSum > blockedSum + 1000, "Raster area shadows did not separate light visibility");
+    document.objects.pop_back();
+    document.objects.pop_back();
+    document.Get(lightId) = originalFirst;
     const auto first = document.Get(lightId);
     auto second = first;
     second.id = "e2f0a5640d4d41f39dd49fa3b4e96abb";

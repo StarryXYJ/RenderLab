@@ -3,6 +3,7 @@ shader "RenderLab/DeferredLighting"
     use "View.params";
     use "Lighting.params";
     use "AreaLighting.params";
+    use "AreaShadow.params";
     use "Shadow.params";
     pass DeferredLighting
     {
@@ -18,6 +19,8 @@ shader "RenderLab/DeferredLighting"
             Texture2D<float4> BrdfLut;
             Texture2D<float4> LtcMatrix;
             Texture2D<float4> LtcAmplitude;
+            Texture2D<float4> AreaShadow0;
+            Texture2D<float4> AreaShadow1;
             Texture2D<float4> MainLightShadow;
             Texture2D<float4> ShadowVisibility;
         }

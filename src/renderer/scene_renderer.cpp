@@ -205,14 +205,17 @@ struct SceneRenderer::Impl
     RenderPipeline forwardPipeline =
         CreatePipeline(PipelineType::Forward)
             .AddFeature(std::make_shared<ShadowFeature>(), RenderStage::BeforeOpaque)
+            .AddFeature(std::make_shared<AreaShadowFeature>(), RenderStage::BeforeOpaque)
             .Create();
     RenderPipeline deferredPipeline =
         CreatePipeline(PipelineType::Deferred)
             .AddFeature(std::make_shared<ShadowFeature>(), RenderStage::BeforeOpaque)
+            .AddFeature(std::make_shared<AreaShadowFeature>(), RenderStage::BeforeOpaque)
             .Create();
     RenderPipeline rayTracingPipeline =
         CreatePipeline(PipelineType::RayTracing)
             .AddFeature(std::make_shared<ShadowFeature>(), RenderStage::BeforeOpaque)
+            .AddFeature(std::make_shared<AreaShadowFeature>(), RenderStage::BeforeOpaque)
             .Create();
     RenderPipeline pathTracingPipeline = CreatePipeline(PipelineType::PathTracing).Create();
     math::Mat4 shadowMatrix = math::Mat4::Identity();
@@ -940,8 +943,9 @@ struct SceneRenderer::Impl
     }
     struct SceneBindings
     {
-        std::optional<shader::BindingHandle> view, object, lighting, shadow, area;
-        std::optional<shader::BindingHandle> environment, brdf, shadowMap, ltcMatrix, ltcAmplitude;
+        std::optional<shader::BindingHandle> view, object, lighting, shadow, area, areaShadow;
+        std::optional<shader::BindingHandle> environment, brdf, shadowMap, ltcMatrix, ltcAmplitude,
+            areaShadow0, areaShadow1;
     };
     std::map<std::pair<const shader::Package*, uint32_t>, SceneBindings> sceneBindings;
     const SceneBindings& Bindings(const std::shared_ptr<const shader::Package>& selected,
@@ -958,6 +962,7 @@ struct SceneRenderer::Impl
         bindings.lighting = selected->SchemaBinding(pass, SceneLightingDataContract);
         bindings.shadow = selected->SchemaBinding(pass, SceneShadowDataContract);
         bindings.area = selected->SchemaBinding(pass, SceneAreaLightingDataContract);
+        bindings.areaShadow = selected->SchemaBinding(pass, SceneAreaShadowDataContract);
         const auto& layout = selected->interfaces.at(pass.index);
         for (uint32_t i = 0; i < layout.blocks.size(); ++i)
         {
@@ -965,7 +970,8 @@ struct SceneRenderer::Impl
                 continue;
             const shader::BindingHandle handle{pass, i, true};
             if (bindings.view != handle && bindings.object != handle &&
-                bindings.lighting != handle && bindings.shadow != handle && bindings.area != handle)
+                bindings.lighting != handle && bindings.shadow != handle &&
+                bindings.area != handle && bindings.areaShadow != handle)
                 throw std::invalid_argument("Unsupported required scene parameter schema: " +
                                             layout.blocks[i].schemaId);
         }
@@ -975,6 +981,8 @@ struct SceneRenderer::Impl
         bindings.shadowMap = selected->SemanticBinding(pass, Semantic::MainLightShadow);
         bindings.ltcMatrix = selected->SemanticBinding(pass, Semantic::LtcMatrix);
         bindings.ltcAmplitude = selected->SemanticBinding(pass, Semantic::LtcAmplitude);
+        bindings.areaShadow0 = selected->SemanticBinding(pass, Semantic::AreaShadow0);
+        bindings.areaShadow1 = selected->SemanticBinding(pass, Semantic::AreaShadow1);
         for (const auto& resource : layout.resources)
             if (resource.scope != shader::Scope::Material &&
                 resource.property.binding == Semantic::None)
@@ -1444,13 +1452,32 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
     if (deferred)
         scan(cameraCandidates, shader::PassRole::Forward, cameraDepthFormat);
     if (!pathTracing)
+    {
         scan(self.snapshot.shadowCasters, shader::PassRole::ShadowCaster, frame.shadowDepthFormat);
+        if (!self.snapshot.areaLights.empty())
+            scan(self.snapshot.allInstances, shader::PassRole::ShadowCaster,
+                 frame.shadowDepthFormat);
+    }
     graph.CreateTexture("CameraDepth",
                         {target->desc.width, target->desc.height, cameraDepthFormat, false, true});
     frame.clearColor = {.02f, .02f, .02f, 1};
     frame.shadowResolution =
         self.snapshot.shadowCasters.empty() ? 1 : self.snapshot.light.shadowResolution;
     const auto frameConstants = self.Parameters(uploads);
+    frame.areaShadowCount =
+        pathTracing ? 0u : static_cast<uint32_t>(self.snapshot.areaLights.size());
+    std::array<rhi::UploadArena::Slice, 2> areaShadowConstants;
+    shader::generated::SceneAreaShadowData areaShadowData;
+    areaShadowData.Parameters = {float(frame.areaShadowCount), .0001f, .01f, 0};
+    for (uint32_t i = 0; i < frame.areaShadowCount; ++i)
+    {
+        shader::generated::SceneShadowData shadow;
+        shadow.MainLightShadowMatrix =
+            FitAreaShadow(self.snapshot.areaLights[i], self.snapshot).values;
+        areaShadowConstants[i] = self.ParameterBuffer(shadow, uploads);
+        (i == 0 ? areaShadowData.Matrix0 : areaShadowData.Matrix1) = shadow.MainLightShadowMatrix;
+    }
+    const auto areaShadowSlice = self.ParameterBuffer(areaShadowData, uploads);
     std::vector<IndexedDrawInput> indexedInputs;
     using IndexedKey = std::tuple<const Impl::MaterialInput*, shader::PassRole, bool>;
     std::map<IndexedKey, IndexedDrawInput> indexedTemplates;
@@ -1833,7 +1860,8 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
         }
         return binding;
     };
-    const auto prepareDraw = [&](const scene::Instance& instance, shader::PassRole requestedRole)
+    const auto prepareDraw = [&](const scene::Instance& instance, shader::PassRole requestedRole,
+                                 int areaShadowIndex = -1)
     {
         const auto& model = self.models.at(instance.model);
         const auto mesh = std::ranges::find(model.meshes, instance.mesh, &assets::Mesh::id);
@@ -1901,8 +1929,10 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
         };
         bind(bindings.view, frameConstants.view);
         bind(bindings.lighting, frameConstants.lighting);
-        bind(bindings.shadow, frameConstants.shadow);
+        bind(bindings.shadow,
+             areaShadowIndex >= 0 ? areaShadowConstants[areaShadowIndex] : frameConstants.shadow);
         bind(bindings.area, frameConstants.area);
+        bind(bindings.areaShadow, areaShadowSlice);
         if (bindings.object)
         {
             const auto objectKey = indexedDraw ? "Indexed.SharedState" : instance.id;
@@ -1924,6 +1954,20 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
             prepare.bindings[*bindings.ltcMatrix] = {0, self.ltcMatrix};
         if (bindings.ltcAmplitude)
             prepare.bindings[*bindings.ltcAmplitude] = {0, self.ltcAmplitude};
+        if (bindings.areaShadow0)
+        {
+            if (frame.areaShadowCount > 0)
+                prepare.deferredResources.insert(*bindings.areaShadow0);
+            else
+                prepare.bindings[*bindings.areaShadow0] = {0, self.textures.at("white/Linear")};
+        }
+        if (bindings.areaShadow1)
+        {
+            if (frame.areaShadowCount > 1)
+                prepare.deferredResources.insert(*bindings.areaShadow1);
+            else
+                prepare.bindings[*bindings.areaShadow1] = {0, self.textures.at("white/Linear")};
+        }
         if (bindings.shadowMap)
             prepare.deferredResources.insert(*bindings.shadowMap);
         auto prepared = self.materials.Prepare(material.package, material.asset, prepare, resolve);
@@ -2050,7 +2094,19 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
             const auto& resource = material.package->GetResource(*bindings.shadowMap);
             draw.textures.push_back({resource.slot, "MainLightShadow", uint32_t(resource.scope)});
         }
-        if (role == shader::PassRole::ShadowCaster)
+        if (bindings.areaShadow0 && frame.areaShadowCount > 0)
+        {
+            const auto& resource = material.package->GetResource(*bindings.areaShadow0);
+            draw.textures.push_back({resource.slot, "AreaLight.Shadow0", uint32_t(resource.scope)});
+        }
+        if (bindings.areaShadow1 && frame.areaShadowCount > 1)
+        {
+            const auto& resource = material.package->GetResource(*bindings.areaShadow1);
+            draw.textures.push_back({resource.slot, "AreaLight.Shadow1", uint32_t(resource.scope)});
+        }
+        if (role == shader::PassRole::ShadowCaster && areaShadowIndex >= 0)
+            frame.areaShadowCasters[areaShadowIndex].push_back(std::move(draw));
+        else if (role == shader::PassRole::ShadowCaster)
             frame.shadowCasters.push_back(std::move(draw));
         else if (role == shader::PassRole::GBuffer)
             frame.gbuffer.push_back(std::move(draw));
@@ -2063,6 +2119,9 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
     {
         for (const auto& instance : self.snapshot.shadowCasters)
             prepareDraw(instance, shader::PassRole::ShadowCaster);
+        for (uint32_t i = 0; i < frame.areaShadowCount; ++i)
+            for (const auto& instance : self.snapshot.allInstances)
+                prepareDraw(instance, shader::PassRole::ShadowCaster, static_cast<int>(i));
         for (const auto& instance : indexed ? self.snapshot.allInstances : self.snapshot.instances)
             prepareDraw(instance, deferred ? shader::PassRole::GBuffer : shader::PassRole::Forward);
     }
@@ -2106,6 +2165,17 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
             importBuffer(frameConstants.area.buffer, "Indexed.AreaLighting", rhi::State::HostWrite),
             rendergraph::Use::Uniform,
             {frameConstants.area.offset, frameConstants.area.size}};
+        bindings.areaShadow = {
+            4,
+            importBuffer(areaShadowSlice.buffer, "Indexed.AreaShadow", rhi::State::HostWrite),
+            rendergraph::Use::Uniform,
+            {areaShadowSlice.offset, areaShadowSlice.size}};
+        bindings.areaShadow0 = frame.areaShadowCount > 0
+                                   ? "AreaLight.Shadow0"
+                                   : importTexture(self.textures.at("white/Linear"));
+        bindings.areaShadow1 = frame.areaShadowCount > 1
+                                   ? "AreaLight.Shadow1"
+                                   : importTexture(self.textures.at("white/Linear"));
         bindings.ltcMatrix = importTexture(self.ltcMatrix);
         bindings.ltcAmplitude = importTexture(self.ltcAmplitude);
         bindings.environment = importTexture(self.environmentAtlas);
@@ -2142,6 +2212,7 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
         bind(SceneLightingDataContract, frameConstants.lighting);
         bind(SceneShadowDataContract, frameConstants.shadow);
         bind(SceneAreaLightingDataContract, frameConstants.area);
+        bind(SceneAreaShadowDataContract, areaShadowSlice);
         const auto inverse = math::Inverse(self.snapshot.viewProjection);
         const std::vector<double> inverseValues(inverse.values.begin(), inverse.values.end());
         prepare.constants[self.deferredLighting->BlockBinding(pass, "DeferredLightingParameters")] =
@@ -2150,7 +2221,7 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
         for (const auto name :
              {"GBufferAlbedoMetallic", "GBufferNormalRoughness", "GBufferEmissionOcclusion",
               "CameraDepth", "EnvironmentAtlas", "BrdfLut", "MainLightShadow", "ShadowVisibility",
-              "LtcMatrix", "LtcAmplitude"})
+              "LtcMatrix", "LtcAmplitude", "AreaShadow0", "AreaShadow1"})
             prepare.deferredResources.insert(self.deferredLighting->ResourceBinding(pass, name));
         auto prepared = self.materials.Prepare(
             self.deferredLighting,
@@ -2189,6 +2260,12 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
             {"BrdfLut", importTexture(self.brdfLut)},
             {"LtcMatrix", importTexture(self.ltcMatrix)},
             {"LtcAmplitude", importTexture(self.ltcAmplitude)},
+            {"AreaShadow0", frame.areaShadowCount > 0
+                                ? "AreaLight.Shadow0"
+                                : importTexture(self.textures.at("white/Linear"))},
+            {"AreaShadow1", frame.areaShadowCount > 1
+                                ? "AreaLight.Shadow1"
+                                : importTexture(self.textures.at("white/Linear"))},
             {"MainLightShadow", "MainLightShadow"},
             {"ShadowVisibility", rayTracing ? "RayTracing.ShadowVisibility"
                                             : importTexture(self.textures.at("white/Linear"))}};

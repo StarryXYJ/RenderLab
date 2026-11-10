@@ -93,6 +93,9 @@ struct RenderFrame
     std::vector<DrawPacket> gbuffer;
     DrawPacket deferredLighting;
     std::vector<DrawPacket> shadowCasters;
+    std::array<std::vector<DrawPacket>, 2> areaShadowCasters;
+    uint32_t areaShadowCount = 0;
+    uint32_t areaShadowResolution = 1024;
     uint32_t shadowResolution = 1;
     rhi::Format shadowDepthFormat = rhi::Format::D32;
     std::array<float, 4> clearColor = {.02f, .02f, .02f, 1};

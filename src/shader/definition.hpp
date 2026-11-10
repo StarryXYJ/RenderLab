@@ -111,7 +111,9 @@ struct Property
         BrdfLut,
         MainLightShadow,
         LtcMatrix,
-        LtcAmplitude
+        LtcAmplitude,
+        AreaShadow0,
+        AreaShadow1
     };
     BindingSemantic binding = BindingSemantic::None;
     MaterialSemantic semantic = MaterialSemantic::None;

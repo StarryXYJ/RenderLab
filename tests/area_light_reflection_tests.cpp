@@ -88,8 +88,8 @@ void Check(rhi::Runtime& runtime, shader::Target target, const std::filesystem::
     const auto rasterBlocked = capture();
     std::cout << "Direct light: open=" << unblockedDirect << " blocked=" << blockedDirect
               << " raster=" << rasterBlocked << '\n';
-    Require(blockedDirect * 2 < unblockedDirect && blockedDirect * 2 < rasterBlocked,
-            "Area-light ray visibility did not shadow direct lighting");
+    Require(blockedDirect * 2 < unblockedDirect && rasterBlocked * 2 < unblockedDirect,
+            "Area-light visibility did not shadow direct lighting");
     options.pipeline = renderer::PipelineType::RayTracing;
     doc.Get(blocker.id).transform.position.x = .7f;
     const auto partial = capture();
