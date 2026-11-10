@@ -28,6 +28,12 @@ float3 SampleCosineHemisphere(float2 xi)
     float phi = 2 * RenderLabPi * xi.y;
     return float3(radius * cos(phi), radius * sin(phi), sqrt(max(0, 1 - xi.x)));
 }
+// A zero seed preserves the original stream; nonzero seeds select a deterministic pixel stream.
+uint PathSamplePixel(uint pixel, uint seed)
+{
+    return seed == 0 ? pixel : pixel ^ RaySampleHash(seed);
+}
+
 // Separate dimensions for camera and path bounces; all arithmetic is deterministic uint32.
 float2 PathSample(uint sampleIndex, uint pixel, uint dimension)
 {

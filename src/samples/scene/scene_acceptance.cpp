@@ -66,12 +66,13 @@ void MeasurePathMotionSequences(rhi::Runtime& runtime, shader::Target target,
     const std::array<const char*, 3> names{"gentle", "fast", "reveal"};
     for (size_t trajectory = 0; trajectory < names.size(); ++trajectory)
     {
-        std::array<std::vector<std::vector<std::byte>>, 2> sequences;
+        std::array<std::vector<std::vector<std::byte>>, 6> sequences;
         std::vector<scene::Scene> poses;
         const auto base = output / "path-sequence" / names[trajectory];
         for (size_t mode = 0; mode < sequences.size(); ++mode)
         {
             // Change illumination so the sample sequence and temporal history both restart.
+            options.pathSeed = static_cast<uint16_t>(1 + mode / 2);
             scene.Document() = initialDocument;
             options.reflectionDenoise = false;
             options.reflectionTemporal = false;
@@ -83,7 +84,7 @@ void MeasurePathMotionSequences(rhi::Runtime& runtime, shader::Target target,
             render(false);
             scene.Document() = initialDocument;
             options.reflectionDenoise = true;
-            options.reflectionTemporal = mode == 1;
+            options.reflectionTemporal = mode % 2 == 1;
             for (uint32_t warmup = 0; warmup < 8; ++warmup)
                 render(false);
             for (uint32_t frame = 0; frame < sequenceFrames; ++frame)
@@ -102,10 +103,12 @@ void MeasurePathMotionSequences(rhi::Runtime& runtime, shader::Target target,
                     poses.push_back(scene.Document());
                 const auto result = render(true);
                 sequences[mode].push_back(
-                    capture(result, base / (mode == 0 ? "spatial" : "temporal") /
+                    capture(result, base / std::format("seed-{}", options.pathSeed) /
+                                        (mode % 2 == 0 ? "spatial" : "temporal") /
                                         std::format("{:02}.bmp", frame)));
             }
         }
+        options.pathSeed = 1000;
         options.reflectionDenoise = false;
         options.reflectionTemporal = false;
         std::vector<std::vector<std::byte>> references;
@@ -133,7 +136,7 @@ void MeasurePathMotionSequences(rhi::Runtime& runtime, shader::Target target,
         }
         while (references.size() < sequenceFrames)
             references.push_back(references.back());
-        std::array<double, 2> mse{}, residualDelta{}, signedError{}, largeError{}, sphereRoiMse{},
+        std::array<double, 6> mse{}, residualDelta{}, signedError{}, largeError{}, sphereRoiMse{},
             stoppedMse{};
         constexpr double components = double(width) * height * 3;
         for (uint32_t frame = 0; frame < sequenceFrames; ++frame)
@@ -167,26 +170,36 @@ void MeasurePathMotionSequences(rhi::Runtime& runtime, shader::Target target,
                                                    components / (sequenceFrames - 1);
                         }
                     }
-        const auto report = std::format(
-            "{{\n  \"trajectory\": \"{}\", \"referenceSpp\": {},\n"
-            "  \"mse\": [{:.6f}, {:.6f}], \"residualDeltaMse\": [{:.6f}, {:.6f}],\n"
-            "  \"signedError\": [{:.6f}, {:.6f}], \"absoluteErrorOver16Fraction\": "
-            "[{:.6f}, {:.6f}],\n  \"sphereCropMse\": [{:.6f}, {:.6f}],\n"
-            "  \"stoppedMse\": [{:.6f}, {:.6f}]\n}}\n",
-            names[trajectory], referenceFrames * renderer::PathSamplesPerFrame, mse[0], mse[1],
-            residualDelta[0], residualDelta[1], signedError[0], signedError[1], largeError[0],
-            largeError[1], sphereRoiMse[0], sphereRoiMse[1], stoppedMse[0], stoppedMse[1]);
+        for (size_t seed = 0; seed < 3; ++seed)
+        {
+            const auto spatial = seed * 2, temporal = spatial + 1;
+            const auto report = std::format(
+                "{{\n  \"trajectory\": \"{}\", \"seed\": {}, "
+                "\"referenceSeed\": 1000, \"referenceSpp\": {},\n"
+                "  \"mse\": [{:.6f}, {:.6f}], \"residualDeltaMse\": [{:.6f}, {:.6f}],\n"
+                "  \"signedError\": [{:.6f}, {:.6f}], \"absoluteErrorOver16Fraction\": "
+                "[{:.6f}, {:.6f}],\n  \"sphereCropMse\": [{:.6f}, {:.6f}],\n"
+                "  \"stoppedMse\": [{:.6f}, {:.6f}]\n}}\n",
+                names[trajectory], seed + 1, referenceFrames * renderer::PathSamplesPerFrame,
+                mse[spatial], mse[temporal], residualDelta[spatial], residualDelta[temporal],
+                signedError[spatial], signedError[temporal], largeError[spatial],
+                largeError[temporal], sphereRoiMse[spatial], sphereRoiMse[temporal],
+                stoppedMse[spatial], stoppedMse[temporal]);
 #ifdef NDEBUG
-        detail::Require(mse[1] <= mse[0] * 1.1 && residualDelta[1] <= residualDelta[0] * 1.1 &&
-                            sphereRoiMse[1] <= sphereRoiMse[0] * 1.1 &&
-                            stoppedMse[1] <= stoppedMse[0] * 1.05,
-                        "Path temporal sequence significantly worsened against spatial baseline");
+            detail::Require(
+                mse[temporal] <= mse[spatial] * 1.1 &&
+                    residualDelta[temporal] <= residualDelta[spatial] * 1.1 &&
+                    sphereRoiMse[temporal] <= sphereRoiMse[spatial] * 1.1 &&
+                    stoppedMse[temporal] <= stoppedMse[spatial] * 1.05,
+                "Path temporal sequence significantly worsened against spatial baseline");
 #endif
-        std::ofstream reportFile(base / "metrics.json", std::ios::binary);
-        reportFile.exceptions(std::ios::failbit | std::ios::badbit);
-        reportFile << report;
-        reportFile.close();
-        logger.Write(LogLevel::Info, "Path motion sequence " + report);
+            std::ofstream reportFile(base / std::format("seed-{}", seed + 1) / "metrics.json",
+                                     std::ios::binary);
+            reportFile.exceptions(std::ios::failbit | std::ios::badbit);
+            reportFile << report;
+            reportFile.close();
+            logger.Write(LogLevel::Info, "Path motion sequence " + report);
+        }
     }
 }
 } // namespace
@@ -526,6 +539,40 @@ void VerifyScene(rhi::Runtime& runtime, shader::Target target, const std::filesy
         detail::Require(changedMaterial.reflectionSamples == renderer::PathSamplesPerFrame &&
                             changedMaterial.reflectionHistoryReset,
                         "Path tracing material change did not reset history");
+        pathOptions.reflectionDenoise = false;
+        pathOptions.pathSeed = 1;
+        const auto seedOne = pathFrame();
+        const auto seedOneBytes = seedOne.pixels->Map();
+        const std::vector<std::byte> seedOneImage(seedOneBytes.begin(), seedOneBytes.end());
+        const auto samePixels = [&](std::span<const std::byte> image)
+        {
+            const auto rowPitch = rhi::TextureRowPitch(65);
+            for (uint32_t y = 0; y < 48; ++y)
+                if (!std::equal(seedOneImage.begin() + y * rowPitch,
+                                seedOneImage.begin() + y * rowPitch + 65 * 4,
+                                image.begin() + y * rowPitch))
+                    return false;
+            return true;
+        };
+        pathOptions.pathSeed = 2;
+        const auto seedTwo = pathFrame();
+        const auto seedTwoBytes = seedTwo.pixels->Map();
+        detail::Require(seedTwo.reflectionHistoryReset &&
+                            seedTwo.reflectionSamples == renderer::PathSamplesPerFrame &&
+                            !samePixels(seedTwoBytes),
+                        "Path sampling seed did not reset history or change the image");
+        pathOptions.pathSeed = 1;
+        const auto seedAgain = pathFrame();
+        const auto seedAgainBytes = seedAgain.pixels->Map();
+        detail::Require(seedAgain.reflectionHistoryReset && samePixels(seedAgainBytes),
+                        "Path sampling seed did not reproduce the same image");
+        pathOptions.reflectionDenoise = true;
+        pathFrame();
+        pathOptions.pathSeed = 2;
+        const auto seedTemporal = pathFrame();
+        detail::Require(seedTemporal.reflectionHistoryReset &&
+                            seedTemporal.reflectionTemporalFrames == 1,
+                        "Path sampling seed did not reset temporal history");
     }
     if (pipeline == renderer::PipelineType::RayTracing)
         for (auto& object : renderer.Document().objects)

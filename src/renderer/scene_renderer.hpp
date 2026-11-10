@@ -70,6 +70,8 @@ struct SceneRenderOptions
     bool reflectionDiagnostics = false;
     /// Read back path component means and secondary/temporal guides for validation.
     bool pathComponentDiagnostics = false;
+    /// Reproducible path sampling stream; changing it resets path histories.
+    uint16_t pathSeed = 0;
     /// Per-view values applied to extraction results; never written to Scene/Material assets.
     std::optional<scene::MainLight> lightOverride;
     std::optional<float> environmentIntensity, environmentRotation, exposure;

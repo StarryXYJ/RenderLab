@@ -52,7 +52,8 @@ void Temporal(uint3 id : SV_DispatchThreadID)
     MaterialHistory[pixel] = material;
     Display[pixel] = filtered;
     if (surface.w <= 0) return;
-    float2 jitter = PathSample(uint(Options.z), pixel.x + pixel.y * width, 0);
+    uint samplePixel = PathSamplePixel(pixel.x + pixel.y * width, uint(Options.w));
+    float2 jitter = PathSample(uint(Options.z), samplePixel, 0);
     float2 ndc = float2((pixel.x + jitter.x) * 2 / width - 1,
                         1 - (pixel.y + jitter.y) * 2 / height);
     float4 projected = mul(InverseViewProjection, float4(ndc, .0001, 1));

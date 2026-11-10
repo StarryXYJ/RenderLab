@@ -1425,7 +1425,10 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
             self.snapshot.environmentIntensity,
             self.snapshot.environmentRotation * float(3.141592653589793 / 180), 0, 0};
         if (pathTracing)
+        {
             parameters.environment[2] = float(PathSamplesPerFrame);
+            parameters.environment[3] = float(options.pathSeed);
+        }
         parameters.options[2] = self.snapshot.light.shadows ? 1.f : 0.f;
         parameters.options[3] = static_cast<float>(MaxReflectionSamples);
         const auto append = [&](const auto& value)
@@ -1648,7 +1651,7 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
                              MaxReflectionSamples)),
                 pathTracing ? static_cast<float>(reflectionSequence)
                             : (options.reflectionDiagnostics ? 1.f : 0.f),
-                32};
+                pathTracing ? static_cast<float>(options.pathSeed) : 32.f};
             frame.rayTracing.reflectionDiagnostics = options.reflectionDiagnostics;
             const auto temporalSlice =
                 uploads.Write(std::as_bytes(std::span{&temporalParameters, size_t{1}}));

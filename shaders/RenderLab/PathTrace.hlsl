@@ -53,7 +53,7 @@ float3 TracePath(uint2 pixel, uint2 size, uint sampleIndex, out float4 surfaceGu
                  out float4 materialGuide, out float3 primary, out float3 indirectDiffuse,
                  out float secondaryDistance, out uint secondarySpecular)
 {
-    uint pixelIndex = pixel.x + pixel.y * size.x;
+    uint pixelIndex = PathSamplePixel(pixel.x + pixel.y * size.x, uint(Environment.w));
     float2 jitter = PathSample(sampleIndex, pixelIndex, 0);
     float2 ndc = float2((pixel.x + jitter.x) * 2 / size.x - 1,
                         1 - (pixel.y + jitter.y) * 2 / size.y);
