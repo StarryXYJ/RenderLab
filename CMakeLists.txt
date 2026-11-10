@@ -289,6 +289,14 @@ if(BUILD_TESTING)
             $<TARGET_FILE_DIR:renderlab_area_light_history_tests>
         COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_FILE:renderlab_pix>
             $<TARGET_FILE_DIR:renderlab_area_light_history_tests> VERBATIM)
+    add_executable(renderlab_ltc_eval_tests tests/ltc_eval_tests.cpp)
+    target_link_libraries(renderlab_ltc_eval_tests PRIVATE renderlab_options renderlab_renderer
+        renderlab_rhi renderlab_shader renderlab_content renderlab_core renderlab_platform)
+    add_custom_command(TARGET renderlab_ltc_eval_tests POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_FILE:renderlab_dxc>
+            $<TARGET_FILE_DIR:renderlab_ltc_eval_tests>
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_FILE:renderlab_pix>
+            $<TARGET_FILE_DIR:renderlab_ltc_eval_tests> VERBATIM)
     add_executable(renderlab_rect_area_light_tests tests/rect_area_light_tests.cpp)
     target_link_libraries(renderlab_rect_area_light_tests PRIVATE renderlab_options renderlab_rhi
         renderlab_shader renderlab_core renderlab_platform)
@@ -440,6 +448,10 @@ if(BUILD_TESTING)
                 ${backend} ${CMAKE_SOURCE_DIR}/sample/m4/RayTracing.rlproject
                 ${CMAKE_SOURCE_DIR}/shaders ${CMAKE_BINARY_DIR}/area-light-history/${backend})
             set_tests_properties(gpu.${backend}.area_light_history PROPERTIES LABELS gpu RUN_SERIAL TRUE TIMEOUT 120)
+            add_test(NAME gpu.${backend}.ltc_eval COMMAND renderlab_ltc_eval_tests
+                ${backend} ${CMAKE_SOURCE_DIR}/shaders/m5/ltc_eval_acceptance.hlsl
+                ${CMAKE_BINARY_DIR}/ltc-eval/${backend})
+            set_tests_properties(gpu.${backend}.ltc_eval PROPERTIES LABELS gpu RUN_SERIAL TRUE TIMEOUT 90)
             add_test(NAME gpu.${backend}.rect_area_light COMMAND renderlab_rect_area_light_tests
                 ${backend} ${CMAKE_SOURCE_DIR}/shaders/m5/rect_area_acceptance.hlsl
                 ${CMAKE_BINARY_DIR}/rect-area/${backend})
