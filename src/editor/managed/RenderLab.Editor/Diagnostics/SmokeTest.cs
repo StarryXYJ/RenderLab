@@ -24,6 +24,7 @@ internal sealed class SmokeTest
     private Task? switchTask;
     private int deviceSwitches;
     private int stage, ticks, resizeBurstTicks;
+    private readonly List<double> resizeBurstTimes = [];
     private int acknowledgedPauseStage = -1;
     private ulong oldHandle, savedFrames, savedResizes, savedPaused, savedInput;
     private bool completed;
@@ -76,6 +77,7 @@ internal sealed class SmokeTest
             if (stage == 17 && resizeBurstTicks < 6)
             {
                 ++resizeBurstTicks;
+                resizeBurstTimes.Add(elapsed.Elapsed.TotalMilliseconds);
                 window.Width += 10;
                 return;
             }
@@ -275,7 +277,8 @@ internal sealed class SmokeTest
                 case 17:
                     CheckPixels(stats);
                     Require(stats.Resizes > savedResizes && stats.Resizes <= savedResizes + 2,
-                        "Consecutive resize updates were not coalesced.");
+                        $"Consecutive resize updates were not coalesced: before={savedResizes}, after={stats.Resizes}, " +
+                        $"update times ms=[{string.Join(", ", resizeBurstTimes.Select(t => t.ToString("F1", System.Globalization.CultureInfo.InvariantCulture)))}].");
                     checks.Add("six consecutive UI resize updates coalesced into at most two swapchain rebuilds");
                     NativeMethods.Check(NativeMethods.Camera(host.Session, savedPose, 0));
                     oldHandle = host.Session;
