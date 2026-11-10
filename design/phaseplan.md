@@ -321,8 +321,11 @@ M7.2 出口：给定固定场景下，两面板默认布局与菜单按需打开
 DX12/Vulkan 场景专项通过，固定 HDR 热点及镜面检查通过，三轨迹三种子线性 HDR
 对照整体改善但部分受影响通道变差；固定静止 504/8184 spp 截图与旧版一致。
 Release 编辑器双后端三秒 Gallery 短测正常关闭且零验证错误/剩余分配/worker_failed，
-见 `D:/Personal/RenderLab/out/hdr-guarded-editor-{dx12,vulkan}`。Debug、真实交互及更多设备
-未验证，局部偏差与成本见 [评估](../docs/performance/m8-denoiser-evaluation.md#两点漫反射亮点限幅)。
+见 `D:/Personal/RenderLab/out/hdr-guarded-editor-{dx12,vulkan}`。叠加 LTC 光栅面光源后，
+Release 的 DX12/Vulkan 光栅面光源、路径面光源和路径场景专项均通过，编辑器双后端
+Gallery 三秒短测零验证错误/剩余分配/worker_failed；证据 `D:/Personal/RenderLab/out/hdr-ltc-*`。
+Debug、真实交互及更多设备未验证，局部偏差与成本见
+[评估](../docs/performance/m8-denoiser-evaluation.md#两点漫反射亮点限幅)。
 
 分量时域差值候选（2026 年 11 月 10 日）在 Release/DX12 首项运动端点测试退化并已
 撤回；重建后 Release/DX12 专项通过，312 张序列图片与候选前逐字节一致；未运行
