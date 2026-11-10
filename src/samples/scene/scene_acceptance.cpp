@@ -232,16 +232,18 @@ void VerifyScene(rhi::Runtime& runtime, shader::Target target, const std::filesy
                             second.reflectionSamples == 2 * renderer::PathSamplesPerFrame &&
                             !second.reflectionHistoryReset,
                         "Path tracing did not accumulate successive samples");
-        bool trace = false, accumulate = false, filter = false, temporal = false, raster = false;
+        bool trace = false, accumulate = false, accumulateDirect = false, filter = false,
+             temporal = false, raster = false;
         for (const auto& pass : first.graphSnapshot->passes)
         {
             trace |= pass.name == "PathTracing.Trace";
             accumulate |= pass.name == "PathTracing.Accumulate";
+            accumulateDirect |= pass.name == "PathTracing.AccumulateDirect";
             filter |= pass.name == "PathTracing.Denoise";
             temporal |= pass.name == "PathTracing.Temporal";
             raster |= pass.name == "Deferred.GBuffer" || pass.name == "Forward.Opaque";
         }
-        detail::Require(trace && accumulate && filter && temporal && !raster,
+        detail::Require(trace && accumulate && accumulateDirect && filter && temporal && !raster,
                         "Path tracing graph composition mismatch");
         pathOptions.reflectionDenoise = false;
         const auto switchedOff = pathFrame();

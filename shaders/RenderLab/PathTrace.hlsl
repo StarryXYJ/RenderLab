@@ -16,6 +16,10 @@ RWTexture2D<float4> SurfaceGuide : register(u2);
 #endif
 RWTexture2D<float4> MaterialGuide : register(u3);
 RWStructuredBuffer<float2> BatchMoments : register(u17);
+#ifdef SPIRV
+[[vk::image_format("rgba32f")]]
+#endif
+RWTexture2D<float4> DirectRadiance : register(u18);
 cbuffer PathParameters : register(b4)
 {
     row_major float4x4 InverseViewProjection;
@@ -37,7 +41,7 @@ struct PathPayload
 };
 
 float3 TracePath(uint2 pixel, uint2 size, uint sampleIndex, out float4 surfaceGuide,
-                 out float4 materialGuide)
+                 out float4 materialGuide, out float3 primary)
 {
     uint pixelIndex = pixel.x + pixel.y * size.x;
     float2 jitter = PathSample(sampleIndex, pixelIndex, 0);
@@ -51,6 +55,7 @@ float3 TracePath(uint2 pixel, uint2 size, uint sampleIndex, out float4 surfaceGu
     ray.TMax = 10000;
     float3 throughput = 1;
     float3 result = 0;
+    primary = 0;
     surfaceGuide = 0;
     materialGuide = 0;
     [loop] for (uint bounce = 0; bounce < 4; ++bounce)
@@ -66,15 +71,21 @@ float3 TracePath(uint2 pixel, uint2 size, uint sampleIndex, out float4 surfaceGu
         }
         if (payload.hit == 0)
         {
-            result += throughput * EnvironmentTile(ray.Direction, 0, EnvironmentAtlas, Environment);
+            float3 environment = throughput * EnvironmentTile(ray.Direction, 0, EnvironmentAtlas, Environment);
+            result += environment;
+            if (bounce == 0) primary += environment;
             break;
         }
         if (payload.unlit != 0)
         {
-            result += throughput * payload.albedo;
+            float3 unlit = throughput * payload.albedo;
+            result += unlit;
+            if (bounce == 0) primary += unlit;
             break;
         }
-        result += throughput * payload.emission;
+        float3 emission = throughput * payload.emission;
+        result += emission;
+        if (bounce == 0) primary += emission;
         float3 lightDirection = SafeNormalize(DirectionToLight.xyz);
         float nl = saturate(dot(payload.normal, lightDirection));
         if (nl > 0 && LightColor.w > 0)
@@ -93,9 +104,13 @@ float3 TracePath(uint2 pixel, uint2 size, uint sampleIndex, out float4 surfaceGu
                 visible = query.CommittedStatus() != COMMITTED_TRIANGLE_HIT;
             }
             if (visible)
-                result += throughput * EvaluateBRDF(payload.albedo, payload.metallic,
+            {
+                float3 direct = throughput * EvaluateBRDF(payload.albedo, payload.metallic,
                     payload.roughness, payload.normal, -ray.Direction, lightDirection) *
                     LightColor.rgb * LightColor.w;
+                result += direct;
+                if (bounce == 0) primary += direct;
+            }
         }
         float2 xi = PathSample(sampleIndex, pixelIndex, bounce + 1);
         float choice = PathSample(sampleIndex, pixelIndex, bounce + 5).x;
@@ -118,13 +133,16 @@ void RayGeneration()
     uint2 size = DispatchRaysDimensions().xy;
     uint pixelIndex = pixel.x + pixel.y * size.x;
     uint count = min(uint(Environment.z), uint(Options.w) - min(uint(Options.y), uint(Options.w)));
-    float3 sum = 0;
+    float3 sum = 0, directSum = 0;
     float mean = 0, m2 = 0;
     float4 guide = 0, material = 0;
     [loop] for (uint i = 0; i < count; ++i)
     {
         float4 sampleGuide, sampleMaterial;
-        float3 sample = TracePath(pixel, size, uint(Options.x) + i, sampleGuide, sampleMaterial);
+        float3 sampleDirect;
+        float3 sample = TracePath(pixel, size, uint(Options.x) + i, sampleGuide, sampleMaterial,
+                                  sampleDirect);
+        directSum += sampleDirect;
         if (i == 0) { guide = sampleGuide; material = sampleMaterial; }
         sum += sample;
         float lum = dot(sample, float3(.2126, .7152, .0722));
@@ -136,6 +154,7 @@ void RayGeneration()
     MaterialGuide[pixel] = material;
     Radiance[pixel] = float4(count > 0 ? sum / count : 0, 1);
     BatchMoments[pixelIndex] = float2(mean, m2);
+    DirectRadiance[pixel] = float4(count > 0 ? directSum / count : 0, 1);
 }
 
 [shader("miss")]

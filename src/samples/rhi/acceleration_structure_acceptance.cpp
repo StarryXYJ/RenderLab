@@ -299,6 +299,110 @@ void VerifyTraceRays(Runtime& runtime, Pool& pool, shader::Target target,
     }
 }
 
+void VerifyPathDirectDenoise(Runtime& runtime, shader::Target target,
+                             const std::filesystem::path& source, Logger& logger)
+{
+    constexpr uint32_t width = 3, height = 3, pitch = 256;
+    using Pixel = std::array<float, 4>;
+    using Image = std::array<Pixel, width * height>;
+    shader::ProgramRequest request;
+    request.entry = {ShaderStage::Compute, source, "Denoise"};
+    request.target = target;
+    if (target == shader::Target::Spirv)
+        request.defines["SPIRV"] = "1";
+    shader::DxcCompiler compiler;
+    PipelineDesc desc;
+    desc.layout = runtime.CreateLayout({{0, BindingKind::SampledTexture},
+                                        {1, BindingKind::SampledTexture},
+                                        {2, BindingKind::StorageTexture},
+                                        {3, BindingKind::ConstantBuffer},
+                                        {4, BindingKind::SampledTexture},
+                                        {5, BindingKind::ReadOnlyBuffer},
+                                        {6, BindingKind::SampledTexture}});
+    desc.compute = runtime.CreateShader(ShaderStage::Compute, compiler.Compile(request), "Denoise");
+    auto pipeline = runtime.CreatePipeline(desc);
+    const auto run = [&](const Image& radiance, const Image& direct)
+    {
+        auto commands = runtime.CreateCommands();
+        const auto upload = [&](const Image& values)
+        {
+            auto image = runtime.CreateTexture(
+                {width, height, Format::Rgba32Float, false, false, "Path.Denoise.Input"});
+            auto buffer =
+                runtime.CreateBuffer({pitch * height, Memory::Upload, "Path.Denoise.Upload"});
+            for (uint32_t y = 0; y < height; ++y)
+                std::memcpy(buffer->Map().data() + y * pitch, values.data() + y * width,
+                            width * sizeof(Pixel));
+            commands->Barrier(buffer, State::HostWrite, State::CopySource);
+            commands->Barrier(image, State::Undefined, State::CopyDest);
+            commands->CopyTexture(buffer, image, pitch, true);
+            commands->Barrier(image, State::CopyDest, State::Sampled);
+            return runtime.CreateView(image);
+        };
+        Image surface, material;
+        surface.fill({0, 0, 1, 1});
+        material.fill({.5f, .5f, .5f, .5f});
+        auto color = upload(radiance), directView = upload(direct), guide = upload(surface),
+             materialView = upload(material);
+        std::array<std::array<float, 2>, width * height> moments;
+        moments.fill({1, 100});
+        auto momentBuffer = runtime.CreateBuffer({sizeof(moments), Memory::Upload, "Path.Moments"});
+        std::memcpy(momentBuffer->Map().data(), moments.data(), sizeof(moments));
+        Binding moment{5};
+        moment.buffer = momentBuffer;
+        moment.size = sizeof(moments);
+        moment.stride = 8;
+        renderer::ReflectionParameters parameters;
+        parameters.environment[2] = 8;
+        parameters.options[3] = float(renderer::MaxReflectionSamples);
+        auto constants =
+            runtime.CreateBuffer({sizeof(parameters), Memory::Upload, "Path.Constants"});
+        std::memcpy(constants->Map().data(), &parameters, sizeof(parameters));
+        Binding uniform{3};
+        uniform.buffer = constants;
+        uniform.size = sizeof(parameters);
+        auto output = runtime.CreateTexture(
+            {width, height, Format::Rgba32Float, true, false, "Path.Denoise.Output"});
+        auto result =
+            runtime.CreateBuffer({pitch * height, Memory::Readback, "Path.Denoise.Readback"});
+        commands->Barrier(constants, State::HostWrite, State::UniformRead);
+        commands->Barrier(momentBuffer, State::HostWrite, State::ShaderRead);
+        commands->Barrier(output, State::Undefined, State::Storage);
+        commands->Bind(pipeline);
+        commands->Bind(runtime.CreateGroup(desc.layout, {{0, color},
+                                                         {1, guide},
+                                                         {2, runtime.CreateView(output)},
+                                                         uniform,
+                                                         {4, materialView},
+                                                         moment,
+                                                         {6, directView}}));
+        commands->Compute(1, 1);
+        commands->Barrier(output, State::Storage, State::CopySource);
+        commands->CopyTexture(result, output, pitch, false);
+        commands->Barrier(result, State::CopyDest, State::HostRead);
+        runtime.Wait(runtime.Submit(std::move(commands)));
+        Image actual;
+        for (uint32_t y = 0; y < height; ++y)
+            std::memcpy(actual.data() + y * width, result->Map().data() + y * pitch,
+                        width * sizeof(Pixel));
+        return actual;
+    };
+    Image direct{}, radiance;
+    radiance.fill({1, 1, 1, 1});
+    direct[4] = {100, 100, 100, 0};
+    radiance[4] = {101, 101, 101, 1};
+    const auto directResult = run(radiance, direct);
+    if (std::abs(directResult[4][0] - 101) > 1e-4f || std::abs(directResult[3][0] - 1) > 1e-4f)
+        throw std::runtime_error("Path direct highlight was filtered or spread to neighbors");
+    direct.fill({0, 0, 0, 0});
+    const auto indirectResult = run(radiance, direct);
+    if (!std::isfinite(indirectResult[4][0]) || indirectResult[4][0] >= 10 ||
+        indirectResult[4][0] < 0)
+        throw std::runtime_error("Path indirect firefly was not filtered");
+    logger.Write(LogLevel::Info,
+                 "Path separated denoising preserved direct highlight and filtered indirect noise");
+}
+
 void VerifyReflectionDenoise(Runtime& runtime, shader::Target target,
                              const std::filesystem::path& source, Logger& logger)
 {
@@ -737,6 +841,9 @@ void VerifyRaySampling(Runtime& runtime, shader::Target target, const std::files
     logger.Write(LogLevel::Info, "Path batch mean/cap and Welford merge passed");
     logger.Write(LogLevel::Info, "Visible GGX sampling passed: 6 roughness/view cases, 4096 "
                                  "samples each; finite weights <= 1, stratified quadrants");
+    VerifyPathDirectDenoise(runtime, target,
+                            source.parent_path().parent_path() / "RenderLab" / "PathDenoise.hlsl",
+                            logger);
     VerifyReflectionDenoise(
         runtime, target,
         source.parent_path().parent_path() / "RenderLab" / "ReflectionDenoise.hlsl", logger);

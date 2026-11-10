@@ -84,6 +84,7 @@ struct RenderFrame
         std::vector<TextureBinding> reflectionTextures;
         std::shared_ptr<rhi::Sampler> sampler;
         std::string previousRadiance, historyRadiance, previousStatistics, historyStatistics;
+        std::string previousDirectRadiance, historyDirectRadiance;
     } rayTracing;
     std::vector<DrawPacket> opaque, transparent;
     std::vector<DrawPacket> gbuffer;

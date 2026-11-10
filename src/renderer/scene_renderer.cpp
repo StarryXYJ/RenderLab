@@ -126,9 +126,9 @@ struct SceneRenderer::Impl
     struct ReflectionHistory
     {
         std::string signature, sequenceSignature;
-        std::array<std::shared_ptr<rhi::Texture>, 2> radiance;
+        std::array<std::shared_ptr<rhi::Texture>, 2> radiance, directRadiance;
         std::array<std::shared_ptr<rhi::Buffer>, 2> statistics;
-        std::array<bool, 2> initialized{};
+        std::array<bool, 2> initialized{}, directInitialized{};
         // Equal pixel counts can retain the buffer while texture dimensions change.
         std::array<bool, 2> statisticsInitialized{};
         uint32_t index = 0;
@@ -139,6 +139,9 @@ struct SceneRenderer::Impl
             uint64_t bytes = statistics[slot] ? statistics[slot]->desc.size : 0;
             if (radiance[slot])
                 bytes += uint64_t(radiance[slot]->desc.width) * radiance[slot]->desc.height * 16;
+            if (directRadiance[slot])
+                bytes += uint64_t(directRadiance[slot]->desc.width) *
+                         directRadiance[slot]->desc.height * 16;
             return bytes;
         }
         uint64_t Bytes() const
@@ -149,9 +152,9 @@ struct SceneRenderer::Impl
     std::map<std::string, ReflectionHistory> reflectionViews;
     uint64_t reflectionUseSequence = 0;
     ReflectionHistory& AcquireReflectionHistory(const std::string& id, uint32_t width,
-                                                uint32_t height)
+                                                uint32_t height, bool pathTracing)
     {
-        const uint64_t desired = uint64_t(width) * height * 48;
+        const uint64_t desired = uint64_t(width) * height * (pathTracing ? 80 : 48);
         const auto found = reflectionViews.find(id);
         const auto activeBytes =
             found == reflectionViews.end()
@@ -457,7 +460,8 @@ struct SceneRenderer::Impl
                                             {10, rhi::BindingKind::SampledTexture},
                                             {11, rhi::BindingKind::Sampler},
                                             {13, rhi::BindingKind::SampledTexture},
-                                            {17, rhi::BindingKind::StorageBuffer}});
+                                            {17, rhi::BindingKind::StorageBuffer},
+                                            {18, rhi::BindingKind::StorageTexture}});
         desc.rayPayloadSize = 64;
         desc.rayGeneration = module(rhi::ShaderStage::RayGeneration, "RayGeneration");
         desc.miss = module(rhi::ShaderStage::Miss, "Miss");
@@ -475,7 +479,8 @@ struct SceneRenderer::Impl
                                             {2, rhi::BindingKind::StorageTexture},
                                             {3, rhi::BindingKind::ConstantBuffer},
                                             {4, rhi::BindingKind::SampledTexture},
-                                            {5, rhi::BindingKind::ReadOnlyBuffer}});
+                                            {5, rhi::BindingKind::ReadOnlyBuffer},
+                                            {6, rhi::BindingKind::SampledTexture}});
         desc.compute =
             runtime.CreateShader(rhi::ShaderStage::Compute, compiler.Compile(request), "Denoise");
         auto filter = runtime.CreatePipeline(desc);
@@ -509,8 +514,8 @@ struct SceneRenderer::Impl
                                         ? rhi::BindingKind::StorageTexture
                                         : rhi::BindingKind::SampledTexture});
         desc.layout = runtime.CreateLayout(std::move(layout));
-        desc.compute = runtime.CreateShader(rhi::ShaderStage::Compute, compiler.Compile(request),
-                                            "Temporal");
+        desc.compute =
+            runtime.CreateShader(rhi::ShaderStage::Compute, compiler.Compile(request), "Temporal");
         auto temporal = runtime.CreatePipeline(desc);
         pathTemporal = std::move(temporal);
         pathTable = std::move(table);
@@ -1455,8 +1460,8 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
         }
         const auto viewId =
             pathTracing ? "path/" + self.document.activeCamera : self.document.activeCamera;
-        auto& history =
-            self.AcquireReflectionHistory(viewId, target->desc.width, target->desc.height);
+        auto& history = self.AcquireReflectionHistory(viewId, target->desc.width,
+                                                      target->desc.height, pathTracing);
         reflectionHistory = &history;
         const bool accumulate =
             pathTracing || (options.reflectionHistory && options.view != SceneView::ReflectionRaw);
@@ -1484,6 +1489,31 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
             {history.initialized[reflectionOutput] ? rhi::State::Sampled : rhi::State::Undefined,
              history.initialized[reflectionOutput], history.completion});
         frame.rayTracing.historyRadiance = name;
+        if (pathTracing)
+        {
+            auto& direct = history.directRadiance[reflectionOutput];
+            if (!direct || direct->desc.width != target->desc.width ||
+                direct->desc.height != target->desc.height)
+            {
+                direct = self.runtime.CreateTexture({target->desc.width, target->desc.height,
+                                                     rhi::Format::Rgba32Float, true, false,
+                                                     "PathTracing.DirectHistory." + viewId});
+                history.directInitialized[reflectionOutput] = false;
+            }
+            frame.rayTracing.historyDirectRadiance = "PathTracing.DirectHistory." + viewId;
+            graph.ImportTexture(frame.rayTracing.historyDirectRadiance, direct,
+                                {history.directInitialized[reflectionOutput]
+                                     ? rhi::State::Sampled
+                                     : rhi::State::Undefined,
+                                 history.directInitialized[reflectionOutput], history.completion});
+            if (valid)
+            {
+                frame.rayTracing.previousDirectRadiance = "PathTracing.PreviousDirect." + viewId;
+                graph.ImportTexture(frame.rayTracing.previousDirectRadiance,
+                                    history.directRadiance[history.index],
+                                    {rhi::State::Sampled, true, history.completion});
+            }
+        }
         const uint64_t statisticsBytes = uint64_t(target->desc.width) * target->desc.height * 8;
         auto& statistics = history.statistics[reflectionOutput];
         if (!statistics || statistics->desc.size != statisticsBytes)
@@ -1580,11 +1610,12 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
             temporalParameters.previousCameraPosition = Vector(temporal.cameraPosition);
             temporalParameters.options = {
                 validTemporal ? 1.f : 0.f,
-                static_cast<float>(std::min(reflectionSamples +
-                                                (pathTracing ? PathSamplesPerFrame : 1u),
-                                            MaxReflectionSamples)),
+                static_cast<float>(
+                    std::min(reflectionSamples + (pathTracing ? PathSamplesPerFrame : 1u),
+                             MaxReflectionSamples)),
                 pathTracing ? static_cast<float>(reflectionSequence)
-                            : (options.reflectionDiagnostics ? 1.f : 0.f), 32};
+                            : (options.reflectionDiagnostics ? 1.f : 0.f),
+                32};
             frame.rayTracing.reflectionDiagnostics = options.reflectionDiagnostics;
             const auto temporalSlice =
                 uploads.Write(std::as_bytes(std::span{&temporalParameters, size_t{1}}));
@@ -1989,6 +2020,9 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
     if (reflections)
     {
         graph.Export(graph.GetTexture(frame.rayTracing.historyRadiance), rhi::State::Sampled);
+        if (pathTracing)
+            graph.Export(graph.GetTexture(frame.rayTracing.historyDirectRadiance),
+                         rhi::State::Sampled);
         graph.Export(graph.GetBuffer(frame.rayTracing.historyStatistics), rhi::State::ShaderRead);
     }
     if (frame.rayTracing.temporalPipeline)
@@ -2145,6 +2179,8 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
         reflectionHistory->sequenceSignature = temporalSignature;
         reflectionHistory->index = reflectionOutput;
         reflectionHistory->initialized[reflectionOutput] = true;
+        if (pathTracing)
+            reflectionHistory->directInitialized[reflectionOutput] = true;
         reflectionHistory->statisticsInitialized[reflectionOutput] = true;
         const auto samples =
             pathTracing ? std::min(PathSamplesPerFrame, MaxReflectionSamples - reflectionSamples)
@@ -2159,8 +2195,8 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
     if (temporal.active)
     {
         temporal.signature = std::move(temporalSignature);
-        temporal.viewId = pathTracing ? "path/" + self.document.activeCamera
-                                      : self.document.activeCamera;
+        temporal.viewId =
+            pathTracing ? "path/" + self.document.activeCamera : self.document.activeCamera;
         temporal.index = temporalOutput;
         temporal.initialized[temporalOutput] = true;
         temporal.viewProjection = self.snapshot.viewProjection;
