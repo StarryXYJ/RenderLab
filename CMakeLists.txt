@@ -85,7 +85,7 @@ target_link_libraries(renderlab_rendergraph PRIVATE renderlab_options renderlab_
 add_library(renderlab_renderer STATIC src/renderer/forward.cpp src/renderer/deferred.cpp
     src/renderer/raytracing.cpp src/renderer/acceleration_scene.cpp
     src/renderer/pipeline.cpp src/renderer/indexed_scene.cpp
-    src/renderer/scene_renderer.cpp src/renderer/environment.cpp src/renderer/shadow.cpp)
+    src/renderer/scene_renderer.cpp src/renderer/environment.cpp src/renderer/ltc_table.cpp src/renderer/shadow.cpp)
 target_include_directories(renderlab_renderer PUBLIC src)
 target_link_libraries(renderlab_renderer PRIVATE renderlab_options renderlab_rendergraph renderlab_rhi
     renderlab_content renderlab_material nlohmann_json::nlohmann_json)
@@ -265,6 +265,10 @@ if(BUILD_TESTING)
     add_executable(renderlab_math_tests tests/math_tests.cpp)
     target_link_libraries(renderlab_math_tests PRIVATE renderlab_options renderlab_content)
     add_test(NAME math.contracts COMMAND renderlab_math_tests)
+    add_executable(renderlab_ltc_data_tests tests/ltc_data_tests.cpp src/renderer/ltc_table.cpp)
+    target_include_directories(renderlab_ltc_data_tests PRIVATE src)
+    target_link_libraries(renderlab_ltc_data_tests PRIVATE renderlab_options)
+    add_test(NAME ltc.data COMMAND renderlab_ltc_data_tests ${CMAKE_SOURCE_DIR}/shaders)
     add_executable(renderlab_area_light_packing_tests tests/area_light_packing_tests.cpp)
     target_include_directories(renderlab_area_light_packing_tests PRIVATE src)
     target_link_libraries(renderlab_area_light_packing_tests PRIVATE renderlab_options)

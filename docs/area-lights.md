@@ -38,3 +38,9 @@ HLSL 位于 `shaders/RenderLab/RectAreaLight.hlsli`，由 Path Tracing 与独立
 每次可继续追踪的表面散射均匀选择一盏已启用矩形灯，均匀采样灯面并发送有限长度的遮挡射线。直接连接与 BSDF 命中解析灯时都使用包含选灯概率的立体角 PDF，并以 power heuristic 加权；相机直接看到的灯不加 MIS 权重。发射面与投射阴影的场景几何、其他解析灯均参与遮挡。NEE 仅在还剩下一段路径时进行，因此与 BSDF 命中遵循相同的四段路径上限。主命中点直接连接计入 primary direct，之后连接按已有首散射漫反射比例分到间接分量；未滤波总量独立累积。
 
 存在显式上限：两盏以内、单面恒定辐亮度、均匀选灯；超限明确拒绝。不支持自动从发光三角形或纹理构造灯、重合灯、透明/Masked 参与光追遮挡，也不提供面光源的光栅实时光照。现有固定世界空间射线偏移在薄几何和极小/极大尺度有偏差；解析采样对极近距离使用阈值，极端近乎平行射线仍受浮点范围限制。没有 ReSTIR、光源分布预计算或光照烘焙。
+
+## 光栅 LTC 数据准备
+
+光栅面光源实现参考 HDRP 的 LTC 职责划分，但不复制 Unity Companion License 下的 Unity 源码或查找表。拟合矩阵与幅度使用论文作者的 [selfshadow/ltc_code](https://github.com/selfshadow/ltc_code/tree/31e5e96b54f98f33098f8503003119ba2231a1c6) 固定提交 `31e5e96b54f98f33098f8503003119ba2231a1c6`，原始 `fit/results/ltc_1.dds` 和 `ltc_2.dds` 原样保存在 `shaders/RenderLab/LtcMatrix.dds`、`LtcAmplitude.dds`；完整版权与许可为同目录 `Ltc_LICENSE.txt`，随 Shader 一起复制及安装。
+
+参考论文：Eric Heitz、Jonathan Dupuy、Stephen Hill、David Neubelt，[Real-Time Polygonal-Light Shading with Linearly Transformed Cosines](https://eheitzresearch.wordpress.com/415-2/)，ACM TOG 35(4), 2016。原表为 64×64 RGBA16F DDS，参数顺序及拟合与 HDRP 自带表不同；加载器只接受该固定布局并转为 RGBA32F。`ltc.data` 验证格式、半精度转换及损坏输入；当前该表尚未接入任何 Shader，不能据此声称已有光栅照明或画质验收。后续应独立验证 RenderLab 的 GGX/Schlick 契约与表的近似误差。

@@ -4,6 +4,9 @@
 
 ## 当前状态
 
+- HDRP 参考面光源 IN_PROGRESS（2026 年 11 月 10 日）：用户授权实现光栅/混合管线面光源；分步完成合法来源的 LTC 表与数值对照、共享直接照明和可见灯面、阴影及混合反射，逐项验证提交；保留 M8 并行工作。
+  数据子项 DONE：固定 LTC 原始拟合表和完整作者许可，64×64 RGBA16F DDS 校验及转换；隔离 Debug/Release `ltc.data` 各 1/1。尚未接入光栅，[来源与限制](../docs/area-lights.md#光栅-ltc-数据准备)。
+
 - 矩形面光源子项 DONE（2026 年 11 月 10 日）：Path Tracing 支持最多两盏单面解析矩形/剪切平行四边形灯、有限遮挡、均匀选灯及 NEE/BSDF power MIS；灯变化失效原始/时域历史，Cornell Box 已改用解析顶灯。Debug/Release 双后端面光源 GPU 专项各 3/3，Release 原有双后端光追场景回归各 1/1；两配置场景与常量打包 CPU 契约通过；无面光源旧场景双后端 128 spp BMP hash 与接入前相同；Release Editor 隔离短测双后端 validation errors/资源残留/worker_failed 为零。40² Cornell 无滤波 4096 spp NEE/BSDF 均值 0.221593/0.221921（DX12），四种子 64 spp 相对 NEE 4096 spp 参考 MSE 0.00501/0.03265；该有限场景对照不证明普遍无偏或性能收益。证据 `out/build/area-light-{debug,release}`、`out/area-light-editor-final`、`out/area-no-light-{reference,current}`。限制：两灯上限、非重合单面恒定辐亮度、四段路径与固定偏移；Forward/Deferred/混合光追不支持此组件，发光 Mesh/环境不做重要性采样，未做 ReSTIR、跨设备与长期运动验收。接口见 [面光源](../docs/area-lights.md)，操作见 [Cornell Box](../sample/m4/README.md#cornell-box)。M8 整体与并行时域/NRD 工作仍按各自状态推进。
 
 - Cornell Box 示例已由发光网格改为解析矩形顶灯；原始网格灯验证记录见 Git 历史，当前验证与限制见上述面光源结果。
