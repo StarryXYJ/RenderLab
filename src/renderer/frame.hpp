@@ -80,6 +80,7 @@ struct RenderFrame
         bool reflectionDiagnostics = false;
         BufferBinding temporalParameters;
         std::array<std::string, 4> previousTemporal, temporalOutputs;
+        std::string previousPathSpecular, pathSpecularOutput;
         BufferBinding reflectionParameters;
         std::vector<BufferBinding> surfaces;
         std::vector<TextureBinding> reflectionTextures;

@@ -501,6 +501,7 @@ void VerifyScene(rhi::Runtime& runtime, shader::Target target, const std::filesy
             "Path tracing camera change did not reset raw history and retain temporal history");
         detail::Require(moved.pathTemporalGuide != nullptr, "Missing path temporal guide readback");
         uint32_t parallaxPixels = 0;
+        uint32_t distinctHistories = 0;
         for (uint32_t y = 0; y < 48; ++y)
             for (uint32_t x = 0; x < 64; ++x)
             {
@@ -510,8 +511,23 @@ void VerifyScene(rhi::Runtime& runtime, shader::Target target, const std::filesy
                 detail::Require(std::isfinite(guide[3]) && guide[3] >= 0 && guide[3] <= 1,
                                 "Path parallax confidence is outside [0,1]");
                 parallaxPixels += guide[3] > 0 && guide[3] < .9999f;
+                std::array<std::array<float, 4>, 2> components{};
+                for (size_t i = 0; i < components.size(); ++i)
+                {
+                    detail::Require(moved.pathTemporalComponents[i] != nullptr,
+                                    "Missing path temporal component readback");
+                    std::memcpy(components[i].data(),
+                                moved.pathTemporalComponents[i]->Map().data() + y * pitch + x * 16,
+                                16);
+                    for (float value : components[i])
+                        detail::Require(std::isfinite(value), "Nonfinite path temporal component");
+                    detail::Require(components[i][3] >= 0 && components[i][3] <= 16,
+                                    "Path temporal history length is outside [0,16]");
+                }
+                distinctHistories += std::abs(components[0][3] - components[1][3]) > .001f;
             }
         detail::Require(parallaxPixels > 0, "Path parallax confidence was never exercised");
+        detail::Require(distinctHistories > 0, "Path component histories did not differ");
         logger.Write(LogLevel::Info,
                      std::format("Path parallax confidence adjusted {} pixels", parallaxPixels));
         pathOptions.pathComponentDiagnostics = false;

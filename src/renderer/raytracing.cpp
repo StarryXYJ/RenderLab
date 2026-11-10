@@ -206,6 +206,12 @@ void PathTracingFeature::Build(rendergraph::Graph& graph, const RenderFrame& fra
     const auto temporalMaterial = temporal.ReadTexture(materialGuide);
     const auto temporalSecondary = temporal.ReadTexture(secondaryGuide);
     const auto temporalFiltered = temporal.ReadTexture(filtered);
+    const auto temporalDiffuse = temporal.ReadTexture(components[0]);
+    const auto temporalSpecular = temporal.ReadTexture(components[1]);
+    const auto previousSpecular = input.previousPathSpecular.empty()
+                                      ? temporalCurrent
+                                      : temporal.ReadTexture(input.previousPathSpecular);
+    const auto outputSpecular = temporal.WriteTexture(input.pathSpecularOutput);
     const auto temporalConstants = temporal.ReadBuffer(
         input.temporalParameters.buffer, Use::Uniform, input.temporalParameters.range);
     std::array<TextureHandle, 4> old, output;
@@ -234,6 +240,10 @@ void PathTracingFeature::Build(rendergraph::Graph& graph, const RenderFrame& fra
             context.BindTexture(12, temporalFiltered);
             context.BindTexture(13, display);
             context.BindTexture(14, temporalSecondary);
+            context.BindTexture(15, temporalDiffuse);
+            context.BindTexture(16, temporalSpecular);
+            context.BindTexture(17, previousSpecular);
+            context.BindTexture(18, outputSpecular);
             context.Dispatch((camera.width + 7) / 8, (camera.height + 7) / 8);
         });
     graph.SetTexture("PathTracing.DisplayRadiance", display);

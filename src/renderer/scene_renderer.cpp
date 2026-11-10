@@ -191,6 +191,7 @@ struct SceneRenderer::Impl
     {
         std::string signature, viewId;
         std::array<std::array<std::shared_ptr<rhi::Texture>, 4>, 2> textures;
+        std::array<std::shared_ptr<rhi::Texture>, 2> pathSpecular;
         std::array<bool, 2> initialized{};
         math::Mat4 viewProjection{}, view{};
         math::Vec3 cameraPosition{};
@@ -516,9 +517,9 @@ struct SceneRenderer::Impl
                          project.engine / "RenderLab" / "PathTemporal.hlsl", "Temporal"};
         desc = {};
         std::vector<rhi::BindingDesc> layout;
-        for (uint32_t slot = 0; slot <= 14; ++slot)
+        for (uint32_t slot = 0; slot <= 18; ++slot)
             layout.push_back({slot, slot == 3 ? rhi::BindingKind::ConstantBuffer
-                                    : (slot >= 8 && slot <= 11) || slot == 13
+                                    : (slot >= 8 && slot <= 11) || slot == 13 || slot == 18
                                         ? rhi::BindingKind::StorageTexture
                                         : rhi::BindingKind::SampledTexture});
         desc.layout = runtime.CreateLayout(std::move(layout));
@@ -1619,11 +1620,13 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
         frame.rayTracing.historyPipeline = pathTracing ? self.pathHistory : self.reflectionHistory;
         if (pathTracing && options.reflectionDenoise)
         {
-            if (options.pathComponentDiagnostics)
+            if (options.pathComponentDiagnostics || options.reflectionTemporal)
                 self.EnsurePathComponentProgram();
-            frame.rayTracing.pathFilteredComponents = options.pathComponentDiagnostics;
-            frame.rayTracing.pathDenoisePipeline =
-                options.pathComponentDiagnostics ? self.pathDenoiseComponents : self.pathDenoise;
+            frame.rayTracing.pathFilteredComponents =
+                options.pathComponentDiagnostics || options.reflectionTemporal;
+            frame.rayTracing.pathDenoisePipeline = frame.rayTracing.pathFilteredComponents
+                                                       ? self.pathDenoiseComponents
+                                                       : self.pathDenoise;
         }
         if (pathTracing)
             frame.rayTracing.pathStatisticsPipeline = self.pathStatistics;
@@ -1657,7 +1660,28 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
                                outputs[0]->desc.height != target->desc.height))
             {
                 outputs = {};
+                temporal.pathSpecular[temporalOutput].reset();
                 temporal.initialized[temporalOutput] = false;
+            }
+            if (pathTracing)
+            {
+                auto& specular = temporal.pathSpecular[temporalOutput];
+                const bool initialized = specular && temporal.initialized[temporalOutput];
+                if (!specular)
+                    specular = self.runtime.CreateTexture({target->desc.width, target->desc.height,
+                                                           rhi::Format::Rgba32Float, true, false,
+                                                           "PathTracing.TemporalSpecular"});
+                frame.rayTracing.pathSpecularOutput = "PathTracing.TemporalSpecular";
+                graph.ImportTexture(frame.rayTracing.pathSpecularOutput, specular,
+                                    {initialized ? rhi::State::Sampled : rhi::State::Undefined,
+                                     initialized, temporal.completion});
+                if (validTemporal)
+                {
+                    frame.rayTracing.previousPathSpecular = "PathTracing.TemporalPreviousSpecular";
+                    graph.ImportTexture(frame.rayTracing.previousPathSpecular,
+                                        temporal.pathSpecular[temporal.index],
+                                        {rhi::State::Sampled, true, temporal.completion});
+                }
             }
             constexpr std::array<const char*, 4> kinds{"Radiance", "World", "Normal", "Moments"};
             for (size_t i = 0; i < outputs.size(); ++i)
@@ -2108,8 +2132,13 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
         graph.Export(graph.GetBuffer(frame.rayTracing.historyStatistics), rhi::State::ShaderRead);
     }
     if (frame.rayTracing.temporalPipeline)
+    {
         for (const auto& name : frame.rayTracing.temporalOutputs)
             graph.Export(graph.GetTexture(name), rhi::State::Sampled);
+        if (pathTracing)
+            graph.Export(graph.GetTexture(frame.rayTracing.pathSpecularOutput),
+                         rhi::State::Sampled);
+    }
     std::string displaySource = pathTracing ? "PathTracing.DisplayRadiance" : "CameraColor";
     if (options.view == SceneView::ReflectionRaw)
         displaySource = "RayTracing.RawRadiance";
@@ -2234,7 +2263,7 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
             graph.Export(buffer, rhi::State::HostRead);
         }
     }
-    if (frame.rayTracing.pathFilteredComponents)
+    if (options.pathComponentDiagnostics && frame.rayTracing.pathFilteredComponents)
     {
         const auto pitch = rhi::TextureRowPitch(target->desc.width, rhi::Format::Rgba32Float);
         const std::array<const char*, 3> sources{"PathTracing.FilteredRadiance",
@@ -2284,6 +2313,22 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
         pass.Execute([buffer, source, pitch](rendergraph::CopyContext& context)
                      { context.CopyTexture(buffer, source, pitch, false); });
         graph.Export(buffer, rhi::State::HostRead);
+        const std::array<std::string, 2> sources{frame.rayTracing.temporalOutputs[0],
+                                                 frame.rayTracing.pathSpecularOutput};
+        for (size_t i = 0; i < sources.size(); ++i)
+        {
+            const auto name = "PathTracing.TemporalComponentReadback." + std::to_string(i);
+            result.pathTemporalComponents[i] = self.runtime.CreateBuffer(
+                {uint64_t(pitch) * target->desc.height, rhi::Memory::Readback, name});
+            auto component = graph.ImportBuffer(name, result.pathTemporalComponents[i],
+                                                {rhi::State::CopyDest, false});
+            auto copy = graph.AddCopyPass(name);
+            const auto value = copy.ReadTexture(sources[i]);
+            component = copy.WriteBuffer(component);
+            copy.Execute([component, value, pitch](rendergraph::CopyContext& context)
+                         { context.CopyTexture(component, value, pitch, false); });
+            graph.Export(component, rhi::State::HostRead);
+        }
     }
     if (readback)
     {
@@ -2367,6 +2412,7 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
         // Re-enabling reconstruction is already cold; inactive guides need no CPU residency.
         // Recorded commands retain any in-flight history versions until their completion.
         temporal.textures = {};
+        temporal.pathSpecular = {};
         temporal.initialized = {};
         temporal.frames = 0;
     }

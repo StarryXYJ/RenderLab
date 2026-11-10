@@ -102,6 +102,8 @@ struct SceneReadback
     std::shared_ptr<rhi::Buffer> pathSecondaryGuide;
     /// Optional temporal normal and parallax confidence (RGBA32F), when enabled.
     std::shared_ptr<rhi::Buffer> pathTemporalGuide;
+    /// Optional diffuse and specular temporal signals and their separate history lengths.
+    std::array<std::shared_ptr<rhi::Buffer>, 2> pathTemporalComponents;
     uint64_t compileNs = 0, prepareNs = 0, recordNs = 0;
     /// CPU scene/material preparation and graph construction, before graph compilation.
     uint64_t scenePrepareNs = 0;

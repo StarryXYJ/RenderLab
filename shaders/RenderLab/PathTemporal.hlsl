@@ -34,6 +34,13 @@ Texture2D<float4> Filtered : register(t12);
 #endif
 RWTexture2D<float4> Display : register(u13);
 Texture2D<float4> SecondaryGuide : register(t14);
+Texture2D<float4> Diffuse : register(t15);
+Texture2D<float4> CurrentSpecular : register(t16);
+Texture2D<float4> PreviousSpecular : register(t17);
+#ifdef SPIRV
+[[vk::image_format("rgba32f")]]
+#endif
+RWTexture2D<float4> Specular : register(u18);
 
 [numthreads(8,8,1)]
 void Temporal(uint3 id : SV_DispatchThreadID)
@@ -42,11 +49,13 @@ void Temporal(uint3 id : SV_DispatchThreadID)
     Output.GetDimensions(width, height);
     if (id.x >= width || id.y >= height) return;
     uint2 pixel = id.xy, size = uint2(width, height);
-    float3 current = Current.Load(int3(pixel, 0)).rgb;
+    float3 current = Diffuse.Load(int3(pixel, 0)).rgb;
+    float3 currentSpecular = CurrentSpecular.Load(int3(pixel, 0)).rgb;
     float4 surface = Surface.Load(int3(pixel, 0));
     float4 material = Material.Load(int3(pixel, 0));
     float4 filtered = Filtered.Load(int3(pixel, 0));
     Output[pixel] = float4(current, 0);
+    Specular[pixel] = float4(currentSpecular, 0);
     World[pixel] = 0;
     Normal[pixel] = 0;
     MaterialHistory[pixel] = material;
@@ -64,8 +73,8 @@ void Temporal(uint3 id : SV_DispatchThreadID)
     float distance = secondary.w > 0 ? secondary.y : 0;
     World[pixel] = float4(world, distance > 0 ? distance : -1);
     Normal[pixel] = float4(n, 1);
-    float3 history = 0;
-    float count = 0, support = 0, motionPixels = 0;
+    float3 history = 0, specularHistory = 0;
+    float count = 0, specularCount = 0, support = 0, motionPixels = 0;
     float oldDistanceSum = 0, oldDistanceWeight = 0, parallaxConfidence = 1;
     float4 clip = mul(PreviousViewProjection, float4(world, 1));
     if (Options.x > 0 && clip.w > 1e-7 && clip.z > 0 && clip.z <= clip.w)
@@ -83,6 +92,7 @@ void Temporal(uint3 id : SV_DispatchThreadID)
             int2 q = base + int2(x, y);
             if (any(q < 0) || any(q >= int2(size))) continue;
             float4 old = Previous.Load(int3(q, 0));
+            float4 oldSpecular = PreviousSpecular.Load(int3(q, 0));
             float4 oldWorld = PreviousWorld.Load(int3(q, 0));
             float4 oldNormal = PreviousNormal.Load(int3(q, 0));
             float4 oldMaterial = PreviousMaterial.Load(int3(q, 0));
@@ -94,7 +104,9 @@ void Temporal(uint3 id : SV_DispatchThreadID)
                 abs(material.a - oldMaterial.a) > .04) continue;
             float w = (x == 0 ? 1 - f.x : f.x) * (y == 0 ? 1 - f.y : f.y);
             history += old.rgb * w;
+            specularHistory += oldSpecular.rgb * w;
             count += old.a * w;
+            specularCount += oldSpecular.a * w;
             support += w;
             if (oldWorld.w > 0 && oldWorld.w < 9999)
             {
@@ -106,10 +118,13 @@ void Temporal(uint3 id : SV_DispatchThreadID)
     if (support > .1)
     {
         history /= support;
+        specularHistory /= support;
         count /= support;
+        specularCount /= support;
         // Glossy reflections move differently from their receiver surface.
         float limit = lerp(2, 16, saturate((material.a - .1) / .5));
-        count = min(count * saturate(support * 2), limit);
+        count = min(count * saturate(support * 2), 16);
+        specularCount = min(specularCount * saturate(support * 2), limit);
         // A receiver and its reflected feature may move differently. This conservative
         // estimate reduces history use; it does not reproject the combined signal as specular.
         if (distance > 0 && distance < 9999 && oldDistanceWeight > .1 && material.a < .4)
@@ -134,9 +149,9 @@ void Temporal(uint3 id : SV_DispatchThreadID)
     {
         count = 0;
     }
-    if (count > 0)
+    if (count > 0 || specularCount > 0)
     {
-        float3 mean = 0, square = 0;
+        float3 mean = 0, square = 0, specularMean = 0, specularSquare = 0;
         float neighbors = 0;
         for (int y = -1; y <= 1; ++y)
         for (int x = -1; x <= 1; ++x)
@@ -149,21 +164,34 @@ void Temporal(uint3 id : SV_DispatchThreadID)
                 abs(otherSurface.w - surface.w) > max(.02, surface.w * .025) ||
                 length(material.rgb - otherMaterial.rgb) > .08 ||
                 abs(material.a - otherMaterial.a) > .04) continue;
-            float3 sample = Current.Load(int3(q, 0)).rgb;
+            float3 sample = Diffuse.Load(int3(q, 0)).rgb;
+            float3 specularSample = CurrentSpecular.Load(int3(q, 0)).rgb;
             mean += sample;
             square += sample * sample;
+            specularMean += specularSample;
+            specularSquare += specularSample * specularSample;
             neighbors += 1;
         }
         mean /= max(1, neighbors);
         float3 deviation = sqrt(max(0, square / max(1, neighbors) - mean * mean));
         history = clamp(history, max(0, mean - deviation - .02),
                         mean + deviation + .02);
+        specularMean /= max(1, neighbors);
+        float3 specularDeviation = sqrt(max(0, specularSquare / max(1, neighbors) -
+                                               specularMean * specularMean));
+        specularHistory = clamp(specularHistory, max(0, specularMean - specularDeviation - .02),
+                                specularMean + specularDeviation + .02);
     }
     // Store the confidence for diagnostics; valid surface normals keep it strictly positive.
     Normal[pixel] = float4(n, parallaxConfidence);
+    specularCount *= parallaxConfidence;
     float3 value = lerp(current, history, count / (count + 1));
+    float3 specularValue = lerp(currentSpecular, specularHistory, specularCount / (specularCount + 1));
     Output[pixel] = float4(value, min(count + 1, 16));
-    // As stationary progressive samples accumulate, retire the correlated temporal preview.
+    Specular[pixel] = float4(specularValue, min(specularCount + 1, 16));
     float preview = saturate(1 - max(0, Options.y - 8) / 24);
-    Display[pixel] = float4(lerp(filtered.rgb, value, preview * .5 * saturate(count / 2) * parallaxConfidence / (1 + .5 * motionPixels)), filtered.a);
+    float weight = preview * .5 / (1 + .5 * motionPixels);
+    float3 correction = (value - current) * saturate(count / 2) +
+                        (specularValue - currentSpecular) * saturate(specularCount / 2);
+    Display[pixel] = float4(max(0, filtered.rgb + weight * correction), filtered.a);
 }
