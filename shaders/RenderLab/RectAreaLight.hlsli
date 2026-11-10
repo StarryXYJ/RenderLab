@@ -48,7 +48,7 @@ bool IntersectRectEmitter(RectEmitter light, float3 origin, float3 direction,
 {
     distance = 0;
     float denominator = dot(light.normal, direction);
-    if (!isfinite(denominator) || abs(denominator) < 1e-7) return false;
+    if (!isfinite(denominator) || denominator == 0) return false;
     float t = dot(light.normal, light.center - origin) / denominator;
     if (!isfinite(t) || t < tMin || t > tMax) return false;
     float3 delta = origin + t * direction - light.center;

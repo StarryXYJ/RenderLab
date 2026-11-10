@@ -1,6 +1,7 @@
 #include "RaySurface.hlsli"
 #include "PathBsdf.hlsli"
 #include "PathHitGuide.hlsli"
+#include "RectAreaLight.hlsli"
 #include "ImageBasedLighting.hlsli"
 
 RaytracingAccelerationStructure Scene : register(t0);
@@ -34,8 +35,26 @@ cbuffer PathParameters : register(b4)
     row_major float4x4 InverseViewProjection;
     float4 CameraPosition, DirectionToLight, LightColor, Environment;
     float4 Options;
+    float4 RectLightHeader;
+    float4 RectLightData[6];
 };
 Texture2D<float4> EnvironmentAtlas : register(t13);
+
+RectEmitter PathRectLight(uint index, out float3 emitted)
+{
+    float4 center = RectLightData[index * 3];
+    float4 edgeU = RectLightData[index * 3 + 1];
+    float4 edgeV = RectLightData[index * 3 + 2];
+    RectEmitter light;
+    light.center = center.xyz;
+    light.edgeU = edgeU.xyz;
+    light.edgeV = edgeV.xyz;
+    float3 areaNormal = cross(light.edgeU, light.edgeV);
+    light.area = length(areaNormal);
+    light.normal = light.area > 0 ? -areaNormal / light.area : 0;
+    emitted = float3(center.w, edgeU.w, edgeV.w);
+    return light;
+}
 
 struct PathPayload
 {
@@ -70,14 +89,53 @@ float3 TracePath(uint2 pixel, uint2 size, uint sampleIndex, out float4 surfaceGu
     secondaryDistance = 0;
     secondarySpecular = 0;
     float3 diffuseFraction = 0;
+    float previousBsdfPdf = 0;
+    float3 previousSurface = 0;
+    const uint rectLightCount = min((uint)RectLightHeader.x, 2u);
+    const bool rectSampling = RectLightHeader.y > 0;
     surfaceGuide = 0;
     materialGuide = 0;
     [loop] for (uint bounce = 0; bounce < 4; ++bounce)
     {
         PathPayload payload = (PathPayload)0;
         TraceRay(Scene, RAY_FLAG_NONE, 0x02, 0, 1, 0, ray, payload);
+        // Analytic emitters have stable identities distinct from emissive scene meshes.
+        float nearestDistance = payload.hit != 0 ? length(payload.position - ray.Origin) : ray.TMax;
+        int nearestLight = -1;
+        [loop] for (uint emitter = 0; emitter < rectLightCount; ++emitter)
+        {
+            float3 ignored;
+            RectEmitter light = PathRectLight(emitter, ignored);
+            float distance;
+            if (IntersectRectEmitter(light, ray.Origin, ray.Direction, ray.TMin, nearestDistance, distance))
+            {
+                nearestDistance = distance;
+                nearestLight = (int)emitter;
+            }
+        }
         if (bounce == 1)
-            secondaryDistance = payload.hit != 0 ? length(payload.position - ray.Origin) : ray.TMax;
+            secondaryDistance = nearestLight >= 0 || payload.hit != 0 ? nearestDistance : ray.TMax;
+        if (nearestLight >= 0)
+        {
+            float3 emitted;
+            RectEmitter light = PathRectLight((uint)nearestLight, emitted);
+            if (dot(light.normal, -ray.Direction) > 0)
+            {
+                float weight = 1;
+                if (bounce > 0 && rectSampling)
+                {
+                    float3 hitPosition = ray.Origin + ray.Direction * nearestDistance;
+                    float lightPdf = RectEmitterPdfOmega(light, previousSurface, hitPosition,
+                                                         1.0 / rectLightCount);
+                    weight = RectPowerWeight(previousBsdfPdf, lightPdf);
+                }
+                float3 value = throughput * emitted * weight;
+                result += value;
+                if (bounce == 0) primary += value;
+                else indirectDiffuse += value * diffuseFraction;
+            }
+            break;
+        }
         if (bounce == 0 && payload.hit != 0)
         {
             // Negative distance bypasses filtering for Unlit surfaces.
@@ -121,6 +179,14 @@ float3 TracePath(uint2 pixel, uint2 size, uint sampleIndex, out float4 surfaceGu
                 query.TraceRayInline(Scene, RAY_FLAG_NONE, 0x01, shadow);
                 while (query.Proceed()) {}
                 visible = query.CommittedStatus() != COMMITTED_TRIANGLE_HIT;
+                [loop] for (uint emitter = 0; emitter < rectLightCount && visible; ++emitter)
+                {
+                    float3 ignored;
+                    RectEmitter blocker = PathRectLight(emitter, ignored);
+                    float distance;
+                    if (IntersectRectEmitter(blocker, shadow.Origin, shadow.Direction,
+                                             shadow.TMin, shadow.TMax, distance)) visible = false;
+                }
             }
             if (visible)
             {
@@ -130,6 +196,57 @@ float3 TracePath(uint2 pixel, uint2 size, uint sampleIndex, out float4 surfaceGu
                 result += direct;
                 if (bounce == 0) primary += direct;
                 else indirectDiffuse += direct * diffuseFraction;
+            }
+        }
+        // A light connection consumes the next path segment, matching the four-segment limit.
+        if (rectLightCount > 0 && rectSampling && bounce < 3)
+        {
+            float2 lightXi = PathSample(sampleIndex, pixelIndex, 16 + 2 * bounce);
+            float choose = PathSample(sampleIndex, pixelIndex, 17 + 2 * bounce).x;
+            uint lightIndex = min((uint)(choose * rectLightCount), rectLightCount - 1);
+            float3 emitted;
+            RectEmitter light = PathRectLight(lightIndex, emitted);
+            RectEmitterSample sample = SampleRectEmitter(light, payload.position, lightXi,
+                                                          1.0 / rectLightCount);
+            if (sample.pdfOmega > 0 && dot(payload.normal, sample.direction) > 0)
+            {
+                float3 shadowOrigin = payload.position + payload.normal * .002;
+                float3 shadowDelta = sample.position - shadowOrigin;
+                float shadowDistance = length(shadowDelta);
+                bool visible = shadowDistance > .002;
+                if (visible)
+                {
+                    RayDesc shadow;
+                    shadow.Origin = shadowOrigin;
+                    shadow.Direction = shadowDelta / shadowDistance;
+                    shadow.TMin = .001;
+                    shadow.TMax = shadowDistance - .001;
+                    RayQuery<RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH> query;
+                    query.TraceRayInline(Scene, RAY_FLAG_NONE, 0x01, shadow);
+                    while (query.Proceed()) {}
+                    visible = query.CommittedStatus() != COMMITTED_TRIANGLE_HIT;
+                    [loop] for (uint other = 0; other < rectLightCount && visible; ++other)
+                    {
+                        if (other == lightIndex) continue;
+                        float3 ignored;
+                        RectEmitter blocker = PathRectLight(other, ignored);
+                        float distance;
+                        if (IntersectRectEmitter(blocker, shadow.Origin, shadow.Direction,
+                                                 shadow.TMin, shadow.TMax, distance)) visible = false;
+                    }
+                }
+                if (visible)
+                {
+                    float bsdfPdf = PathBsdfPdf(payload.normal, -ray.Direction,
+                                                sample.direction, payload.roughness);
+                    float weight = RectPowerWeight(sample.pdfOmega, bsdfPdf);
+                    float3 direct = throughput * EvaluateBRDF(payload.albedo, payload.metallic,
+                        payload.roughness, payload.normal, -ray.Direction, sample.direction) *
+                        emitted * (weight / sample.pdfOmega);
+                    result += direct;
+                    if (bounce == 0) primary += direct;
+                    else indirectDiffuse += direct * diffuseFraction;
+                }
             }
         }
         float2 xi = PathSample(sampleIndex, pixelIndex, bounce + 1);
@@ -148,6 +265,8 @@ float3 TracePath(uint2 pixel, uint2 size, uint sampleIndex, out float4 surfaceGu
         }
         throughput *= EvaluateBRDF(payload.albedo, payload.metallic, payload.roughness,
                                    payload.normal, -ray.Direction, direction) / pdf;
+        previousBsdfPdf = pdf;
+        previousSurface = payload.position;
         ray.Origin = payload.position + payload.normal * .002;
         ray.Direction = direction;
     }

@@ -4,14 +4,9 @@
 
 ## 当前状态
 
-- 面光源 IN_PROGRESS（2026 年 11 月 10 日）：用户授权继续至完整矩形面光源；当前推进 GPU 数据、解析灯面和路径追踪 NEE/MIS、遮挡与历史失效，按验证子项提交；与并行时域/NRD 工作协调共享文件。
-  场景数据子项 DONE：版本 1 序列化、稳定顺序提取及层级剪切/镜像、启停、边界和缓存更新；隔离 Debug/Release 的 `scene.contracts` 各 1/1，见 `out/build/area-light-{debug,release}`。当前不生成灯面或照明；[接口与限制](../docs/area-lights.md)。
-  独立采样数学子项 DONE：矩形面积/立体角 PDF、选灯概率与 power heuristic；RTX 5060 Release 隔离构建 DX12/Vulkan GPU 测试各 1/1，固定无阻挡场景与独立 CPU 双精度面积积分对照，validation errors/资源与描述符余量均为零；`out/build/area-light-release/rect-area`。不含实际积分器、灯面身份匹配、遮挡与画质验收。
-  GPU 常量准备子项 DONE：复用路径常量预留区、最多两灯及超限拒绝，Debug/Release 的 `area_light.packing` 各 1/1；尚未连入 Renderer/Shader，见 [契约](../docs/area-lights.md#路径追踪常量准备)。
-  解析相交子项 DONE：有限平行四边形两面射线命中、剪切和边界；RTX 5060 Release 双后端 `gpu.*.rect_area_light` 各 1/1，尚未接入路径或阴影射线。
-  路径数据及历史子项 DONE：常量上传、双灯上限的预检/运行拒绝和灯变化时原始/时域历史失效；RTX 5060 Release 双后端 `gpu.*.area_light_history` 各 1/1，Shader 尚未消费。
+- 矩形面光源子项 DONE（2026 年 11 月 10 日）：Path Tracing 支持最多两盏单面解析矩形/剪切平行四边形灯、有限遮挡、均匀选灯及 NEE/BSDF power MIS；灯变化失效原始/时域历史，Cornell Box 已改用解析顶灯。Debug/Release 双后端面光源 GPU 专项各 3/3，Release 原有双后端光追场景回归各 1/1；两配置场景与常量打包 CPU 契约通过；无面光源旧场景双后端 128 spp BMP hash 与接入前相同；Release Editor 隔离短测双后端 validation errors/资源残留/worker_failed 为零。40² Cornell 无滤波 4096 spp NEE/BSDF 均值 0.221593/0.221921（DX12），四种子 64 spp 相对 NEE 4096 spp 参考 MSE 0.00501/0.03265；该有限场景对照不证明普遍无偏或性能收益。证据 `out/build/area-light-{debug,release}`、`out/area-light-editor-final`、`out/area-no-light-{reference,current}`。限制：两灯上限、非重合单面恒定辐亮度、四段路径与固定偏移；Forward/Deferred/混合光追不支持此组件，发光 Mesh/环境不做重要性采样，未做 ReSTIR、跨设备与长期运动验收。接口见 [面光源](../docs/area-lights.md)，操作见 [Cornell Box](../sample/m4/README.md#cornell-box)。M8 整体与并行时域/NRD 工作仍按各自状态推进。
 
-- Cornell Box 风格示例 DONE（2026 年 11 月 10 日）：项目复用样例网格，黑环境与自发光顶灯提供室内路径追踪测试；RTX 5060、既有 Release 构建树下 DX12/Vulkan 320²、256 spp 无降噪加载与渲染均成功，验证错误及退出分配为零；DX12 Editor Path Tracing 隔离短测正常关闭。发光面缺少重要性采样、四段路径和滤波偏差限制保留；未与标准 Cornell 参考作光度比较，也未以此代替当前源码构建验收。见 [示例](../sample/m4/README.md#cornell-box)，证据 `out/cornell/`。
+- Cornell Box 示例已由发光网格改为解析矩形顶灯；原始网格灯验证记录见 Git 历史，当前验证与限制见上述面光源结果。
 
 - M7 项目切换子项 DONE（2026 年 11 月 10 日）：项目 scope、File/Open Project、最近项目和失败回退；托管 Debug/Release 各 26/26，回退/取消为模拟测试；Debug/Vulkan 既有 23 项窗口自检通过（30 份关闭账本零泄漏/验证错误/worker_failed），Release/DX12 可见窗口通过文件选择器切换至 PBR 并显示最近列表。Vulkan 的项目切换、真实加载失败回退与混合 DPI 尚未实机验证；M7.2f 原有人工验收限制保留。使用既有原生构建树，未重建并发 M8 工作。操作和契约见 [手册](../manual/build.md#avalonia-嵌入原型) 与 [工作台](../docs/editor-workbench.md#项目会话与切换)。
 

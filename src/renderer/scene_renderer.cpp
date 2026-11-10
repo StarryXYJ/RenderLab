@@ -1432,6 +1432,8 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
             parameters.environment[2] = float(PathSamplesPerFrame);
             parameters.environment[3] = float(options.pathSeed);
             parameters.reserved = PackPathRectLights(self.snapshot.areaLights);
+            if (!self.snapshot.areaLights.empty() && options.pathAreaLightSampling)
+                parameters.reserved[1] = 1;
         }
         parameters.options[2] = self.snapshot.light.shadows ? 1.f : 0.f;
         parameters.options[3] = static_cast<float>(MaxReflectionSamples);

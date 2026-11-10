@@ -192,22 +192,26 @@
           -0.1
         ],
         "scale": [
-          0.58,
-          0.02,
-          0.58
+          1,
+          1,
+          1
         ],
         "rotation": [
+          -0.7071067811865476,
           0,
           0,
-          0,
-          1
+          0.7071067811865476
         ]
       },
-      "meshRenderer": {
-        "model": "b4748e75e72a5dba8d4439fa86854c92",
-        "materials": {
-          "724bed1a90285b9d933f9a5abbe5e9af": "e830b510caec50a595af91bb4c0f3655"
-        }
+      "rectAreaLight": {
+        "radiance": [
+          12,
+          12,
+          12
+        ],
+        "width": 1.16,
+        "height": 1.16,
+        "enabled": true
       }
     },
     {

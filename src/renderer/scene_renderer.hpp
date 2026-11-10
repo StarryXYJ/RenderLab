@@ -72,6 +72,8 @@ struct SceneRenderOptions
     bool pathComponentDiagnostics = false;
     /// Reproducible path sampling stream; changing it resets path histories.
     uint16_t pathSeed = 0;
+    /// Validation baseline: disable explicit rectangular-light sampling and its MIS weighting.
+    bool pathAreaLightSampling = true;
     /// Per-view values applied to extraction results; never written to Scene/Material assets.
     std::optional<scene::MainLight> lightOverride;
     std::optional<float> environmentIntensity, environmentRotation, exposure;

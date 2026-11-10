@@ -1,4 +1,4 @@
-#include "rect_area_sampling.hlsli"
+#include "../RenderLab/RectAreaLight.hlsli"
 RWStructuredBuffer<float4> Result : register(u0);
 [numthreads(1, 1, 1)]
 void CSMain(uint3 id : SV_DispatchThreadID)
