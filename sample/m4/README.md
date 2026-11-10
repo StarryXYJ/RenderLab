@@ -27,3 +27,15 @@ Add `--debug-panel` for native view/exposure/shadow controls, or press F1 in a s
 ```
 
 需要支持 AS、Ray Query 和 Ray Tracing Pipeline 的设备；Vulkan 使用同一入口。Pbr 项目也支持三种管线。原始 Copper 自定义 Shader 没有 GBuffer/命中表面实现，保持 Forward；Shadow 项目含 Masked 几何，目前不能进入光追模式。窗口切换不兼容管线时显示具体原因并恢复上一选择。Path Tracing 和 Forward+ 暂未实现，后续可扩展现有菜单。接口与限制见 [光追基础](../../docs/raytracing.md)。
+
+## Cornell Box
+
+`CornellBox.rlproject` 是 Cornell Box 风格的室内 GI 示例，复用本目录的立方体和球体网格：红/绿侧墙、白色墙面、漫反射球、粗糙金属球、方块和自发光顶灯。背景环境为黑色，没有方向光；表面照明来自路径追踪命中顶灯后的光传输。它是自主搭建的近似测试场景，不是原始 Cornell Box 的精确几何或光度复现。
+
+在 Editor 使用 File / Open Project 选择该 `.rlproject`，再在 Render Settings / Pipeline 中选择 Path Tracing；也可从仓库根目录直接运行：
+
+```powershell
+./out/dotnet/RenderLab.Editor/bin/Release/net10.0/RenderLab.Editor.exe --project sample/m4/CornellBox.rlproject --pipeline pathtracing
+```
+
+顶灯为自发光几何，现有路径追踪没有面光源重要性采样，低样本会有明显噪声；静止累积或开启 Spatial denoise 可改善预览，降噪有偏差。当前最多四段路径，且仅支持不透明几何；该示例不代表标准参考图或完全收敛的 GI 基准。普通光栅管线不会模拟该顶灯的间接照明。

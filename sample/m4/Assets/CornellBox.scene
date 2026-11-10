@@ -1,0 +1,301 @@
+{
+  "version": 1,
+  "activeCamera": "efd8b93224c05d23ae5c82270823b747",
+  "ambient": [
+    0,
+    0,
+    0
+  ],
+  "exposure": 0,
+  "objects": [
+    {
+      "id": "efd8b93224c05d23ae5c82270823b747",
+      "name": "camera",
+      "enabled": true,
+      "transform": {
+        "position": [
+          0,
+          1.5,
+          5.8
+        ],
+        "scale": [
+          1,
+          1,
+          1
+        ],
+        "rotation": [
+          0,
+          0,
+          0,
+          1
+        ]
+      },
+      "camera": {
+        "fov": 40,
+        "near": 0.1,
+        "far": 100
+      }
+    },
+    {
+      "id": "56a3c2f8c5fd5e769500cb692da64a4a",
+      "name": "floor",
+      "enabled": true,
+      "transform": {
+        "position": [
+          0,
+          -0.06,
+          0
+        ],
+        "scale": [
+          1.56,
+          0.06,
+          1.56
+        ],
+        "rotation": [
+          0,
+          0,
+          0,
+          1
+        ]
+      },
+      "meshRenderer": {
+        "model": "b4748e75e72a5dba8d4439fa86854c92",
+        "materials": {
+          "724bed1a90285b9d933f9a5abbe5e9af": "74b1b0d36ad35df5b00be40ad53e4337"
+        }
+      }
+    },
+    {
+      "id": "fd28b4fd190c59e1b936427da3f5e6e0",
+      "name": "ceiling",
+      "enabled": true,
+      "transform": {
+        "position": [
+          0,
+          3.06,
+          0
+        ],
+        "scale": [
+          1.56,
+          0.06,
+          1.56
+        ],
+        "rotation": [
+          0,
+          0,
+          0,
+          1
+        ]
+      },
+      "meshRenderer": {
+        "model": "b4748e75e72a5dba8d4439fa86854c92",
+        "materials": {
+          "724bed1a90285b9d933f9a5abbe5e9af": "74b1b0d36ad35df5b00be40ad53e4337"
+        }
+      }
+    },
+    {
+      "id": "02f222d56a115a6bab76906ae76bd35e",
+      "name": "back-wall",
+      "enabled": true,
+      "transform": {
+        "position": [
+          0,
+          1.5,
+          -1.56
+        ],
+        "scale": [
+          1.56,
+          1.5,
+          0.06
+        ],
+        "rotation": [
+          0,
+          0,
+          0,
+          1
+        ]
+      },
+      "meshRenderer": {
+        "model": "b4748e75e72a5dba8d4439fa86854c92",
+        "materials": {
+          "724bed1a90285b9d933f9a5abbe5e9af": "74b1b0d36ad35df5b00be40ad53e4337"
+        }
+      }
+    },
+    {
+      "id": "0e8618bdcea95f2d84bffd493766a4ef",
+      "name": "left-wall",
+      "enabled": true,
+      "transform": {
+        "position": [
+          -1.56,
+          1.5,
+          0
+        ],
+        "scale": [
+          0.06,
+          1.5,
+          1.56
+        ],
+        "rotation": [
+          0,
+          0,
+          0,
+          1
+        ]
+      },
+      "meshRenderer": {
+        "model": "b4748e75e72a5dba8d4439fa86854c92",
+        "materials": {
+          "724bed1a90285b9d933f9a5abbe5e9af": "fd49c87917335a43b88ac5a8a734f3b3"
+        }
+      }
+    },
+    {
+      "id": "12f61ac216575864a5825aa2cbe187cb",
+      "name": "right-wall",
+      "enabled": true,
+      "transform": {
+        "position": [
+          1.56,
+          1.5,
+          0
+        ],
+        "scale": [
+          0.06,
+          1.5,
+          1.56
+        ],
+        "rotation": [
+          0,
+          0,
+          0,
+          1
+        ]
+      },
+      "meshRenderer": {
+        "model": "b4748e75e72a5dba8d4439fa86854c92",
+        "materials": {
+          "724bed1a90285b9d933f9a5abbe5e9af": "a698899dae3758c5a2da316469447e6c"
+        }
+      }
+    },
+    {
+      "id": "91002cdf7eda54d8821badc6ad102164",
+      "name": "ceiling-light",
+      "enabled": true,
+      "transform": {
+        "position": [
+          0,
+          2.96,
+          -0.1
+        ],
+        "scale": [
+          0.58,
+          0.02,
+          0.58
+        ],
+        "rotation": [
+          0,
+          0,
+          0,
+          1
+        ]
+      },
+      "meshRenderer": {
+        "model": "b4748e75e72a5dba8d4439fa86854c92",
+        "materials": {
+          "724bed1a90285b9d933f9a5abbe5e9af": "e830b510caec50a595af91bb4c0f3655"
+        }
+      }
+    },
+    {
+      "id": "d1d443dc5cf857bc96b35b96e72e9869",
+      "name": "diffuse-sphere",
+      "enabled": true,
+      "transform": {
+        "position": [
+          -0.72,
+          0.51,
+          0.32
+        ],
+        "scale": [
+          0.5,
+          0.5,
+          0.5
+        ],
+        "rotation": [
+          0,
+          0,
+          0,
+          1
+        ]
+      },
+      "meshRenderer": {
+        "model": "8cb75671f1c7525abe1c98eeede99855",
+        "materials": {
+          "18609d7bc4b25b3094ca40a95c490f5a": "74b1b0d36ad35df5b00be40ad53e4337"
+        }
+      }
+    },
+    {
+      "id": "2ec81c53e4315662ab076ddf88c02a64",
+      "name": "metal-sphere",
+      "enabled": true,
+      "transform": {
+        "position": [
+          0.72,
+          0.56,
+          0.23
+        ],
+        "scale": [
+          0.55,
+          0.55,
+          0.55
+        ],
+        "rotation": [
+          0,
+          0,
+          0,
+          1
+        ]
+      },
+      "meshRenderer": {
+        "model": "8cb75671f1c7525abe1c98eeede99855",
+        "materials": {
+          "18609d7bc4b25b3094ca40a95c490f5a": "490c64a6e4aa5d36b6fac4b0ec847a5b"
+        }
+      }
+    },
+    {
+      "id": "293201fab9955401a207219c5c7d320f",
+      "name": "box",
+      "enabled": true,
+      "transform": {
+        "position": [
+          -0.05,
+          0.42,
+          -0.9
+        ],
+        "scale": [
+          0.4,
+          0.42,
+          0.38
+        ],
+        "rotation": [
+          0,
+          0.17364817766693033,
+          0,
+          0.984807753012208
+        ]
+      },
+      "meshRenderer": {
+        "model": "b4748e75e72a5dba8d4439fa86854c92",
+        "materials": {
+          "724bed1a90285b9d933f9a5abbe5e9af": "74b1b0d36ad35df5b00be40ad53e4337"
+        }
+      }
+    }
+  ]
+}

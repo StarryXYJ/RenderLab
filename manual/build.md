@@ -503,6 +503,8 @@ cmake --preset windows-release
 
 默认加载源码仓库的 `sample/m4/RayTracing.rlproject`，初始为 Deferred。运行中可通过 File / Open Project 选择 `.rlproject`，或从 File / Recent Projects 切换最近成功打开的项目；项目决定启动场景。切换会重建视口，失败时尝试重开旧项目。`--project` 可以指定其他项目，`--shaders` 可指定引擎 Shader 根目录；默认使用 exe 同目录的 shaders。点击原生视口后使用 WASD/QE、方向键或右键拖动。此宿主未打包示例项目，移出仓库运行时必须显式提供项目路径。
 
+Cornell Box 风格 GI 场景可打开 `sample/m4/CornellBox.rlproject`，并将管线切为 Path Tracing；场景与限制见 [示例说明](../sample/m4/README.md#cornell-box)。
+
 工作台的管线选择支持 Path Tracing，也可通过 `--pipeline pathtracing` 启动；当前场景需要
 受支持的设备以及不透明、非 Masked 的内置材质。切换时提交方式归为 Direct，视图归为
 Final/HDR；不支持的组合会拒绝并保留已生效配置。静止时按目标帧率持续累积。

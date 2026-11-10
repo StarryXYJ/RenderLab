@@ -4,6 +4,8 @@
 
 ## 当前状态
 
+- Cornell Box 风格示例 DONE（2026 年 11 月 10 日）：项目复用样例网格，黑环境与自发光顶灯提供室内路径追踪测试；RTX 5060、既有 Release 构建树下 DX12/Vulkan 320²、256 spp 无降噪加载与渲染均成功，验证错误及退出分配为零；DX12 Editor Path Tracing 隔离短测正常关闭。发光面缺少重要性采样、四段路径和滤波偏差限制保留；未与标准 Cornell 参考作光度比较，也未以此代替当前源码构建验收。见 [示例](../sample/m4/README.md#cornell-box)，证据 `out/cornell/`。
+
 - M7 项目切换子项 DONE（2026 年 11 月 10 日）：项目 scope、File/Open Project、最近项目和失败回退；托管 Debug/Release 各 26/26，回退/取消为模拟测试；Debug/Vulkan 既有 23 项窗口自检通过（30 份关闭账本零泄漏/验证错误/worker_failed），Release/DX12 可见窗口通过文件选择器切换至 PBR 并显示最近列表。Vulkan 的项目切换、真实加载失败回退与混合 DPI 尚未实机验证；M7.2f 原有人工验收限制保留。使用既有原生构建树，未重建并发 M8 工作。操作和契约见 [手册](../manual/build.md#avalonia-嵌入原型) 与 [工作台](../docs/editor-workbench.md#项目会话与切换)。
 
 - 当前实施阶段：M8 路径追踪收敛与白点修订 IN_PROGRESS（2026 年 11 月 9 日用户反馈重新打开）；B4 继续暂停，M7 其它工作仍为 DEFERRED。
