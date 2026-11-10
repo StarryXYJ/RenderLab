@@ -59,7 +59,8 @@ void Check(rhi::Runtime& runtime, shader::Target target, const std::filesystem::
     doc.Get(id).transform.rotation = {.70710678f, 0, 0, .70710678f};
     const auto back = capture();
     std::cout << "Reflection back=" << back << '\n';
-    Require(back < lit * 4 / 10, "Reversing area-light orientation failed to change reflection energy");
+    Require(back < lit * 4 / 10,
+            "Reversing area-light orientation failed to change reflection energy");
     doc.Get(id).transform.rotation = {-.70710678f, 0, 0, .70710678f};
     scene::Object blocker;
     blocker.id = "e1f0a5640d4d41f39dd49fa3b4e96abb";
@@ -72,6 +73,49 @@ void Check(rhi::Runtime& runtime, shader::Target target, const std::filesystem::
     Require(blocked < lit / 5, "Geometry failed to occlude reflected area emitter");
     doc.objects.pop_back();
     options.view = renderer::SceneView::Final;
+    options.reflections = false;
+    doc.Get(id).areaLight->radiance = {12, 12, 12};
+    const auto unblockedDirect = capture();
+    doc.objects.push_back(blocker);
+    const auto blockedDirect = capture();
+    options.pipeline = renderer::PipelineType::Deferred;
+    const auto rasterBlocked = capture();
+    std::cout << "Direct light: open=" << unblockedDirect << " blocked=" << blockedDirect
+              << " raster=" << rasterBlocked << '\n';
+    Require(blockedDirect * 2 < unblockedDirect && blockedDirect * 2 < rasterBlocked,
+            "Area-light ray visibility did not shadow direct lighting");
+    options.pipeline = renderer::PipelineType::RayTracing;
+    doc.Get(blocker.id).transform.position.x = .7f;
+    const auto partial = capture();
+    std::cout << "Partial blocker direct light=" << partial << '\n';
+    Require(partial > blockedDirect + 1000 && partial < unblockedDirect - 1000,
+            "Partial area-light occlusion did not create intermediate illumination");
+    doc.objects.pop_back();
+    auto& firstLight = doc.Get(id);
+    firstLight.transform.position.x = -.65f;
+    firstLight.areaLight->width = firstLight.areaLight->height = .4f;
+    auto secondLight = firstLight;
+    secondLight.id = "e2f0a5640d4d41f39dd49fa3b4e96abb";
+    secondLight.transform.position.x = .65f;
+    doc.objects.push_back(secondLight);
+    blocker.transform.position.x = -.65f;
+    blocker.transform.scale = {.55f, .04f, .55f};
+    doc.objects.push_back(blocker);
+    const auto twoWithBlocker = capture();
+    doc.Get(secondLight.id).areaLight->enabled = false;
+    const auto firstBlocked = capture();
+    doc.Get(id).areaLight->enabled = false;
+    doc.Get(secondLight.id).areaLight->enabled = true;
+    const auto secondOpen = capture();
+    std::cout << "Independent lamps: both=" << twoWithBlocker << " blocked=" << firstBlocked
+              << " open=" << secondOpen << '\n';
+    Require(secondOpen > firstBlocked + 1000 && twoWithBlocker > firstBlocked + 1000,
+            "One lamp's visibility incorrectly shadowed the other");
+    doc.objects.pop_back();
+    doc.objects.pop_back();
+    doc.Get(id).areaLight->enabled = true;
+    options.pipeline = renderer::PipelineType::RayTracing;
+    options.reflections = true;
     options.reflectionTemporal = true;
     options.reflectionDenoise = true;
     const auto frame = [&]()

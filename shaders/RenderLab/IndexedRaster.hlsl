@@ -111,7 +111,7 @@ float4 PSForward(Varyings input, bool frontFace : SV_IsFrontFace) : SV_Target
         * light.color * visibility;
     direct += EvaluateAreaLights(SceneAreaLighting, input.positionWS, surface.normalWS,
                                  SafeNormalize(viewDirWS), surface.baseColor, surface.metallic,
-                                 surface.perceptualRoughness, LtcMatrix, LtcAmplitude);
+                                 surface.perceptualRoughness, LtcMatrix, LtcAmplitude, 1.xx);
     float3 indirect = EvaluateImageBasedLighting(surface, viewDirWS,
         SceneLighting.EnvironmentParameters, EnvironmentAtlas, BrdfLut);
     return float4(direct + indirect + surface.emission, 1);

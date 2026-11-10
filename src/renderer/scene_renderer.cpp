@@ -1497,6 +1497,8 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
         parameters.shadowOptions = {
             .002f, .001f, 10000,
             self.snapshot.light.shadows && self.snapshot.light.intensity > 0 ? 1.f : 0.f};
+        const auto area = PackRectLights(self.snapshot.areaLights);
+        std::copy(area.begin(), area.end(), parameters.reserved.begin());
         const auto slice = uploads.Write(std::as_bytes(std::span{&parameters, size_t{1}}));
         const auto name =
             importBuffer(slice.buffer, "RayTracing.Parameters", rhi::State::HostWrite);
@@ -2253,8 +2255,11 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
         {"RawView",
          {"uint",
           1,
-          {options.view != SceneView::Final && options.view != SceneView::Environment ? 1.0
-                                                                                      : 0.0}}},
+          {options.view == SceneView::Shadow && rayTracing
+               ? 2.0
+               : (options.view != SceneView::Final && options.view != SceneView::Environment
+                      ? 1.0
+                      : 0.0)}}},
         {"ViewportSize", {"float2", 1, {double(target->desc.width), double(target->desc.height)}}}};
     for (const auto& [handle, values] : displayPreparation.constants)
     {
