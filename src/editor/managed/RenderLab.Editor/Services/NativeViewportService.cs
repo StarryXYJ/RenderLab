@@ -16,6 +16,7 @@ public sealed class NativeViewportService : IDisposable
 {
     private readonly EditorOptions options;
     private int logSequence;
+    private readonly string logOwner = Guid.NewGuid().ToString("N");
     private float[]? savedCamera;
     private long lastLogPoll;
     private ulong lastNativeSequence;
@@ -79,7 +80,7 @@ public sealed class NativeViewportService : IDisposable
         NativeMethods.Check(NativeMethods.Create(parent, creatingDevice.Backend == "dx12" ? 0u : 1u,
             creatingDevice.Validation ? 1u : 0u, options.Profiling ? 1u : 0u,
             options.TargetFps, options.BenchmarkSeconds > 0 ? 1u : 0u,
-            options.Project, options.Shaders, Path.Combine(options.Output, $"native-{++logSequence}.log"),
+            options.Project, options.Shaders, Path.Combine(options.Output, $"native-{logOwner}-{++logSequence}.log"),
             out var session, out var child));
         Session = session;
         observationConfigured = false;

@@ -501,7 +501,7 @@ cmake --preset windows-release
 
 有完整 NuGet 缓存的离线机器可以增加 `-OfflinePackageCache C:/你的目录/.nuget/packages`；恢复仍使用 locked mode。直接运行 dotnet 时在仓库根目录使用 `RenderLab.slnx` 作为构建入口；需要自定义原生路径时使用 `-p:NativeBuildDir=绝对路径`。构建脚本跳过本原型没有使用的 Avalonia 商业产品构建遥测，不修改用户全局设置。
 
-默认加载源码仓库的 `sample/m4/RayTracing.rlproject`，初始为 Deferred。`--project` 可以指定其他项目，`--shaders` 可指定引擎 Shader 根目录；默认使用 exe 同目录的 shaders。点击原生视口后使用 WASD/QE、方向键或右键拖动。此宿主未打包示例项目，移出仓库运行时必须显式提供项目路径。
+默认加载源码仓库的 `sample/m4/RayTracing.rlproject`，初始为 Deferred。运行中可通过 File / Open Project 选择 `.rlproject`，或从 File / Recent Projects 切换最近成功打开的项目；项目决定启动场景。切换会重建视口，失败时尝试重开旧项目。`--project` 可以指定其他项目，`--shaders` 可指定引擎 Shader 根目录；默认使用 exe 同目录的 shaders。点击原生视口后使用 WASD/QE、方向键或右键拖动。此宿主未打包示例项目，移出仓库运行时必须显式提供项目路径。
 
 工作台的管线选择支持 Path Tracing，也可通过 `--pipeline pathtracing` 启动；当前场景需要
 受支持的设备以及不透明、非 Masked 的内置材质。切换时提交方式归为 Direct，视图归为
