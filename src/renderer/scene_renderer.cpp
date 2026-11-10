@@ -1472,10 +1472,13 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
     for (uint32_t i = 0; i < frame.areaShadowCount; ++i)
     {
         shader::generated::SceneShadowData shadow;
-        shadow.MainLightShadowMatrix =
-            FitAreaShadow(self.snapshot.areaLights[i], self.snapshot).values;
+        float farPlane = 0;
+        const auto& light = self.snapshot.areaLights[i];
+        shadow.MainLightShadowMatrix = FitAreaShadow(light, self.snapshot, &farPlane).values;
         areaShadowConstants[i] = self.ParameterBuffer(shadow, uploads);
         (i == 0 ? areaShadowData.Matrix0 : areaShadowData.Matrix1) = shadow.MainLightShadowMatrix;
+        (i == 0 ? areaShadowData.Light0 : areaShadowData.Light1) = {
+            math::Length(light.edgeU), math::Length(light.edgeV), farPlane, AreaShadowNear};
     }
     const auto areaShadowSlice = self.ParameterBuffer(areaShadowData, uploads);
     std::vector<IndexedDrawInput> indexedInputs;

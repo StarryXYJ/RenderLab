@@ -93,9 +93,16 @@ void Check(rhi::Runtime& runtime, shader::Target target, const std::filesystem::
     options.pipeline = renderer::PipelineType::RayTracing;
     doc.Get(blocker.id).transform.position.x = .7f;
     const auto partial = capture();
-    std::cout << "Partial blocker direct light=" << partial << '\n';
+    options.pipeline = renderer::PipelineType::Deferred;
+    const auto rasterPartial = capture();
+    options.pipeline = renderer::PipelineType::RayTracing;
+    std::cout << "Partial blocker direct light: ray=" << partial << " raster=" << rasterPartial
+              << '\n';
     Require(partial > blockedDirect + 1000 && partial < unblockedDirect - 1000,
             "Partial area-light occlusion did not create intermediate illumination");
+    Require(rasterPartial > rasterBlocked + 1000 && rasterPartial < unblockedDirect &&
+                rasterPartial > partial / 2 && rasterPartial < partial * 2,
+            "Raster partial shadow diverged from the ray-query reference");
     doc.objects.pop_back();
     auto& firstLight = doc.Get(id);
     firstLight.transform.position.x = -.65f;

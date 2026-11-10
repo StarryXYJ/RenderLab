@@ -1,6 +1,8 @@
-[scope(view), schema("renderlab.area_shadow", 1), type(SceneAreaShadowData)] cbuffer SceneAreaShadow
+[scope(view), schema("renderlab.area_shadow", 2), type(SceneAreaShadowData)] cbuffer SceneAreaShadow
 {
     [id("Matrix0")] float4x4 Matrix0 = (1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1);
     [id("Matrix1")] float4x4 Matrix1 = (1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1);
+    [id("Light0")] float4 Light0 = (0, 0, 1, 0.01);
+    [id("Light1")] float4 Light1 = (0, 0, 1, 0.01);
     [id("Parameters")] float4 Parameters = (0, 0.0001, 0.01, 0);
 }

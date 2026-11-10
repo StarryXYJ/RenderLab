@@ -5,7 +5,8 @@
 ## 当前状态
 
 - HDRP 参考面光源 IN_PROGRESS（2026 年 11 月 10 日）：用户授权实现光栅/混合管线面光源；分步完成合法来源的 LTC 表与数值对照、共享直接照明和可见灯面、阴影及混合反射，逐项验证提交；保留 M8 并行工作。
-  普通光栅面灯阴影 IN_PROGRESS：中心投影基础子项 DONE：独立两张 1024² 阴影图、材质 ShadowCaster 投射、3×3 PCF 与距离缩放偏移接入 Forward/Deferred/Indexed；Cornell 遮挡及双灯测试与混合光追回归在 Debug/Release DX12/Vulkan 各 4/4，Release Indexed 回归双后端通过，Editor bridge 和托管 Release 构建通过。透明接收和 Masked 场景尚未专项验证；3×3 不产生尺寸相关半影，尚需 PCSS/EVSM、参考对照及性能验收。[限制](../docs/area-lights.md#光栅面灯阴影)。
+  PCSS 式滤波子项 DONE：中心及 4×4 遮挡搜索、4×4 过滤，随灯大小与遮挡距离调整半影；独立滤波与场景/混合对照在隔离 Debug/Release 的 DX12/Vulkan 各 6/6，Editor bridge 与托管 Release 构建通过。Cornell 部分遮挡 DX12 显示通道和光栅 6358、16 射线 Ray Query 7668；非 HDR 或逐像素画质验收。单中心图、有限点数、最大核半径与剪切近似的限制见 [面光源](../docs/area-lights.md#光栅面灯阴影)。
+  普通光栅面灯阴影 IN_PROGRESS：中心投影基础子项 DONE：独立两张 1024² 阴影图、材质 ShadowCaster 投射、3×3 PCF 与距离缩放偏移接入 Forward/Deferred/Indexed；Cornell 遮挡及双灯测试与混合光追回归在 Debug/Release DX12/Vulkan 各 4/4，Release Indexed 回归双后端通过，Editor bridge 和托管 Release 构建通过。透明接收和 Masked 场景尚未专项验证；该基础子项的 3×3 滤波已由 PCSS 式近似替换；仍需 HDR 参考、透明/Masked 专项与性能验收。[限制](../docs/area-lights.md#光栅面灯阴影)。
   投影准备 DONE：灯中心、前向 170° 透视、场景包围盒决定远平面，Debug/Release `surface.contracts` 各 1/1，覆盖正反向、镜像、剪切方向及 reversed-Z；近平面与广角边界限制见上述光栅阴影子项。
   混合反射命中物照明子项 DONE：每盏灯一次均匀面积采样、立体角 PDF 与有限遮挡射线，纳入现有反射累积；Cornell 小灯在隔离 Debug/Release DX12/Vulkan 各 2/2，DX12 移除该贡献的负对照输出为零。单样本噪声、固定偏移与极端亮度限制仍在，未做多种子画质、性能和跨设备验收。
   混合光追面灯遮挡子项 DONE：不透明主表面对两灯分别采用 4×4 固定分层 Ray Query，可见比例乘 LTC；全遮挡、部分遮挡、两灯独立性在隔离 Debug/Release DX12/Vulkan 各 2/2；Release 原有 Ray Query 场景及光栅面灯回归双后端通过，Editor bridge 与托管 Release 构建通过。尚无 BRDF 权重或时间滤波，存在采样偏差和每像素最多 32 射线成本，未做性能及跨设备验收；Forward、普通 Deferred、透明表面使用独立光栅阴影图。[限制及验证](../docs/area-lights.md#混合光追面灯遮挡)。
