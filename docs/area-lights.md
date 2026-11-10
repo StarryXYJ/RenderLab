@@ -15,3 +15,7 @@ Extractor 将全部启用面光源按稳定对象 UUID 排序，输出世界空�
 实验性 HLSL 位于 `shaders/m5/rect_area_sampling.hlsli`，没有加入运行时路径。`SampleRectEmitter` 均匀采样世界平行四边形；`RectEmitterPdfOmega` 将 `selectionPdf / area` 转换成 `selectionPdf * distance² / (area * cosLight)`，包含选中该灯的概率，采样点必须位于指定灯面。背面、重合点、退化面积和非有限结果返回零 PDF；小于等于 `1e-12` 的平方距离视为重合。调用方负责有效的 [0,1) 随机数、单位正面法线及与 BSDF 一致的测度。
 
 `RectPowerWeight` 是每个技术各取一个样本的 power heuristic，在相同立体角测度下计算权重；不提供路径贡献、遮挡、发光体身份匹配或完整 MIS 策略。独立测试 `gpu.{dx12,vulkan}.rect_area_light` 将 GPU 均匀采样的单位漫反射结果与 CPU 双精度面积中点积分比较，并检查选灯概率、背面、重合、剪切、零 PDF、斜射与大 PDF 的 MIS 权重。仅测试固定几何和未遮挡单次采样，不代表实际光传输、时域或 Cornell Box 已接入。
+
+## 路径追踪常量准备
+
+`renderer::PackPathRectLights` 将稳定顺序的快照打包到路径追踪现有 256 字节常量块的预留区：一个 float4 头（x 是灯数），其后每灯三个 float4，依次为 `center/radiance.r`、`edgeU/radiance.g`、`edgeV/radiance.b`。无灯时全零；最多两盏，超出明确拒绝，不静默丢灯。面积和单面法线由 U/V 的叉积恢复。当前仅有打包函数和 CPU 布局测试，常量块与 Shader 仍未接线；限制是首版固定常量块容量，后续多灯应改用有界缓冲和明确的选灯概率。
