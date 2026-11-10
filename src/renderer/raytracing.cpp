@@ -125,7 +125,47 @@ void PathTracingFeature::Build(rendergraph::Graph& graph, const RenderFrame& fra
             context.BindBuffer(5, moments, 0, momentBytes, 8);
             context.Dispatch((camera.width + 7) / 8, (camera.height + 7) / 8);
         });
-    graph.SetTexture("PathTracing.DisplayRadiance", filtered);
+    if (!input.temporalPipeline)
+    {
+        graph.SetTexture("PathTracing.DisplayRadiance", filtered);
+        return;
+    }
+    graph.CreateTexture("PathTracing.TemporalDisplay",
+                        {camera.width, camera.height, rhi::Format::Rgba32Float, true, false});
+    auto temporal = graph.AddComputePass("PathTracing.Temporal");
+    const auto temporalCurrent = temporal.ReadTexture(filtered);
+    const auto temporalSurface = temporal.ReadTexture(surfaceGuide);
+    const auto temporalMaterial = temporal.ReadTexture(materialGuide);
+    const auto temporalFiltered = temporal.ReadTexture(filtered);
+    const auto temporalConstants = temporal.ReadBuffer(input.temporalParameters.buffer, Use::Uniform,
+                                                        input.temporalParameters.range);
+    std::array<TextureHandle, 4> old, output;
+    for (size_t i = 0; i < old.size(); ++i)
+    {
+        old[i] = input.previousTemporal[i].empty() ? temporalCurrent
+                                                   : temporal.ReadTexture(input.previousTemporal[i]);
+        output[i] = temporal.WriteTexture(input.temporalOutputs[i]);
+    }
+    const auto display = temporal.WriteTexture("PathTracing.TemporalDisplay");
+    temporal.Execute(
+        [=](ComputeContext& context)
+        {
+            context.Bind(input.temporalPipeline);
+            context.BindTexture(0, temporalCurrent);
+            context.BindTexture(1, temporalSurface);
+            context.BindTexture(2, temporalMaterial);
+            context.BindBuffer(3, temporalConstants, input.temporalParameters.range.offset,
+                               input.temporalParameters.range.size);
+            for (uint32_t i = 0; i < old.size(); ++i)
+            {
+                context.BindTexture(4 + i, old[i]);
+                context.BindTexture(8 + i, output[i]);
+            }
+            context.BindTexture(12, temporalFiltered);
+            context.BindTexture(13, display);
+            context.Dispatch((camera.width + 7) / 8, (camera.height + 7) / 8);
+        });
+    graph.SetTexture("PathTracing.DisplayRadiance", display);
 }
 void RayQueryShadowFeature::Build(rendergraph::Graph& graph, const RenderFrame& frame)
 {

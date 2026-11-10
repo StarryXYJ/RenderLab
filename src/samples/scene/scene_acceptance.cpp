@@ -14,6 +14,7 @@
 #include "shader/compiler.hpp"
 
 #include <algorithm>
+#include <array>
 #include <chrono>
 #include <cmath>
 #include <cstddef>
@@ -21,6 +22,7 @@
 #include <format>
 #include <set>
 #include <stdexcept>
+#include <vector>
 
 namespace renderlab::samples
 {
@@ -65,15 +67,16 @@ void VerifyScene(rhi::Runtime& runtime, shader::Target target, const std::filesy
                             second.reflectionSamples == 2 * renderer::PathSamplesPerFrame &&
                             !second.reflectionHistoryReset,
                         "Path tracing did not accumulate successive samples");
-        bool trace = false, accumulate = false, filter = false, raster = false;
+        bool trace = false, accumulate = false, filter = false, temporal = false, raster = false;
         for (const auto& pass : first.graphSnapshot->passes)
         {
             trace |= pass.name == "PathTracing.Trace";
             accumulate |= pass.name == "PathTracing.Accumulate";
             filter |= pass.name == "PathTracing.Denoise";
+            temporal |= pass.name == "PathTracing.Temporal";
             raster |= pass.name == "Deferred.GBuffer" || pass.name == "Forward.Opaque";
         }
-        detail::Require(trace && accumulate && filter && !raster,
+        detail::Require(trace && accumulate && filter && temporal && !raster,
                         "Path tracing graph composition mismatch");
         pathOptions.reflectionDenoise = false;
         const auto switchedOff = pathFrame();
@@ -81,7 +84,8 @@ void VerifyScene(rhi::Runtime& runtime, shader::Target target, const std::filesy
                             !switchedOff.reflectionHistoryReset,
                         "Path filter toggle reset the raw accumulation");
         for (const auto& pass : switchedOff.graphSnapshot->passes)
-            detail::Require(pass.name != "PathTracing.Denoise",
+            detail::Require(pass.name != "PathTracing.Denoise" &&
+                                pass.name != "PathTracing.Temporal",
                             "Disabled path filter still entered the graph");
         renderer::SceneRenderer rawRenderer(runtime, target, fixture, engine);
         auto rawTarget = runtime.CreateTexture(
@@ -110,12 +114,85 @@ void VerifyScene(rhi::Runtime& runtime, shader::Target target, const std::filesy
             differing += difference != 0;
         }
         detail::Require(differing <= 4, "Path filter toggle changed raw history broadly");
+        // Compare the same moving-camera sequence against a stationary endpoint reference.
+        std::array<std::vector<std::byte>, 3> motionImages;
+        for (uint32_t mode = 0; mode < motionImages.size(); ++mode)
+        {
+            renderer::SceneRenderer motionRenderer(runtime, target, project.parent_path() / "PathTracingGallery.rlproject",
+                                                   engine);
+            auto motionTarget = runtime.CreateTexture(
+                {128, 72, rhi::Format::Rgba8Srgb, false, true, "PathTracing.Motion"});
+            renderer::SceneRenderOptions motionOptions;
+            motionOptions.pipeline = renderer::PipelineType::PathTracing;
+            motionOptions.reflectionDenoise = mode != 2;
+            motionOptions.reflectionTemporal = mode == 1;
+            auto motionState = rhi::State::Undefined;
+            renderer::SceneReadback motion;
+            auto step = [&]()
+            {
+                motion = motionRenderer.Render(motionTarget, motionState, nullptr, true, {},
+                                               motionOptions);
+                motionState = rhi::State::CopySource;
+                runtime.Wait(motion.completion);
+            };
+            for (int frame = 0; frame < 8; ++frame) step();
+            for (int frame = 0; frame < 16; ++frame)
+            {
+                motionRenderer.Document().MoveCamera({.02f, 0, 0}, {0, .15f, 0});
+                step();
+            }
+            if (mode == 2)
+            {
+#ifdef NDEBUG
+                constexpr int referenceFrames = 511;
+#else
+                constexpr int referenceFrames = 63;
+#endif
+                for (int frame = 0; frame < referenceFrames; ++frame) step();
+            }
+            const auto pixels = motion.pixels->Map();
+            motionImages[mode].assign(pixels.begin(), pixels.end());
+            SaveImage(output / (mode == 0 ? "path-motion-spatial.bmp"
+                                : mode == 1 ? "path-motion-temporal.bmp"
+                                            : "path-motion-reference.bmp"),
+                      pixels, 128, 72, rhi::TextureRowPitch(128));
+        }
+        std::array<double, 2> error{};
+        for (size_t mode = 0; mode < error.size(); ++mode)
+        {
+            for (size_t i = 0; i < motionImages[mode].size(); ++i)
+            {
+                if (i % 4 == 3) continue;
+                const auto delta = int(std::to_integer<uint8_t>(motionImages[mode][i])) -
+                                   int(std::to_integer<uint8_t>(motionImages[2][i]));
+                error[mode] += delta * delta;
+            }
+            error[mode] /= 128 * 72 * 3;
+        }
+        logger.Write(LogLevel::Info, std::format("Path motion MSE: spatial {:.3f}, temporal {:.3f}",
+                                                 error[0], error[1]));
+#ifdef NDEBUG
+        detail::Require(error[1] < error[0], "Path temporal motion increased endpoint MSE");
+#endif
         pathOptions.reflectionDenoise = true;
+        const auto temporalCold = pathFrame();
+        detail::Require(temporalCold.reflectionTemporalFrames == 1,
+                        "Path temporal history did not restart after filter toggle");
+        pathOptions.reflectionTemporal = false;
+        const auto temporalOff = pathFrame();
+        detail::Require(!temporalOff.reflectionHistoryReset &&
+                            temporalOff.reflectionTemporalFrames == 0,
+                        "Path temporal toggle discarded raw history or retained temporal history");
+        pathOptions.reflectionTemporal = true;
+        const auto temporalRestart = pathFrame();
+        detail::Require(!temporalRestart.reflectionHistoryReset &&
+                            temporalRestart.reflectionTemporalFrames == 1,
+                        "Path temporal re-enable did not restart display history");
         pathRenderer.Document().MoveCamera({.5f, 0, 0}, {0, 5, 0});
         const auto moved = pathFrame();
         detail::Require(moved.reflectionSamples == renderer::PathSamplesPerFrame &&
-                            moved.reflectionHistoryReset,
-                        "Path tracing camera change did not reset history");
+                            moved.reflectionHistoryReset && moved.reflectionTemporalFrames == 2,
+                        "Path tracing camera change did not reset raw history and retain temporal history");
         pathRenderer.Document() = original;
         const auto restored = pathFrame();
         detail::Require(restored.reflectionSamples == renderer::PathSamplesPerFrame &&
@@ -126,14 +203,14 @@ void VerifyScene(rhi::Runtime& runtime, shader::Target target, const std::filesy
         pathRenderer.Document().Get(light).light->intensity *= .5f;
         const auto changedLight = pathFrame();
         detail::Require(changedLight.reflectionSamples == renderer::PathSamplesPerFrame &&
-                            changedLight.reflectionHistoryReset,
+                            changedLight.reflectionHistoryReset && changedLight.reflectionTemporalFrames == 1,
                         "Path tracing light change did not reset history");
         pathTarget = runtime.CreateTexture(
             {65, 48, rhi::Format::Rgba8Srgb, false, true, "PathTracing.Resized"});
         state = rhi::State::Undefined;
         const auto resized = pathFrame();
         detail::Require(resized.reflectionSamples == renderer::PathSamplesPerFrame &&
-                            resized.reflectionHistoryReset,
+                            resized.reflectionHistoryReset && resized.reflectionTemporalFrames == 1,
                         "Path tracing resize did not reset history");
         pathOptions.exposure = 1.5f;
         const auto exposure = pathFrame();

@@ -41,6 +41,28 @@
 `f06d322952b5f75af9e6ef95ce26144b5fbb6aa7dd4032f638783c105d4762d3`；
 解压后 DX12/Vulkan validation 各运行 8 帧通过。
 
+## 运动预览首版
+
+2026 年 11 月 10 日，RTX 5060、Release、DX12、validation 开启；Gallery 128×72，
+固定种子，预热 8 帧后相机平移/转动 16 帧。终点空间滤波与时域预览对比停在同一
+相机位置累积 4096 spp 的未滤波参考：sRGB 8 位 RGB MSE 为 63.3468 / 61.3704，
+MAE 为 2.7100 / 2.5211。参考仍有噪声；这只是单轨迹的单帧结果，无法证明运动
+序列没有拖影或各种材质均改善。图像由 `gpu.dx12.reflections` 生成在
+`out/build/m5-release/reflections/dx12/path-motion-*.bmp`。Vulkan 相同轨迹的 MSE
+为 63.3555 / 61.3825。两个后端分别通过 Debug 和 Release 场景回归；Debug 使用
+512 spp 参考作功能检查，不作为画质验收。
+
+受限时域历史混合经过空间滤波的显示信号；静止时它们可能共享样本。路径追踪的
+渐进 HDR 历史、样本数和 Welford 矩仍独立；首版不声称无偏或等同独立 spp。
+邻域约束可能压低真实高光，曲面镜面反射与运动遮挡仍需专门的序列评估。
+
+相同 Gallery 静止 640×360、128 spp 时重投影开/关截图逐像素一致，见
+`out/m8-temporal-static`。另一次 Release/DX12、validation 关闭、32 帧预热和
+128 帧测量的 headless 串行短测：时域开/关墙钟吞吐 719.6 / 810.1 FPS，新增
+Temporal Pass 均值 0.081 ms，跟踪分配峰值 69.2 / 35.4 MiB。高样本静止时显示
+权重虽已退为零，首版仍运行该 Pass 以保留下一次运动的历史；上述结果不是窗口帧率
+或其他设备保证。原始日志为 `out/m8-temporal-performance-{on,off}.log`。
+
 ## 旧版固定场景对照
 
 以下记录属于旧版 1 spp/帧、2048 spp 旁路的实现，不代表当前滤波行为。

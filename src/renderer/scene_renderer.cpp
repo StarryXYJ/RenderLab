@@ -109,7 +109,7 @@ struct SceneRenderer::Impl
     std::unique_ptr<IndexedScene> indexedScene;
     std::shared_ptr<rhi::Pipeline> rayQueryShadow;
     std::shared_ptr<rhi::ShaderTable> reflectionTable, reflectionTableWithoutGuide, pathTable;
-    std::shared_ptr<rhi::Pipeline> pathDenoise, pathHistory, pathStatistics;
+    std::shared_ptr<rhi::Pipeline> pathDenoise, pathHistory, pathStatistics, pathTemporal;
     std::shared_ptr<rhi::Pipeline> reflectionHistory, reflectionStatistics, reflectionCombine,
         reflectionDenoise, reflectionTemporal;
     std::shared_ptr<rhi::Buffer> emptyReflectionStatistics;
@@ -499,6 +499,20 @@ struct SceneRenderer::Impl
         desc.compute = runtime.CreateShader(rhi::ShaderStage::Compute, compiler.Compile(request),
                                             "Statistics");
         auto statistics = runtime.CreatePipeline(desc);
+        request.entry = {rhi::ShaderStage::Compute,
+                         project.engine / "RenderLab" / "PathTemporal.hlsl", "Temporal"};
+        desc = {};
+        std::vector<rhi::BindingDesc> layout;
+        for (uint32_t slot = 0; slot <= 13; ++slot)
+            layout.push_back({slot, slot == 3 ? rhi::BindingKind::ConstantBuffer
+                                    : (slot >= 8 && slot <= 11) || slot == 13
+                                        ? rhi::BindingKind::StorageTexture
+                                        : rhi::BindingKind::SampledTexture});
+        desc.layout = runtime.CreateLayout(std::move(layout));
+        desc.compute = runtime.CreateShader(rhi::ShaderStage::Compute, compiler.Compile(request),
+                                            "Temporal");
+        auto temporal = runtime.CreatePipeline(desc);
+        pathTemporal = std::move(temporal);
         pathTable = std::move(table);
         pathDenoise = std::move(filter);
         pathHistory = std::move(history);
@@ -1516,7 +1530,8 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
                                            : frame.rayTracing.denoisePipeline
                                                ? self.reflectionTable
                                                : self.reflectionTableWithoutGuide;
-        if (frame.rayTracing.denoisePipeline && options.reflectionTemporal && accumulate)
+        if ((frame.rayTracing.denoisePipeline || frame.rayTracing.pathDenoisePipeline) &&
+            options.reflectionTemporal && accumulate)
         {
             auto& temporal = self.temporalHistory;
             const auto direction = [](const math::Mat4& view)
@@ -1565,8 +1580,11 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
             temporalParameters.previousCameraPosition = Vector(temporal.cameraPosition);
             temporalParameters.options = {
                 validTemporal ? 1.f : 0.f,
-                static_cast<float>(std::min(reflectionSamples + 1, MaxReflectionSamples)),
-                options.reflectionDiagnostics ? 1.f : 0.f, 32};
+                static_cast<float>(std::min(reflectionSamples +
+                                                (pathTracing ? PathSamplesPerFrame : 1u),
+                                            MaxReflectionSamples)),
+                pathTracing ? static_cast<float>(reflectionSequence)
+                            : (options.reflectionDiagnostics ? 1.f : 0.f), 32};
             frame.rayTracing.reflectionDiagnostics = options.reflectionDiagnostics;
             const auto temporalSlice =
                 uploads.Write(std::as_bytes(std::span{&temporalParameters, size_t{1}}));
@@ -1576,7 +1594,8 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
                                                                 rhi::State::HostWrite),
                                                    rendergraph::Use::Uniform,
                                                    {temporalSlice.offset, temporalSlice.size}};
-            frame.rayTracing.temporalPipeline = self.reflectionTemporal;
+            frame.rayTracing.temporalPipeline =
+                pathTracing ? self.pathTemporal : self.reflectionTemporal;
             frame.rayTracing.reconstructionPipelines = self.reflectionReconstruction;
         }
         frame.rayTracing.sampler = self.sampler;
@@ -2140,7 +2159,8 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
     if (temporal.active)
     {
         temporal.signature = std::move(temporalSignature);
-        temporal.viewId = self.document.activeCamera;
+        temporal.viewId = pathTracing ? "path/" + self.document.activeCamera
+                                      : self.document.activeCamera;
         temporal.index = temporalOutput;
         temporal.initialized[temporalOutput] = true;
         temporal.viewProjection = self.snapshot.viewProjection;
