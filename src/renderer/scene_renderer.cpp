@@ -2386,6 +2386,21 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
             context.Draw(3);
         });
     SceneReadback result;
+    if (options.sceneHdrDiagnostics)
+    {
+        const auto pitch = rhi::TextureRowPitch(target->desc.width, rhi::Format::Rgba32Float);
+        result.sceneHdr = self.runtime.CreateBuffer(
+            {uint64_t(pitch) * target->desc.height, rhi::Memory::Readback, "Scene.Hdr"});
+        auto buffer = graph.ImportBuffer("Scene.Hdr.Readback", result.sceneHdr,
+                                         {rhi::State::CopyDest, false});
+        auto pass = graph.AddCopyPass("Scene.Hdr.Readback");
+        const auto source =
+            pass.ReadTexture(pathTracing ? "PathTracing.DisplayRadiance" : "CameraColor");
+        buffer = pass.WriteBuffer(buffer);
+        pass.Execute([buffer, source, pitch](rendergraph::CopyContext& context)
+                     { context.CopyTexture(buffer, source, pitch, false); });
+        graph.Export(buffer, rhi::State::HostRead);
+    }
     if (options.pathHdrDiagnostics)
     {
         const auto pitch = rhi::TextureRowPitch(target->desc.width, rhi::Format::Rgba32Float);

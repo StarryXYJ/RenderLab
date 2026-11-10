@@ -6,6 +6,7 @@
 #include "shader/dxc_compiler.hpp"
 
 #include <array>
+#include <cmath>
 #include <cstring>
 #include <filesystem>
 #include <iostream>
@@ -33,7 +34,7 @@ void Check(Runtime& runtime, shader::Target target, const std::filesystem::path&
         runtime.CreateLayout({{0, BindingKind::StorageBuffer}, {1, BindingKind::SampledTexture}});
     desc.compute = runtime.CreateShader(ShaderStage::Compute, compiler.Compile(request), "CSMain");
     const auto pipeline = runtime.CreatePipeline(desc);
-    constexpr uint32_t bytes = 8 * sizeof(float), size = 64;
+    constexpr uint32_t bytes = 12 * sizeof(float), size = 64;
     const auto output = runtime.CreateBuffer({bytes, Memory::Device, "AreaShadow.Result", true});
     const auto readback = runtime.CreateBuffer({bytes, Memory::Readback, "AreaShadow.Readback"});
     auto texture =
@@ -44,8 +45,11 @@ void Check(Runtime& runtime, shader::Target target, const std::filesystem::path&
     for (uint32_t y = 0; y < size; ++y)
         for (uint32_t x = 0; x < size; ++x)
         {
-            const std::array<float, 4> texel{
-                x < size / 2 ? (y < size / 2 ? .00990099f : .00490049f) : 0, 0, 0, 0};
+            const float depth = x < size / 2 ? (y < size / 2 ? .00990099f : .00490049f)
+                                : x >= 3 * size / 4
+                                    ? .0032343033f + .001f * ((y + .5f) / size - .5f)
+                                    : 0;
+            const std::array<float, 4> texel{depth, 0, 0, 0};
             std::memcpy(upload->Map().data() + y * pitch + x * 16, texel.data(), 16);
         }
     Binding binding{0};
@@ -65,13 +69,15 @@ void Check(Runtime& runtime, shader::Target target, const std::filesystem::path&
     commands->Copy(output, readback, bytes);
     commands->Barrier(readback, State::CopyDest, State::HostRead);
     runtime.Wait(runtime.Submit(std::move(commands)));
-    std::array<float, 8> values{};
+    std::array<float, 12> values{};
     std::memcpy(values.data(), readback->Map().data(), bytes);
     std::cout << "Small=" << values[0] << " large=" << values[1] << " blocked=" << values[2]
-              << " open=" << values[3] << " near=" << values[4] << " far=" << values[5] << '\n';
+              << " open=" << values[3] << " near=" << values[4] << " far=" << values[5]
+              << " self=" << values[6] << " corrected=" << values[7] << '\n';
     Require(values[0] < values[1] && values[1] > 0 && values[1] < 1 && values[2] == 0 &&
-                values[3] == 1 && values[4] > values[5],
-            "Area shadow filter did not preserve endpoints or increase penumbra with emitter size");
+                values[3] == 1 && values[4] > values[5] && values[6] < 1 && values[7] == 1 &&
+                std::abs(values[8]) < 1e-6 && std::abs(values[9] - .001f) < 1e-6,
+            "Area shadow filter failed size, separation, endpoints or receiver-plane correction");
 }
 } // namespace
 int main(int argc, char** argv)

@@ -115,6 +115,46 @@ void Check(rhi::Runtime& runtime, shader::Target target, const std::filesystem::
         return sum / count;
     };
     const auto reference = capture(101, true, 512);
+    const auto rasterCapture = [&](renderer::PipelineType pipeline)
+    {
+        options.pipeline = pipeline;
+        options.pathComponentDiagnostics = false;
+        options.sceneHdrDiagnostics = true;
+        options.reflections = false;
+        auto frame = renderer.Render(targetImage, state, nullptr, false, {}, options);
+        state = rhi::State::CopySource;
+        runtime.Wait(frame.completion);
+        Require(frame.sceneHdr != nullptr, "Missing scene HDR readback");
+        const auto pixels = frame.sceneHdr->Map();
+        const auto pitch = rhi::TextureRowPitch(Width, rhi::Format::Rgba32Float);
+        Image image(Width * Height);
+        for (uint32_t y = 0; y < Height; ++y)
+            for (uint32_t x = 0; x < Width; ++x)
+            {
+                std::array<float, 4> value{};
+                std::memcpy(value.data(), pixels.data() + y * pitch + 16 * x, 16);
+                for (size_t c = 0; c < 3; ++c)
+                {
+                    Require(std::isfinite(value[c]) && value[c] >= -1e-5f, "Invalid scene HDR");
+                    image[y * Width + x][c] = value[c];
+                }
+            }
+        return image;
+    };
+    const auto raster = rasterCapture(renderer::PipelineType::Deferred);
+    const auto hybrid = rasterCapture(renderer::PipelineType::RayTracing);
+    const double directMean = mean(reference.direct, reference.total);
+    const double rasterMean = mean(raster, reference.total);
+    const double hybridMean = mean(hybrid, reference.total);
+    std::cout << "Direct HDR means: path=" << directMean << " raster=" << rasterMean
+              << " hybrid=" << hybridMean << " MSE=" << mse(raster, reference.direct) << "/"
+              << mse(hybrid, reference.direct) << '\n';
+    Require(directMean > .001 && rasterMean > .7 * directMean && rasterMean < 1.3 * directMean &&
+                hybridMean > .7 * directMean && hybridMean < 1.3 * directMean,
+            "Area-light direct HDR energy differs substantially from path tracing");
+    options.pipeline = renderer::PipelineType::PathTracing;
+    options.sceneHdrDiagnostics = false;
+    options.reflections = true;
     const auto bsdfReference = capture(102, false, 512);
     const double referenceMean = mean(reference.total, reference.total);
     const double bsdfMean = mean(bsdfReference.total, reference.total);

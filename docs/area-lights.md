@@ -57,9 +57,12 @@ Forward、Deferred 和 Indexed Forward 使用共享的场景灯快照与 LTC 查
 
 ## 光栅面灯阴影
 
-每盏灯从中心沿灯面正面方向绘制一张 1024² reversed-Z 阴影图，投影物独立于方向光，从所有启用实例按材质 ShadowCaster 规则筛选；Masked 使用其阴影 pass 的 alpha 裁剪。Forward、Deferred、Indexed Forward 和透明 Forward 查询各灯的阴影图。采用自实现的 PCSS 式近似：先用中心及 4×4 样本估计遮挡物距离，再用 4×4 样本过滤，半影随灯尺寸和遮挡距离变化。它使用单一中心投影、有限样本和最大 0.12 UV 滤波半径，并以灯两条边长近似滤波轴；细小遮挡物可能漏检，剪切、近距离和大面积灯的半影并非精确积分。每灯 170° 视场、0.01 世界单位近平面以及固定偏移会造成边界漏光、自阴影或失真。没有 EVSM、阴影缓存和可配置质量；透明接收和 Masked 的全裁剪/投射开关由 `gpu.{dx12,vulkan}.surface` 专项覆盖；性能及跨设备验收尚未完成。`gpu.{dx12,vulkan}.area_shadow_filter` 验证半影随灯尺寸与遮挡距离变化以及全亮/全暗端点。Cornell 部分遮挡的 DX12 显示通道和为光栅 6358、16 射线 Ray Query 7668，只说明该有限场景的量级，非 HDR 或逐像素误差验收。`gpu.{dx12,vulkan}.raster_area_light` 验证无方向光的遮挡、双灯独立及不同光栅提交路径一致性；混合光追测试检查与 Ray Query 的全遮挡结果。
+每盏灯从中心沿灯面正面方向绘制一张 1024² reversed-Z 阴影图，投影物独立于方向光，从所有启用实例按材质 ShadowCaster 规则筛选；Masked 使用其阴影 pass 的 alpha 裁剪。Forward、Deferred、Indexed Forward 和透明 Forward 查询各灯的阴影图。采用自实现的 PCSS 式近似：先用中心及 4×4 样本估计遮挡物距离，再用 4×4 样本过滤，半影随灯尺寸和遮挡距离变化。接收面深度梯度由表面法线和灯投影计算，以减少斜面自阴影并保持 Forward/Deferred 一致。它使用单一中心投影、有限样本和最大 0.12 UV 滤波半径，并以灯两条边长近似滤波轴；细小遮挡物可能漏检，剪切、近距离和大面积灯的半影并非精确积分。每灯 170° 视场、0.01 世界单位近平面以及固定偏移会造成边界漏光、自阴影或失真。没有 EVSM、阴影缓存和可配置质量；透明接收和 Masked 的全裁剪/投射开关由 `gpu.{dx12,vulkan}.surface` 专项覆盖；性能及跨设备验收尚未完成。`gpu.{dx12,vulkan}.area_shadow_filter` 验证半影随灯尺寸与遮挡距离变化以及全亮/全暗端点。Cornell 部分遮挡的 DX12 显示通道和为光栅 6358、16 射线 Ray Query 7668，只说明该有限场景的量级，非 HDR 或逐像素误差验收。`gpu.{dx12,vulkan}.raster_area_light` 验证无方向光的遮挡、双灯独立及不同光栅提交路径一致性；混合光追测试检查与 Ray Query 的全遮挡结果。
 
 
 ## 混合光追面灯遮挡
 
 Ray Tracing 管线对不透明主表面使用 Ray Query，分别在每盏灯上固定分层取 4×4 点，追踪到有限灯面距离并计算可见比例；其他解析灯与不透明投影几何也可遮挡。这一比例分别乘以各灯的 LTC 直接光。它能产生近似软阴影，但没有按 BRDF/立体角加权，固定网格可能出现分层和走样，尤其在近灯、大遮挡或高光场景；它不是无偏的面积积分，也没有时域滤波。每像素最多增加 32 条阴影射线，尚未完成性能与跨设备验收。透明表面使用上述光栅阴影图而非 Ray Query；阴影投射遵循当前不透明几何及投影策略，不支持透明或 Masked 光追遮挡。`gpu.{dx12,vulkan}.area_light_reflection` 对照完全、部分遮挡与双灯独立性。
+
+
+`SceneRenderOptions::sceneHdrDiagnostics` 可读取显示变换前的线性 RGBA32F（`SceneReadback::sceneHdr`），用于跨管线对照。Cornell Box 的 DX12 40×40 有限测试以 Path Tracing 4096 spp 的 primary direct 为参考，排除参考总亮度不低于 5 的像素后，平均亮度为路径 0.1441、Deferred 0.1248、混合 Ray Query 0.1294；逐通道 MSE 分别约 0.125 和 0.124。路径主射线带抖动、光栅边界不抗锯齿，因此这些 MSE 包含几何边缘差异，不能单独解释为阴影估计误差，也不能推及其他场景。`gpu.{dx12,vulkan}.area_light_render` 执行此对照与能量范围检查。
