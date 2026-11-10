@@ -136,6 +136,39 @@ RTX 5060、Release、DX12、640×360、固定 Gallery 和时域关闭，以上�
 空间滤波 0.064 ms。新增一张瞬态和两张历史 RGBA32F 图约 48 字节/像素。日志见
 `out/m8-direct-perf.log`、`out/m8-lobe-perf.log`，不代表窗口帧率或其他硬件。
 
+## 首个次级命中引导与镜面置信度
+
+2026 年 11 月 10 日，RTX 5060：每帧记录与首个主表面近似匹配的余弦/GGX 采样分布
+各自的首条次级射线距离调和均值和样本数。0 表示无样本；环境未命中使用射线最大
+距离 10000。它是基于采样分布的近似引导，不代表各 BRDF 分量恰好各自选择了该路径，
+也不是已经满足 NRD 打包要求的输入。使用当前和历史有限镜面距离估计虚拟点与接收点
+的屏幕视差，只保守降低混合显示历史的权重；没有对单独镜面辐射做虚拟重投影。
+
+Release/DX12、Gallery 128×72、三条固定相机序列及每位置约 4096 spp 参考：上版 /
+本版时域 MSE 分别为 gentle 42.74499 / 42.74371、fast 43.07807 / 43.06505、
+reveal 43.99514 / 43.98868。差异很小，单场景/单序列不足以证明视觉改善。
+DX12 的 64×48 移动诊断中 125 个像素的置信度被调整；Vulkan 也通过非零触发检查。
+固定 640×360、512 spp 静止图的未滤波图和关闭时域的滤波图均与上一版逐像素一致。
+结果见 `out/m8-hit-guide` 和 `out/build/m5-release/reflections/<backend>/path-sequence`。
+
+合成 GPU 测试覆盖无样本、有限值、环境、无效值和混合计数；真实场景 HDR/引导读回
+验证范围、批次计数与滤波开关一致。RTX 5060 的 Debug/Release DX12/Vulkan 相关 GPU
+回归各 4/4；Debug 编辑器 Vulkan 完整 smoke 通过。DX12 完整 smoke 两次在 Avalonia
+`NumericUpDownAutomationPeer` 的 `UnsupportedType (Decimal)` 异常失败，不能计作通过；
+首次运行还观察到输出目录桥接 DLL 与指定 Debug 构建树不一致，统一后仍复现该异常。
+独立的 Debug 编辑器 Path Tracing 三秒窗口短测在 DX12/Vulkan 均完成，关闭时验证错误、
+worker_failed 和原生分配均为零；不足以代替完整 smoke 或人工运动验收。证据见
+`out/m8-hit-guide-editor-retry`、`out/m8-hit-guide-editor-dx12-repeat`、
+`out/m8-hit-guide-editor-vulkan` 和 `out/m8-hit-guide-window`。另在新增 Cornell Box
+场景做了双后端 320×320、256 spp 截图的加载与运行检查（`out/m8-hit-guide-cornell`），
+验证错误为零；这不是该场景的运动画质对照。
+
+一次 Release/DX12 640×360、32 预热 + 128 帧 headless 串行短测，上版 / 本版跟踪
+分配峰值约 91.7 / 95.4 MiB，吞吐约 699.2 / 595.6 FPS；本版 Trace Pass 0.784 ms、
+Temporal Pass 0.087 ms，上版分别 0.702 / 0.079 ms。这是两次短测，不足以证明稳定
+性能比例；新增的每帧 RGBA32F 引导约 16 字节/像素，滤波关闭时仍会生成。
+日志为 `out/m8-lobe-perf.log` 与 `out/m8-hit-guide-perf.log`。
+
 ## BSDF 采样比例候选（已撤回）
 
 同日尝试根据材质改变余弦漫反射与 visible-GGX 的混合概率，采样器和混合 PDF

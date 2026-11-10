@@ -561,7 +561,7 @@ void VerifyRaySampling(Runtime& runtime, shader::Target target, const std::files
     desc.layout = runtime.CreateLayout({{0, BindingKind::StorageBuffer}});
     desc.compute = runtime.CreateShader(ShaderStage::Compute, compiler.Compile(request), "CSMain");
     auto pipeline = runtime.CreatePipeline(desc);
-    constexpr uint32_t bytes = 18 * 4 * sizeof(float);
+    constexpr uint32_t bytes = 24 * 4 * sizeof(float);
     auto result = runtime.CreateBuffer({bytes, Memory::Device, "Sampling.Result", true});
     auto readback = runtime.CreateBuffer({bytes, Memory::Readback, "Sampling.Readback"});
     Binding binding{0};
@@ -577,7 +577,7 @@ void VerifyRaySampling(Runtime& runtime, shader::Target target, const std::files
     commands->Copy(result, readback, bytes);
     commands->Barrier(readback, State::CopyDest, State::HostRead);
     runtime.Wait(runtime.Submit(std::move(commands)));
-    std::array<float, 72> values{};
+    std::array<float, 96> values{};
     std::memcpy(values.data(), readback->Map().data(), bytes);
     for (uint32_t i = 0; i < 6; ++i)
     {
@@ -667,6 +667,24 @@ void VerifyRaySampling(Runtime& runtime, shader::Target target, const std::files
         if (values[scenario * 4 + 3] != 0)
             throw std::runtime_error("Path BSDF sampling produced invalid weights");
     }
+    const std::array<std::array<float, 4>, 6> expectedHitGuides{
+        {{0, 0, 0, 0},
+         {16.f / 3.f, 0, 2, 0},
+         {0, 3.2f, 0, 2},
+         {2.f / (.2f + .0001f), 10000, 2, 1},
+         {0, 0, 0, 0},
+         {4, 10.f / 3.f, 1, 2}}};
+    for (size_t scenario = 0; scenario < expectedHitGuides.size(); ++scenario)
+        for (size_t channel = 0; channel < 4; ++channel)
+        {
+            const float actual = values[(scenario + 18) * 4 + channel];
+            const float expected = expectedHitGuides[scenario][channel];
+            if (!std::isfinite(actual) ||
+                std::abs(actual - expected) > 1e-5f * std::max(1.f, std::abs(expected)))
+                throw std::runtime_error("Path secondary distance guide averaging mismatch");
+        }
+    logger.Write(LogLevel::Info,
+                 "Path secondary hit guides passed finite, missing and environment cases");
     request.entry = {ShaderStage::Compute,
                      source.parent_path().parent_path() / "RenderLab" / "ReflectionPost.hlsl",
                      "Accumulate"};

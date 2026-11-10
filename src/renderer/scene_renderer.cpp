@@ -465,7 +465,8 @@ struct SceneRenderer::Impl
                                             {13, rhi::BindingKind::SampledTexture},
                                             {17, rhi::BindingKind::StorageBuffer},
                                             {18, rhi::BindingKind::StorageTexture},
-                                            {19, rhi::BindingKind::StorageTexture}});
+                                            {19, rhi::BindingKind::StorageTexture},
+                                            {20, rhi::BindingKind::StorageTexture}});
         desc.rayPayloadSize = 64;
         desc.rayGeneration = module(rhi::ShaderStage::RayGeneration, "RayGeneration");
         desc.miss = module(rhi::ShaderStage::Miss, "Miss");
@@ -513,7 +514,7 @@ struct SceneRenderer::Impl
                          project.engine / "RenderLab" / "PathTemporal.hlsl", "Temporal"};
         desc = {};
         std::vector<rhi::BindingDesc> layout;
-        for (uint32_t slot = 0; slot <= 13; ++slot)
+        for (uint32_t slot = 0; slot <= 14; ++slot)
             layout.push_back({slot, slot == 3 ? rhi::BindingKind::ConstantBuffer
                                     : (slot >= 8 && slot <= 11) || slot == 13
                                         ? rhi::BindingKind::StorageTexture
@@ -2187,6 +2188,36 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
                          { context.CopyTexture(buffer, source, pitch, false); });
             graph.Export(buffer, rhi::State::HostRead);
         }
+    }
+    if (options.pathComponentDiagnostics)
+    {
+        const auto pitch = rhi::TextureRowPitch(target->desc.width, rhi::Format::Rgba32Float);
+        result.pathSecondaryGuide =
+            self.runtime.CreateBuffer({uint64_t(pitch) * target->desc.height, rhi::Memory::Readback,
+                                       "PathTracing.SecondaryGuide.Readback"});
+        auto buffer = graph.ImportBuffer("PathTracing.SecondaryGuide.Readback",
+                                         result.pathSecondaryGuide, {rhi::State::CopyDest, false});
+        auto pass = graph.AddCopyPass("PathTracing.SecondaryGuide.Readback");
+        const auto source = pass.ReadTexture("PathTracing.SecondaryGuide");
+        buffer = pass.WriteBuffer(buffer);
+        pass.Execute([buffer, source, pitch](rendergraph::CopyContext& context)
+                     { context.CopyTexture(buffer, source, pitch, false); });
+        graph.Export(buffer, rhi::State::HostRead);
+    }
+    if (options.pathComponentDiagnostics && frame.rayTracing.temporalPipeline)
+    {
+        const auto pitch = rhi::TextureRowPitch(target->desc.width, rhi::Format::Rgba32Float);
+        result.pathTemporalGuide =
+            self.runtime.CreateBuffer({uint64_t(pitch) * target->desc.height, rhi::Memory::Readback,
+                                       "PathTracing.TemporalGuide.Readback"});
+        auto buffer = graph.ImportBuffer("PathTracing.TemporalGuide.Readback",
+                                         result.pathTemporalGuide, {rhi::State::CopyDest, false});
+        auto pass = graph.AddCopyPass("PathTracing.TemporalGuide.Readback");
+        const auto source = pass.ReadTexture(frame.rayTracing.temporalOutputs[2]);
+        buffer = pass.WriteBuffer(buffer);
+        pass.Execute([buffer, source, pitch](rendergraph::CopyContext& context)
+                     { context.CopyTexture(buffer, source, pitch, false); });
+        graph.Export(buffer, rhi::State::HostRead);
     }
     if (readback)
     {

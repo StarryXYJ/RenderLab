@@ -1,5 +1,6 @@
 #include "RaySurface.hlsli"
 #include "PathBsdf.hlsli"
+#include "PathHitGuide.hlsli"
 #include "ImageBasedLighting.hlsli"
 
 RaytracingAccelerationStructure Scene : register(t0);
@@ -24,6 +25,10 @@ RWTexture2D<float4> DirectRadiance : register(u18);
 [[vk::image_format("rgba32f")]]
 #endif
 RWTexture2D<float4> DiffuseRadiance : register(u19);
+#ifdef SPIRV
+[[vk::image_format("rgba32f")]]
+#endif
+RWTexture2D<float4> SecondaryGuide : register(u20);
 cbuffer PathParameters : register(b4)
 {
     row_major float4x4 InverseViewProjection;
@@ -45,7 +50,8 @@ struct PathPayload
 };
 
 float3 TracePath(uint2 pixel, uint2 size, uint sampleIndex, out float4 surfaceGuide,
-                 out float4 materialGuide, out float3 primary, out float3 indirectDiffuse)
+                 out float4 materialGuide, out float3 primary, out float3 indirectDiffuse,
+                 out float secondaryDistance, out uint secondarySpecular)
 {
     uint pixelIndex = pixel.x + pixel.y * size.x;
     float2 jitter = PathSample(sampleIndex, pixelIndex, 0);
@@ -61,6 +67,8 @@ float3 TracePath(uint2 pixel, uint2 size, uint sampleIndex, out float4 surfaceGu
     float3 result = 0;
     primary = 0;
     indirectDiffuse = 0;
+    secondaryDistance = 0;
+    secondarySpecular = 0;
     float3 diffuseFraction = 0;
     surfaceGuide = 0;
     materialGuide = 0;
@@ -68,6 +76,8 @@ float3 TracePath(uint2 pixel, uint2 size, uint sampleIndex, out float4 surfaceGu
     {
         PathPayload payload = (PathPayload)0;
         TraceRay(Scene, RAY_FLAG_NONE, 0x02, 0, 1, 0, ray, payload);
+        if (bounce == 1)
+            secondaryDistance = payload.hit != 0 ? length(payload.position - ray.Origin) : ray.TMax;
         if (bounce == 0 && payload.hit != 0)
         {
             // Negative distance bypasses filtering for Unlit surfaces.
@@ -130,6 +140,7 @@ float3 TracePath(uint2 pixel, uint2 size, uint sampleIndex, out float4 surfaceGu
         if (pdf <= 0) break;
         if (bounce == 0)
         {
+            secondarySpecular = choice >= .5 ? 1 : 0;
             float3 diffuse, specular;
             EvaluateBRDFComponents(payload.albedo, payload.metallic, payload.roughness,
                                    payload.normal, -ray.Direction, direction, diffuse, specular);
@@ -153,15 +164,24 @@ void RayGeneration()
     float3 sum = 0, directSum = 0, diffuseSum = 0;
     float mean = 0, m2 = 0;
     float4 guide = 0, material = 0;
+    PathHitGuideAccumulator hitGuide = (PathHitGuideAccumulator)0;
     [loop] for (uint i = 0; i < count; ++i)
     {
         float4 sampleGuide, sampleMaterial;
         float3 sampleDirect, sampleDiffuse;
+        float secondaryDistance;
+        uint secondarySpecular;
         float3 sample = TracePath(pixel, size, uint(Options.x) + i, sampleGuide, sampleMaterial,
-                                  sampleDirect, sampleDiffuse);
+                                  sampleDirect, sampleDiffuse, secondaryDistance, secondarySpecular);
         directSum += sampleDirect;
         diffuseSum += sampleDiffuse;
         if (i == 0) { guide = sampleGuide; material = sampleMaterial; }
+        // Avoid mixing different primary surfaces within a jittered batch.
+        if (guide.w > 0 && sampleGuide.w > 0 && dot(guide.xyz, sampleGuide.xyz) >= .99 &&
+            abs(guide.w - sampleGuide.w) <= max(.02, guide.w * .01) &&
+            length(material.rgb - sampleMaterial.rgb) <= .05 &&
+            abs(material.a - sampleMaterial.a) <= .03)
+            AddPathHitGuide(hitGuide, secondaryDistance, secondarySpecular != 0);
         sum += sample;
         float lum = dot(sample, float3(.2126, .7152, .0722));
         float delta = lum - mean;
@@ -174,6 +194,7 @@ void RayGeneration()
     BatchMoments[pixelIndex] = float2(mean, m2);
     DirectRadiance[pixel] = float4(count > 0 ? directSum / count : 0, 1);
     DiffuseRadiance[pixel] = float4(count > 0 ? diffuseSum / count : 0, 1);
+    SecondaryGuide[pixel] = ResolvePathHitGuide(hitGuide);
 }
 
 [shader("miss")]

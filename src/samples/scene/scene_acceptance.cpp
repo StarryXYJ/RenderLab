@@ -271,6 +271,9 @@ void VerifyScene(rhi::Runtime& runtime, shader::Target target, const std::filesy
         // HDR diagnostics check physically valid per-channel decomposition and toggle consistency.
         const auto pitch = rhi::TextureRowPitch(64, rhi::Format::Rgba32Float);
         uint32_t diffusePixels = 0, specularPixels = 0, mixedChannels = 0;
+        uint32_t diffuseGuidePixels = 0, specularGuidePixels = 0;
+        detail::Require(switchedOff.pathSecondaryGuide && raw.pathSecondaryGuide,
+                        "Missing secondary hit guide diagnostic readback");
         for (uint32_t y = 0; y < 48; ++y)
             for (uint32_t x = 0; x < 64; ++x)
             {
@@ -288,6 +291,28 @@ void VerifyScene(rhi::Runtime& runtime, shader::Target target, const std::filesy
                                 raw.pathComponents[component]->Map().data() + y * pitch + x * 16,
                                 16);
                 }
+                std::array<float, 4> hitGuide{}, referenceGuide{};
+                std::memcpy(hitGuide.data(),
+                            switchedOff.pathSecondaryGuide->Map().data() + y * pitch + x * 16, 16);
+                std::memcpy(referenceGuide.data(),
+                            raw.pathSecondaryGuide->Map().data() + y * pitch + x * 16, 16);
+                for (size_t lobe = 0; lobe < 2; ++lobe)
+                {
+                    const float distance = hitGuide[lobe], count = hitGuide[lobe + 2];
+                    detail::Require(
+                        std::isfinite(distance) && std::isfinite(count) && count >= 0 &&
+                            count <= float(renderer::PathSamplesPerFrame) &&
+                            (count == 0 ? distance == 0 : distance > 0 && distance <= 10000.01f),
+                        "Invalid first-secondary guide distance or sample count");
+                    detail::Require(std::abs(distance - referenceGuide[lobe]) <=
+                                            1e-4f * std::max(1.f, distance) &&
+                                        count == referenceGuide[lobe + 2],
+                                    "Secondary guide changed after denoise toggle");
+                }
+                detail::Require(hitGuide[2] + hitGuide[3] <= float(renderer::PathSamplesPerFrame),
+                                "Secondary guide over-counted batch samples");
+                diffuseGuidePixels += hitGuide[2] > 0;
+                specularGuidePixels += hitGuide[3] > 0;
                 for (uint32_t channel = 0; channel < 3; ++channel)
                 {
                     const float total = components[0][channel], direct = components[1][channel],
@@ -309,6 +334,8 @@ void VerifyScene(rhi::Runtime& runtime, shader::Target target, const std::filesy
             }
         detail::Require(diffusePixels > 0 && specularPixels > 0 && mixedChannels > 0,
                         "Path fixture did not exercise overlapping indirect BRDF components");
+        detail::Require(diffuseGuidePixels > 0 && specularGuidePixels > 0,
+                        "Path fixture did not exercise both secondary hit guides");
         pathOptions.pathComponentDiagnostics = false;
         SaveImage(output / "path-filter-toggle.bmp", switchedOff.pixels->Map(), 64, 48,
                   rhi::TextureRowPitch(64));
@@ -406,12 +433,29 @@ void VerifyScene(rhi::Runtime& runtime, shader::Target target, const std::filesy
         detail::Require(!temporalRestart.reflectionHistoryReset &&
                             temporalRestart.reflectionTemporalFrames == 1,
                         "Path temporal re-enable did not restart display history");
+        pathOptions.pathComponentDiagnostics = true;
         pathRenderer.Document().MoveCamera({.5f, 0, 0}, {0, 5, 0});
         const auto moved = pathFrame();
         detail::Require(
             moved.reflectionSamples == renderer::PathSamplesPerFrame &&
                 moved.reflectionHistoryReset && moved.reflectionTemporalFrames == 2,
             "Path tracing camera change did not reset raw history and retain temporal history");
+        detail::Require(moved.pathTemporalGuide != nullptr, "Missing path temporal guide readback");
+        uint32_t parallaxPixels = 0;
+        for (uint32_t y = 0; y < 48; ++y)
+            for (uint32_t x = 0; x < 64; ++x)
+            {
+                std::array<float, 4> guide{};
+                std::memcpy(guide.data(),
+                            moved.pathTemporalGuide->Map().data() + y * pitch + x * 16, 16);
+                detail::Require(std::isfinite(guide[3]) && guide[3] >= 0 && guide[3] <= 1,
+                                "Path parallax confidence is outside [0,1]");
+                parallaxPixels += guide[3] > 0 && guide[3] < .9999f;
+            }
+        detail::Require(parallaxPixels > 0, "Path parallax confidence was never exercised");
+        logger.Write(LogLevel::Info,
+                     std::format("Path parallax confidence adjusted {} pixels", parallaxPixels));
+        pathOptions.pathComponentDiagnostics = false;
         pathRenderer.Document() = original;
         const auto restored = pathFrame();
         detail::Require(restored.reflectionSamples == renderer::PathSamplesPerFrame &&

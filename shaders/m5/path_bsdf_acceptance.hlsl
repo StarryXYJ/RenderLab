@@ -1,4 +1,5 @@
 #include "../RenderLab/PathBsdf.hlsli"
+#include "../RenderLab/PathHitGuide.hlsli"
 RWStructuredBuffer<float4> Result : register(u0);
 [numthreads(1,1,1)]
 void CSMain(uint3 id : SV_DispatchThreadID)
@@ -37,4 +38,11 @@ void CSMain(uint3 id : SV_DispatchThreadID)
     Result[scenario] = float4(sum / 65536, invalid);
     Result[scenario + 6] = float4(diffuseSum / 65536, 0);
     Result[scenario + 12] = float4(specularSum / 65536, 0);
+    PathHitGuideAccumulator guide = (PathHitGuideAccumulator)0;
+    if (scenario == 1) { AddPathHitGuide(guide, 4, false); AddPathHitGuide(guide, 8, false); }
+    if (scenario == 2) { AddPathHitGuide(guide, 2, true); AddPathHitGuide(guide, 8, true); }
+    if (scenario == 3) { AddPathHitGuide(guide, 10000, true); AddPathHitGuide(guide, 5, false); AddPathHitGuide(guide, 10000, false); }
+    if (scenario == 4) { AddPathHitGuide(guide, 0, true); AddPathHitGuide(guide, -1, false); }
+    if (scenario == 5) { AddPathHitGuide(guide, 2, true); AddPathHitGuide(guide, 10, true); AddPathHitGuide(guide, 4, false); }
+    Result[scenario + 18] = ResolvePathHitGuide(guide);
 }

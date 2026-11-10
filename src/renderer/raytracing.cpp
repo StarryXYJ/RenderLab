@@ -22,6 +22,8 @@ void PathTracingFeature::Build(rendergraph::Graph& graph, const RenderFrame& fra
                         {camera.width, camera.height, rhi::Format::Rgba32Float, true, false});
     graph.CreateTexture("PathTracing.RawDiffuseRadiance",
                         {camera.width, camera.height, rhi::Format::Rgba32Float, true, false});
+    graph.CreateTexture("PathTracing.SecondaryGuide",
+                        {camera.width, camera.height, rhi::Format::Rgba32Float, true, false});
     graph.CreateTexture("PathTracing.SurfaceGuide",
                         {camera.width, camera.height, rhi::Format::Rgba32Float, true, false});
     graph.CreateTexture("PathTracing.MaterialGuide",
@@ -44,6 +46,7 @@ void PathTracingFeature::Build(rendergraph::Graph& graph, const RenderFrame& fra
     const auto raw = trace.WriteTexture("PathTracing.RawRadiance");
     const auto rawDirect = trace.WriteTexture("PathTracing.RawDirectRadiance");
     const auto rawDiffuse = trace.WriteTexture("PathTracing.RawDiffuseRadiance");
+    const auto secondaryGuide = trace.WriteTexture("PathTracing.SecondaryGuide");
     const auto surfaceGuide = trace.WriteTexture("PathTracing.SurfaceGuide");
     const auto materialGuide = trace.WriteTexture("PathTracing.MaterialGuide");
     const auto batchMoments = trace.WriteBuffer("PathTracing.BatchMoments");
@@ -58,6 +61,7 @@ void PathTracingFeature::Build(rendergraph::Graph& graph, const RenderFrame& fra
             context.BindBuffer(17, batchMoments, 0, momentBytes, 8);
             context.BindTexture(18, rawDirect);
             context.BindTexture(19, rawDiffuse);
+            context.BindTexture(20, secondaryGuide);
             context.BindBuffer(4, constants, parameters.range.offset, parameters.range.size);
             for (size_t i = 0; i < surfaces.size(); ++i)
             {
@@ -185,6 +189,7 @@ void PathTracingFeature::Build(rendergraph::Graph& graph, const RenderFrame& fra
     const auto temporalCurrent = temporal.ReadTexture(filtered);
     const auto temporalSurface = temporal.ReadTexture(surfaceGuide);
     const auto temporalMaterial = temporal.ReadTexture(materialGuide);
+    const auto temporalSecondary = temporal.ReadTexture(secondaryGuide);
     const auto temporalFiltered = temporal.ReadTexture(filtered);
     const auto temporalConstants = temporal.ReadBuffer(
         input.temporalParameters.buffer, Use::Uniform, input.temporalParameters.range);
@@ -213,6 +218,7 @@ void PathTracingFeature::Build(rendergraph::Graph& graph, const RenderFrame& fra
             }
             context.BindTexture(12, temporalFiltered);
             context.BindTexture(13, display);
+            context.BindTexture(14, temporalSecondary);
             context.Dispatch((camera.width + 7) / 8, (camera.height + 7) / 8);
         });
     graph.SetTexture("PathTracing.DisplayRadiance", display);

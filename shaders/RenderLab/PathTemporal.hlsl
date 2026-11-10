@@ -33,6 +33,7 @@ Texture2D<float4> Filtered : register(t12);
 [[vk::image_format("rgba32f")]]
 #endif
 RWTexture2D<float4> Display : register(u13);
+Texture2D<float4> SecondaryGuide : register(t14);
 
 [numthreads(8,8,1)]
 void Temporal(uint3 id : SV_DispatchThreadID)
@@ -58,10 +59,13 @@ void Temporal(uint3 id : SV_DispatchThreadID)
     float3 direction = SafeNormalize(projected.xyz / projected.w - CameraPosition.xyz);
     float3 world = CameraPosition.xyz + direction * surface.w;
     float3 n = SafeNormalize(surface.xyz);
-    World[pixel] = float4(world, 1);
+    float4 secondary = SecondaryGuide.Load(int3(pixel, 0));
+    float distance = secondary.w > 0 ? secondary.y : 0;
+    World[pixel] = float4(world, distance > 0 ? distance : -1);
     Normal[pixel] = float4(n, 1);
     float3 history = 0;
     float count = 0, support = 0, motionPixels = 0;
+    float oldDistanceSum = 0, oldDistanceWeight = 0, parallaxConfidence = 1;
     float4 clip = mul(PreviousViewProjection, float4(world, 1));
     if (Options.x > 0 && clip.w > 1e-7 && clip.z > 0 && clip.z <= clip.w)
     {
@@ -82,7 +86,7 @@ void Temporal(uint3 id : SV_DispatchThreadID)
             float4 oldNormal = PreviousNormal.Load(int3(q, 0));
             float4 oldMaterial = PreviousMaterial.Load(int3(q, 0));
             float3 delta = oldWorld.xyz - world;
-            if (old.a < 1 || oldWorld.w <= 0 || oldNormal.w <= 0 ||
+            if (old.a < 1 || oldNormal.w <= 0 ||
                 dot(n, oldNormal.xyz) < .97 || length(delta) > footprint * 2 ||
                 abs(dot(delta, n)) > footprint * .5 ||
                 length(material.rgb - oldMaterial.rgb) > .08 ||
@@ -91,6 +95,11 @@ void Temporal(uint3 id : SV_DispatchThreadID)
             history += old.rgb * w;
             count += old.a * w;
             support += w;
+            if (oldWorld.w > 0 && oldWorld.w < 9999)
+            {
+                oldDistanceSum += oldWorld.w * w;
+                oldDistanceWeight += w;
+            }
         }
     }
     if (support > .1)
@@ -100,6 +109,25 @@ void Temporal(uint3 id : SV_DispatchThreadID)
         // Glossy reflections move differently from their receiver surface.
         float limit = lerp(2, 16, saturate((material.a - .1) / .5));
         count = min(count * saturate(support * 2), limit);
+        // A receiver and its reflected feature may move differently. This conservative
+        // estimate reduces history use; it does not reproject the combined signal as specular.
+        if (distance > 0 && distance < 9999 && oldDistanceWeight > .1 && material.a < .4)
+        {
+            distance = lerp(distance, oldDistanceSum / oldDistanceWeight, .75);
+            World[pixel] = float4(world, distance);
+            float3 view = SafeNormalize(CameraPosition.xyz - world);
+            float4 virtualClip = mul(PreviousViewProjection, float4(world - view * distance, 1));
+            if (virtualClip.w > 1e-7 && virtualClip.z > 0 && virtualClip.z <= virtualClip.w)
+            {
+                float2 virtualUv = float2(virtualClip.x / virtualClip.w * .5 + .5,
+                                          .5 - virtualClip.y / virtualClip.w * .5);
+                float2 receiverUv = float2(clip.x / clip.w * .5 + .5,
+                                           .5 - clip.y / clip.w * .5);
+                float disparity = length((virtualUv - receiverUv) * size);
+                float glossy = saturate((.4 - material.a) / .35) * saturate(secondary.w / 2);
+                parallaxConfidence = lerp(1, rcp(1 + .25 * disparity), glossy);
+            }
+        }
     }
     else
     {
@@ -130,9 +158,11 @@ void Temporal(uint3 id : SV_DispatchThreadID)
         history = clamp(history, max(0, mean - deviation - .02),
                         mean + deviation + .02);
     }
+    // Store the confidence for diagnostics; valid surface normals keep it strictly positive.
+    Normal[pixel] = float4(n, parallaxConfidence);
     float3 value = lerp(current, history, count / (count + 1));
     Output[pixel] = float4(value, min(count + 1, 16));
     // As stationary progressive samples accumulate, retire the correlated temporal preview.
     float preview = saturate(1 - max(0, Options.y - 8) / 24);
-    Display[pixel] = float4(lerp(filtered.rgb, value, preview * .5 * saturate(count / 2) / (1 + .5 * motionPixels)), filtered.a);
+    Display[pixel] = float4(lerp(filtered.rgb, value, preview * .5 * saturate(count / 2) * parallaxConfidence / (1 + .5 * motionPixels)), filtered.a);
 }
