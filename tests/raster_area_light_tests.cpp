@@ -105,6 +105,42 @@ void Check(rhi::Runtime& runtime, shader::Target target, const std::filesystem::
     compare(dark, capture(P::Deferred, S::Direct));
     document.Get(lightId).areaLight->enabled = false;
     compare(dark, capture(P::Forward, S::Direct));
+
+    document.ambient = {.4f, .4f, .4f};
+    auto& emitter = document.Get(lightId);
+    emitter.areaLight->enabled = true;
+    emitter.transform.position = {0, 1.5f, 4};
+    emitter.transform.rotation = {0, 1, 0, 0};
+    emitter.areaLight->radiance = {2, 1, .5f};
+    emitter.areaLight->width = emitter.areaLight->height = .8f;
+    const auto visible = capture(P::Forward, S::Direct);
+    compare(visible, capture(P::Deferred, S::Direct));
+    compare(visible, capture(P::Forward, S::IndexedDirect));
+    const size_t center = (Height / 2 * Width + Width / 2) * 4;
+    std::cout << "Visible center RGB=" << int(visible[center]) << "," << int(visible[center + 1])
+              << "," << int(visible[center + 2]) << '\n';
+    Require(visible[center] > visible[center + 1] && visible[center + 1] > visible[center + 2] &&
+                visible[center + 2] > 40,
+            "Visible area-light radiance or facing is incorrect");
+    emitter.transform.rotation = {};
+    const auto back = capture(P::Forward, S::Direct);
+    Require(back[center] < 3 && back[center + 1] < 3 && back[center + 2] < 3,
+            "Area-light back face did not occlude as black");
+    compare(back, capture(P::Deferred, S::Direct));
+    emitter.areaLight->enabled = false;
+    const auto behind = capture(P::Forward, S::Direct);
+    Require(behind[center] > 20, "Back face test lacks visible background geometry");
+    emitter.areaLight->enabled = true;
+    emitter.transform.rotation = {0, 1, 0, 0};
+    scene::Object blocker;
+    blocker.id = "e1f0a5640d4d41f39dd49fa3b4e96abb";
+    blocker.transform.position = {0, 1.5f, 5};
+    blocker.transform.scale = {1, 1, .1f};
+    blocker.mesh = scene::MeshRenderer{"b4748e75e72a5dba8d4439fa86854c92"};
+    document.objects.push_back(blocker);
+    const auto hidden = capture(P::Forward, S::Direct);
+    Require(hidden[center] + 30 < visible[center], "Geometry failed to occlude visible area light");
+    compare(hidden, capture(P::Deferred, S::Direct));
 }
 } // namespace
 int main(int argc, char** argv)

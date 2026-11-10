@@ -90,7 +90,9 @@ struct SceneRenderer::Impl
     std::array<float, 3> environmentAmbient{};
     std::shared_ptr<const shader::Package> toneMapping;
     std::shared_ptr<const shader::Package> deferredLighting;
-    std::shared_ptr<rhi::Buffer> fullscreen;
+    std::shared_ptr<rhi::Buffer> fullscreen, areaVertices;
+    std::shared_ptr<rhi::BindingLayout> areaLayout;
+    std::shared_ptr<rhi::ShaderModule> areaVertex, areaForward, areaGBuffer;
     std::shared_ptr<rhi::TextureView> offscreenDisplayView;
     struct MaterialInput
     {
@@ -268,6 +270,11 @@ struct SceneRenderer::Impl
         const std::array<float, 6> triangle{-1, -1, 3, -1, -1, 3};
         fullscreen =
             Upload(std::as_bytes(std::span{triangle}), "Display.Triangle", rhi::State::Vertex);
+        constexpr std::array<float, 36> emitterVertices{
+            -.5f, -.5f, 0, .5f, -.5f, 0, .5f, .5f, 0, -.5f, -.5f, 0, .5f, .5f, 0, -.5f, .5f, 0,
+            -.5f, -.5f, 1, .5f, -.5f, 1, .5f, .5f, 1, -.5f, -.5f, 1, .5f, .5f, 1, -.5f, .5f, 1};
+        areaVertices = Upload(std::as_bytes(std::span{emitterVertices}), "AreaLight.Vertices",
+                              rhi::State::Vertex);
         sampler = runtime.CreateSampler();
         UploadImage("white/Srgb", {1, 1, {255, 255, 255, 255}}, true);
         UploadImage("white/Linear", {1, 1, {255, 255, 255, 255}}, false);
@@ -419,6 +426,38 @@ struct SceneRenderer::Impl
                 for (size_t i = 0; i < stored.images.size(); ++i)
                     modelImages.emplace(id + "/Image/" + std::to_string(i), &stored.images[i]);
             }
+    }
+    std::shared_ptr<rhi::Pipeline> AreaEmitterPipeline(bool deferred, rhi::Format depthFormat)
+    {
+        if (!areaLayout)
+        {
+            areaLayout = runtime.CreateLayout(
+                {{0, rhi::BindingKind::ConstantBuffer}, {1, rhi::BindingKind::ConstantBuffer}});
+            shader::DxcCompiler compiler;
+            const auto module = [&](rhi::ShaderStage stage, const char* entry)
+            {
+                shader::ProgramRequest request;
+                request.entry = {stage, project.engine / "RenderLab" / "AreaEmitter.hlsl", entry};
+                request.target = shaderTarget;
+                request.generatedTypes = shader::GenerateTypesHeader(
+                    package->interfaces.at(package->ResolvePass(shader::PassRole::Forward).index));
+                return runtime.CreateShader(stage, compiler.Compile(request), entry);
+            };
+            areaVertex = module(rhi::ShaderStage::Vertex, "VSMain");
+            areaForward = module(rhi::ShaderStage::Pixel, "PSForward");
+            areaGBuffer = module(rhi::ShaderStage::Pixel, "PSGBuffer");
+        }
+        rhi::PipelineDesc desc;
+        desc.layout = areaLayout;
+        desc.vertex = areaVertex;
+        desc.pixel = deferred ? areaGBuffer : areaForward;
+        desc.colorFormats = std::vector<rhi::Format>(deferred ? 3 : 1, rhi::Format::Rgba32Float);
+        desc.depthStencilFormat = depthFormat;
+        desc.depth = {true, true};
+        desc.raster.cull = rhi::CullMode::None;
+        desc.vertexStride = 12;
+        desc.attributes = {{"POSITION", 0, rhi::VertexFormat::Float3, 0}};
+        return runtime.CreatePipeline(std::move(desc));
     }
     void EnsureRayQueryProgram()
     {
@@ -2025,6 +2064,23 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
             prepareDraw(instance, shader::PassRole::ShadowCaster);
         for (const auto& instance : indexed ? self.snapshot.allInstances : self.snapshot.instances)
             prepareDraw(instance, deferred ? shader::PassRole::GBuffer : shader::PassRole::Forward);
+    }
+    if (!pathTracing && !self.snapshot.areaLights.empty())
+    {
+        DrawPacket draw;
+        draw.pipeline = self.AreaEmitterPipeline(deferred, cameraDepthFormat);
+        draw.vertices = importBuffer(self.areaVertices, "AreaLight.Vertices", rhi::State::Vertex);
+        draw.count = static_cast<uint32_t>(self.snapshot.areaLights.size()) * 6;
+        draw.buffers = {
+            {0,
+             importBuffer(frameConstants.view.buffer, "AreaLight.View", rhi::State::HostWrite),
+             rendergraph::Use::Uniform,
+             {frameConstants.view.offset, frameConstants.view.size}},
+            {1,
+             importBuffer(frameConstants.area.buffer, "AreaLight.Data", rhi::State::HostWrite),
+             rendergraph::Use::Uniform,
+             {frameConstants.area.offset, frameConstants.area.size}}};
+        (deferred ? frame.gbuffer : frame.opaque).push_back(std::move(draw));
     }
     if (indexed)
     {
