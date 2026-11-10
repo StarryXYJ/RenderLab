@@ -50,6 +50,7 @@ void MeasurePathMotionSequences(rhi::Runtime& runtime, shader::Target target,
     options.pipeline = renderer::PipelineType::PathTracing;
     const auto render = [&](bool readback)
     {
+        options.pathHdrDiagnostics = readback;
         auto result = scene.Render(image, state, nullptr, readback, {}, options);
         state = rhi::State::CopySource;
         runtime.Wait(result.completion);
@@ -63,10 +64,41 @@ void MeasurePathMotionSequences(rhi::Runtime& runtime, shader::Target target,
         SaveImage(path, bytes, width, height, pitch);
         return std::vector<std::byte>(bytes.begin(), bytes.end());
     };
+    const auto captureHdr = [&](const renderer::SceneReadback& frame)
+    {
+        detail::Require(frame.pathHdrDisplay != nullptr, "Missing path HDR display readback");
+        const auto bytes = frame.pathHdrDisplay->Map();
+        const auto hdrPitch = rhi::TextureRowPitch(width, rhi::Format::Rgba32Float);
+        std::vector<float> result(width * height * 3);
+        for (uint32_t y = 0; y < height; ++y)
+            for (uint32_t x = 0; x < width; ++x)
+            {
+                std::array<float, 4> pixel{};
+                std::memcpy(pixel.data(), bytes.data() + y * hdrPitch + x * 16, 16);
+                for (size_t c = 0; c < 3; ++c)
+                {
+                    detail::Require(std::isfinite(pixel[c]) && pixel[c] >= 0,
+                                    "Nonfinite or negative path HDR display");
+                    result[(y * width + x) * 3 + c] = pixel[c];
+                }
+            }
+        return result;
+    };
+    const auto saveHdr = [&](const std::filesystem::path& path, const std::vector<float>& pixels)
+    {
+        std::filesystem::create_directories(path.parent_path());
+        std::ofstream file(path, std::ios::binary);
+        file.exceptions(std::ios::failbit | std::ios::badbit);
+        file << "PF\n" << width << ' ' << height << "\n-1.0\n";
+        for (uint32_t row = height; row-- > 0;)
+            file.write(reinterpret_cast<const char*>(pixels.data() + row * width * 3),
+                       width * 3 * sizeof(float));
+    };
     const std::array<const char*, 3> names{"gentle", "fast", "reveal"};
     for (size_t trajectory = 0; trajectory < names.size(); ++trajectory)
     {
         std::array<std::vector<std::vector<std::byte>>, 6> sequences;
+        std::array<std::vector<std::vector<float>>, 6> hdrSequences;
         std::vector<scene::Scene> poses;
         const auto base = output / "path-sequence" / names[trajectory];
         for (size_t mode = 0; mode < sequences.size(); ++mode)
@@ -106,38 +138,60 @@ void MeasurePathMotionSequences(rhi::Runtime& runtime, shader::Target target,
                     capture(result, base / std::format("seed-{}", options.pathSeed) /
                                         (mode % 2 == 0 ? "spatial" : "temporal") /
                                         std::format("{:02}.bmp", frame)));
+                hdrSequences[mode].push_back(captureHdr(result));
+                saveHdr(base / std::format("seed-{}", options.pathSeed) /
+                            (mode % 2 == 0 ? "spatial" : "temporal") /
+                            std::format("{:02}.pfm", frame),
+                        hdrSequences[mode].back());
             }
         }
         options.pathSeed = 1000;
         options.reflectionDenoise = false;
         options.reflectionTemporal = false;
         std::vector<std::vector<std::byte>> references;
+        std::vector<std::vector<float>> hdrReferences;
         for (uint32_t frame = 0; frame < motionFrames; ++frame)
         {
-            // Reset even if a repeated pose happens to match the last reference frame.
-            scene.Document() = poses[frame];
-            auto light = std::ranges::find_if(scene.Document().objects, [](const auto& object)
-                                              { return object.light.has_value(); });
-            detail::Require(light != scene.Document().objects.end(),
-                            "Sequence fixture needs a light");
-            light->light->intensity *= .5f;
-            render(false);
-            scene.Document() = poses[frame];
-            renderer::SceneReadback reference;
-            for (uint32_t sample = 0; sample < referenceFrames; ++sample)
+            std::vector<float> hdrReference(width * height * 3);
+            for (uint16_t referenceSeed : {uint16_t{1000}, uint16_t{1001}, uint16_t{1002}})
             {
-                reference = render(sample + 1 == referenceFrames);
-                detail::Require(reference.reflectionSamples ==
-                                    (sample + 1) * renderer::PathSamplesPerFrame,
-                                "Path sequence reference failed to accumulate");
+                options.pathSeed = referenceSeed;
+                // Reset even if a repeated pose happens to match the last reference frame.
+                scene.Document() = poses[frame];
+                auto light = std::ranges::find_if(scene.Document().objects, [](const auto& object)
+                                                  { return object.light.has_value(); });
+                detail::Require(light != scene.Document().objects.end(),
+                                "Sequence fixture needs a light");
+                light->light->intensity *= .5f;
+                render(false);
+                scene.Document() = poses[frame];
+                renderer::SceneReadback reference;
+                for (uint32_t sample = 0; sample < referenceFrames; ++sample)
+                {
+                    reference = render(sample + 1 == referenceFrames);
+                    detail::Require(reference.reflectionSamples ==
+                                        (sample + 1) * renderer::PathSamplesPerFrame,
+                                    "Path sequence reference failed to accumulate");
+                }
+                if (referenceSeed == 1000)
+                    references.push_back(
+                        capture(reference, base / "reference" / std::format("{:02}.bmp", frame)));
+                const auto hdr = captureHdr(reference);
+                saveHdr(base / "reference-hdr" / std::format("seed-{}", referenceSeed) /
+                            std::format("{:02}.pfm", frame),
+                        hdr);
+                for (size_t i = 0; i < hdr.size(); ++i)
+                    hdrReference[i] += hdr[i] / 3;
             }
-            references.push_back(
-                capture(reference, base / "reference" / std::format("{:02}.bmp", frame)));
+            hdrReferences.push_back(std::move(hdrReference));
+            saveHdr(base / "reference-hdr" / std::format("{:02}.pfm", frame), hdrReferences.back());
         }
         while (references.size() < sequenceFrames)
             references.push_back(references.back());
+        while (hdrReferences.size() < sequenceFrames)
+            hdrReferences.push_back(hdrReferences.back());
         std::array<double, 6> mse{}, residualDelta{}, signedError{}, largeError{}, sphereRoiMse{},
-            stoppedMse{};
+            stoppedMse{}, hdrMse{}, hdrStoppedMse{};
         constexpr double components = double(width) * height * 3;
         for (uint32_t frame = 0; frame < sequenceFrames; ++frame)
             for (uint32_t y = 0; y < height; ++y)
@@ -150,6 +204,13 @@ void MeasurePathMotionSequences(rhi::Runtime& runtime, shader::Target target,
                             const double error =
                                 int(std::to_integer<uint8_t>(sequences[mode][frame][pixel])) -
                                 int(std::to_integer<uint8_t>(references[frame][pixel]));
+                            const auto hdrPixel = (y * width + x) * 3 + channel;
+                            const double hdrError = hdrSequences[mode][frame][hdrPixel] -
+                                                    hdrReferences[frame][hdrPixel];
+                            hdrMse[mode] += hdrError * hdrError / components / sequenceFrames;
+                            if (frame >= motionFrames)
+                                hdrStoppedMse[mode] += hdrError * hdrError / components /
+                                                       (sequenceFrames - motionFrames);
                             mse[mode] += error * error / components / sequenceFrames;
                             if (frame >= motionFrames)
                                 stoppedMse[mode] +=
@@ -179,12 +240,16 @@ void MeasurePathMotionSequences(rhi::Runtime& runtime, shader::Target target,
                 "  \"mse\": [{:.6f}, {:.6f}], \"residualDeltaMse\": [{:.6f}, {:.6f}],\n"
                 "  \"signedError\": [{:.6f}, {:.6f}], \"absoluteErrorOver16Fraction\": "
                 "[{:.6f}, {:.6f}],\n  \"sphereCropMse\": [{:.6f}, {:.6f}],\n"
-                "  \"stoppedMse\": [{:.6f}, {:.6f}]\n}}\n",
+                "  \"stoppedMse\": [{:.6f}, {:.6f}],\n"
+                "  \"hdrReferenceSeeds\": [1000, 1001, 1002], \"hdrReferenceSppPerSeed\": {},\n"
+                "  \"hdrMse\": [{:.9f}, {:.9f}], \"hdrStoppedMse\": [{:.9f}, {:.9f}]\n}}\n",
                 names[trajectory], seed + 1, referenceFrames * renderer::PathSamplesPerFrame,
                 mse[spatial], mse[temporal], residualDelta[spatial], residualDelta[temporal],
                 signedError[spatial], signedError[temporal], largeError[spatial],
                 largeError[temporal], sphereRoiMse[spatial], sphereRoiMse[temporal],
-                stoppedMse[spatial], stoppedMse[temporal]);
+                stoppedMse[spatial], stoppedMse[temporal],
+                referenceFrames * renderer::PathSamplesPerFrame, hdrMse[spatial], hdrMse[temporal],
+                hdrStoppedMse[spatial], hdrStoppedMse[temporal]);
 #ifdef NDEBUG
             detail::Require(
                 mse[temporal] <= mse[spatial] * 1.1 &&
@@ -231,6 +296,7 @@ void VerifyScene(rhi::Runtime& runtime, shader::Target target, const std::filesy
         pathOptions.pipeline = renderer::PipelineType::PathTracing;
         pathOptions.captureGraph = true;
         pathOptions.pathComponentDiagnostics = true;
+        pathOptions.pathHdrDiagnostics = true;
         auto state = rhi::State::Undefined;
         const auto pathFrame = [&]()
         {
@@ -253,6 +319,7 @@ void VerifyScene(rhi::Runtime& runtime, shader::Target target, const std::filesy
             {
                 std::array<std::array<float, 4>, 3> parts{};
                 std::array<float, 4> direct{};
+                std::array<float, 4> display{};
                 for (size_t i = 0; i < parts.size(); ++i)
                 {
                     detail::Require(first.pathFilteredComponents[i] != nullptr,
@@ -264,6 +331,9 @@ void VerifyScene(rhi::Runtime& runtime, shader::Target target, const std::filesy
                 }
                 std::memcpy(direct.data(),
                             first.pathComponents[1]->Map().data() + y * filteredPitch + x * 16, 16);
+                detail::Require(first.pathHdrDisplay != nullptr, "Missing linear path display");
+                std::memcpy(display.data(),
+                            first.pathHdrDisplay->Map().data() + y * filteredPitch + x * 16, 16);
                 for (size_t c = 0; c < 3; ++c)
                 {
                     detail::Require(
@@ -272,6 +342,9 @@ void VerifyScene(rhi::Runtime& runtime, shader::Target target, const std::filesy
                             std::abs(parts[0][c] - direct[c] - parts[1][c] - parts[2][c]) <=
                                 1e-5f * std::max(1.f, std::abs(parts[0][c])),
                         "Filtered path components do not reconstruct the display input");
+                    detail::Require(std::abs(display[c] - parts[0][c]) <=
+                                        1e-5f * std::max(1.f, std::abs(parts[0][c])),
+                                    "Cold temporal HDR display differs from filtered input");
                 }
                 filteredIndirectPixels += parts[1][0] + parts[2][0] > 1e-5f;
             }
@@ -282,10 +355,12 @@ void VerifyScene(rhi::Runtime& runtime, shader::Target target, const std::filesy
             {64, 48, rhi::Format::Rgba8Srgb, false, true, "PathTracing.StandardFilter"});
         auto standardOptions = pathOptions;
         standardOptions.pathComponentDiagnostics = false;
+        standardOptions.pathHdrDiagnostics = false;
         const auto standard = standardRenderer.Render(standardTarget, rhi::State::Undefined,
                                                       nullptr, true, {}, standardOptions);
         runtime.Wait(standard.completion);
         const auto standardBytes = standard.pixels->Map();
+        detail::Require(!standard.pathHdrDisplay, "Disabled HDR readback returned a buffer");
         const auto diagnosticBytes = first.pixels->Map();
         detail::Require(
             std::equal(standardBytes.begin(), standardBytes.end(), diagnosticBytes.begin()),

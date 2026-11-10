@@ -70,6 +70,8 @@ struct SceneRenderOptions
     bool reflectionDiagnostics = false;
     /// Read back path component means and secondary/temporal guides for validation.
     bool pathComponentDiagnostics = false;
+    /// Read back the linear path display before tone mapping; never affects accumulation.
+    bool pathHdrDiagnostics = false;
     /// Reproducible path sampling stream; changing it resets path histories.
     uint16_t pathSeed = 0;
     /// Validation baseline: disable explicit rectangular-light sampling and its MIS weighting.
@@ -104,6 +106,8 @@ struct SceneReadback
     std::shared_ptr<rhi::Buffer> pathTemporalGuide;
     /// Optional diffuse and specular temporal signals and their separate history lengths.
     std::array<std::shared_ptr<rhi::Buffer>, 2> pathTemporalComponents;
+    /// Optional linear RGBA32F display branch, pitched by TextureRowPitch; wait before mapping.
+    std::shared_ptr<rhi::Buffer> pathHdrDisplay;
     uint64_t compileNs = 0, prepareNs = 0, recordNs = 0;
     /// CPU scene/material preparation and graph construction, before graph compilation.
     uint64_t scenePrepareNs = 0;

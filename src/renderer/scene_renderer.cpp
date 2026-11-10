@@ -1128,8 +1128,8 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
     }
     const bool pathTracing = options.pipeline == PipelineType::PathTracing;
     const bool rayTracing = options.pipeline == PipelineType::RayTracing || pathTracing;
-    if (options.pathComponentDiagnostics && !pathTracing)
-        throw std::invalid_argument("Path component diagnostics require the path tracing pipeline");
+    if ((options.pathComponentDiagnostics || options.pathHdrDiagnostics) && !pathTracing)
+        throw std::invalid_argument("Path diagnostics require the path tracing pipeline");
     if (options.pipeline != PipelineType::Forward && options.pipeline != PipelineType::Deferred &&
         !rayTracing)
         throw std::invalid_argument("Unknown or unavailable scene render pipeline");
@@ -2212,6 +2212,21 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
             context.Draw(3);
         });
     SceneReadback result;
+    if (options.pathHdrDiagnostics)
+    {
+        const auto pitch = rhi::TextureRowPitch(target->desc.width, rhi::Format::Rgba32Float);
+        result.pathHdrDisplay =
+            self.runtime.CreateBuffer({uint64_t(pitch) * target->desc.height, rhi::Memory::Readback,
+                                       "PathTracing.HdrDisplay"});
+        auto buffer = graph.ImportBuffer("PathTracing.HdrDisplay.Readback", result.pathHdrDisplay,
+                                         {rhi::State::CopyDest, false});
+        auto pass = graph.AddCopyPass("PathTracing.HdrDisplay.Readback");
+        const auto source = pass.ReadTexture(displaySource);
+        buffer = pass.WriteBuffer(buffer);
+        pass.Execute([buffer, source, pitch](rendergraph::CopyContext& context)
+                     { context.CopyTexture(buffer, source, pitch, false); });
+        graph.Export(buffer, rhi::State::HostRead);
+    }
     if (options.reflectionDiagnostics && frame.rayTracing.statisticsPipeline)
     {
         const auto bytes = uint64_t(target->desc.width) * target->desc.height * 8;
