@@ -149,6 +149,35 @@ void Check(rhi::Runtime& runtime, shader::Target target, const std::filesystem::
     std::cout << "Direct HDR means: path=" << directMean << " raster=" << rasterMean
               << " hybrid=" << hybridMean << " MSE=" << mse(raster, reference.direct) << "/"
               << mse(hybrid, reference.direct) << '\n';
+    double rasterInterior = 0, hybridInterior = 0;
+    size_t interiorChannels = 0;
+    for (uint32_t y = 1; y + 1 < Height; ++y)
+        for (uint32_t x = 1; x + 1 < Width; ++x)
+        {
+            const size_t i = y * Width + x;
+            const double center = Luminance(reference.direct[i]);
+            if (center > 2 || Luminance(reference.total[i]) >= 5)
+                continue;
+            bool stable = true;
+            for (int dy = -1; dy <= 1; ++dy)
+                for (int dx = -1; dx <= 1; ++dx)
+                    stable &= std::abs(Luminance(reference.direct[(y + dy) * Width + x + dx]) -
+                                       center) < .08;
+            if (!stable)
+                continue;
+            for (size_t c = 0; c < 3; ++c)
+            {
+                rasterInterior += std::pow(double(raster[i][c]) - reference.direct[i][c], 2);
+                hybridInterior += std::pow(double(hybrid[i][c]) - reference.direct[i][c], 2);
+                ++interiorChannels;
+            }
+        }
+    Require(interiorChannels > 300, "HDR reference has insufficient interior samples");
+    std::cout << "Direct interior HDR MSE: raster=" << rasterInterior / interiorChannels
+              << " hybrid=" << hybridInterior / interiorChannels << " channels=" << interiorChannels
+              << '\n';
+    Require(rasterInterior / interiorChannels < .005 && hybridInterior / interiorChannels < .002,
+            "Interior area-light HDR error exceeded the finite-scene tolerance");
     Require(directMean > .001 && rasterMean > .7 * directMean && rasterMean < 1.3 * directMean &&
                 hybridMean > .7 * directMean && hybridMean < 1.3 * directMean,
             "Area-light direct HDR energy differs substantially from path tracing");
@@ -210,6 +239,20 @@ void Check(rhi::Runtime& runtime, shader::Target target, const std::filesystem::
     std::cout << "Multi-light HDR mean: one=" << oneMean << " two=" << twoMean << '\n';
     Require(oneMean > 0 && twoMean > 1.45 * oneMean && twoMean < 2.7 * oneMean,
             "Uniform light selection lost or duplicated multi-light energy");
+    const auto twoRaster = rasterCapture(renderer::PipelineType::Deferred);
+    const auto twoHybrid = rasterCapture(renderer::PipelineType::RayTracing);
+    const double twoPathDirect = mean(twoLights.direct, twoLights.total);
+    const double twoRasterDirect = mean(twoRaster, twoLights.total);
+    const double twoHybridDirect = mean(twoHybrid, twoLights.total);
+    std::cout << "Two-light direct HDR means: path=" << twoPathDirect
+              << " raster=" << twoRasterDirect << " hybrid=" << twoHybridDirect << '\n';
+    Require(twoPathDirect > .001 && twoRasterDirect > .6 * twoPathDirect &&
+                twoRasterDirect < 1.5 * twoPathDirect && twoHybridDirect > .6 * twoPathDirect &&
+                twoHybridDirect < 1.5 * twoPathDirect,
+            "Two-light direct HDR energy differs substantially from path tracing");
+    options.pipeline = renderer::PipelineType::PathTracing;
+    options.sceneHdrDiagnostics = false;
+    options.reflections = true;
 
     doc = original;
     auto& cameraLight =

@@ -65,4 +65,18 @@ Forward、Deferred 和 Indexed Forward 使用共享的场景灯快照与 LTC 查
 Ray Tracing 管线对不透明主表面使用 Ray Query，分别在每盏灯上固定分层取 4×4 点，追踪到有限灯面距离并计算可见比例；其他解析灯与不透明投影几何也可遮挡。这一比例分别乘以各灯的 LTC 直接光。它能产生近似软阴影，但没有按 BRDF/立体角加权，固定网格可能出现分层和走样，尤其在近灯、大遮挡或高光场景；它不是无偏的面积积分，也没有时域滤波。每像素最多增加 32 条阴影射线，尚未完成性能与跨设备验收。透明表面使用上述光栅阴影图而非 Ray Query；阴影投射遵循当前不透明几何及投影策略，不支持透明或 Masked 光追遮挡。`gpu.{dx12,vulkan}.area_light_reflection` 对照完全、部分遮挡与双灯独立性。
 
 
-`SceneRenderOptions::sceneHdrDiagnostics` 可读取显示变换前的线性 RGBA32F（`SceneReadback::sceneHdr`），用于跨管线对照。Cornell Box 的 DX12 40×40 有限测试以 Path Tracing 4096 spp 的 primary direct 为参考，排除参考总亮度不低于 5 的像素后，平均亮度为路径 0.1441、Deferred 0.1248、混合 Ray Query 0.1294；逐通道 MSE 分别约 0.125 和 0.124。路径主射线带抖动、光栅边界不抗锯齿，因此这些 MSE 包含几何边缘差异，不能单独解释为阴影估计误差，也不能推及其他场景。`gpu.{dx12,vulkan}.area_light_render` 执行此对照与能量范围检查。
+`SceneRenderOptions::sceneHdrDiagnostics` 可读取显示变换前的线性 RGBA32F（`SceneReadback::sceneHdr`），用于跨管线对照。Cornell Box 的 DX12 40×40 有限测试以 Path Tracing 4096 spp 的 primary direct 为参考，排除参考总亮度不低于 5 的像素后，平均亮度为路径 0.1441、Deferred 0.1248、混合 Ray Query 0.1294；逐通道 MSE 分别约 0.125 和 0.124。路径主射线带抖动、光栅边界不抗锯齿，因此这些 MSE 包含几何边缘差异，不能单独解释为阴影估计误差，也不能推及其他场景。对 926 个按参考图筛掉高亮、几何边缘及局部梯度的像素，逐通道 MSE 为光栅 0.000566、混合 0.0000526；此筛选不覆盖复杂边界。双灯变体以 1024 spp 路径 primary direct 为参考，平均亮度路径 0.03464、光栅 0.02852、混合 0.02946。`gpu.{dx12,vulkan}.area_light_render` 执行此对照与能量范围检查。
+
+
+## 有限性能测量
+
+2026-11-10 使用 RTX 5060、驱动 32.0.15.9174、Release、验证层关闭、512×512、固定相机，预热 10 帧后测量 30 帧。零灯为 Cornell 顶灯禁用；单灯为原场景；双灯将其拆为两个较小灯，几何相同。以下是对应 GPU pass 平均耗时（毫秒），不等于端到端帧时间或通用性能结论：
+
+| 后端 | 管线与 pass | 零灯 | 一灯 | 两灯 |
+| --- | --- | ---: | ---: | ---: |
+| DX12 | Forward.Opaque | 0.042 | 0.166 | 0.288 |
+| Vulkan | Forward.Opaque | 0.041 | 0.161 | 0.290 |
+| DX12 | RayTracing.Shadows | 0.018 | 0.399 | 0.816 |
+| Vulkan | RayTracing.Shadows | 0.013 | 0.407 | 0.809 |
+
+每张光栅面灯阴影图 pass 约 0.03–0.04 ms。光栅 pass 同时包含 LTC 和阴影滤波；Ray Query pass 包含方向光检查与面灯射线，双灯尺寸也不同，不能直接将差值解读为单独算法的精确成本。混合管线当前即使没有透明表面也会生成光栅灯阴影图。性能数字仅测一张显卡、一个场景和分辨率；Intel 核显另外以 DX12、验证层开启、256² 运行 Forward 和混合管线各 8 帧，均无验证错误，但这不是画质或性能验收。Intel 核显 Vulkan 在创建 Runtime 时因现有 64 位有效时间戳要求被拒绝，未进入面灯渲染；动态遮挡与长期运行仍未验收。结果和零灯/双灯临时场景位于 `out/area-light-benchmark`，生成命令见 [构建手册](../manual/build.md#面光源短测)。

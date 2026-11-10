@@ -553,3 +553,14 @@ ctest --preset windows-release -R '^editor.input$' --output-on-failure
 M0 的设备初始化历史见 [M0 基础模块](../docs/m0-foundation.md)。M1 的 API、生命周期、分配预算和支持范围见 [最小 RHI](../docs/m1-rhi.md)，各阶段的实际验收配置与结论统一见 [阶段计划](../design/phaseplan.md)。
 
 M1 首期资源为单 mip/layer 的 2D 纹理、显式单流顶点布局和单 Graphics Queue；Vulkan 的 Host 内存要求 coherent，Timestamp 要求 64 位有效计数。资源分配采用显式预算下的 dedicated/committed 分配，尚未采用子分配、Bindless 或 GPU 剔除。验证开启时的 Timestamp 只验证读回链路，不是性能基准。
+
+
+### 面光源短测
+
+构建 `renderlab_sandbox` 后可对 Cornell Box 的单灯场景测量，调整后端和管线分别运行；下面使用隔离 Release 构建，路径按实际配置替换：
+
+```powershell
+./out/build/area-light-release/renderlab_sandbox.exe --backend dx12 --headless --validation off --benchmark 30 --warmup-frames 10 --width 512 --height 512 --pipeline forward --project sample/m4/CornellBox.rlproject --output out/area-light-benchmark/forward --profile out/area-light-benchmark/forward-profile.json
+```
+
+将 `--pipeline` 改为 `raytracing`、`--backend` 改为 `vulkan` 可对照其他路径；为每次运行指定不同输出。GPU pass 名称与数据的解释见 [面光源](../docs/area-lights.md#有限性能测量)。
