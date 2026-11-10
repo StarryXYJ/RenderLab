@@ -14,6 +14,16 @@ Texture2D<float4> MaterialGuide : register(t4);
 StructuredBuffer<float2> Moments : register(t5);
 Texture2D<float4> DirectRadiance : register(t6);
 Texture2D<float4> DiffuseRadiance : register(t7);
+#ifdef PATH_COMPONENT_OUTPUTS
+#ifdef SPIRV
+[[vk::image_format("rgba32f")]]
+#endif
+RWTexture2D<float4> FilteredDiffuse : register(u8);
+#ifdef SPIRV
+[[vk::image_format("rgba32f")]]
+#endif
+RWTexture2D<float4> FilteredSpecular : register(u9);
+#endif
 
 float Luminance(float3 color) { return dot(color, float3(.2126, .7152, .0722)); }
 
@@ -38,6 +48,10 @@ void Denoise(uint3 id : SV_DispatchThreadID)
     if (guide.w <= 0 || strength <= 0)
     {
         Output[pixel] = combined;
+#ifdef PATH_COMPONENT_OUTPUTS
+        FilteredDiffuse[pixel] = float4(centerDiffuse, 1);
+        FilteredSpecular[pixel] = float4(combined.rgb - direct - centerDiffuse, 1);
+#endif
         return;
     }
     float3 diffuseColors[9], specularColors[9];
@@ -67,6 +81,10 @@ void Denoise(uint3 id : SV_DispatchThreadID)
     if (count < 3)
     {
         Output[pixel] = combined;
+#ifdef PATH_COMPONENT_OUTPUTS
+        FilteredDiffuse[pixel] = float4(centerDiffuse, 1);
+        FilteredSpecular[pixel] = float4(combined.rgb - direct - centerDiffuse, 1);
+#endif
         return;
     }
     float sortedDiffuse[9], sortedSpecular[9];
@@ -96,4 +114,8 @@ void Denoise(uint3 id : SV_DispatchThreadID)
     float3 diffuseResult = lerp(centerDiffuse, diffuseSum / total, strength);
     float3 specularResult = lerp(centerSpecular, specularSum / total, strength);
     Output[pixel] = float4(direct + diffuseResult + specularResult, combined.a);
+#ifdef PATH_COMPONENT_OUTPUTS
+    FilteredDiffuse[pixel] = float4(diffuseResult, 1);
+    FilteredSpecular[pixel] = float4(specularResult, 1);
+#endif
 }

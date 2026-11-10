@@ -154,6 +154,13 @@ void PathTracingFeature::Build(rendergraph::Graph& graph, const RenderFrame& fra
     }
     graph.CreateTexture("PathTracing.FilteredRadiance",
                         {camera.width, camera.height, rhi::Format::Rgba32Float, true, false});
+    if (input.pathFilteredComponents)
+    {
+        graph.CreateTexture("PathTracing.FilteredDiffuse",
+                            {camera.width, camera.height, rhi::Format::Rgba32Float, true, false});
+        graph.CreateTexture("PathTracing.FilteredSpecular",
+                            {camera.width, camera.height, rhi::Format::Rgba32Float, true, false});
+    }
     auto denoise = graph.AddComputePass("PathTracing.Denoise");
     const auto source = denoise.ReadTexture(accumulated);
     const auto direct = denoise.ReadTexture(directAccumulated);
@@ -164,6 +171,12 @@ void PathTracingFeature::Build(rendergraph::Graph& graph, const RenderFrame& fra
     const auto filterConstants =
         denoise.ReadBuffer(parameters.buffer, Use::Uniform, parameters.range);
     const auto filtered = denoise.WriteTexture("PathTracing.FilteredRadiance");
+    std::vector<TextureHandle> components;
+    if (input.pathFilteredComponents)
+    {
+        components.push_back(denoise.WriteTexture("PathTracing.FilteredDiffuse"));
+        components.push_back(denoise.WriteTexture("PathTracing.FilteredSpecular"));
+    }
     denoise.Execute(
         [=](ComputeContext& context)
         {
@@ -176,6 +189,8 @@ void PathTracingFeature::Build(rendergraph::Graph& graph, const RenderFrame& fra
             context.BindBuffer(5, moments, 0, momentBytes, 8);
             context.BindTexture(6, direct);
             context.BindTexture(7, diffuse);
+            for (uint32_t i = 0; i < components.size(); ++i)
+                context.BindTexture(8 + i, components[i]);
             context.Dispatch((camera.width + 7) / 8, (camera.height + 7) / 8);
         });
     if (!input.temporalPipeline)

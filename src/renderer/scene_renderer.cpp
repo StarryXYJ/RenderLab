@@ -110,7 +110,8 @@ struct SceneRenderer::Impl
     std::unique_ptr<IndexedScene> indexedScene;
     std::shared_ptr<rhi::Pipeline> rayQueryShadow;
     std::shared_ptr<rhi::ShaderTable> reflectionTable, reflectionTableWithoutGuide, pathTable;
-    std::shared_ptr<rhi::Pipeline> pathDenoise, pathHistory, pathStatistics, pathTemporal;
+    std::shared_ptr<rhi::Pipeline> pathDenoise, pathDenoiseComponents, pathHistory, pathStatistics,
+        pathTemporal;
     std::shared_ptr<rhi::Pipeline> reflectionHistory, reflectionStatistics, reflectionCombine,
         reflectionDenoise, reflectionTemporal;
     std::shared_ptr<rhi::Buffer> emptyReflectionStatistics;
@@ -529,6 +530,33 @@ struct SceneRenderer::Impl
         pathDenoise = std::move(filter);
         pathHistory = std::move(history);
         pathStatistics = std::move(statistics);
+    }
+    void EnsurePathComponentProgram()
+    {
+        if (pathDenoiseComponents)
+            return;
+        shader::DxcCompiler compiler;
+        shader::ProgramRequest request;
+        request.entry = {rhi::ShaderStage::Compute,
+                         project.engine / "RenderLab" / "PathDenoise.hlsl", "Denoise"};
+        request.target = shaderTarget;
+        if (shaderTarget == shader::Target::Spirv)
+            request.defines["SPIRV"] = "1";
+        rhi::PipelineDesc desc;
+        request.defines["PATH_COMPONENT_OUTPUTS"] = "1";
+        desc.layout = runtime.CreateLayout({{0, rhi::BindingKind::SampledTexture},
+                                            {1, rhi::BindingKind::SampledTexture},
+                                            {2, rhi::BindingKind::StorageTexture},
+                                            {3, rhi::BindingKind::ConstantBuffer},
+                                            {4, rhi::BindingKind::SampledTexture},
+                                            {5, rhi::BindingKind::ReadOnlyBuffer},
+                                            {6, rhi::BindingKind::SampledTexture},
+                                            {7, rhi::BindingKind::SampledTexture},
+                                            {8, rhi::BindingKind::StorageTexture},
+                                            {9, rhi::BindingKind::StorageTexture}});
+        desc.compute =
+            runtime.CreateShader(rhi::ShaderStage::Compute, compiler.Compile(request), "Denoise");
+        pathDenoiseComponents = runtime.CreatePipeline(desc);
     }
     void EnsureReflectionPrograms()
     {
@@ -1590,7 +1618,13 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
             {slice.offset, slice.size}};
         frame.rayTracing.historyPipeline = pathTracing ? self.pathHistory : self.reflectionHistory;
         if (pathTracing && options.reflectionDenoise)
-            frame.rayTracing.pathDenoisePipeline = self.pathDenoise;
+        {
+            if (options.pathComponentDiagnostics)
+                self.EnsurePathComponentProgram();
+            frame.rayTracing.pathFilteredComponents = options.pathComponentDiagnostics;
+            frame.rayTracing.pathDenoisePipeline =
+                options.pathComponentDiagnostics ? self.pathDenoiseComponents : self.pathDenoise;
+        }
         if (pathTracing)
             frame.rayTracing.pathStatisticsPipeline = self.pathStatistics;
         frame.rayTracing.statisticsPipeline = self.reflectionStatistics;
@@ -2192,6 +2226,27 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
                 {uint64_t(pitch) * target->desc.height, rhi::Memory::Readback, name});
             auto buffer =
                 graph.ImportBuffer(name, result.pathComponents[i], {rhi::State::CopyDest, false});
+            auto pass = graph.AddCopyPass(name);
+            const auto source = pass.ReadTexture(sources[i]);
+            buffer = pass.WriteBuffer(buffer);
+            pass.Execute([buffer, source, pitch](rendergraph::CopyContext& context)
+                         { context.CopyTexture(buffer, source, pitch, false); });
+            graph.Export(buffer, rhi::State::HostRead);
+        }
+    }
+    if (frame.rayTracing.pathFilteredComponents)
+    {
+        const auto pitch = rhi::TextureRowPitch(target->desc.width, rhi::Format::Rgba32Float);
+        const std::array<const char*, 3> sources{"PathTracing.FilteredRadiance",
+                                                 "PathTracing.FilteredDiffuse",
+                                                 "PathTracing.FilteredSpecular"};
+        for (size_t i = 0; i < sources.size(); ++i)
+        {
+            const auto name = "PathTracing.FilteredReadback." + std::to_string(i);
+            result.pathFilteredComponents[i] = self.runtime.CreateBuffer(
+                {uint64_t(pitch) * target->desc.height, rhi::Memory::Readback, name});
+            auto buffer = graph.ImportBuffer(name, result.pathFilteredComponents[i],
+                                             {rhi::State::CopyDest, false});
             auto pass = graph.AddCopyPass(name);
             const auto source = pass.ReadTexture(sources[i]);
             buffer = pass.WriteBuffer(buffer);

@@ -96,6 +96,8 @@ struct SceneReadback
     std::shared_ptr<rhi::Buffer> reflectionStatistics;
     /// Optional RGBA32F means: total, primary direct, indirect diffuse; wait for completion.
     std::array<std::shared_ptr<rhi::Buffer>, 3> pathComponents;
+    /// Optional filtered total, diffuse and specular radiance, present only when denoising.
+    std::array<std::shared_ptr<rhi::Buffer>, 3> pathFilteredComponents;
     /// Optional per-frame first-secondary hit guide (RGBA32F); wait for completion.
     std::shared_ptr<rhi::Buffer> pathSecondaryGuide;
     /// Optional temporal normal and parallax confidence (RGBA32F), when enabled.

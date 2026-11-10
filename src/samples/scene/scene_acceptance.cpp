@@ -246,6 +246,50 @@ void VerifyScene(rhi::Runtime& runtime, shader::Target target, const std::filesy
                             second.reflectionSamples == 2 * renderer::PathSamplesPerFrame &&
                             !second.reflectionHistoryReset,
                         "Path tracing did not accumulate successive samples");
+        const auto filteredPitch = rhi::TextureRowPitch(64, rhi::Format::Rgba32Float);
+        uint32_t filteredIndirectPixels = 0;
+        for (uint32_t y = 0; y < 48; ++y)
+            for (uint32_t x = 0; x < 64; ++x)
+            {
+                std::array<std::array<float, 4>, 3> parts{};
+                std::array<float, 4> direct{};
+                for (size_t i = 0; i < parts.size(); ++i)
+                {
+                    detail::Require(first.pathFilteredComponents[i] != nullptr,
+                                    "Missing filtered path component");
+                    std::memcpy(parts[i].data(),
+                                first.pathFilteredComponents[i]->Map().data() + y * filteredPitch +
+                                    x * 16,
+                                16);
+                }
+                std::memcpy(direct.data(),
+                            first.pathComponents[1]->Map().data() + y * filteredPitch + x * 16, 16);
+                for (size_t c = 0; c < 3; ++c)
+                {
+                    detail::Require(
+                        std::isfinite(parts[0][c]) && std::isfinite(parts[1][c]) &&
+                            std::isfinite(parts[2][c]) &&
+                            std::abs(parts[0][c] - direct[c] - parts[1][c] - parts[2][c]) <=
+                                1e-5f * std::max(1.f, std::abs(parts[0][c])),
+                        "Filtered path components do not reconstruct the display input");
+                }
+                filteredIndirectPixels += parts[1][0] + parts[2][0] > 1e-5f;
+            }
+        detail::Require(filteredIndirectPixels > 0,
+                        "Filtered components did not exercise indirect light");
+        renderer::SceneRenderer standardRenderer(runtime, target, fixture, engine);
+        auto standardTarget = runtime.CreateTexture(
+            {64, 48, rhi::Format::Rgba8Srgb, false, true, "PathTracing.StandardFilter"});
+        auto standardOptions = pathOptions;
+        standardOptions.pathComponentDiagnostics = false;
+        const auto standard = standardRenderer.Render(standardTarget, rhi::State::Undefined,
+                                                      nullptr, true, {}, standardOptions);
+        runtime.Wait(standard.completion);
+        const auto standardBytes = standard.pixels->Map();
+        const auto diagnosticBytes = first.pixels->Map();
+        detail::Require(
+            std::equal(standardBytes.begin(), standardBytes.end(), diagnosticBytes.begin()),
+            "Filtered component diagnostics changed the displayed image");
         bool trace = false, accumulate = false, accumulateDirect = false, accumulateDiffuse = false,
              filter = false, temporal = false, raster = false;
         for (const auto& pass : first.graphSnapshot->passes)
@@ -263,6 +307,8 @@ void VerifyScene(rhi::Runtime& runtime, shader::Target target, const std::filesy
                         "Path tracing graph composition mismatch");
         pathOptions.reflectionDenoise = false;
         const auto switchedOff = pathFrame();
+        detail::Require(!switchedOff.pathFilteredComponents[0],
+                        "Disabled denoising returned filtered component readback");
         detail::Require(switchedOff.reflectionSamples == 3 * renderer::PathSamplesPerFrame &&
                             !switchedOff.reflectionHistoryReset,
                         "Path filter toggle reset the raw accumulation");
