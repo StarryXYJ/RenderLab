@@ -363,7 +363,7 @@ void Gpu(rhi::Runtime& runtime, shader::Target target, const std::filesystem::pa
     const shader::MaterialTemplate litSchema(lit.package);
     int revision = 0;
     const auto save = [&](const std::string& id, std::array<double, 4> rgba,
-                          const std::string& variant, bool useLit = false)
+                          const std::string& variant, bool useLit = false, bool casts = true)
     {
         const auto& selected = useLit ? litSchema : schema;
         auto asset = material::Create(selected);
@@ -372,6 +372,7 @@ void Gpu(rhi::Runtime& runtime, shader::Target target, const std::filesystem::pa
                       std::array<double, 1>{variant == "Transparent" ? 1.0 : 0.0});
         material::Set(asset, selected, "alpha_clip",
                       std::array<double, 1>{variant == "Masked" ? 1.0 : 0.0});
+        material::Set(asset, selected, "cast_shadows", std::array<double, 1>{casts ? 1.0 : 0.0});
         const auto& path = database.Get(id).path;
         material::Save(asset, path);
         std::filesystem::last_write_time(path, std::filesystem::file_time_type::clock::now() +
@@ -440,6 +441,52 @@ void Gpu(rhi::Runtime& runtime, shader::Target target, const std::filesystem::pa
     Require(render("masked-no-cast-disabled") == clippedShadow,
             "Fully clipped material must not cast a shadow");
     object("sun").light->shadows = true;
+    // Area shadow casters are independent of the directional light's enabled state.
+    document = original;
+    object("sun").light->intensity = 0;
+    object("solid").enabled = false;
+    object("glass").enabled = false;
+    scene::Object area;
+    area.id = "e7f0a5640d4d41f39dd49fa3b4e96abb";
+    area.transform.position = {1.3f, 4, 0};
+    area.transform.rotation = {-.70710678f, 0, 0, .70710678f};
+    area.areaLight = scene::RectAreaLight{};
+    area.areaLight->radiance = {15, 15, 15};
+    area.areaLight->width = area.areaLight->height = 1;
+    document.objects.push_back(area);
+    save(backMaterial, {.65, .65, .65, 1}, "Default", true);
+    save(maskedId, {1, 1, 1, 0}, "Masked", true);
+    const auto areaClipped = render("area-masked-clipped");
+    object("masked").enabled = false;
+    Require(render("area-masked-disabled") == areaClipped,
+            "Fully clipped material must not cast an area shadow");
+    object("masked").enabled = true;
+    save(maskedId, {1, 1, 1, 1}, "Masked", true, false);
+    const auto areaNoCast = render("area-masked-no-cast");
+    save(maskedId, {1, 1, 1, 1}, "Masked", true, true);
+    const auto areaCast = render("area-masked-cast");
+    size_t areaDarkened = 0;
+    for (size_t i = 0; i < areaCast.size(); i += 4)
+        areaDarkened += areaCast[i] + 10 < areaNoCast[i];
+    std::cout << "Area masked shadow darkened pixels=" << areaDarkened << '\n';
+    Require(areaDarkened > 20, "Enabled masked material failed to cast area shadows");
+    save(backMaterial, {.65, .65, .65, .7}, "Transparent", true);
+    save(maskedId, {1, 1, 1, 1}, "Masked", true, false);
+    const auto transparentNoCast = render("area-transparent-no-cast");
+    save(maskedId, {1, 1, 1, 1}, "Masked", true, true);
+    const auto transparentCast = render("area-transparent-cast");
+    size_t transparentDarkened = 0;
+    for (size_t i = 0; i < transparentCast.size(); i += 4)
+        transparentDarkened += transparentCast[i] + 5 < transparentNoCast[i];
+    std::cout << "Area transparent shadow darkened pixels=" << transparentDarkened << '\n';
+    Require(transparentDarkened > 20, "Transparent surface failed to receive area shadows");
+    const auto deferredTransparent =
+        render("area-transparent-deferred", {.pipeline = renderer::PipelineType::Deferred});
+    uint64_t transparentError = 0;
+    for (size_t i = 0; i < transparentCast.size(); ++i)
+        transparentError += std::abs(int(transparentCast[i]) - int(deferredTransparent[i]));
+    Require(transparentError < transparentCast.size(),
+            "Transparent area shadow differs between Forward and Deferred");
     {
         document = original;
         const auto baseline = render("policy-before-rename");
@@ -500,7 +547,8 @@ void Gpu(rhi::Runtime& runtime, shader::Target target, const std::filesystem::pa
                     position += to.size();
                 }
             };
-            for (const auto block : {"SceneView", "SceneObject", "SceneLighting", "SceneShadow"})
+            for (const auto block : {"SceneView", "SceneObject", "SceneLighting", "SceneShadow",
+                                     "SceneAreaLighting", "SceneAreaShadow"})
                 replace(block, std::string("Renamed_") + block);
             replace(", MainLightShadow,", ", SunTexture,");
             replace("EnvironmentAtlas", "SkyTexture");
