@@ -61,12 +61,13 @@ void Temporal(uint3 id : SV_DispatchThreadID)
     World[pixel] = float4(world, 1);
     Normal[pixel] = float4(n, 1);
     float3 history = 0;
-    float count = 0, support = 0;
+    float count = 0, support = 0, motionPixels = 0;
     float4 clip = mul(PreviousViewProjection, float4(world, 1));
     if (Options.x > 0 && clip.w > 1e-7 && clip.z > 0 && clip.z <= clip.w)
     {
         float2 uv = float2(clip.x / clip.w * .5 + .5, .5 - clip.y / clip.w * .5);
         float2 previousPixel = uv * size - .5;
+        motionPixels = length(previousPixel - float2(pixel));
         int2 base = int2(floor(previousPixel));
         float2 f = frac(previousPixel);
         // Allow one pixel of primary-ray jitter while rejecting changes in the surface plane.
@@ -100,6 +101,10 @@ void Temporal(uint3 id : SV_DispatchThreadID)
         float limit = lerp(2, 16, saturate((material.a - .1) / .5));
         count = min(count * saturate(support * 2), limit);
     }
+    else
+    {
+        count = 0;
+    }
     if (count > 0)
     {
         float3 mean = 0, square = 0;
@@ -128,6 +133,6 @@ void Temporal(uint3 id : SV_DispatchThreadID)
     float3 value = lerp(current, history, count / (count + 1));
     Output[pixel] = float4(value, min(count + 1, 16));
     // As stationary progressive samples accumulate, retire the correlated temporal preview.
-    float preview = saturate(1 - max(0, Options.y - 8) / 120);
-    Display[pixel] = float4(lerp(filtered.rgb, value, preview * .5 * saturate(count / 2)), filtered.a);
+    float preview = saturate(1 - max(0, Options.y - 8) / 24);
+    Display[pixel] = float4(lerp(filtered.rgb, value, preview * .5 * saturate(count / 2) / (1 + .5 * motionPixels)), filtered.a);
 }

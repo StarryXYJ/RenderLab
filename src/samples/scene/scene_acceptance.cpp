@@ -20,12 +20,177 @@
 #include <cstddef>
 #include <cstring>
 #include <format>
+#include <fstream>
 #include <set>
 #include <stdexcept>
 #include <vector>
 
 namespace renderlab::samples
 {
+namespace
+{
+void MeasurePathMotionSequences(rhi::Runtime& runtime, shader::Target target,
+                                const std::filesystem::path& project,
+                                const std::filesystem::path& engine,
+                                const std::filesystem::path& output, Logger& logger)
+{
+    constexpr uint32_t width = 128, height = 72, motionFrames = 8, sequenceFrames = 12;
+#ifdef NDEBUG
+    constexpr uint32_t referenceFrames = 512;
+#else
+    constexpr uint32_t referenceFrames = 32;
+#endif
+    const auto pitch = rhi::TextureRowPitch(width);
+    const auto image = runtime.CreateTexture(
+        {width, height, rhi::Format::Rgba8Srgb, false, true, "PathTracing.Sequence"});
+    renderer::SceneRenderer scene(runtime, target, project, engine);
+    const auto initialDocument = scene.Document();
+    rhi::State state = rhi::State::Undefined;
+    renderer::SceneRenderOptions options;
+    options.pipeline = renderer::PipelineType::PathTracing;
+    const auto render = [&](bool readback)
+    {
+        auto result = scene.Render(image, state, nullptr, readback, {}, options);
+        state = rhi::State::CopySource;
+        runtime.Wait(result.completion);
+        return result;
+    };
+    const auto capture =
+        [&](const renderer::SceneReadback& frame, const std::filesystem::path& path)
+    {
+        const auto bytes = frame.pixels->Map();
+        std::filesystem::create_directories(path.parent_path());
+        SaveImage(path, bytes, width, height, pitch);
+        return std::vector<std::byte>(bytes.begin(), bytes.end());
+    };
+    const std::array<const char*, 3> names{"gentle", "fast", "reveal"};
+    for (size_t trajectory = 0; trajectory < names.size(); ++trajectory)
+    {
+        std::array<std::vector<std::vector<std::byte>>, 2> sequences;
+        std::vector<scene::Scene> poses;
+        const auto base = output / "path-sequence" / names[trajectory];
+        for (size_t mode = 0; mode < sequences.size(); ++mode)
+        {
+            // Change illumination so the sample sequence and temporal history both restart.
+            scene.Document() = initialDocument;
+            options.reflectionDenoise = false;
+            options.reflectionTemporal = false;
+            auto light = std::ranges::find_if(scene.Document().objects, [](const auto& object)
+                                              { return object.light.has_value(); });
+            detail::Require(light != scene.Document().objects.end(),
+                            "Sequence fixture needs a light");
+            light->light->intensity *= .5f;
+            render(false);
+            scene.Document() = initialDocument;
+            options.reflectionDenoise = true;
+            options.reflectionTemporal = mode == 1;
+            for (uint32_t warmup = 0; warmup < 8; ++warmup)
+                render(false);
+            for (uint32_t frame = 0; frame < sequenceFrames; ++frame)
+            {
+                if (frame < motionFrames)
+                    scene.Document().MoveCamera({trajectory == 0   ? .02f
+                                                 : trajectory == 1 ? .08f
+                                                                   : .12f,
+                                                 0, 0},
+                                                {0,
+                                                 trajectory == 0   ? .15f
+                                                 : trajectory == 1 ? .8f
+                                                                   : -.6f,
+                                                 0});
+                if (mode == 0)
+                    poses.push_back(scene.Document());
+                const auto result = render(true);
+                sequences[mode].push_back(
+                    capture(result, base / (mode == 0 ? "spatial" : "temporal") /
+                                        std::format("{:02}.bmp", frame)));
+            }
+        }
+        options.reflectionDenoise = false;
+        options.reflectionTemporal = false;
+        std::vector<std::vector<std::byte>> references;
+        for (uint32_t frame = 0; frame < motionFrames; ++frame)
+        {
+            // Reset even if a repeated pose happens to match the last reference frame.
+            scene.Document() = poses[frame];
+            auto light = std::ranges::find_if(scene.Document().objects, [](const auto& object)
+                                              { return object.light.has_value(); });
+            detail::Require(light != scene.Document().objects.end(),
+                            "Sequence fixture needs a light");
+            light->light->intensity *= .5f;
+            render(false);
+            scene.Document() = poses[frame];
+            renderer::SceneReadback reference;
+            for (uint32_t sample = 0; sample < referenceFrames; ++sample)
+            {
+                reference = render(sample + 1 == referenceFrames);
+                detail::Require(reference.reflectionSamples ==
+                                    (sample + 1) * renderer::PathSamplesPerFrame,
+                                "Path sequence reference failed to accumulate");
+            }
+            references.push_back(
+                capture(reference, base / "reference" / std::format("{:02}.bmp", frame)));
+        }
+        while (references.size() < sequenceFrames)
+            references.push_back(references.back());
+        std::array<double, 2> mse{}, residualDelta{}, signedError{}, largeError{}, sphereRoiMse{},
+            stoppedMse{};
+        constexpr double components = double(width) * height * 3;
+        for (uint32_t frame = 0; frame < sequenceFrames; ++frame)
+            for (uint32_t y = 0; y < height; ++y)
+                for (uint32_t x = 0; x < width; ++x)
+                    for (uint32_t channel = 0; channel < 3; ++channel)
+                    {
+                        const auto pixel = y * pitch + x * 4 + channel;
+                        for (size_t mode = 0; mode < sequences.size(); ++mode)
+                        {
+                            const double error =
+                                int(std::to_integer<uint8_t>(sequences[mode][frame][pixel])) -
+                                int(std::to_integer<uint8_t>(references[frame][pixel]));
+                            mse[mode] += error * error / components / sequenceFrames;
+                            if (frame >= motionFrames)
+                                stoppedMse[mode] +=
+                                    error * error / components / (sequenceFrames - motionFrames);
+                            // Fixed image crop covers the sphere cluster, plus adjacent floor.
+                            if (x >= 30 && x < 100 && y >= 25 && y < 60)
+                                sphereRoiMse[mode] +=
+                                    error * error / (70. * 35 * 3) / sequenceFrames;
+                            signedError[mode] += error / components / sequenceFrames;
+                            largeError[mode] +=
+                                (std::abs(error) > 16 ? 1. : 0.) / components / sequenceFrames;
+                            if (frame == 0)
+                                continue;
+                            const double previous =
+                                int(std::to_integer<uint8_t>(sequences[mode][frame - 1][pixel])) -
+                                int(std::to_integer<uint8_t>(references[frame - 1][pixel]));
+                            residualDelta[mode] += (error - previous) * (error - previous) /
+                                                   components / (sequenceFrames - 1);
+                        }
+                    }
+        const auto report = std::format(
+            "{{\n  \"trajectory\": \"{}\", \"referenceSpp\": {},\n"
+            "  \"mse\": [{:.6f}, {:.6f}], \"residualDeltaMse\": [{:.6f}, {:.6f}],\n"
+            "  \"signedError\": [{:.6f}, {:.6f}], \"absoluteErrorOver16Fraction\": "
+            "[{:.6f}, {:.6f}],\n  \"sphereCropMse\": [{:.6f}, {:.6f}],\n"
+            "  \"stoppedMse\": [{:.6f}, {:.6f}]\n}}\n",
+            names[trajectory], referenceFrames * renderer::PathSamplesPerFrame, mse[0], mse[1],
+            residualDelta[0], residualDelta[1], signedError[0], signedError[1], largeError[0],
+            largeError[1], sphereRoiMse[0], sphereRoiMse[1], stoppedMse[0], stoppedMse[1]);
+#ifdef NDEBUG
+        detail::Require(mse[1] <= mse[0] * 1.1 && residualDelta[1] <= residualDelta[0] * 1.1 &&
+                            sphereRoiMse[1] <= sphereRoiMse[0] * 1.1 &&
+                            stoppedMse[1] <= stoppedMse[0] * 1.05,
+                        "Path temporal sequence significantly worsened against spatial baseline");
+#endif
+        std::ofstream reportFile(base / "metrics.json", std::ios::binary);
+        reportFile.exceptions(std::ios::failbit | std::ios::badbit);
+        reportFile << report;
+        reportFile.close();
+        logger.Write(LogLevel::Info, "Path motion sequence " + report);
+    }
+}
+} // namespace
+
 void VerifyScene(rhi::Runtime& runtime, shader::Target target, const std::filesystem::path& project,
                  const std::filesystem::path& engine, const std::filesystem::path& output,
                  Logger& logger, renderer::PipelineType pipeline, bool validate)
@@ -118,8 +283,8 @@ void VerifyScene(rhi::Runtime& runtime, shader::Target target, const std::filesy
         std::array<std::vector<std::byte>, 3> motionImages;
         for (uint32_t mode = 0; mode < motionImages.size(); ++mode)
         {
-            renderer::SceneRenderer motionRenderer(runtime, target, project.parent_path() / "PathTracingGallery.rlproject",
-                                                   engine);
+            renderer::SceneRenderer motionRenderer(
+                runtime, target, project.parent_path() / "PathTracingGallery.rlproject", engine);
             auto motionTarget = runtime.CreateTexture(
                 {128, 72, rhi::Format::Rgba8Srgb, false, true, "PathTracing.Motion"});
             renderer::SceneRenderOptions motionOptions;
@@ -135,7 +300,8 @@ void VerifyScene(rhi::Runtime& runtime, shader::Target target, const std::filesy
                 motionState = rhi::State::CopySource;
                 runtime.Wait(motion.completion);
             };
-            for (int frame = 0; frame < 8; ++frame) step();
+            for (int frame = 0; frame < 8; ++frame)
+                step();
             for (int frame = 0; frame < 16; ++frame)
             {
                 motionRenderer.Document().MoveCamera({.02f, 0, 0}, {0, .15f, 0});
@@ -148,11 +314,12 @@ void VerifyScene(rhi::Runtime& runtime, shader::Target target, const std::filesy
 #else
                 constexpr int referenceFrames = 63;
 #endif
-                for (int frame = 0; frame < referenceFrames; ++frame) step();
+                for (int frame = 0; frame < referenceFrames; ++frame)
+                    step();
             }
             const auto pixels = motion.pixels->Map();
             motionImages[mode].assign(pixels.begin(), pixels.end());
-            SaveImage(output / (mode == 0 ? "path-motion-spatial.bmp"
+            SaveImage(output / (mode == 0   ? "path-motion-spatial.bmp"
                                 : mode == 1 ? "path-motion-temporal.bmp"
                                             : "path-motion-reference.bmp"),
                       pixels, 128, 72, rhi::TextureRowPitch(128));
@@ -162,7 +329,8 @@ void VerifyScene(rhi::Runtime& runtime, shader::Target target, const std::filesy
         {
             for (size_t i = 0; i < motionImages[mode].size(); ++i)
             {
-                if (i % 4 == 3) continue;
+                if (i % 4 == 3)
+                    continue;
                 const auto delta = int(std::to_integer<uint8_t>(motionImages[mode][i])) -
                                    int(std::to_integer<uint8_t>(motionImages[2][i]));
                 error[mode] += delta * delta;
@@ -174,6 +342,9 @@ void VerifyScene(rhi::Runtime& runtime, shader::Target target, const std::filesy
 #ifdef NDEBUG
         detail::Require(error[1] < error[0], "Path temporal motion increased endpoint MSE");
 #endif
+        MeasurePathMotionSequences(runtime, target,
+                                   project.parent_path() / "PathTracingGallery.rlproject", engine,
+                                   output, logger);
         pathOptions.reflectionDenoise = true;
         const auto temporalCold = pathFrame();
         detail::Require(temporalCold.reflectionTemporalFrames == 1,
@@ -190,9 +361,10 @@ void VerifyScene(rhi::Runtime& runtime, shader::Target target, const std::filesy
                         "Path temporal re-enable did not restart display history");
         pathRenderer.Document().MoveCamera({.5f, 0, 0}, {0, 5, 0});
         const auto moved = pathFrame();
-        detail::Require(moved.reflectionSamples == renderer::PathSamplesPerFrame &&
-                            moved.reflectionHistoryReset && moved.reflectionTemporalFrames == 2,
-                        "Path tracing camera change did not reset raw history and retain temporal history");
+        detail::Require(
+            moved.reflectionSamples == renderer::PathSamplesPerFrame &&
+                moved.reflectionHistoryReset && moved.reflectionTemporalFrames == 2,
+            "Path tracing camera change did not reset raw history and retain temporal history");
         pathRenderer.Document() = original;
         const auto restored = pathFrame();
         detail::Require(restored.reflectionSamples == renderer::PathSamplesPerFrame &&
@@ -203,7 +375,8 @@ void VerifyScene(rhi::Runtime& runtime, shader::Target target, const std::filesy
         pathRenderer.Document().Get(light).light->intensity *= .5f;
         const auto changedLight = pathFrame();
         detail::Require(changedLight.reflectionSamples == renderer::PathSamplesPerFrame &&
-                            changedLight.reflectionHistoryReset && changedLight.reflectionTemporalFrames == 1,
+                            changedLight.reflectionHistoryReset &&
+                            changedLight.reflectionTemporalFrames == 1,
                         "Path tracing light change did not reset history");
         pathTarget = runtime.CreateTexture(
             {65, 48, rhi::Format::Rgba8Srgb, false, true, "PathTracing.Resized"});
