@@ -6,6 +6,7 @@
 
 - 面光源并行基础 IN_PROGRESS（2026 年 11 月 10 日）：先完成独立于现有时域重建的矩形面光源场景数据、变换和采样数学与验证；NEE/MIS 与路径积分器接线另行集成，当前不改变画面。
   场景数据子项 DONE：版本 1 序列化、稳定顺序提取及层级剪切/镜像、启停、边界和缓存更新；隔离 Debug/Release 的 `scene.contracts` 各 1/1，见 `out/build/area-light-{debug,release}`。当前不生成灯面或照明；[接口与限制](../docs/area-lights.md)。
+  独立采样数学子项 DONE：矩形面积/立体角 PDF、选灯概率与 power heuristic；RTX 5060 Release 隔离构建 DX12/Vulkan GPU 测试各 1/1，固定无阻挡场景与独立 CPU 双精度面积积分对照，validation errors/资源与描述符余量均为零；`out/build/area-light-release/rect-area`。不含实际积分器、灯面身份匹配、遮挡与画质验收。
 
 - Cornell Box 风格示例 DONE（2026 年 11 月 10 日）：项目复用样例网格，黑环境与自发光顶灯提供室内路径追踪测试；RTX 5060、既有 Release 构建树下 DX12/Vulkan 320²、256 spp 无降噪加载与渲染均成功，验证错误及退出分配为零；DX12 Editor Path Tracing 隔离短测正常关闭。发光面缺少重要性采样、四段路径和滤波偏差限制保留；未与标准 Cornell 参考作光度比较，也未以此代替当前源码构建验收。见 [示例](../sample/m4/README.md#cornell-box)，证据 `out/cornell/`。
 

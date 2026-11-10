@@ -265,6 +265,14 @@ if(BUILD_TESTING)
     add_executable(renderlab_math_tests tests/math_tests.cpp)
     target_link_libraries(renderlab_math_tests PRIVATE renderlab_options renderlab_content)
     add_test(NAME math.contracts COMMAND renderlab_math_tests)
+    add_executable(renderlab_rect_area_light_tests tests/rect_area_light_tests.cpp)
+    target_link_libraries(renderlab_rect_area_light_tests PRIVATE renderlab_options renderlab_rhi
+        renderlab_shader renderlab_core renderlab_platform)
+    add_custom_command(TARGET renderlab_rect_area_light_tests POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_FILE:renderlab_dxc>
+            $<TARGET_FILE_DIR:renderlab_rect_area_light_tests>
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_FILE:renderlab_pix>
+            $<TARGET_FILE_DIR:renderlab_rect_area_light_tests> VERBATIM)
     add_executable(renderlab_scene_tests tests/scene_tests.cpp)
     target_link_libraries(renderlab_scene_tests PRIVATE renderlab_options renderlab_content)
     add_test(NAME scene.contracts COMMAND renderlab_scene_tests)
@@ -400,6 +408,10 @@ if(BUILD_TESTING)
             add_test(NAME gpu.${backend}.alias COMMAND renderlab_alias_tests ${backend}
                 ${CMAKE_BINARY_DIR}/alias/${backend})
             set_tests_properties(gpu.${backend}.alias PROPERTIES LABELS gpu RUN_SERIAL TRUE TIMEOUT 90)
+            add_test(NAME gpu.${backend}.rect_area_light COMMAND renderlab_rect_area_light_tests
+                ${backend} ${CMAKE_SOURCE_DIR}/shaders/m5/rect_area_acceptance.hlsl
+                ${CMAKE_BINARY_DIR}/rect-area/${backend})
+            set_tests_properties(gpu.${backend}.rect_area_light PROPERTIES LABELS gpu RUN_SERIAL TRUE TIMEOUT 90)
             add_test(NAME gpu.${backend}.indexed_scene COMMAND renderlab_indexed_scene_tests ${backend}
                 ${CMAKE_SOURCE_DIR}/sample/m4/Pbr.rlproject ${CMAKE_SOURCE_DIR}/sample/m4/Shadow.rlproject
                 ${CMAKE_SOURCE_DIR}/shaders ${CMAKE_BINARY_DIR}/indexed-scene/${backend})
