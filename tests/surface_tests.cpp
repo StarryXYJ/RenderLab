@@ -48,6 +48,38 @@ void Cpu()
     snapshot.shadowCasters.front().bounds = {{1, 1, 1}, {1, 1, 1}};
     for (float value : renderer::FitDirectionalShadow(snapshot).values)
         Require(std::isfinite(value), "Degenerate shadow bounds must yield a finite projection");
+    scene::AreaLight area;
+    area.center = {0, 3, 0};
+    area.edgeU = {2, 0, 0};
+    area.edgeV = {.5f, 0, 2};
+    area.normal = {0, -1, 0};
+    snapshot.allInstances.push_back(instance);
+    const auto areaMatrix = renderer::FitAreaShadow(area, snapshot);
+    const auto project = [&](math::Vec3 p)
+    {
+        const auto clip = math::Point(areaMatrix, p);
+        const float w = areaMatrix.At(3, 0) * p.x + areaMatrix.At(3, 1) * p.y +
+                        areaMatrix.At(3, 2) * p.z + areaMatrix.At(3, 3);
+        return clip * (1 / w);
+    };
+    const auto nearPoint = project({0, 2, 0}), farPoint = project({0, 0, 0});
+    Require(std::abs(nearPoint.x) < 1e-6f && std::abs(nearPoint.y) < 1e-6f &&
+                nearPoint.z > farPoint.z && farPoint.z > 0,
+            "Area shadow projection faces wrong direction or has incorrect depth");
+    const auto edge = project({1, 0, 1});
+    Require(std::abs(edge.x) < 1 && std::abs(edge.y) < 1,
+            "Area shadow frustum omitted a front-facing receiver");
+    const float behindW = areaMatrix.At(3, 0) * area.center.x +
+                          areaMatrix.At(3, 1) * (area.center.y + 1) +
+                          areaMatrix.At(3, 2) * area.center.z + areaMatrix.At(3, 3);
+    Require(behindW < 0, "Area shadow frustum must reject the emitter back side");
+    area.edgeU = {-2, 0, 0};
+    area.normal = {0, 1, 0};
+    const auto mirrored = renderer::FitAreaShadow(area, snapshot);
+    const auto point = math::Point(mirrored, {0, 4, 0});
+    const auto w = mirrored.At(3, 1) * 4 + mirrored.At(3, 3);
+    Require(w > 0 && point.z / w > 0 && point.z / w < 1,
+            "Mirrored area shadow projection faces wrong direction");
 }
 uint8_t Display(float x)
 {
