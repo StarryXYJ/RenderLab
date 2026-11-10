@@ -5,7 +5,8 @@
 ## 当前状态
 
 - HDRP 参考面光源 IN_PROGRESS（2026 年 11 月 10 日）：用户授权实现光栅/混合管线面光源；分步完成合法来源的 LTC 表与数值对照、共享直接照明和可见灯面、阴影及混合反射，逐项验证提交；保留 M8 并行工作。
-  可见灯面子项 DONE：同一解析灯数据生成光栅灯面，正面显示辐亮度、背面黑且写入深度，受相机前方几何遮挡；路径追踪保持解析相交。隔离 Debug/Release 的 DX12/Vulkan 灯面及光栅测试各 2/2，windows-release Editor bridge 与托管 Editor Release 构建通过。混合反射射线尚不能命中灯面，面灯阴影尚未实现。
+  混合反射可见灯面子项 DONE：反射射线比较三角形和解析灯面最近命中，正面发光、背面遮挡，灯变化失效反射累积与时域历史；Cornell 亮度、朝向、遮挡和历史验证在隔离 Debug/Release DX12/Vulkan 各 2/2，路径历史回归各双后端通过。尚未实现反射命中物的面光源照明。
+  可见灯面子项 DONE：同一解析灯数据生成光栅灯面，正面显示辐亮度、背面黑且写入深度，受相机前方几何遮挡；路径追踪保持解析相交。隔离 Debug/Release 的 DX12/Vulkan 灯面及光栅测试各 2/2，windows-release Editor bridge 与托管 Editor Release 构建通过。该子项不覆盖混合反射命中物照明，面灯阴影尚未实现。
   光栅直接光子项 DONE：Forward、Deferred 和 Indexed Forward 共用场景矩形灯与 LTC，最多两灯、超限拒绝；Cornell 开关、双灯、提交方式对照在隔离 Debug/Release 的 DX12/Vulkan 各 2/2；Release 原有光追/Indexed 回归及 LTC 数值各双后端通过，windows-release Editor bridge 与托管 Editor Release 构建通过；验证入口见 [面光源](../docs/area-lights.md#光栅直接照明)。该子项验证不覆盖面灯阴影、间接光和混合反射，HDR 与路径追踪完整场景对照仍待补充。
   数值子项 DONE：独立 LTC Shader 与双精度面积积分对照，Debug/Release 的 DX12/Vulkan 各 2/2；覆盖正视、金属、斜视剪切、跨地平线与背面，有限样例最大逐通道相对误差约 2.8%。未接入生产光栅管线，中心方向漫反射 Fresnel 为近似，极端参数及遮挡尚未验证。
   数据子项 DONE：固定 LTC 原始拟合表和完整作者许可，64×64 RGBA16F DDS 校验及转换；隔离 Debug/Release `ltc.data` 各 1/1。尚未接入光栅，[来源与限制](../docs/area-lights.md#光栅-ltc-数据准备)。

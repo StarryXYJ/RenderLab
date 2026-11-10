@@ -289,6 +289,14 @@ if(BUILD_TESTING)
             $<TARGET_FILE_DIR:renderlab_area_light_render_tests>
         COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_FILE:renderlab_pix>
             $<TARGET_FILE_DIR:renderlab_area_light_render_tests> VERBATIM)
+    add_executable(renderlab_area_light_reflection_tests tests/area_light_reflection_tests.cpp)
+    target_link_libraries(renderlab_area_light_reflection_tests PRIVATE renderlab_options renderlab_renderer
+        renderlab_rhi renderlab_content renderlab_core renderlab_platform)
+    add_custom_command(TARGET renderlab_area_light_reflection_tests POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_FILE:renderlab_dxc>
+            $<TARGET_FILE_DIR:renderlab_area_light_reflection_tests>
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_FILE:renderlab_pix>
+            $<TARGET_FILE_DIR:renderlab_area_light_reflection_tests> VERBATIM)
     add_executable(renderlab_area_light_history_tests tests/area_light_history_tests.cpp)
     target_link_libraries(renderlab_area_light_history_tests PRIVATE renderlab_options renderlab_renderer
         renderlab_rhi renderlab_content renderlab_core renderlab_platform)
@@ -456,6 +464,10 @@ if(BUILD_TESTING)
                 ${backend} ${CMAKE_SOURCE_DIR}/sample/m4/CornellBox.rlproject
                 ${CMAKE_SOURCE_DIR}/shaders ${CMAKE_BINARY_DIR}/area-light-render/${backend})
             set_tests_properties(gpu.${backend}.area_light_render PROPERTIES LABELS gpu RUN_SERIAL TRUE TIMEOUT 240)
+            add_test(NAME gpu.${backend}.area_light_reflection COMMAND renderlab_area_light_reflection_tests
+                ${backend} ${CMAKE_SOURCE_DIR}/sample/m4/CornellBox.rlproject
+                ${CMAKE_SOURCE_DIR}/shaders ${CMAKE_BINARY_DIR}/area-light-reflection/${backend})
+            set_tests_properties(gpu.${backend}.area_light_reflection PROPERTIES LABELS gpu RUN_SERIAL TRUE TIMEOUT 120)
             add_test(NAME gpu.${backend}.area_light_history COMMAND renderlab_area_light_history_tests
                 ${backend} ${CMAKE_SOURCE_DIR}/sample/m4/RayTracing.rlproject
                 ${CMAKE_SOURCE_DIR}/shaders ${CMAKE_BINARY_DIR}/area-light-history/${backend})

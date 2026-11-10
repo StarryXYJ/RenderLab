@@ -1,5 +1,6 @@
 #include "RaySurface.hlsli"
 #include "RaySampling.hlsli"
+#include "RectAreaLight.hlsli"
 #include "ImageBasedLighting.hlsli"
 RaytracingAccelerationStructure Scene : register(t0);
 #ifdef SPIRV
@@ -13,6 +14,8 @@ cbuffer ReflectionParameters : register(b4)
     row_major float4x4 InverseViewProjection;
     float4 CameraPosition, DirectionToLight, LightColor, Environment;
     float4 Options;
+    float4 RectLightHeader;
+    float4 RectLightData[6];
 };
 Texture2D<float4> AlbedoMetallic : register(t12);
 Texture2D<float4> EnvironmentAtlas : register(t13);
@@ -68,6 +71,30 @@ void RayGeneration()
     ray.TMax = 10000;
     Payload payload = {0.xxx, 0};
     TraceRay(Scene, RAY_FLAG_NONE, 0x02, 0, 1, 0, ray, payload);
+    // Analytic lamps are not in the triangle acceleration structure. Compare their finite
+    // intersections to the closest geometry hit, including dark, opaque back faces.
+    float nearest = payload.distance > 0 ? payload.distance : ray.TMax;
+    [loop] for (uint i = 0; i < min((uint)RectLightHeader.x, 2u); ++i)
+    {
+        float4 center = RectLightData[3 * i];
+        float4 u = RectLightData[3 * i + 1];
+        float4 v = RectLightData[3 * i + 2];
+        RectEmitter light;
+        light.center = center.xyz;
+        light.edgeU = u.xyz;
+        light.edgeV = v.xyz;
+        float3 areaNormal = cross(u.xyz, v.xyz);
+        light.area = length(areaNormal);
+        light.normal = light.area > 0 ? -areaNormal / light.area : 0;
+        float distance;
+        if (IntersectRectEmitter(light, ray.Origin, ray.Direction, ray.TMin, nearest, distance))
+        {
+            nearest = distance;
+            payload.distance = distance;
+            payload.radiance = dot(light.normal, -ray.Direction) > 0
+                ? float3(center.w, u.w, v.w) : 0;
+        }
+    }
     // Positive distance: hit, -1: environment miss, 0: rejected/invalid sample.
 #if RENDERLAB_REFLECTION_GUIDE
     HitGuide[pixel] = payload.distance;

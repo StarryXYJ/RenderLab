@@ -1513,11 +1513,11 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
         parameters.environment = {
             self.snapshot.environmentIntensity,
             self.snapshot.environmentRotation * float(3.141592653589793 / 180), 0, 0};
+        parameters.reserved = PackRectLights(self.snapshot.areaLights);
         if (pathTracing)
         {
             parameters.environment[2] = float(PathSamplesPerFrame);
             parameters.environment[3] = float(options.pathSeed);
-            parameters.reserved = PackPathRectLights(self.snapshot.areaLights);
             if (!self.snapshot.areaLights.empty() && options.pathAreaLightSampling)
                 parameters.reserved[1] = 1;
         }
@@ -1539,8 +1539,7 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
         appendTemporal(parameters.lightColor);
         appendTemporal(parameters.environment);
         appendTemporal(parameters.options);
-        if (pathTracing)
-            appendTemporal(parameters.reserved);
+        appendTemporal(parameters.reserved);
         appendTemporal(self.snapshot.projection.values);
         append(target->desc.width);
         append(target->desc.height);
