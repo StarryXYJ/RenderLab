@@ -126,9 +126,9 @@ struct SceneRenderer::Impl
     struct ReflectionHistory
     {
         std::string signature, sequenceSignature;
-        std::array<std::shared_ptr<rhi::Texture>, 2> radiance, directRadiance;
+        std::array<std::shared_ptr<rhi::Texture>, 2> radiance, directRadiance, diffuseRadiance;
         std::array<std::shared_ptr<rhi::Buffer>, 2> statistics;
-        std::array<bool, 2> initialized{}, directInitialized{};
+        std::array<bool, 2> initialized{}, directInitialized{}, diffuseInitialized{};
         // Equal pixel counts can retain the buffer while texture dimensions change.
         std::array<bool, 2> statisticsInitialized{};
         uint32_t index = 0;
@@ -142,6 +142,9 @@ struct SceneRenderer::Impl
             if (directRadiance[slot])
                 bytes += uint64_t(directRadiance[slot]->desc.width) *
                          directRadiance[slot]->desc.height * 16;
+            if (diffuseRadiance[slot])
+                bytes += uint64_t(diffuseRadiance[slot]->desc.width) *
+                         diffuseRadiance[slot]->desc.height * 16;
             return bytes;
         }
         uint64_t Bytes() const
@@ -154,7 +157,7 @@ struct SceneRenderer::Impl
     ReflectionHistory& AcquireReflectionHistory(const std::string& id, uint32_t width,
                                                 uint32_t height, bool pathTracing)
     {
-        const uint64_t desired = uint64_t(width) * height * (pathTracing ? 80 : 48);
+        const uint64_t desired = uint64_t(width) * height * (pathTracing ? 112 : 48);
         const auto found = reflectionViews.find(id);
         const auto activeBytes =
             found == reflectionViews.end()
@@ -461,7 +464,8 @@ struct SceneRenderer::Impl
                                             {11, rhi::BindingKind::Sampler},
                                             {13, rhi::BindingKind::SampledTexture},
                                             {17, rhi::BindingKind::StorageBuffer},
-                                            {18, rhi::BindingKind::StorageTexture}});
+                                            {18, rhi::BindingKind::StorageTexture},
+                                            {19, rhi::BindingKind::StorageTexture}});
         desc.rayPayloadSize = 64;
         desc.rayGeneration = module(rhi::ShaderStage::RayGeneration, "RayGeneration");
         desc.miss = module(rhi::ShaderStage::Miss, "Miss");
@@ -480,7 +484,8 @@ struct SceneRenderer::Impl
                                             {3, rhi::BindingKind::ConstantBuffer},
                                             {4, rhi::BindingKind::SampledTexture},
                                             {5, rhi::BindingKind::ReadOnlyBuffer},
-                                            {6, rhi::BindingKind::SampledTexture}});
+                                            {6, rhi::BindingKind::SampledTexture},
+                                            {7, rhi::BindingKind::SampledTexture}});
         desc.compute =
             runtime.CreateShader(rhi::ShaderStage::Compute, compiler.Compile(request), "Denoise");
         auto filter = runtime.CreatePipeline(desc);
@@ -1090,6 +1095,8 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
     }
     const bool pathTracing = options.pipeline == PipelineType::PathTracing;
     const bool rayTracing = options.pipeline == PipelineType::RayTracing || pathTracing;
+    if (options.pathComponentDiagnostics && !pathTracing)
+        throw std::invalid_argument("Path component diagnostics require the path tracing pipeline");
     if (options.pipeline != PipelineType::Forward && options.pipeline != PipelineType::Deferred &&
         !rayTracing)
         throw std::invalid_argument("Unknown or unavailable scene render pipeline");
@@ -1511,6 +1518,31 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
                 frame.rayTracing.previousDirectRadiance = "PathTracing.PreviousDirect." + viewId;
                 graph.ImportTexture(frame.rayTracing.previousDirectRadiance,
                                     history.directRadiance[history.index],
+                                    {rhi::State::Sampled, true, history.completion});
+            }
+        }
+        if (pathTracing)
+        {
+            auto& diffuse = history.diffuseRadiance[reflectionOutput];
+            if (!diffuse || diffuse->desc.width != target->desc.width ||
+                diffuse->desc.height != target->desc.height)
+            {
+                diffuse = self.runtime.CreateTexture({target->desc.width, target->desc.height,
+                                                      rhi::Format::Rgba32Float, true, false,
+                                                      "PathTracing.DiffuseHistory." + viewId});
+                history.diffuseInitialized[reflectionOutput] = false;
+            }
+            frame.rayTracing.historyDiffuseRadiance = "PathTracing.DiffuseHistory." + viewId;
+            graph.ImportTexture(frame.rayTracing.historyDiffuseRadiance, diffuse,
+                                {history.diffuseInitialized[reflectionOutput]
+                                     ? rhi::State::Sampled
+                                     : rhi::State::Undefined,
+                                 history.diffuseInitialized[reflectionOutput], history.completion});
+            if (valid)
+            {
+                frame.rayTracing.previousDiffuseRadiance = "PathTracing.PreviousDiffuse." + viewId;
+                graph.ImportTexture(frame.rayTracing.previousDiffuseRadiance,
+                                    history.diffuseRadiance[history.index],
                                     {rhi::State::Sampled, true, history.completion});
             }
         }
@@ -2021,8 +2053,12 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
     {
         graph.Export(graph.GetTexture(frame.rayTracing.historyRadiance), rhi::State::Sampled);
         if (pathTracing)
+        {
             graph.Export(graph.GetTexture(frame.rayTracing.historyDirectRadiance),
                          rhi::State::Sampled);
+            graph.Export(graph.GetTexture(frame.rayTracing.historyDiffuseRadiance),
+                         rhi::State::Sampled);
+        }
         graph.Export(graph.GetBuffer(frame.rayTracing.historyStatistics), rhi::State::ShaderRead);
     }
     if (frame.rayTracing.temporalPipeline)
@@ -2131,6 +2167,27 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
                      { context.CopyTexture(buffer, diagnostics, pitch, false); });
         graph.Export(buffer, rhi::State::HostRead);
     }
+    if (options.pathComponentDiagnostics)
+    {
+        const auto pitch = rhi::TextureRowPitch(target->desc.width, rhi::Format::Rgba32Float);
+        const std::array<std::string, 3> sources{frame.rayTracing.historyRadiance,
+                                                 frame.rayTracing.historyDirectRadiance,
+                                                 frame.rayTracing.historyDiffuseRadiance};
+        for (size_t i = 0; i < sources.size(); ++i)
+        {
+            const auto name = "PathTracing.ComponentReadback." + std::to_string(i);
+            result.pathComponents[i] = self.runtime.CreateBuffer(
+                {uint64_t(pitch) * target->desc.height, rhi::Memory::Readback, name});
+            auto buffer =
+                graph.ImportBuffer(name, result.pathComponents[i], {rhi::State::CopyDest, false});
+            auto pass = graph.AddCopyPass(name);
+            const auto source = pass.ReadTexture(sources[i]);
+            buffer = pass.WriteBuffer(buffer);
+            pass.Execute([buffer, source, pitch](rendergraph::CopyContext& context)
+                         { context.CopyTexture(buffer, source, pitch, false); });
+            graph.Export(buffer, rhi::State::HostRead);
+        }
+    }
     if (readback)
     {
         const auto pitch = rhi::TextureRowPitch(target->desc.width);
@@ -2180,7 +2237,10 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
         reflectionHistory->index = reflectionOutput;
         reflectionHistory->initialized[reflectionOutput] = true;
         if (pathTracing)
+        {
             reflectionHistory->directInitialized[reflectionOutput] = true;
+            reflectionHistory->diffuseInitialized[reflectionOutput] = true;
+        }
         reflectionHistory->statisticsInitialized[reflectionOutput] = true;
         const auto samples =
             pathTracing ? std::min(PathSamplesPerFrame, MaxReflectionSamples - reflectionSamples)

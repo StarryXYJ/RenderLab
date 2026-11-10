@@ -217,6 +217,7 @@ void VerifyScene(rhi::Runtime& runtime, shader::Target target, const std::filesy
         renderer::SceneRenderOptions pathOptions;
         pathOptions.pipeline = renderer::PipelineType::PathTracing;
         pathOptions.captureGraph = true;
+        pathOptions.pathComponentDiagnostics = true;
         auto state = rhi::State::Undefined;
         const auto pathFrame = [&]()
         {
@@ -232,18 +233,20 @@ void VerifyScene(rhi::Runtime& runtime, shader::Target target, const std::filesy
                             second.reflectionSamples == 2 * renderer::PathSamplesPerFrame &&
                             !second.reflectionHistoryReset,
                         "Path tracing did not accumulate successive samples");
-        bool trace = false, accumulate = false, accumulateDirect = false, filter = false,
-             temporal = false, raster = false;
+        bool trace = false, accumulate = false, accumulateDirect = false, accumulateDiffuse = false,
+             filter = false, temporal = false, raster = false;
         for (const auto& pass : first.graphSnapshot->passes)
         {
             trace |= pass.name == "PathTracing.Trace";
             accumulate |= pass.name == "PathTracing.Accumulate";
             accumulateDirect |= pass.name == "PathTracing.AccumulateDirect";
+            accumulateDiffuse |= pass.name == "PathTracing.AccumulateDiffuse";
             filter |= pass.name == "PathTracing.Denoise";
             temporal |= pass.name == "PathTracing.Temporal";
             raster |= pass.name == "Deferred.GBuffer" || pass.name == "Forward.Opaque";
         }
-        detail::Require(trace && accumulate && accumulateDirect && filter && temporal && !raster,
+        detail::Require(trace && accumulate && accumulateDirect && accumulateDiffuse && filter &&
+                            temporal && !raster,
                         "Path tracing graph composition mismatch");
         pathOptions.reflectionDenoise = false;
         const auto switchedOff = pathFrame();
@@ -265,6 +268,48 @@ void VerifyScene(rhi::Runtime& runtime, shader::Target target, const std::filesy
             rawState = rhi::State::CopySource;
             runtime.Wait(raw.completion);
         }
+        // HDR diagnostics check physically valid per-channel decomposition and toggle consistency.
+        const auto pitch = rhi::TextureRowPitch(64, rhi::Format::Rgba32Float);
+        uint32_t diffusePixels = 0, specularPixels = 0, mixedChannels = 0;
+        for (uint32_t y = 0; y < 48; ++y)
+            for (uint32_t x = 0; x < 64; ++x)
+            {
+                std::array<std::array<float, 4>, 3> components{}, reference{};
+                for (size_t component = 0; component < components.size(); ++component)
+                {
+                    detail::Require(switchedOff.pathComponents[component] &&
+                                        raw.pathComponents[component],
+                                    "Missing path component diagnostic readback");
+                    std::memcpy(components[component].data(),
+                                switchedOff.pathComponents[component]->Map().data() + y * pitch +
+                                    x * 16,
+                                16);
+                    std::memcpy(reference[component].data(),
+                                raw.pathComponents[component]->Map().data() + y * pitch + x * 16,
+                                16);
+                }
+                for (uint32_t channel = 0; channel < 3; ++channel)
+                {
+                    const float total = components[0][channel], direct = components[1][channel],
+                                diffuse = components[2][channel];
+                    const float tolerance = 1e-4f * std::max(1.f, std::abs(total));
+                    const float specular = total - direct - diffuse;
+                    detail::Require(std::isfinite(total) && std::isfinite(direct) &&
+                                        std::isfinite(diffuse) && direct >= -tolerance &&
+                                        diffuse >= -tolerance && specular >= -tolerance,
+                                    "Path component is non-finite, negative or exceeds total");
+                    for (size_t component = 0; component < components.size(); ++component)
+                        detail::Require(std::abs(components[component][channel] -
+                                                 reference[component][channel]) <= tolerance,
+                                        "Path component history changed after denoise toggle");
+                    diffusePixels += diffuse > .001f;
+                    specularPixels += specular > .001f;
+                    mixedChannels += diffuse > .001f && specular > .001f;
+                }
+            }
+        detail::Require(diffusePixels > 0 && specularPixels > 0 && mixedChannels > 0,
+                        "Path fixture did not exercise overlapping indirect BRDF components");
+        pathOptions.pathComponentDiagnostics = false;
         SaveImage(output / "path-filter-toggle.bmp", switchedOff.pixels->Map(), 64, 48,
                   rhi::TextureRowPitch(64));
         SaveImage(output / "path-raw-reference.bmp", raw.pixels->Map(), 64, 48,

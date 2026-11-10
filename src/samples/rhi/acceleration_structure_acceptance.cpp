@@ -318,10 +318,11 @@ void VerifyPathDirectDenoise(Runtime& runtime, shader::Target target,
                                         {3, BindingKind::ConstantBuffer},
                                         {4, BindingKind::SampledTexture},
                                         {5, BindingKind::ReadOnlyBuffer},
-                                        {6, BindingKind::SampledTexture}});
+                                        {6, BindingKind::SampledTexture},
+                                        {7, BindingKind::SampledTexture}});
     desc.compute = runtime.CreateShader(ShaderStage::Compute, compiler.Compile(request), "Denoise");
     auto pipeline = runtime.CreatePipeline(desc);
-    const auto run = [&](const Image& radiance, const Image& direct)
+    const auto run = [&](const Image& radiance, const Image& direct, const Image& diffuse)
     {
         auto commands = runtime.CreateCommands();
         const auto upload = [&](const Image& values)
@@ -343,7 +344,7 @@ void VerifyPathDirectDenoise(Runtime& runtime, shader::Target target,
         surface.fill({0, 0, 1, 1});
         material.fill({.5f, .5f, .5f, .5f});
         auto color = upload(radiance), directView = upload(direct), guide = upload(surface),
-             materialView = upload(material);
+             materialView = upload(material), diffuseView = upload(diffuse);
         std::array<std::array<float, 2>, width * height> moments;
         moments.fill({1, 100});
         auto momentBuffer = runtime.CreateBuffer({sizeof(moments), Memory::Upload, "Path.Moments"});
@@ -375,7 +376,8 @@ void VerifyPathDirectDenoise(Runtime& runtime, shader::Target target,
                                                          uniform,
                                                          {4, materialView},
                                                          moment,
-                                                         {6, directView}}));
+                                                         {6, directView},
+                                                         {7, diffuseView}}));
         commands->Compute(1, 1);
         commands->Barrier(output, State::Storage, State::CopySource);
         commands->CopyTexture(result, output, pitch, false);
@@ -391,16 +393,21 @@ void VerifyPathDirectDenoise(Runtime& runtime, shader::Target target,
     radiance.fill({1, 1, 1, 1});
     direct[4] = {100, 100, 100, 0};
     radiance[4] = {101, 101, 101, 1};
-    const auto directResult = run(radiance, direct);
+    Image diffuse{};
+    const auto directResult = run(radiance, direct, diffuse);
     if (std::abs(directResult[4][0] - 101) > 1e-4f || std::abs(directResult[3][0] - 1) > 1e-4f)
         throw std::runtime_error("Path direct highlight was filtered or spread to neighbors");
     direct.fill({0, 0, 0, 0});
-    const auto indirectResult = run(radiance, direct);
+    const auto indirectResult = run(radiance, direct, diffuse);
     if (!std::isfinite(indirectResult[4][0]) || indirectResult[4][0] >= 10 ||
         indirectResult[4][0] < 0)
         throw std::runtime_error("Path indirect firefly was not filtered");
-    logger.Write(LogLevel::Info,
-                 "Path separated denoising preserved direct highlight and filtered indirect noise");
+    diffuse = radiance;
+    const auto diffuseResult = run(radiance, direct, diffuse);
+    if (!std::isfinite(diffuseResult[4][0]) || diffuseResult[4][0] >= 10 || diffuseResult[4][0] < 0)
+        throw std::runtime_error("Path diffuse firefly was not filtered");
+    logger.Write(LogLevel::Info, "Path separated denoising preserved direct highlight and filtered "
+                                 "both indirect components");
 }
 
 void VerifyReflectionDenoise(Runtime& runtime, shader::Target target,
@@ -554,7 +561,7 @@ void VerifyRaySampling(Runtime& runtime, shader::Target target, const std::files
     desc.layout = runtime.CreateLayout({{0, BindingKind::StorageBuffer}});
     desc.compute = runtime.CreateShader(ShaderStage::Compute, compiler.Compile(request), "CSMain");
     auto pipeline = runtime.CreatePipeline(desc);
-    constexpr uint32_t bytes = 6 * 4 * sizeof(float);
+    constexpr uint32_t bytes = 18 * 4 * sizeof(float);
     auto result = runtime.CreateBuffer({bytes, Memory::Device, "Sampling.Result", true});
     auto readback = runtime.CreateBuffer({bytes, Memory::Readback, "Sampling.Readback"});
     Binding binding{0};
@@ -570,7 +577,7 @@ void VerifyRaySampling(Runtime& runtime, shader::Target target, const std::files
     commands->Copy(result, readback, bytes);
     commands->Barrier(readback, State::CopyDest, State::HostRead);
     runtime.Wait(runtime.Submit(std::move(commands)));
-    std::array<float, 24> values{};
+    std::array<float, 72> values{};
     std::memcpy(values.data(), readback->Map().data(), bytes);
     for (uint32_t i = 0; i < 6; ++i)
     {
@@ -607,7 +614,7 @@ void VerifyRaySampling(Runtime& runtime, shader::Target target, const std::files
         const double vx = std::sqrt(1 - nv * nv);
         const double alpha = roughness * roughness;
         const double alpha2 = alpha * alpha;
-        std::array<double, 3> integral{};
+        std::array<double, 3> integral{}, diffuseIntegral{}, specularIntegral{};
         for (uint32_t z = 0; z < steps; ++z)
         {
             const double nl = (z + .5) / steps;
@@ -630,9 +637,11 @@ void VerifyRaySampling(Runtime& runtime, shader::Target target, const std::files
                 {
                     const double f0 = .04 * (1 - metallic) + base[c] * metallic;
                     const double fresnel = f0 + (1 - f0) * std::pow(1 - vh, 5);
-                    integral[c] += ((1 - fresnel) * (1 - metallic) * base[c] / pi +
-                                    fresnel * distribution * visibility) *
-                                   nl;
+                    const double diffuse = (1 - fresnel) * (1 - metallic) * base[c] / pi * nl;
+                    const double specular = fresnel * distribution * visibility * nl;
+                    diffuseIntegral[c] += diffuse;
+                    specularIntegral[c] += specular;
+                    integral[c] += diffuse + specular;
                 }
             }
         }
@@ -642,6 +651,15 @@ void VerifyRaySampling(Runtime& runtime, shader::Target target, const std::files
             const double actual = values[scenario * 4 + c];
             if (!std::isfinite(actual) || std::abs(actual - expected) > .025 + expected * .04)
                 throw std::runtime_error("Path BSDF sampling differs from hemisphere quadrature");
+            const double expectedDiffuse = diffuseIntegral[c] * (2 * pi / (steps * steps));
+            const double expectedSpecular = specularIntegral[c] * (2 * pi / (steps * steps));
+            const double actualDiffuse = values[(scenario + 6) * 4 + c];
+            const double actualSpecular = values[(scenario + 12) * 4 + c];
+            if (!std::isfinite(actualDiffuse) || !std::isfinite(actualSpecular) ||
+                std::abs(actualDiffuse - expectedDiffuse) > .025 + expectedDiffuse * .04 ||
+                std::abs(actualSpecular - expectedSpecular) > .025 + expectedSpecular * .04 ||
+                std::abs(actualDiffuse + actualSpecular - actual) > 1e-3)
+                throw std::runtime_error("Path BSDF component sampling differs from quadrature");
             logger.Write(LogLevel::Info,
                          std::format("Path BSDF scenario {} channel {}: GPU {:.6f}, CPU {:.6f}",
                                      scenario, c, actual, expected));

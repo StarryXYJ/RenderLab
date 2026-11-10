@@ -85,6 +85,7 @@ struct RenderFrame
         std::shared_ptr<rhi::Sampler> sampler;
         std::string previousRadiance, historyRadiance, previousStatistics, historyStatistics;
         std::string previousDirectRadiance, historyDirectRadiance;
+        std::string previousDiffuseRadiance, historyDiffuseRadiance;
     } rayTracing;
     std::vector<DrawPacket> opaque, transparent;
     std::vector<DrawPacket> gbuffer;

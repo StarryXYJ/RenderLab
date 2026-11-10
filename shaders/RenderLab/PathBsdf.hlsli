@@ -2,6 +2,14 @@
 #define RENDERLAB_PATH_BSDF_INCLUDED
 #include "RaySampling.hlsli"
 
+// Per-channel first-scatter contribution used to partition the shared downstream path.
+float3 PathDiffuseFraction(float3 diffuse, float3 specular)
+{
+    float3 total = diffuse + specular;
+    return float3(total.x > 0 ? diffuse.x / total.x : 0,
+                  total.y > 0 ? diffuse.y / total.y : 0,
+                  total.z > 0 ? diffuse.z / total.z : 0);
+}
 // Equal-probability mixture of cosine diffuse and visible-GGX reflection.
 float PathBsdfPdf(float3 n, float3 v, float3 l, float roughness)
 {

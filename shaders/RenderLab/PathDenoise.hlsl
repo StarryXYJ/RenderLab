@@ -13,6 +13,7 @@ cbuffer PathParameters : register(b3)
 Texture2D<float4> MaterialGuide : register(t4);
 StructuredBuffer<float2> Moments : register(t5);
 Texture2D<float4> DirectRadiance : register(t6);
+Texture2D<float4> DiffuseRadiance : register(t7);
 
 float Luminance(float3 color) { return dot(color, float3(.2126, .7152, .0722)); }
 
@@ -25,7 +26,8 @@ void Denoise(uint3 id : SV_DispatchThreadID)
     int2 pixel = int2(id.xy), size = int2(width, height);
     float4 combined = Radiance.Load(int3(pixel, 0));
     float3 direct = DirectRadiance.Load(int3(pixel, 0)).rgb;
-    float4 center = float4(max(0, combined.rgb - direct), combined.a);
+    float3 centerDiffuse = max(0, DiffuseRadiance.Load(int3(pixel, 0)).rgb);
+    float3 centerSpecular = max(0, combined.rgb - direct - centerDiffuse);
     float4 guide = SurfaceGuide.Load(int3(pixel, 0));
     float4 material = MaterialGuide.Load(int3(pixel, 0));
     float samples = min(Options.y + Environment.z, Options.w);
@@ -38,8 +40,8 @@ void Denoise(uint3 id : SV_DispatchThreadID)
         Output[pixel] = combined;
         return;
     }
-    float3 colors[9];
-    float values[9];
+    float3 diffuseColors[9], specularColors[9];
+    float diffuseValues[9], specularValues[9];
     float weights[9];
     uint count = 0;
     [unroll] for (int y = -1; y <= 1; ++y)
@@ -52,10 +54,13 @@ void Denoise(uint3 id : SV_DispatchThreadID)
         if (g.w <= 0 || dot(guide.xyz, g.xyz) < .95 ||
             abs(guide.w - g.w) > max(.02, guide.w * .025) ||
             length(material.rgb - m.rgb) > .12 || abs(material.a - m.a) > .1) continue;
-        float3 color = max(0, Radiance.Load(int3(q, 0)).rgb -
-                              DirectRadiance.Load(int3(q, 0)).rgb);
-        colors[count] = color;
-        values[count] = Luminance(color);
+        float3 diffuse = max(0, DiffuseRadiance.Load(int3(q, 0)).rgb);
+        float3 specular = max(0, Radiance.Load(int3(q, 0)).rgb -
+                                  DirectRadiance.Load(int3(q, 0)).rgb - diffuse);
+        diffuseColors[count] = diffuse;
+        specularColors[count] = specular;
+        diffuseValues[count] = Luminance(diffuse);
+        specularValues[count] = Luminance(specular);
         weights[count] = x == 0 && y == 0 ? 2 : 1;
         ++count;
     }
@@ -64,22 +69,31 @@ void Denoise(uint3 id : SV_DispatchThreadID)
         Output[pixel] = combined;
         return;
     }
-    float sorted[9];
-    [unroll] for (uint i = 0; i < 9; ++i) sorted[i] = i < count ? values[i] : 1e30;
+    float sortedDiffuse[9], sortedSpecular[9];
+    [unroll] for (uint i = 0; i < 9; ++i)
+    {
+        sortedDiffuse[i] = i < count ? diffuseValues[i] : 1e30;
+        sortedSpecular[i] = i < count ? specularValues[i] : 1e30;
+    }
     [unroll] for (uint i = 0; i < 9; ++i)
     [unroll] for (uint j = 0; j < 8; ++j)
     {
-        float a = sorted[j], b = sorted[j + 1];
-        sorted[j] = min(a, b);
-        sorted[j + 1] = max(a, b);
+        float a = sortedDiffuse[j], b = sortedDiffuse[j + 1];
+        sortedDiffuse[j] = min(a, b); sortedDiffuse[j + 1] = max(a, b);
+        a = sortedSpecular[j]; b = sortedSpecular[j + 1];
+        sortedSpecular[j] = min(a, b); sortedSpecular[j + 1] = max(a, b);
     }
-    float limit = sorted[count / 2] * 2.5 + .04;
-    float3 sum = 0;
+    float diffuseLimit = sortedDiffuse[count / 2] * 2.5 + .04;
+    float specularLimit = sortedSpecular[count / 2] * 2.5 + .04;
+    float3 diffuseSum = 0, specularSum = 0;
     float total = 0;
     [loop] for (uint i = 0; i < count; ++i)
     {
-        sum += colors[i] * min(1, limit / max(values[i], 1e-6)) * weights[i];
+        diffuseSum += diffuseColors[i] * min(1, diffuseLimit / max(diffuseValues[i], 1e-6)) * weights[i];
+        specularSum += specularColors[i] * min(1, specularLimit / max(specularValues[i], 1e-6)) * weights[i];
         total += weights[i];
     }
-    Output[pixel] = float4(direct + lerp(center.rgb, sum / total, strength), center.a);
+    float3 diffuseResult = lerp(centerDiffuse, diffuseSum / total, strength);
+    float3 specularResult = lerp(centerSpecular, specularSum / total, strength);
+    Output[pixel] = float4(direct + diffuseResult + specularResult, combined.a);
 }

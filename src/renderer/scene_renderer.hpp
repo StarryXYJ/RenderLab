@@ -9,6 +9,7 @@
 #include "scene/scene.hpp"
 #include "shader/definition.hpp"
 
+#include <array>
 #include <cstdint>
 #include <filesystem>
 #include <map>
@@ -67,6 +68,8 @@ struct SceneRenderOptions
     /// Read back per-pixel history weight, history length, reprojection path and stable hit
     /// distance.
     bool reflectionDiagnostics = false;
+    /// Read back path total, primary-direct and first-bounce diffuse HDR means for validation.
+    bool pathComponentDiagnostics = false;
     /// Per-view values applied to extraction results; never written to Scene/Material assets.
     std::optional<scene::MainLight> lightOverride;
     std::optional<float> environmentIntensity, environmentRotation, exposure;
@@ -87,6 +90,8 @@ struct SceneReadback
     /// Optional tightly packed float2 per pixel: centered luminance moment and filter control.
     /// The moment covers the same raw samples as progressive history; wait for completion.
     std::shared_ptr<rhi::Buffer> reflectionStatistics;
+    /// Optional RGBA32F means: total, primary direct, indirect diffuse; wait for completion.
+    std::array<std::shared_ptr<rhi::Buffer>, 3> pathComponents;
     uint64_t compileNs = 0, prepareNs = 0, recordNs = 0;
     /// CPU scene/material preparation and graph construction, before graph compilation.
     uint64_t scenePrepareNs = 0;

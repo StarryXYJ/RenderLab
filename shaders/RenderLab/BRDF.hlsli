@@ -23,6 +23,19 @@ float VisibilitySmithGGX(float nv, float nl, float roughness)
     float l = nv * sqrt(nl * nl * (1 - a2) + a2);
     return 0.5 / max(v + l, 1e-6);
 }
+// Components include N dot L and use the same Fresnel/visibility convention as EvaluateBRDF.
+void EvaluateBRDFComponents(float3 baseColor, float metallic, float roughness,
+                            float3 n, float3 v, float3 l,
+                            out float3 diffuse, out float3 specular)
+{
+    float nl = saturate(dot(n, l));
+    float nv = saturate(dot(n, v));
+    float3 h = SafeNormalize(v + l);
+    float3 f = FresnelSchlick(saturate(dot(v, h)), lerp(0.04.xxx, baseColor, metallic));
+    diffuse = (1 - f) * (1 - metallic) * baseColor / RenderLabPi * nl;
+    specular = f * DistributionGGX(saturate(dot(n, h)), roughness) *
+               VisibilitySmithGGX(nv, nl, roughness) * nl;
+}
 float3 EvaluateBRDF(float3 baseColor, float metallic, float roughness,
                     float3 n, float3 v, float3 l)
 {
