@@ -55,6 +55,12 @@ void Check(rhi::Runtime& runtime, shader::Target target, const std::filesystem::
     const auto dark = capture();
     std::cout << "Reflection display sum: lit=" << lit << " dark=" << dark << '\n';
     Require(lit > dark + 100, "Reflections did not see area emitter");
+    doc.Get(id).areaLight->width = doc.Get(id).areaLight->height = .02f;
+    doc.Get(id).areaLight->radiance = {100000, 100000, 100000};
+    const auto tiny = capture();
+    std::cout << "Small light reflected signal=" << tiny << '\n';
+    Require(tiny > 100, "Reflected hit surfaces missed small area-light illumination");
+    doc.Get(id).areaLight->width = doc.Get(id).areaLight->height = 1.16f;
     doc.Get(id).areaLight->radiance = {50, 50, 50};
     doc.Get(id).transform.rotation = {.70710678f, 0, 0, .70710678f};
     const auto back = capture();

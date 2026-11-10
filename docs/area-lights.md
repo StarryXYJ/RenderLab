@@ -37,22 +37,22 @@ HLSL 位于 `shaders/RenderLab/RectAreaLight.hlsli`，由 Path Tracing 与独立
 
 每次可继续追踪的表面散射均匀选择一盏已启用矩形灯，均匀采样灯面并发送有限长度的遮挡射线。直接连接与 BSDF 命中解析灯时都使用包含选灯概率的立体角 PDF，并以 power heuristic 加权；相机直接看到的灯不加 MIS 权重。发射面与投射阴影的场景几何、其他解析灯均参与遮挡。NEE 仅在还剩下一段路径时进行，因此与 BSDF 命中遵循相同的四段路径上限。主命中点直接连接计入 primary direct，之后连接按已有首散射漫反射比例分到间接分量；未滤波总量独立累积。
 
-存在显式上限：两盏以内、单面恒定辐亮度、均匀选灯；超限明确拒绝。不支持自动从发光三角形或纹理构造灯、重合灯、透明/Masked 参与光追遮挡，尚不支持面光源的光栅阴影及混合光追反射命中物的面灯照明。现有固定世界空间射线偏移在薄几何和极小/极大尺度有偏差；解析采样对极近距离使用阈值，极端近乎平行射线仍受浮点范围限制。没有 ReSTIR、光源分布预计算或光照烘焙。
+存在显式上限：两盏以内、单面恒定辐亮度、均匀选灯；超限明确拒绝。不支持自动从发光三角形或纹理构造灯、重合灯、透明/Masked 参与光追遮挡，尚不支持面光源的普通光栅阴影。现有固定世界空间射线偏移在薄几何和极小/极大尺度有偏差；解析采样对极近距离使用阈值，极端近乎平行射线仍受浮点范围限制。没有 ReSTIR、光源分布预计算或光照烘焙。
 
 ## 光栅 LTC 数据准备
 
 光栅面光源实现参考 HDRP 的 LTC 职责划分，但不复制 Unity Companion License 下的 Unity 源码或查找表。拟合矩阵与幅度使用论文作者的 [selfshadow/ltc_code](https://github.com/selfshadow/ltc_code/tree/31e5e96b54f98f33098f8503003119ba2231a1c6) 固定提交 `31e5e96b54f98f33098f8503003119ba2231a1c6`，原始 `fit/results/ltc_1.dds` 和 `ltc_2.dds` 原样保存在 `shaders/RenderLab/LtcMatrix.dds`、`LtcAmplitude.dds`；完整版权与许可为同目录 `Ltc_LICENSE.txt`，随 Shader 一起复制及安装。
 
-参考论文：Eric Heitz、Jonathan Dupuy、Stephen Hill、David Neubelt，[Real-Time Polygonal-Light Shading with Linearly Transformed Cosines](https://eheitzresearch.wordpress.com/415-2/)，ACM TOG 35(4), 2016。原表为 64×64 RGBA16F DDS，参数顺序及拟合与 HDRP 自带表不同；加载器只接受该固定布局并转为 RGBA32F。`ltc.data` 验证格式、半精度转换及损坏输入；独立测试 Shader 已使用这两张表，但尚未接入渲染管线。`gpu.{dx12,vulkan}.ltc_eval` 将 LTC 与双精度面积积分对照，覆盖正视漫反射、金属、斜视剪切、跨地平线以及背面；四个有限场景的最大逐通道相对误差约 2.8%。漫反射 Fresnel 使用灯中心方向近似；该结果不代表所有粗糙度、视角或近距离条件均满足相同误差，也没有遮挡。
+参考论文：Eric Heitz、Jonathan Dupuy、Stephen Hill、David Neubelt，[Real-Time Polygonal-Light Shading with Linearly Transformed Cosines](https://eheitzresearch.wordpress.com/415-2/)，ACM TOG 35(4), 2016。原表为 64×64 RGBA16F DDS，参数顺序及拟合与 HDRP 自带表不同；加载器只接受该固定布局并转为 RGBA32F。`ltc.data` 验证格式、半精度转换及损坏输入；两张表已接入光栅直接照明；独立测试 Shader 用于数值核对。`gpu.{dx12,vulkan}.ltc_eval` 将 LTC 与双精度面积积分对照，覆盖正视漫反射、金属、斜视剪切、跨地平线以及背面；四个有限场景的最大逐通道相对误差约 2.8%。漫反射 Fresnel 使用灯中心方向近似；该结果不代表所有粗糙度、视角或近距离条件均满足相同误差，也没有遮挡。
 
 
 ## 光栅直接照明
 
 Forward、Deferred 和 Indexed Forward 使用共享的场景灯快照与 LTC 查表计算无遮挡的矩形灯直接照明；每帧最多两盏，超限时明确拒绝。灯面朝向和剪切平行四边形与路径追踪一致。灯亮度为线性辐亮度；不需要预烘焙，LTC 拟合表是材质模型的预计算数据，与场景无关。内置 Lit 支持此照明，自定义 Shader 需显式实现相应契约。
 
-光栅管线从同一灯数据绘制独立灯面：正面显示辐亮度，背面为不透光黑面，参与相机深度测试；路径追踪继续使用解析相交，不绘制这份光栅几何。Forward、普通 Deferred 及透明物体目前不计算面灯阴影，所有光栅路径都不产生面灯间接光，混合光追反射射线能与解析灯面比较最近命中并显示正面辐亮度，背面遮挡；灯变更会重置反射历史。但反射射线命中的普通物体尚未接受面光源照明；因此这些路径的遮挡场景会漏光，不能把此阶段当作 HDRP 完整面光源实现。`gpu.{dx12,vulkan}.raster_area_light` 验证 Cornell Box 的开关、双灯、灯面正反面与相机遮挡和不同光栅提交路径一致性，使用显示输出而非无偏 HDR 参考；数值拟合只覆盖上述有限测试场景。
+光栅管线从同一灯数据绘制独立灯面：正面显示辐亮度，背面为不透光黑面，参与相机深度测试；路径追踪继续使用解析相交，不绘制这份光栅几何。Forward、普通 Deferred 及透明物体目前不计算面灯阴影，所有光栅路径都不产生面灯间接光，混合光追反射射线能与解析灯面比较最近命中并显示正面辐亮度，背面遮挡；灯变更会重置反射历史。反射射线命中的普通物体对每盏灯进行一次均匀面积采样并追踪有限遮挡射线，场景几何和其他解析灯可遮挡；该单样本估计可能产生噪声和高亮离群值，使用现有反射累积与显示重建。普通光栅路径的遮挡场景会漏光，不能把此阶段当作 HDRP 完整面光源实现。`gpu.{dx12,vulkan}.raster_area_light` 验证 Cornell Box 的开关、双灯、灯面正反面与相机遮挡和不同光栅提交路径一致性，使用显示输出而非无偏 HDR 参考；数值拟合只覆盖上述有限测试场景。
 
-`gpu.{dx12,vulkan}.area_light_reflection` 在 Cornell Box 对照灯的亮度、方向和几何遮挡，并检查灯变化使混合反射的累积与时域历史失效；这是有限场景验证，未覆盖全部表面材质与极端尺度。
+`gpu.{dx12,vulkan}.area_light_reflection` 在 Cornell Box 对照灯的亮度、方向、几何遮挡及小灯照亮反射命中物的贡献，并检查灯变化使混合反射的累积与时域历史失效；这是有限场景验证，未覆盖全部表面材质与极端尺度。
 
 
 ## 混合光追面灯遮挡
