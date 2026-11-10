@@ -312,8 +312,9 @@ Vulkan 或多种子候选画质测试。方法、结果和后续方向见
 
 空间滤波分量诊断（2026 年 11 月 10 日）：按需输出漫反射/镜面与滤波总量，验证与
 直接分量重组；RTX 5060、隔离 Release 的 DX12/Vulkan 场景专项通过，诊断开关的首帧
-显示图相同；日志 `D:/Personal/RenderLab/out/pc{2,3}`。只覆盖当前场景，未做 Debug、
-独立 GPU 合成边界或性能测试；后续已用于分量时域候选，见 [契约](../docs/path-tracing.md)。
+显示图相同；日志 `D:/Personal/RenderLab/out/pc{2,3}`。只覆盖当前场景，未做独立 GPU
+合成边界或性能测试；后续已用于分量时域候选并通过组合后的 Debug/Release 回归，见
+[契约](../docs/path-tracing.md)。
 
 分量时域预览（2026 年 11 月 10 日）：分别累积空间滤波后的间接漫反射与镜面，
 镜面使用保守视差置信度；RTX 5060、隔离 Release 的 DX12/Vulkan 场景专项通过，
@@ -321,7 +322,11 @@ Vulkan 或多种子候选画质测试。方法、结果和后续方向见
 [评估](../docs/performance/m8-denoiser-evaluation.md#分量空间结果的独立时域预览)。
 Release 托管编辑器配隔离 Release Bridge，双后端 Gallery 3 秒短测正常关闭，零验证
 错误/剩余分配/worker_failed，`D:/Personal/RenderLab/out/pc-editor-{dx12,vulkan}`；
-未做 Debug、完整 smoke、动态物体、用户交互画质或多种子 HDR 参考验收。
+叠加矩形面光源接线后，隔离 Debug/Release 的 DX12/Vulkan 场景专项和 Release 面光源
+HDR 专项均通过；Release 托管编辑器与隔离 Bridge 双后端 Cornell Box 三秒短测，零
+验证错误/剩余分配/worker_failed（`D:/Personal/RenderLab/out/pc-{debug,area-combined,area}`、
+`D:/Personal/RenderLab/out/pc-combined-editor-{dx12,vulkan}`）。尚未做完整 smoke、
+动态物体、用户交互画质或多种子 HDR 参考验收。
 
 首个次级距离与镜面视差引导（2026 年 11 月 10 日）：按主表面匹配和采样分布汇总
 首条次级距离，低粗糙度时以近似视差保守调整混合历史置信度；不改变原始累积，也不
