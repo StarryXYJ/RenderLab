@@ -41,6 +41,27 @@ RectEmitterSample SampleRectEmitter(RectEmitter light, float3 shadingPoint, floa
     result.pdfOmega = RectEmitterPdfOmega(light, shadingPoint, result.position, selectionPdf);
     return result;
 }
+// Intersect the finite parallelogram from either side. The caller decides whether its
+// front face emits; both faces can block another light. direction must be normalized.
+bool IntersectRectEmitter(RectEmitter light, float3 origin, float3 direction,
+                          float tMin, float tMax, out float distance)
+{
+    distance = 0;
+    float denominator = dot(light.normal, direction);
+    if (!isfinite(denominator) || abs(denominator) < 1e-7) return false;
+    float t = dot(light.normal, light.center - origin) / denominator;
+    if (!isfinite(t) || t < tMin || t > tMax) return false;
+    float3 delta = origin + t * direction - light.center;
+    float uu = dot(light.edgeU, light.edgeU), uv = dot(light.edgeU, light.edgeV);
+    float vv = dot(light.edgeV, light.edgeV), determinant = uu * vv - uv * uv;
+    if (!(determinant > 0) || !isfinite(determinant)) return false;
+    float du = dot(delta, light.edgeU), dv = dot(delta, light.edgeV);
+    float u = (du * vv - dv * uv) / determinant;
+    float v = (dv * uu - du * uv) / determinant;
+    if (!isfinite(u) || !isfinite(v) || abs(u) > .5 || abs(v) > .5) return false;
+    distance = t;
+    return true;
+}
 // Power heuristic with one sample from each technique; PDFs must use the same measure.
 float RectPowerWeight(float selectedPdf, float otherPdf)
 {

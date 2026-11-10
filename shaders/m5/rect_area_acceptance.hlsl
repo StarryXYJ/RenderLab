@@ -34,4 +34,16 @@ void CSMain(uint3 id : SV_DispatchThreadID)
     light.area = 0;
     float noArea = RectEmitterPdfOmega(light, 0, light.center, 1);
     Result[4] = float4(sheared.pdfOmega, noSelection, noArea, RectPowerWeight(1, -1));
+    light.area = 4;
+    float distance;
+    bool front = IntersectRectEmitter(light, 0, float3(0, 0, 1), .001, 10, distance);
+    float frontDistance = distance;
+    bool backHit = IntersectRectEmitter(light, float3(0, 0, 2), float3(0, 0, -1), .001, 10, distance);
+    bool outside = IntersectRectEmitter(light, float3(3, 0, 0), float3(0, 0, 1), .001, 10, distance);
+    bool parallel = IntersectRectEmitter(light, 0, float3(1, 0, 0), .001, 10, distance);
+    Result[5] = float4(front ? frontDistance : 0, backHit ? 1 : 0, outside ? 1 : 0, parallel ? 1 : 0);
+    bool shortRay = IntersectRectEmitter(light, 0, float3(0, 0, 1), .001, .9, distance);
+    bool shearHit = IntersectRectEmitter(light, float3(1.25, .9, 0), float3(0, 0, 1), .001, 10, distance);
+    bool shearMiss = IntersectRectEmitter(light, float3(-1.4, .9, 0), float3(0, 0, 1), .001, 10, distance);
+    Result[6] = float4(shortRay ? 1 : 0, shearHit ? 1 : 0, shearMiss ? 1 : 0, 0);
 }

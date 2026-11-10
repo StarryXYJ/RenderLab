@@ -30,7 +30,7 @@ void Check(Runtime& runtime, shader::Target target, const std::filesystem::path&
     desc.layout = runtime.CreateLayout({{0, BindingKind::StorageBuffer}});
     desc.compute = runtime.CreateShader(ShaderStage::Compute, compiler.Compile(request), "CSMain");
     const auto pipeline = runtime.CreatePipeline(desc);
-    constexpr uint32_t bytes = 5 * 4 * sizeof(float);
+    constexpr uint32_t bytes = 7 * 4 * sizeof(float);
     const auto output = runtime.CreateBuffer({bytes, Memory::Device, "RectLight.Result", true});
     const auto readback = runtime.CreateBuffer({bytes, Memory::Readback, "RectLight.Readback"});
     Binding binding{0};
@@ -46,7 +46,7 @@ void Check(Runtime& runtime, shader::Target target, const std::filesystem::path&
     commands->Copy(output, readback, bytes);
     commands->Barrier(readback, State::CopyDest, State::HostRead);
     runtime.Wait(runtime.Submit(std::move(commands)));
-    std::array<float, 20> values{};
+    std::array<float, 28> values{};
     std::memcpy(values.data(), readback->Map().data(), bytes);
     for (const auto value : values)
         Require(std::isfinite(value), "Rectangular light produced a nonfinite result");
@@ -64,6 +64,9 @@ void Check(Runtime& runtime, shader::Target target, const std::filesystem::path&
     Require(std::abs(values[16] - float(.25 * shearDistance2 * std::sqrt(shearDistance2))) < 1e-6 &&
                 values[17] == 0 && values[18] == 0 && values[19] == 0,
             "Sheared area or zero/invalid PDF contract failed");
+    Require(values[20] == 1 && values[21] == 1 && values[22] == 0 && values[23] == 0 &&
+                values[24] == 0 && values[25] == 1 && values[26] == 0,
+            "Finite rect intersection or shear clipping failed");
     // Independent midpoint integration over the projected area in double precision.
     constexpr int steps = 1024;
     constexpr double pi = 3.14159265358979323846;
