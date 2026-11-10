@@ -183,12 +183,72 @@ void Contracts()
     Require(Child(current).previousWorld.values == Child(current).world.values,
             "Deleted/reinserted instance retained stale history");
 }
+void RectAreaLightContracts()
+{
+    Fixture fixture;
+    auto& parent = fixture.document.Get(ParentId);
+    parent.transform.scale = {-2, 3, 1};
+    auto& child = fixture.document.Get(ChildId);
+    child.areaLight = scene::RectAreaLight{{4, 2, 1}, 2, 3, true};
+    child.transform.rotation = math::Quaternion::EulerDegrees({0, 0, 37});
+    scene::Extractor extractor;
+    auto snapshot = extractor.Extract(fixture.document, 1, fixture.models);
+    Require(snapshot.areaLights.size() == 1 && snapshot.areaLights[0].object == ChildId,
+            "Enabled rectangular emitter was not extracted");
+    const auto& light = snapshot.areaLights[0];
+    const auto transform = fixture.document.WorldTransforms().at(ChildId).matrix;
+    const auto expectedU = math::Direction(transform, {2, 0, 0});
+    const auto expectedV = math::Direction(transform, {0, 3, 0});
+    const auto cross = math::Cross(expectedU, expectedV);
+    Require(light.edgeU == expectedU && light.edgeV == expectedV &&
+                std::abs(light.area - 36) < 1e-3f &&
+                std::abs(math::Dot(light.normal, cross) + light.area) < 1e-3f &&
+                std::abs(math::Length(light.normal) - 1) < 1e-5f &&
+                light.radiance == math::Vec3{4, 2, 1},
+            "Transformed emitter did not preserve shear/mirror, area or front orientation");
+    Require(std::abs(math::Dot(light.edgeU, light.edgeV)) > .1f,
+            "Fixture did not exercise hierarchy shear");
+    fixture.document.Get(OtherId).areaLight = scene::RectAreaLight{};
+    std::reverse(fixture.document.objects.begin(), fixture.document.objects.end());
+    snapshot = extractor.Extract(fixture.document, 1, fixture.models);
+    Require(snapshot.areaLights.size() == 2 && snapshot.areaLights[0].object == ChildId &&
+                snapshot.areaLights[1].object == OtherId,
+            "Rectangular emitters did not retain stable UUID order");
+    std::reverse(fixture.document.objects.begin(), fixture.document.objects.end());
+    fixture.document.Get(OtherId).areaLight.reset();
+    child.areaLight->width = 4;
+    snapshot = extractor.Extract(fixture.document, 1, fixture.models);
+    Require(std::abs(snapshot.areaLights[0].area - 72) < 1e-3f,
+            "Direct light edits did not invalidate extraction");
+    parent.enabled = false;
+    Require(extractor.Extract(fixture.document, 1, fixture.models).areaLights.empty(),
+            "Disabled parent did not suppress rectangular emitter");
+    parent.enabled = true;
+    child.areaLight->enabled = false;
+    Require(extractor.Extract(fixture.document, 1, fixture.models).areaLights.empty(),
+            "Disabled rectangular emitter was extracted");
+    child.areaLight->enabled = true;
+    const auto path = std::filesystem::current_path() / "scene-area-light-contract.scene";
+    fixture.document.Save(path);
+    const auto loaded = scene::Scene::Load(path);
+    std::filesystem::remove(path);
+    Require(loaded.Get(ChildId).areaLight == child.areaLight,
+            "Rectangular emitter did not round-trip through scene serialization");
+    child.areaLight->width = 0;
+    Fails([&] { extractor.Extract(fixture.document, 1, fixture.models); });
+    child.areaLight->width = 1;
+    child.areaLight->radiance.x = -1;
+    Fails([&] { extractor.Extract(fixture.document, 1, fixture.models); });
+    child.areaLight->radiance.x = std::numeric_limits<float>::infinity();
+    Fails([&] { extractor.Extract(fixture.document, 1, fixture.models); });
+}
 } // namespace
 int main()
 {
     try
     {
         Contracts();
+        RectAreaLightContracts();
         std::cout << "Scene cache contracts passed: edits/model/bounds/history/cancel/reorder\n";
         return 0;
     }
