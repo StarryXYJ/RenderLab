@@ -1,6 +1,7 @@
 #include "renderer/scene_renderer.hpp"
 #include "material/render_state.hpp"
 #include "renderer/acceleration_scene.hpp"
+#include "renderer/area_light.hpp"
 #include "renderer/builtin_shaders.hpp"
 #include "renderer/ray_surface.hpp"
 #include "renderer/raytracing.hpp"
@@ -968,6 +969,8 @@ void SceneRenderer::ValidatePipeline(PipelineType pipeline)
     self.EnsureModels();
     scene::Extractor extractor;
     const auto snapshot = extractor.Extract(self.document, 1, self.models);
+    if (pipeline == PipelineType::PathTracing)
+        (void)PackPathRectLights(snapshot.areaLights);
     for (const auto& instance : snapshot.allInstances)
     {
         const auto& model = self.models.at(instance.model);
@@ -1428,6 +1431,7 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
         {
             parameters.environment[2] = float(PathSamplesPerFrame);
             parameters.environment[3] = float(options.pathSeed);
+            parameters.reserved = PackPathRectLights(self.snapshot.areaLights);
         }
         parameters.options[2] = self.snapshot.light.shadows ? 1.f : 0.f;
         parameters.options[3] = static_cast<float>(MaxReflectionSamples);
@@ -1447,6 +1451,8 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
         appendTemporal(parameters.lightColor);
         appendTemporal(parameters.environment);
         appendTemporal(parameters.options);
+        if (pathTracing)
+            appendTemporal(parameters.reserved);
         appendTemporal(self.snapshot.projection.values);
         append(target->desc.width);
         append(target->desc.height);
