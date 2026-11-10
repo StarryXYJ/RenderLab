@@ -11,6 +11,7 @@
 #include "material/runtime.hpp"
 #include "renderer/environment.hpp"
 #include "renderer/forward.hpp"
+#include "renderer/ltc_table.hpp"
 #include "renderer/pipeline.hpp"
 #include "renderer/shadow.hpp"
 #include "rendergraph/graph.hpp"
@@ -84,7 +85,7 @@ struct SceneRenderer::Impl
     std::map<std::string, std::shared_ptr<const shader::Package>> packages;
     std::map<std::string, std::filesystem::path> engineShaders;
     std::map<const shader::Package*, std::shared_ptr<const material::GpuGeneration>> generations;
-    std::shared_ptr<rhi::TextureView> environmentAtlas, brdfLut;
+    std::shared_ptr<rhi::TextureView> environmentAtlas, brdfLut, ltcMatrix, ltcAmplitude;
     std::string environmentKey;
     std::array<float, 3> environmentAmbient{};
     std::shared_ptr<const shader::Package> toneMapping;
@@ -273,6 +274,12 @@ struct SceneRenderer::Impl
         textures.emplace("normal/Linear",
                          UploadFloat("Builtin.FlatNormal", {1, 1, {.5f, .5f, 1, 1}}));
         brdfLut = UploadFloat("Environment.Brdf", IntegrateEnvironmentBrdf());
+        ltcMatrix = UploadFloat(
+            "AreaLight.LtcMatrix",
+            DecodeLtcTable(assets::detail::Read(project.engine / "RenderLab" / "LtcMatrix.dds")));
+        ltcAmplitude = UploadFloat("AreaLight.LtcAmplitude",
+                                   DecodeLtcTable(assets::detail::Read(
+                                       project.engine / "RenderLab" / "LtcAmplitude.dds")));
         EnsureModels();
     }
     std::shared_ptr<rhi::Buffer> Upload(std::span<const std::byte> bytes, const std::string& name,
@@ -894,8 +901,8 @@ struct SceneRenderer::Impl
     }
     struct SceneBindings
     {
-        std::optional<shader::BindingHandle> view, object, lighting, shadow;
-        std::optional<shader::BindingHandle> environment, brdf, shadowMap;
+        std::optional<shader::BindingHandle> view, object, lighting, shadow, area;
+        std::optional<shader::BindingHandle> environment, brdf, shadowMap, ltcMatrix, ltcAmplitude;
     };
     std::map<std::pair<const shader::Package*, uint32_t>, SceneBindings> sceneBindings;
     const SceneBindings& Bindings(const std::shared_ptr<const shader::Package>& selected,
@@ -911,6 +918,7 @@ struct SceneRenderer::Impl
         bindings.object = selected->SchemaBinding(pass, SceneObjectDataContract);
         bindings.lighting = selected->SchemaBinding(pass, SceneLightingDataContract);
         bindings.shadow = selected->SchemaBinding(pass, SceneShadowDataContract);
+        bindings.area = selected->SchemaBinding(pass, SceneAreaLightingDataContract);
         const auto& layout = selected->interfaces.at(pass.index);
         for (uint32_t i = 0; i < layout.blocks.size(); ++i)
         {
@@ -918,7 +926,7 @@ struct SceneRenderer::Impl
                 continue;
             const shader::BindingHandle handle{pass, i, true};
             if (bindings.view != handle && bindings.object != handle &&
-                bindings.lighting != handle && bindings.shadow != handle)
+                bindings.lighting != handle && bindings.shadow != handle && bindings.area != handle)
                 throw std::invalid_argument("Unsupported required scene parameter schema: " +
                                             layout.blocks[i].schemaId);
         }
@@ -926,6 +934,8 @@ struct SceneRenderer::Impl
         bindings.environment = selected->SemanticBinding(pass, Semantic::EnvironmentAtlas);
         bindings.brdf = selected->SemanticBinding(pass, Semantic::BrdfLut);
         bindings.shadowMap = selected->SemanticBinding(pass, Semantic::MainLightShadow);
+        bindings.ltcMatrix = selected->SemanticBinding(pass, Semantic::LtcMatrix);
+        bindings.ltcAmplitude = selected->SemanticBinding(pass, Semantic::LtcAmplitude);
         for (const auto& resource : layout.resources)
             if (resource.scope != shader::Scope::Material &&
                 resource.property.binding == Semantic::None)
@@ -941,7 +951,7 @@ struct SceneRenderer::Impl
     }
     struct FrameBuffers
     {
-        rhi::UploadArena::Slice view, lighting, shadow;
+        rhi::UploadArena::Slice view, lighting, shadow, area;
     };
     FrameBuffers Parameters(rhi::UploadPool::Batch& uploads)
     {
@@ -958,6 +968,15 @@ struct SceneRenderer::Impl
         lighting.EnvironmentParameters = {
             snapshot.environmentIntensity,
             static_cast<float>(snapshot.environmentRotation * 3.141592653589793 / 180), 0, 0};
+        const auto packed = PackRectLights(snapshot.areaLights);
+        SceneAreaLightingData area;
+        std::copy_n(packed.begin(), 4, area.Header.begin());
+        std::copy_n(packed.begin() + 4, 4, area.Center0.begin());
+        std::copy_n(packed.begin() + 8, 4, area.EdgeU0.begin());
+        std::copy_n(packed.begin() + 12, 4, area.EdgeV0.begin());
+        std::copy_n(packed.begin() + 16, 4, area.Center1.begin());
+        std::copy_n(packed.begin() + 20, 4, area.EdgeU1.begin());
+        std::copy_n(packed.begin() + 24, 4, area.EdgeV1.begin());
         SceneShadowData shadow;
         shadow.MainLightShadowMatrix = shadowMatrix.values;
         shadow.MainLightShadowParameters = {
@@ -968,7 +987,7 @@ struct SceneRenderer::Impl
                 ? 1.f
                 : 0.f};
         return {ParameterBuffer(view, uploads), ParameterBuffer(lighting, uploads),
-                ParameterBuffer(shadow, uploads)};
+                ParameterBuffer(shadow, uploads), ParameterBuffer(area, uploads)};
     }
 };
 SceneRenderer::SceneRenderer(rhi::Runtime& runtime, shader::Target target,
@@ -985,10 +1004,8 @@ scene::Scene& SceneRenderer::Document()
 void SceneRenderer::ValidatePipeline(PipelineType pipeline)
 {
     auto& self = *impl_;
-    if (pipeline == PipelineType::Forward)
-        return;
-    if (pipeline != PipelineType::Deferred && pipeline != PipelineType::RayTracing &&
-        pipeline != PipelineType::PathTracing)
+    if (pipeline != PipelineType::Forward && pipeline != PipelineType::Deferred &&
+        pipeline != PipelineType::RayTracing && pipeline != PipelineType::PathTracing)
         throw std::invalid_argument("Unknown rendering pipeline");
     if ((pipeline == PipelineType::RayTracing || pipeline == PipelineType::PathTracing) &&
         (!self.runtime.SupportsAccelerationStructures() || !self.runtime.SupportsRayQuery() ||
@@ -998,8 +1015,9 @@ void SceneRenderer::ValidatePipeline(PipelineType pipeline)
     self.EnsureModels();
     scene::Extractor extractor;
     const auto snapshot = extractor.Extract(self.document, 1, self.models);
-    if (pipeline == PipelineType::PathTracing)
-        (void)PackPathRectLights(snapshot.areaLights);
+    (void)PackRectLights(snapshot.areaLights);
+    if (pipeline == PipelineType::Forward)
+        return;
     for (const auto& instance : snapshot.allInstances)
     {
         const auto& model = self.models.at(instance.model);
@@ -1844,6 +1862,7 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
         bind(bindings.view, frameConstants.view);
         bind(bindings.lighting, frameConstants.lighting);
         bind(bindings.shadow, frameConstants.shadow);
+        bind(bindings.area, frameConstants.area);
         if (bindings.object)
         {
             const auto objectKey = indexedDraw ? "Indexed.SharedState" : instance.id;
@@ -1861,6 +1880,10 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
             prepare.bindings[*bindings.environment] = {0, self.environmentAtlas};
         if (bindings.brdf)
             prepare.bindings[*bindings.brdf] = {0, self.brdfLut};
+        if (bindings.ltcMatrix)
+            prepare.bindings[*bindings.ltcMatrix] = {0, self.ltcMatrix};
+        if (bindings.ltcAmplitude)
+            prepare.bindings[*bindings.ltcAmplitude] = {0, self.ltcAmplitude};
         if (bindings.shadowMap)
             prepare.deferredResources.insert(*bindings.shadowMap);
         auto prepared = self.materials.Prepare(material.package, material.asset, prepare, resolve);
@@ -2021,6 +2044,13 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
             importBuffer(frameConstants.shadow.buffer, "Indexed.Shadow", rhi::State::HostWrite),
             rendergraph::Use::Uniform,
             {frameConstants.shadow.offset, frameConstants.shadow.size}};
+        bindings.area = {
+            3,
+            importBuffer(frameConstants.area.buffer, "Indexed.AreaLighting", rhi::State::HostWrite),
+            rendergraph::Use::Uniform,
+            {frameConstants.area.offset, frameConstants.area.size}};
+        bindings.ltcMatrix = importTexture(self.ltcMatrix);
+        bindings.ltcAmplitude = importTexture(self.ltcAmplitude);
         bindings.environment = importTexture(self.environmentAtlas);
         bindings.brdf = importTexture(self.brdfLut);
         bindings.viewProjection = self.snapshot.viewProjection;
@@ -2054,6 +2084,7 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
         bind(SceneViewDataContract, frameConstants.view);
         bind(SceneLightingDataContract, frameConstants.lighting);
         bind(SceneShadowDataContract, frameConstants.shadow);
+        bind(SceneAreaLightingDataContract, frameConstants.area);
         const auto inverse = math::Inverse(self.snapshot.viewProjection);
         const std::vector<double> inverseValues(inverse.values.begin(), inverse.values.end());
         prepare.constants[self.deferredLighting->BlockBinding(pass, "DeferredLightingParameters")] =
@@ -2061,7 +2092,8 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
              {"RayTracedShadows", {"uint", 1, {rayTracing ? 1.0 : 0.0}}}};
         for (const auto name :
              {"GBufferAlbedoMetallic", "GBufferNormalRoughness", "GBufferEmissionOcclusion",
-              "CameraDepth", "EnvironmentAtlas", "BrdfLut", "MainLightShadow", "ShadowVisibility"})
+              "CameraDepth", "EnvironmentAtlas", "BrdfLut", "MainLightShadow", "ShadowVisibility",
+              "LtcMatrix", "LtcAmplitude"})
             prepare.deferredResources.insert(self.deferredLighting->ResourceBinding(pass, name));
         auto prepared = self.materials.Prepare(
             self.deferredLighting,
@@ -2098,6 +2130,8 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
             {"CameraDepth", "CameraDepth"},
             {"EnvironmentAtlas", importTexture(self.environmentAtlas)},
             {"BrdfLut", importTexture(self.brdfLut)},
+            {"LtcMatrix", importTexture(self.ltcMatrix)},
+            {"LtcAmplitude", importTexture(self.ltcAmplitude)},
             {"MainLightShadow", "MainLightShadow"},
             {"ShadowVisibility", rayTracing ? "RayTracing.ShadowVisibility"
                                             : importTexture(self.textures.at("white/Linear"))}};

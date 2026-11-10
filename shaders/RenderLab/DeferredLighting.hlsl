@@ -1,6 +1,7 @@
 #include <renderlab/generated/parameters.hlsli>
 #include "Core.hlsli"
 #include "Lighting.hlsli"
+#include "AreaLighting.hlsli"
 #include "ImageBasedLighting.hlsli"
 #include "Shadows.hlsli"
 
@@ -58,9 +59,12 @@ float4 PSMain(Varyings input) : SV_Target
     const float visibility = DeferredLightingParameters.RayTracedShadows != 0
         ? ShadowVisibility.Load(int3(pixel, 0)).x
         : MainLightVisibility(SceneShadow, MainLightShadow, shadowSampling);
-    const float3 direct = EvaluateBRDF(surface.baseColor, surface.metallic,
+    float3 direct = EvaluateBRDF(surface.baseColor, surface.metallic,
         surface.perceptualRoughness, surface.normalWS, SafeNormalize(viewDirWS), light.direction)
         * light.color * visibility;
+    direct += EvaluateAreaLights(SceneAreaLighting, positionWS, surface.normalWS,
+                                 SafeNormalize(viewDirWS), surface.baseColor, surface.metallic,
+                                 surface.perceptualRoughness, LtcMatrix, LtcAmplitude);
     const float3 indirect = EvaluateImageBasedLighting(surface, viewDirWS,
         SceneLighting.EnvironmentParameters, EnvironmentAtlas, BrdfLut);
     return float4(direct + indirect + surface.emission, 1);

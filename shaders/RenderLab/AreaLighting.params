@@ -1,0 +1,10 @@
+[scope(view), schema("renderlab.area_lighting", 1), type(SceneAreaLightingData)] cbuffer SceneAreaLighting
+{
+    [id("Header")] float4 Header = (0, 0, 0, 0);
+    [id("Center0")] float4 Center0 = (0, 0, 0, 0);
+    [id("EdgeU0")] float4 EdgeU0 = (0, 0, 0, 0);
+    [id("EdgeV0")] float4 EdgeV0 = (0, 0, 0, 0);
+    [id("Center1")] float4 Center1 = (0, 0, 0, 0);
+    [id("EdgeU1")] float4 EdgeU1 = (0, 0, 0, 0);
+    [id("EdgeV1")] float4 EdgeV1 = (0, 0, 0, 0);
+}

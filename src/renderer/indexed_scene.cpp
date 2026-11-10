@@ -65,6 +65,7 @@ struct IndexedScene::Impl
             runtime.CreateLayout({{0, rhi::BindingKind::ConstantBuffer},
                                   {1, rhi::BindingKind::ConstantBuffer},
                                   {2, rhi::BindingKind::ConstantBuffer},
+                                  {3, rhi::BindingKind::ConstantBuffer},
                                   {0, rhi::BindingKind::ReadOnlyBuffer, 2},
                                   {1, rhi::BindingKind::ReadOnlyBuffer, 2},
                                   {2, rhi::BindingKind::ReadOnlyBuffer, 2},
@@ -72,7 +73,9 @@ struct IndexedScene::Impl
                                   {0, rhi::BindingKind::Sampler, 1},
                                   {8, rhi::BindingKind::SampledTexture},
                                   {9, rhi::BindingKind::SampledTexture},
-                                  {10, rhi::BindingKind::SampledTexture}});
+                                  {10, rhi::BindingKind::SampledTexture},
+                                  {11, rhi::BindingKind::SampledTexture},
+                                  {12, rhi::BindingKind::SampledTexture}});
         shader::DxcCompiler compiler;
         const auto module = [&](rhi::ShaderStage stage, const char* entry)
         {
@@ -454,13 +457,15 @@ void IndexedScene::Build(rendergraph::Graph& graph, const std::vector<IndexedDra
         draw.indices = "Indexed.Indices";
         draw.stencilReference = batch.stencil;
         draw.queue = batch.queue;
-        draw.buffers = {frame.view,    frame.lighting,  frame.shadow,
+        draw.buffers = {frame.view,    frame.lighting,  frame.shadow,  frame.area,
                         objectBinding, materialBinding, visibleBinding};
         for (uint32_t i = 0; i < IndexedTextureCapacity; ++i)
             draw.textures.push_back({16, textureNames[i < textureNames.size() ? i : 0], 1, i});
         draw.textures.push_back({8, frame.environment});
         draw.textures.push_back({9, frame.brdf});
         draw.textures.push_back({10, "MainLightShadow"});
+        draw.textures.push_back({11, frame.ltcMatrix});
+        draw.textures.push_back({12, frame.ltcAmplitude});
         draw.samplers = {{0, self.sampler, 1}};
         auto& destination = batch.gbuffer ? gbuffer : opaque;
         if (indirect)

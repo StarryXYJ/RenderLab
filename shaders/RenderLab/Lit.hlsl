@@ -1,5 +1,6 @@
 #include "LitSurface.hlsli"
 #include "Lighting.hlsli"
+#include "AreaLighting.hlsli"
 #include "ImageBasedLighting.hlsli"
 #include "Shadows.hlsli"
 
@@ -16,6 +17,9 @@ float4 PSMain(Varyings input, bool frontFace : SV_IsFrontFace) : SV_Target
     float3 direct = EvaluateBRDF(surface.baseColor, surface.metallic,
                                  surface.perceptualRoughness, surface.normalWS,
                                  SafeNormalize(viewDirWS), light.direction) * light.color * visibility;
+    direct += EvaluateAreaLights(SceneAreaLighting, input.positionWS, surface.normalWS,
+                                 SafeNormalize(viewDirWS), surface.baseColor, surface.metallic,
+                                 surface.perceptualRoughness, LtcMatrix, LtcAmplitude);
     float3 indirect = EvaluateImageBasedLighting(surface, viewDirWS,
                                                  SceneLighting.EnvironmentParameters,
                                                  EnvironmentAtlas, BrdfLut);

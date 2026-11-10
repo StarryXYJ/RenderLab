@@ -1,4 +1,4 @@
-#include "LtcAreaLight.hlsli"
+#include "../RenderLab/LtcAreaLight.hlsli"
 RWStructuredBuffer<float4> Result : register(u0);
 Texture2D<float4> MatrixTable : register(t1);
 Texture2D<float4> AmplitudeTable : register(t2);

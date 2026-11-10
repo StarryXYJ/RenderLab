@@ -50,8 +50,8 @@ struct IndexedDrawInput
 };
 struct IndexedFrameBindings
 {
-    BufferBinding view, lighting, shadow;
-    std::string environment, brdf;
+    BufferBinding view, lighting, shadow, area;
+    std::string environment, brdf, ltcMatrix, ltcAmplitude;
     math::Mat4 viewProjection;
 };
 struct IndexedSceneStatistics

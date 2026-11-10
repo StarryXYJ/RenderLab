@@ -273,6 +273,14 @@ if(BUILD_TESTING)
     target_include_directories(renderlab_area_light_packing_tests PRIVATE src)
     target_link_libraries(renderlab_area_light_packing_tests PRIVATE renderlab_options)
     add_test(NAME area_light.packing COMMAND renderlab_area_light_packing_tests)
+    add_executable(renderlab_raster_area_light_tests tests/raster_area_light_tests.cpp)
+    target_link_libraries(renderlab_raster_area_light_tests PRIVATE renderlab_options renderlab_renderer
+        renderlab_rhi renderlab_content renderlab_core renderlab_platform)
+    add_custom_command(TARGET renderlab_raster_area_light_tests POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_FILE:renderlab_dxc>
+            $<TARGET_FILE_DIR:renderlab_raster_area_light_tests>
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_FILE:renderlab_pix>
+            $<TARGET_FILE_DIR:renderlab_raster_area_light_tests> VERBATIM)
     add_executable(renderlab_area_light_render_tests tests/area_light_render_tests.cpp)
     target_link_libraries(renderlab_area_light_render_tests PRIVATE renderlab_options renderlab_renderer
         renderlab_rhi renderlab_content renderlab_core renderlab_platform)
@@ -440,6 +448,10 @@ if(BUILD_TESTING)
             add_test(NAME gpu.${backend}.alias COMMAND renderlab_alias_tests ${backend}
                 ${CMAKE_BINARY_DIR}/alias/${backend})
             set_tests_properties(gpu.${backend}.alias PROPERTIES LABELS gpu RUN_SERIAL TRUE TIMEOUT 90)
+            add_test(NAME gpu.${backend}.raster_area_light COMMAND renderlab_raster_area_light_tests
+                ${backend} ${CMAKE_SOURCE_DIR}/sample/m4/CornellBox.rlproject
+                ${CMAKE_SOURCE_DIR}/shaders ${CMAKE_BINARY_DIR}/raster-area-light/${backend})
+            set_tests_properties(gpu.${backend}.raster_area_light PROPERTIES LABELS gpu RUN_SERIAL TRUE TIMEOUT 120)
             add_test(NAME gpu.${backend}.area_light_render COMMAND renderlab_area_light_render_tests
                 ${backend} ${CMAKE_SOURCE_DIR}/sample/m4/CornellBox.rlproject
                 ${CMAKE_SOURCE_DIR}/shaders ${CMAKE_BINARY_DIR}/area-light-render/${backend})

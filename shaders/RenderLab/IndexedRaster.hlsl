@@ -3,6 +3,7 @@
 #include "Core.hlsli"
 #include "MaterialSampling.hlsli"
 #include "Lighting.hlsli"
+#include "AreaLighting.hlsli"
 #include "ImageBasedLighting.hlsli"
 #include "Shadows.hlsli"
 #include "Alpha.hlsli"
@@ -22,6 +23,7 @@ struct IndexedMaterial
 ConstantBuffer<SceneViewData> SceneView : register(b0);
 ConstantBuffer<SceneLightingData> SceneLighting : register(b1);
 ConstantBuffer<SceneShadowData> SceneShadow : register(b2);
+ConstantBuffer<SceneAreaLightingData> SceneAreaLighting : register(b3);
 StructuredBuffer<IndexedInstance> Objects : register(t0, space2);
 StructuredBuffer<IndexedMaterial> Materials : register(t1, space2);
 StructuredBuffer<uint> VisibleInstances : register(t2, space2);
@@ -30,6 +32,8 @@ SamplerState MaterialSampler : register(s0, space1);
 Texture2D<float4> EnvironmentAtlas : register(t8);
 Texture2D<float4> BrdfLut : register(t9);
 Texture2D<float4> MainLightShadow : register(t10);
+Texture2D<float4> LtcMatrix : register(t11);
+Texture2D<float4> LtcAmplitude : register(t12);
 
 struct Attributes
 {
@@ -105,6 +109,9 @@ float4 PSForward(Varyings input, bool frontFace : SV_IsFrontFace) : SV_Target
     float3 direct = EvaluateBRDF(surface.baseColor, surface.metallic,
         surface.perceptualRoughness, surface.normalWS, SafeNormalize(viewDirWS), light.direction)
         * light.color * visibility;
+    direct += EvaluateAreaLights(SceneAreaLighting, input.positionWS, surface.normalWS,
+                                 SafeNormalize(viewDirWS), surface.baseColor, surface.metallic,
+                                 surface.perceptualRoughness, LtcMatrix, LtcAmplitude);
     float3 indirect = EvaluateImageBasedLighting(surface, viewDirWS,
         SceneLighting.EnvironmentParameters, EnvironmentAtlas, BrdfLut);
     return float4(direct + indirect + surface.emission, 1);

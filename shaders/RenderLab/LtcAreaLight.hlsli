@@ -1,8 +1,8 @@
 #ifndef RENDERLAB_LTC_AREA_LIGHT_INCLUDED
 #define RENDERLAB_LTC_AREA_LIGHT_INCLUDED
 
-#include "../RenderLab/BRDF.hlsli"
-#include "../RenderLab/RectAreaLight.hlsli"
+#include "BRDF.hlsli"
+#include "RectAreaLight.hlsli"
 
 // The 2016 selfshadow LTC tables are distributed with Ltc_LICENSE.txt.
 // Heitz, Dupuy, Hill, Neubelt: Real-Time Polygonal-Light Shading with LTCs, TOG 35(4).

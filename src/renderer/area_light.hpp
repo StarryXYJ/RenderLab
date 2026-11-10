@@ -8,15 +8,15 @@
 
 namespace renderlab::renderer
 {
-/// @brief Path constants reserved region: one header and three float4s per emitter.
+/// @brief Shared raster and path emitter layout: one header and three float4s per emitter.
 /// Zero-initialized output preserves existing rendering for a scene without emitters.
-inline constexpr size_t MaxPathRectLights = 2;
-using PathRectLightConstants = std::array<float, 28>;
-inline PathRectLightConstants PackPathRectLights(std::span<const scene::AreaLight> lights)
+inline constexpr size_t MaxRectLights = 2;
+using RectLightConstants = std::array<float, 28>;
+inline RectLightConstants PackRectLights(std::span<const scene::AreaLight> lights)
 {
-    if (lights.size() > MaxPathRectLights)
-        throw std::invalid_argument("Path tracing supports at most two rectangular area lights");
-    PathRectLightConstants result{};
+    if (lights.size() > MaxRectLights)
+        throw std::invalid_argument("Rendering supports at most two rectangular area lights");
+    RectLightConstants result{};
     result[0] = static_cast<float>(lights.size());
     for (size_t i = 0; i < lights.size(); ++i)
     {
@@ -36,5 +36,12 @@ inline PathRectLightConstants PackPathRectLights(std::span<const scene::AreaLigh
         result[offset + 11] = light.radiance.z;
     }
     return result;
+}
+// Path tracing reserves this layout inside its existing constants ABI.
+inline constexpr size_t MaxPathRectLights = MaxRectLights;
+using PathRectLightConstants = RectLightConstants;
+inline PathRectLightConstants PackPathRectLights(std::span<const scene::AreaLight> lights)
+{
+    return PackRectLights(lights);
 }
 } // namespace renderlab::renderer
