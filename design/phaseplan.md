@@ -4,20 +4,7 @@
 
 ## 当前状态
 
-- HDRP 参考面光源 IN_PROGRESS（2026 年 11 月 10 日）：用户授权实现光栅/混合管线面光源；分步完成合法来源的 LTC 表与数值对照、共享直接照明和可见灯面、阴影及混合反射，逐项验证提交；保留 M8 并行工作。
-  性能与补充参考子项 DONE：单机 RTX 5060、512²、30 帧的 DX12/Vulkan 零/一/双灯短测；Ray Query 阴影 pass 单灯约 0.40 ms、双灯约 0.81 ms，光栅阴影图每张约 0.03–0.04 ms。Cornell 双灯 HDR 均值和单灯内部像素对照、无面灯路径追踪双后端 128 spp 输出 hash 与接入前一致；细节与边界见 [面光源](../docs/area-lights.md#有限性能测量)。Intel 核显 DX12 的 Forward/混合各 8 帧验证错误为零；Intel Vulkan 在 Runtime 创建时因现有时间戳限制失败，未验证面灯，复杂遮挡和长期画质仍未验收。
-  HDR 对照与斜面修正子项 DONE：新增可选线性场景 HDR 回读；灯投影与表面法线计算接收面梯度，修复斜面自遮挡并保持 Forward/Deferred 一致。Cornell DX12 4096 spp 路径 primary direct 均值 0.1441，光栅 0.1248、混合 0.1294，逐通道 MSE 约 0.125/0.124；边缘抗锯齿不同，该有限场景不代表全局画质。独立梯度、尺寸/遮挡距离、光栅、路径 HDR、材质测试在 Debug 双后端 8/8；Release 对应测试双后端通过，Editor bridge 与托管 Release 构建通过。
-  光栅材质回归子项 DONE：Masked 全裁剪和投射开关、透明 Lit 接收及 Forward/Deferred 对照、既有自定义 Shader 别名回归；隔离 Debug/Release DX12/Vulkan 的 `surface` 各 2/2，Release 窗口回归双后端通过。
-  PCSS 式滤波子项 DONE：中心及 4×4 遮挡搜索、4×4 过滤，随灯大小与遮挡距离调整半影；独立滤波与场景/混合对照在隔离 Debug/Release 的 DX12/Vulkan 各 6/6，Editor bridge 与托管 Release 构建通过。Cornell 部分遮挡 DX12 显示通道和光栅 6358、16 射线 Ray Query 7668；非 HDR 或逐像素画质验收。单中心图、有限点数、最大核半径与剪切近似的限制见 [面光源](../docs/area-lights.md#光栅面灯阴影)。
-  普通光栅面灯阴影 IN_PROGRESS：中心投影基础子项 DONE：独立两张 1024² 阴影图、材质 ShadowCaster 投射、3×3 PCF 与距离缩放偏移接入 Forward/Deferred/Indexed；Cornell 遮挡及双灯测试与混合光追回归在 Debug/Release DX12/Vulkan 各 4/4，Release Indexed 回归双后端通过，Editor bridge 和托管 Release 构建通过。该基础子项的 3×3 滤波已由 PCSS 式近似替换；HDR 与单机短测见上述子项，跨场景、跨硬件画质和性能仍未验收。[限制](../docs/area-lights.md#光栅面灯阴影)。
-  投影准备 DONE：灯中心、前向 170° 透视、场景包围盒决定远平面，Debug/Release `surface.contracts` 各 1/1，覆盖正反向、镜像、剪切方向及 reversed-Z；近平面与广角边界限制见上述光栅阴影子项。
-  混合反射命中物照明子项 DONE：每盏灯一次均匀面积采样、立体角 PDF 与有限遮挡射线，纳入现有反射累积；Cornell 小灯在隔离 Debug/Release DX12/Vulkan 各 2/2，DX12 移除该贡献的负对照输出为零。单样本噪声、固定偏移与极端亮度限制仍在，未做多种子画质、性能和跨设备验收。
-  混合光追面灯遮挡子项 DONE：不透明主表面对两灯分别采用 4×4 固定分层 Ray Query，可见比例乘 LTC；全遮挡、部分遮挡、两灯独立性在隔离 Debug/Release DX12/Vulkan 各 2/2；Release 原有 Ray Query 场景及光栅面灯回归双后端通过，Editor bridge 与托管 Release 构建通过。尚无 BRDF 权重或时间滤波，存在采样偏差和每像素最多 32 射线成本，未做性能及跨设备验收；Forward、普通 Deferred、透明表面使用独立光栅阴影图。[限制及验证](../docs/area-lights.md#混合光追面灯遮挡)。
-  混合反射可见灯面子项 DONE：反射射线比较三角形和解析灯面最近命中，正面发光、背面遮挡，灯变化失效反射累积与时域历史；Cornell 亮度、朝向、遮挡和历史验证在隔离 Debug/Release DX12/Vulkan 各 2/2，路径历史回归各双后端通过。该子项原始验证不覆盖命中物受光。
-  可见灯面子项 DONE：同一解析灯数据生成光栅灯面，正面显示辐亮度、背面黑且写入深度，受相机前方几何遮挡；路径追踪保持解析相交。隔离 Debug/Release 的 DX12/Vulkan 灯面及光栅测试各 2/2，windows-release Editor bridge 与托管 Editor Release 构建通过。该子项不覆盖混合反射命中物照明及阴影。
-  光栅直接光子项 DONE：Forward、Deferred 和 Indexed Forward 共用场景矩形灯与 LTC，最多两灯、超限拒绝；Cornell 开关、双灯、提交方式对照在隔离 Debug/Release 的 DX12/Vulkan 各 2/2；Release 原有光追/Indexed 回归及 LTC 数值各双后端通过，windows-release Editor bridge 与托管 Editor Release 构建通过；验证入口见 [面光源](../docs/area-lights.md#光栅直接照明)。该子项验证不覆盖面灯阴影、间接光和混合反射，HDR 有限场景对照见上述子项，尚未覆盖更多场景。
-  数值子项 DONE：独立 LTC Shader 与双精度面积积分对照，Debug/Release 的 DX12/Vulkan 各 2/2；覆盖正视、金属、斜视剪切、跨地平线与背面，有限样例最大逐通道相对误差约 2.8%。该数值子项单独验证时未接入生产管线；中心方向漫反射 Fresnel 为近似，极端参数及遮挡尚未验证。
-  数据子项 DONE：固定 LTC 原始拟合表和完整作者许可，64×64 RGBA16F DDS 校验及转换；隔离 Debug/Release `ltc.data` 各 1/1。数据子项单独验证时尚未接入光栅，[来源与限制](../docs/area-lights.md#光栅-ltc-数据准备)。
+- HDRP 参考面光源功能基线 DONE（2026 年 11 月 10 日）：Forward、Deferred、Indexed 和透明接收使用共享矩形灯、LTC、独立阴影图及 PCSS 式近似；可见灯面参与深度；混合光追使用逐灯 Ray Query 遮挡、解析灯面反射及反射命中物面积采样。最多两盏单面恒定辐亮度灯，支持剪切变换；LTC 数据来源与许可随产品分发。隔离 Debug/Release 的 RTX 5060 DX12/Vulkan 数值、场景、材质、反射、阴影及 HDR 对照通过；Release 窗口回归双后端通过，Editor bridge 与托管 Release 构建通过；无灯路径追踪双后端 128 spp 图像与接入前 hash 一致。Intel 核显 DX12 Forward/混合各 8 帧短测无验证错误；Intel Vulkan 在 Runtime 创建前受下述既有限制阻塞，未验证此设备面灯。Cornell 单/双灯 HDR 对照和 RTX 5060 单机短测、验证入口、完整限制见 [面光源](../docs/area-lights.md) 和 [手册](../manual/build.md#面光源短测)。这是所授权功能的近似基线，并非完整 HDRP：中心图有视场、近平面与漏光限制；有限采样有噪声和偏差；阴影缓存、EVSM、质量配置、更多设备/场景、长期运动及性能尚未验收，ReSTIR 与面灯烘焙未实现。M8 并行工作仍按其状态推进。
 
 - M1 Intel Vulkan 时间戳兼容性 TODO（2026 年 11 月 10 日发现）：Intel 核显 Vulkan 队列 `timestampValidBits` 非 64，现有 `VulkanRuntime` 在创建时拒绝设备；Forward/混合面光源均未进入渲染。需设计有限位时间戳回绕与计时契约并验证，不把 DX12 或 RTX Vulkan 的通过等同于此设备通过；日志 `out/area-light-benchmark/intel-vulkan-{forward,raytracing}.log`。
 
