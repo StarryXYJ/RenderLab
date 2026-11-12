@@ -64,6 +64,8 @@ struct SceneRenderOptions
     bool reflectionHistory = true;
     /// Display reconstruction; never feeds back into progressive history.
     bool reflectionDenoise = true;
+    /// Experimental biased compression-domain spatial filter for path tracing only.
+    bool pathHdrNormalize = false;
     /// Camera reprojection for static geometry; independent from the unfiltered running mean.
     bool reflectionTemporal = true;
     /// Read back per-pixel history weight, history length, reprojection path and stable hit

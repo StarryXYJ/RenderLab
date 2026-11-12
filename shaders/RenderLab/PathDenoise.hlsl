@@ -26,6 +26,10 @@ RWTexture2D<float4> FilteredSpecular : register(u9);
 #endif
 
 float Luminance(float3 color) { return dot(color, float3(.2126, .7152, .0722)); }
+#ifdef PATH_HDR_NORMALIZE
+float3 CompressHDR(float3 color) { return color / (1 + Luminance(color)); }
+float3 ExpandHDR(float3 color) { return color / max(1 - Luminance(color), 1e-6); }
+#endif
 
 [numthreads(8,8,1)]
 void Denoise(uint3 id : SV_DispatchThreadID)
@@ -71,6 +75,10 @@ void Denoise(uint3 id : SV_DispatchThreadID)
         float3 diffuse = max(0, DiffuseRadiance.Load(int3(q, 0)).rgb);
         float3 specular = max(0, Radiance.Load(int3(q, 0)).rgb -
                                   DirectRadiance.Load(int3(q, 0)).rgb - diffuse);
+#ifdef PATH_HDR_NORMALIZE
+        diffuse = CompressHDR(diffuse);
+        specular = CompressHDR(specular);
+#endif
         diffuseColors[count] = diffuse;
         specularColors[count] = specular;
         diffuseValues[count] = Luminance(diffuse);
@@ -116,12 +124,22 @@ void Denoise(uint3 id : SV_DispatchThreadID)
         total += weights[i];
     }
     // Do not blur a normal value when the only neighbor is the brighter sample.
+#ifdef PATH_HDR_NORMALIZE
+    float centerDiffuseValue = Luminance(CompressHDR(centerDiffuse));
+    float3 filteredDiffuse = ExpandHDR(diffuseSum / total);
+    float3 filteredSpecular = ExpandHDR(specularSum / total);
+    float3 diffuseResult = count == 2 && centerDiffuseValue <= diffuseLimit
+                               ? centerDiffuse
+                               : lerp(centerDiffuse, filteredDiffuse, strength);
+    float3 specularResult = lerp(centerSpecular, filteredSpecular, strength);
+#else
     float3 diffuseResult = count == 2 && Luminance(centerDiffuse) <= diffuseLimit
                                ? centerDiffuse
                                : lerp(centerDiffuse, diffuseSum / total, strength);
     // Two points cannot distinguish a narrow reflection from an outlier reliably.
     float3 specularResult = count < 3 ? centerSpecular
                                       : lerp(centerSpecular, specularSum / total, strength);
+#endif
     Output[pixel] = float4(direct + diffuseResult + specularResult, combined.a);
 #ifdef PATH_COMPONENT_OUTPUTS
     FilteredDiffuse[pixel] = float4(diffuseResult, 1);

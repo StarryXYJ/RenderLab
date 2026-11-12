@@ -35,6 +35,7 @@ struct Options
         return benchmarkFrames > 0 || benchmarkSeconds > 0;
     }
     bool reflectionDenoise = true, reflectionTemporal = true;
+    bool pathHdrNormalize = false;
     bool debugPanel = false, fixedCamera = false, cpuProfile = false;
     bool headless = false;
     bool windowTest = false;

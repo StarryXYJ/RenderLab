@@ -32,6 +32,7 @@ internal sealed class SmokeTest
     private readonly float[] savedPose = new float[7];
     private readonly Dictionary<string, string> sourceHashes;
     private int configurationCase;
+    private int pathHdrPhase;
     private ulong configurationRequest;
     private ViewportConfig expectedConfig;
     private uint savedReflectionSamples;
@@ -323,6 +324,30 @@ internal sealed class SmokeTest
                             if (stats.Pipeline != 4 || stats.ReflectionSamples < 2) { --stage; break; }
                             Require(configState.Applied.Pipeline == 4 && stats.Pipeline == 4 && stats.ReflectionSamples >= 2,
                                 "Path tracing configuration did not present and accumulate.");
+                            if (pathHdrPhase == 0)
+                            {
+                                savedReflectionSamples = stats.ReflectionSamples;
+                                window.ViewModel.Settings.PathHdrNormalize = true;
+                                configurationRequest = service.Configuration.RequestedId;
+                                pathHdrPhase = 1;
+                                --stage;
+                                break;
+                            }
+                            if (stats.ReflectionSamples <= savedReflectionSamples) { --stage; break; }
+                            if (pathHdrPhase == 1)
+                            {
+                                Require((configState.Applied.Flags & 64u) != 0 && window.ViewModel.Settings.PathHdrNormalize,
+                                    "Path HDR filter was not applied.");
+                                savedReflectionSamples = stats.ReflectionSamples;
+                                window.ViewModel.Settings.PathHdrNormalize = false;
+                                configurationRequest = service.Configuration.RequestedId;
+                                pathHdrPhase = 2;
+                                --stage;
+                                break;
+                            }
+                            Require((configState.Applied.Flags & 64u) == 0 && !window.ViewModel.Settings.PathHdrNormalize,
+                                "Path HDR filter was not disabled.");
+                            checks.Add("path HDR filter enables and disables without resetting raw accumulation");
                         }
                         checks.Add("supported pipeline/submission modes including path tracing, threaded/async/alias options and frame configuration identity");
                         var invalid = service.EditableConfig; invalid.ShadowResolution = 192; invalid.RequestId = configState.RequestedId + 1;

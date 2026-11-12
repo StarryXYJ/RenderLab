@@ -11,7 +11,7 @@ RenderLab 是面向引擎岗和渲染岗求职的渲染引擎项目。核心采�
 路径追踪的运动预览使用独立的有偏显示历史，主射线几何和材质引导时域复用；
 未滤波渐进 HDR 总量、主射线直接贡献及间接漫反射贡献分别累积；间接镜面由差值
 计算，显示滤波独立处理两个间接分量并分别保存时域历史后加回直接贡献。每帧首个
-次级命中引导用于保守调整镜面时域置信度；历史及其活动视图槽的实例变换只在成功提交后发布。契约与局限见
+次级命中引导用于保守调整镜面时域置信度；可选压缩域空间滤波采用独立的有偏显示变体，切换时重置显示历史而保留原始累积。历史及其活动视图槽的实例变换只在成功提交后发布。契约与局限见
 [路径追踪](../docs/path-tracing.md)。可选主射线身份诊断通过独立 Ray Query 与读回提供首样本可见性依据，不参与路径积分或时域重建。
 
 光栅直接照明使用独立的场景面光源参数契约，与路径追踪共用提取结果及两灯上限；内置 Forward、Deferred 和 Indexed Forward 使用同一组 LTC 拟合数据。灯面、阴影和混合反射各自独立实现；普通光栅使用逐灯中心阴影图与 PCSS 式滤波，混合管线对不透明主表面另用逐灯 Ray Query 可见性。当前能力及限制见 [面光源](../docs/area-lights.md)。
@@ -95,7 +95,7 @@ Windows 编辑器使用 Avalonia 管理整个窗口和普通面板，NativeContr
 
 托管宿主按官方 Avalonia MVVM 模板组织 App、Views 与 ViewModels；XAML 使用编译绑定，CommunityToolkit.Mvvm 生成属性通知和命令，App 通过 Microsoft.Extensions.DependencyInjection 装配具体依赖。ViewModel 保存 UI 状态和服务投影，不调用 P/Invoke 或持有 HWND；NativeViewportService 管理原生 Session、已接受的视口配置与错误，NativeControlHost 适配窗口生命周期和 Timer。项目切换以应用级窗口和项目级 DI scope 划分生命周期；项目 scope 的视口由现有原生 owner 协议退休后再释放，失败可重开旧项目。当前服务与视口一一对应，不建设通用模块框架；后续编辑面板沿同一结构增量加入，场景、材质和资源的权威状态继续归 C++ 服务。
 
-Editor 采用 [固定场景渲染工作台](../docs/editor-workbench.md)：Dock.Avalonia 12.0.0.2 管理固定面板和版本化布局，Scene 复用原生宿主，Ursa 按实际控件需要选用。固定源场景与资源保持只读，运行覆盖、预设与布局保存于 UserSettings。v10 桥接以定宽配置和单调 request_id 传递请求，owner 校验后在成功提交首帧时确认 Applied；暂停改动保持 Pending，单帧/恢复后确认。照明/环境/曝光在 SceneRenderer 提取后的 Snapshot 上覆盖，原文档保持权威；能力与拒绝原因来自原生 Runtime/Renderer。后续图查看器消费真实 Plan 的值快照，性能面板消费带 Session/源帧/配置版本的计数与完成结果，不持有 GPU 资源或构造第二套依赖图；Graph 已消费有界实际 Plan 快照并支持矩阵/依赖/生命周期与 Freeze/导出，Profiler 消费成功提交且完成点已确认的计数/时间/内存值，并可选显式可见性读回；图与性能冻结帧共享来源身份，实施状态只见阶段计划。
+Editor 采用 [固定场景渲染工作台](../docs/editor-workbench.md)：Dock.Avalonia 12.0.0.2 管理固定面板和版本化布局，Scene 复用原生宿主，Ursa 按实际控件需要选用。固定源场景与资源保持只读，运行覆盖、预设与布局保存于 UserSettings。v12 桥接以定宽配置和单调 request_id 传递请求，owner 校验后在成功提交首帧时确认 Applied；暂停改动保持 Pending，单帧/恢复后确认。照明/环境/曝光在 SceneRenderer 提取后的 Snapshot 上覆盖，原文档保持权威；能力与拒绝原因来自原生 Runtime/Renderer。后续图查看器消费真实 Plan 的值快照，性能面板消费带 Session/源帧/配置版本的计数与完成结果，不持有 GPU 资源或构造第二套依赖图；Graph 已消费有界实际 Plan 快照并支持矩阵/依赖/生命周期与 Freeze/导出，Profiler 消费成功提交且完成点已确认的计数/时间/内存值，并可选显式可见性读回；图与性能冻结帧共享来源身份，实施状态只见阶段计划。
 
 工作台默认只打开 Scene 与 Render Settings；Render Graph、Profiler、Log 从顶部 Window 菜单按需打开，保留诊断预设及上次布局恢复。托管日志统一经 Serilog/DI ILogger 写结构化滚动文件和有界内存 sink；原生 Logger 保留独立文件与运行时所有权，通过可选有界镜像队列批量送入工作台日志，不在渲染/验证回调内调用托管 UI。关闭 Log 面板不停止记录，关闭程序先收取原生末尾日志再释放 Serilog。
 

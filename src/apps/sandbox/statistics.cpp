@@ -22,6 +22,7 @@ renderer::SceneRenderOptions RenderOptions(const Options& options)
                       : options.pipeline == "raytracing" ? renderer::PipelineType::RayTracing
                                                          : renderer::PipelineType::Forward;
     render.reflectionDenoise = options.reflectionDenoise;
+    render.pathHdrNormalize = options.pathHdrNormalize;
     render.recordingThreads = options.recordingThreads;
     render.asyncCompute = options.asyncCompute;
     render.memoryAlias = options.memoryAlias;
@@ -180,6 +181,7 @@ void Statistics::Save(const std::filesystem::path& path, const Options& options,
                           {"quality", options.quality},
                           {"view", options.view},
                           {"reflectionDenoise", options.reflectionDenoise},
+                          {"pathHdrNormalize", options.pathHdrNormalize},
                           {"reflectionTemporal", options.reflectionTemporal},
                           {"pipeline", options.pipeline},
                           {"submission", options.submission},

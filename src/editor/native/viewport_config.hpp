@@ -25,7 +25,7 @@ inline void ValidateConfig(const rl_viewport_config& c)
     require(c.recording_threads >= 1 && c.recording_threads <= 16,
             "Recording threads must be in [1,16]");
     require(c.async_compute <= 1 && c.memory_alias <= 1 && c.profiling <= 1 && c.continuous <= 1 &&
-                c.target_fps <= 240 && (c.flags & ~63u) == 0,
+                c.target_fps <= 240 && (c.flags & ~127u) == 0,
             "Invalid execution flags or target FPS");
     require(c.shadow_resolution >= 128 && c.shadow_resolution <= 2048 &&
                 !(c.shadow_resolution & (c.shadow_resolution - 1)),
@@ -68,6 +68,7 @@ inline renderer::SceneRenderOptions RenderOptions(const rl_viewport_config& c,
     options.reflections = (c.flags & 1) != 0;
     options.reflectionHistory = (c.flags & 2) != 0;
     options.reflectionDenoise = (c.flags & 4) != 0;
+    options.pathHdrNormalize = (c.flags & 64) != 0;
     options.reflectionTemporal = (c.flags & 8) != 0;
     auto light = source;
     light.direction = math::Normalize({c.light_x, c.light_y, c.light_z});

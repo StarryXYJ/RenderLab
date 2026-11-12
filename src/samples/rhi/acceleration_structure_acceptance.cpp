@@ -322,7 +322,11 @@ void VerifyPathDirectDenoise(Runtime& runtime, shader::Target target,
                                         {7, BindingKind::SampledTexture}});
     desc.compute = runtime.CreateShader(ShaderStage::Compute, compiler.Compile(request), "Denoise");
     auto pipeline = runtime.CreatePipeline(desc);
-    const auto run = [&](const Image& radiance, const Image& direct, const Image& diffuse)
+    request.defines["PATH_HDR_NORMALIZE"] = "1";
+    desc.compute = runtime.CreateShader(ShaderStage::Compute, compiler.Compile(request), "Denoise");
+    auto normalizedPipeline = runtime.CreatePipeline(desc);
+    const auto run = [&](const Image& radiance, const Image& direct, const Image& diffuse,
+                         bool normalize = false)
     {
         auto commands = runtime.CreateCommands();
         const auto upload = [&](const Image& values)
@@ -369,7 +373,7 @@ void VerifyPathDirectDenoise(Runtime& runtime, shader::Target target,
         commands->Barrier(constants, State::HostWrite, State::UniformRead);
         commands->Barrier(momentBuffer, State::HostWrite, State::ShaderRead);
         commands->Barrier(output, State::Undefined, State::Storage);
-        commands->Bind(pipeline);
+        commands->Bind(normalize ? normalizedPipeline : pipeline);
         commands->Bind(runtime.CreateGroup(desc.layout, {{0, color},
                                                          {1, guide},
                                                          {2, runtime.CreateView(output)},
@@ -397,6 +401,9 @@ void VerifyPathDirectDenoise(Runtime& runtime, shader::Target target,
     const auto directResult = run(radiance, direct, diffuse);
     if (std::abs(directResult[4][0] - 101) > 1e-4f || std::abs(directResult[3][0] - 1) > 1e-4f)
         throw std::runtime_error("Path direct highlight was filtered or spread to neighbors");
+    const auto normalizedDirect = run(radiance, direct, diffuse, true);
+    if (std::abs(normalizedDirect[4][0] - 101) > 1e-4f)
+        throw std::runtime_error("Path HDR normalization changed direct highlight");
     direct.fill({0, 0, 0, 0});
     const auto indirectResult = run(radiance, direct, diffuse);
     if (!std::isfinite(indirectResult[4][0]) || indirectResult[4][0] >= 10 ||
@@ -406,6 +413,12 @@ void VerifyPathDirectDenoise(Runtime& runtime, shader::Target target,
     const auto diffuseResult = run(radiance, direct, diffuse);
     if (!std::isfinite(diffuseResult[4][0]) || diffuseResult[4][0] >= 10 || diffuseResult[4][0] < 0)
         throw std::runtime_error("Path diffuse firefly was not filtered");
+    radiance.fill({8, 4, 2, 1});
+    diffuse.fill({0, 0, 0, 0});
+    const auto constantResult = run(radiance, direct, diffuse, true);
+    for (size_t c = 0; c < 3; ++c)
+        if (std::abs(constantResult[4][c] - radiance[4][c]) > 1e-4f)
+            throw std::runtime_error("Path HDR normalization changed constant radiance");
     logger.Write(LogLevel::Info, "Path separated denoising preserved direct highlight and filtered "
                                  "both indirect components");
 }

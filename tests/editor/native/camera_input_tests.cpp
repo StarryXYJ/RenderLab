@@ -82,6 +82,10 @@ int main()
         Require(source.light.intensity == 2 && options.lightOverride->intensity == 3 &&
                     options.lightOverride->shadows,
                 "Runtime overrides modified source lighting");
+        candidate.flags |= 64;
+        editor::ValidateConfig(candidate);
+        Require(editor::RenderOptions(candidate, source.light).pathHdrNormalize,
+                "Path HDR normalization flag was not propagated");
         for (uint32_t variant = 0; variant < 6; ++variant)
         {
             candidate = defaults;
@@ -92,7 +96,7 @@ int main()
             if (variant == 2)
                 candidate.shadow_resolution = 192;
             if (variant == 3)
-                candidate.flags = 64;
+                candidate.flags = 128;
             if (variant == 4)
                 candidate.light_x = candidate.light_y = candidate.light_z = 0;
             if (variant == 5)

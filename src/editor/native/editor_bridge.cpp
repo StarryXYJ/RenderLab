@@ -1231,7 +1231,7 @@ template <class F> rl_status Guard(F&& operation)
 
 uint32_t RENDERLAB_EDITOR_CALL rl_editor_abi_version()
 {
-    return 11;
+    return 12;
 }
 rl_status RENDERLAB_EDITOR_CALL rl_viewport_request_snapshot(rl_viewport_handle handle)
 {

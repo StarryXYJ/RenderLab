@@ -102,6 +102,7 @@ void MeasurePathMotionSequences(rhi::Runtime& runtime, shader::Target target,
     {
         std::array<std::vector<std::vector<std::byte>>, 6> sequences;
         std::array<std::vector<std::vector<float>>, 6> hdrSequences;
+        std::array<std::vector<std::vector<float>>, 3> normalizedSequences;
         std::array<std::vector<std::vector<float>>, 3> rawSequences;
         std::array<std::vector<double>, 3> acceptedFractions;
         std::vector<scene::Scene> poses;
@@ -213,6 +214,41 @@ void MeasurePathMotionSequences(rhi::Runtime& runtime, shader::Target target,
                                         "Two-sample diffuse filter changed specular radiance");
                 }
             }
+        }
+        for (uint16_t seed = 1; seed <= 3; ++seed)
+        {
+            options.pathSeed = seed;
+            scene.Document() = initialDocument;
+            options.reflectionDenoise = false;
+            options.reflectionTemporal = false;
+            auto light = std::ranges::find_if(scene.Document().objects, [](const auto& object)
+                                              { return object.light.has_value(); });
+            detail::Require(light != scene.Document().objects.end(),
+                            "Sequence fixture needs a light");
+            light->light->intensity *= .5f;
+            render(false);
+            scene.Document() = initialDocument;
+            options.reflectionDenoise = true;
+            options.reflectionTemporal = true;
+            options.pathHdrNormalize = true;
+            for (uint32_t warmup = 0; warmup < 8; ++warmup)
+                render(false);
+            for (uint32_t frame = 0; frame < sequenceFrames; ++frame)
+            {
+                scene.Document() = poses[frame];
+                options.pathComponentDiagnostics = true;
+                const auto result = render(true);
+                options.pathComponentDiagnostics = false;
+                const auto raw = captureHdrBuffer(result.pathComponents[0], true);
+                detail::Require(raw == rawSequences[seed - 1][frame],
+                                "HDR normalization changed raw path accumulation");
+                normalizedSequences[seed - 1].push_back(captureHdr(result));
+                const auto destination = base / std::format("seed-{}", seed) / "normalized";
+                capture(result, destination / std::format("{:02}.bmp", frame));
+                saveHdr(destination / std::format("{:02}.pfm", frame),
+                        normalizedSequences[seed - 1].back());
+            }
+            options.pathHdrNormalize = false;
         }
         options.pathSeed = 1000;
         options.reflectionDenoise = false;
@@ -376,6 +412,38 @@ void MeasurePathMotionSequences(rhi::Runtime& runtime, shader::Target target,
             reportFile << report;
             reportFile.close();
             logger.Write(LogLevel::Info, "Path motion sequence " + report);
+            double normalizedMse = 0, normalizedStoppedMse = 0, normalizedSigned = 0;
+            double normalizedDelta = 0;
+            for (uint32_t frame = 0; frame < sequenceFrames; ++frame)
+                for (size_t i = 0; i < hdrReferences[frame].size(); ++i)
+                {
+                    const double error =
+                        normalizedSequences[seed][frame][i] - hdrReferences[frame][i];
+                    normalizedMse += error * error / components / sequenceFrames;
+                    normalizedSigned += error / components / sequenceFrames;
+                    if (frame >= motionFrames)
+                        normalizedStoppedMse +=
+                            error * error / components / (sequenceFrames - motionFrames);
+                    if (frame > 0)
+                    {
+                        const double previous =
+                            normalizedSequences[seed][frame - 1][i] - hdrReferences[frame - 1][i];
+                        normalizedDelta += (error - previous) * (error - previous) / components /
+                                           (sequenceFrames - 1);
+                    }
+                }
+            const auto normalizedReport = std::format(
+                "{{\n  \"baselineHdrMse\": {:.9f}, \"normalizedHdrMse\": {:.9f},\n"
+                "  \"baselineStoppedHdrMse\": {:.9f}, \"normalizedStoppedHdrMse\": {:.9f},\n"
+                "  \"normalizedSignedError\": {:.9f}, \"normalizedResidualDeltaMse\": {:.9f}\n}}\n",
+                hdrMse[temporal], normalizedMse, hdrStoppedMse[temporal], normalizedStoppedMse,
+                normalizedSigned, normalizedDelta);
+            std::ofstream normalizedFile(base / std::format("seed-{}", seed + 1) /
+                                             "normalized-metrics.json",
+                                         std::ios::binary);
+            normalizedFile.exceptions(std::ios::failbit | std::ios::badbit);
+            normalizedFile << normalizedReport;
+            logger.Write(LogLevel::Info, "Path normalized motion " + normalizedReport);
         }
     }
 }
@@ -544,6 +612,57 @@ void MeasurePathRawConvergence(rhi::Runtime& runtime, shader::Target target,
                                      seed, result.reflectionSamples, mse, outliers, maxExcess));
         }
     }
+    std::array<std::array<std::vector<float>, checkpoints.size()>, 3> rawBaseline;
+    std::ofstream displayReport(base / "display-normalization.csv", std::ios::binary);
+    displayReport.exceptions(std::ios::failbit | std::ios::badbit);
+    displayReport << "normalized,seed,spp,mse,mean,hot_pixel,hot_reference\n";
+    options.reflectionDenoise = true;
+    options.reflectionTemporal = false;
+    for (uint32_t mode = 0; mode < 2; ++mode)
+    {
+        options.pathHdrNormalize = mode == 1;
+        for (uint16_t seed : {uint16_t{1}, uint16_t{2}, uint16_t{3}})
+        {
+            options.pathSeed = seed;
+            size_t checkpointIndex = 0;
+            for (uint32_t frame = 1; frame <= checkpoints.back(); ++frame)
+            {
+                const bool checkpoint = frame == checkpoints[checkpointIndex];
+                options.pathHdrDiagnostics = checkpoint;
+                const auto result = render(checkpoint);
+                detail::Require(result.reflectionSamples == frame * renderer::PathSamplesPerFrame,
+                                "Display comparison failed to accumulate");
+                if (!checkpoint)
+                    continue;
+                const auto raw = extract(result.pathComponents[0]);
+                if (mode == 0)
+                    rawBaseline[seed - 1][checkpointIndex] = raw;
+                else
+                    detail::Require(raw == rawBaseline[seed - 1][checkpointIndex],
+                                    "HDR normalization changed stationary raw history");
+                const auto display = extract(result.pathHdrDisplay);
+                double mse = 0, mean = 0;
+                for (size_t i = 0; i < channels; ++i)
+                {
+                    detail::Require(display[i] >= 0, "Negative path HDR display");
+                    const double error = display[i] - reference[i];
+                    mse += error * error / channels;
+                    mean += display[i] / double(channels);
+                }
+                constexpr size_t hotPixel = (33 * width + 43) * 3 + 2;
+                displayReport << std::format("{},{},{},{:.9f},{:.9f},{:.9f},{:.9f}\n", mode, seed,
+                                             result.reflectionSamples, mse, mean, display[hotPixel],
+                                             reference[hotPixel]);
+                save(base / std::format("display-{}-seed-{}-{}spp.pfm",
+                                        mode == 0 ? "original" : "normalized", seed,
+                                        result.reflectionSamples),
+                     display);
+                ++checkpointIndex;
+            }
+        }
+    }
+    options.pathHdrNormalize = false;
+    options.pathHdrDiagnostics = false;
 }
 void VerifyPathMovingObject(rhi::Runtime& runtime, shader::Target target,
                             const std::filesystem::path& project,
@@ -1231,6 +1350,21 @@ void VerifyScene(rhi::Runtime& runtime, shader::Target target, const std::filesy
         detail::Require(!temporalRestart.reflectionHistoryReset &&
                             temporalRestart.reflectionTemporalFrames == 1,
                         "Path temporal re-enable did not restart display history");
+        pathOptions.pathHdrNormalize = true;
+        const auto normalized = pathFrame();
+        detail::Require(!normalized.reflectionHistoryReset &&
+                            normalized.reflectionSamples ==
+                                temporalRestart.reflectionSamples + renderer::PathSamplesPerFrame &&
+                            normalized.reflectionTemporalFrames == 1,
+                        "HDR filter toggle did not preserve raw history and reset display history");
+        pathOptions.pathHdrNormalize = false;
+        const auto unnormalized = pathFrame();
+        detail::Require(
+            !unnormalized.reflectionHistoryReset &&
+                unnormalized.reflectionSamples ==
+                    normalized.reflectionSamples + renderer::PathSamplesPerFrame &&
+                unnormalized.reflectionTemporalFrames == 1,
+            "HDR filter disable did not preserve raw history and reset display history");
         pathOptions.pathComponentDiagnostics = true;
         pathRenderer.Document().MoveCamera({.5f, 0, 0}, {0, 5, 0});
         const auto moved = pathFrame();

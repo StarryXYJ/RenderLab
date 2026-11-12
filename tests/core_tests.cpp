@@ -94,6 +94,9 @@ int main()
                 "Geometry submission switch was not parsed");
         Require(!ParseOptions(std::array{"--temporal-denoise"sv, "off"sv}).reflectionTemporal,
                 "Temporal denoise switch was not parsed");
+        Require(ParseOptions(std::array{"--path-hdr-normalize"sv, "on"sv}).pathHdrNormalize,
+                "Path HDR normalization switch was not parsed");
+        RequireInvalid([] { ParseOptions(std::array{"--path-hdr-normalize"sv, "invalid"sv}); });
         RequireInvalid([] { ParseOptions(std::array{"--gpu-budget-mib"sv, "0"sv}); });
         RequireInvalid([] { ParseOptions(std::array{"--gpu-budget-mib"sv, "16385"sv}); });
         Require(ParseOptions(std::array{"--gpu-budget-mib"sv, "1024"sv}).gpuBudgetMiB == 1024,

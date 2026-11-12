@@ -72,7 +72,7 @@ public sealed class NativeViewportService : IDisposable
             Close(Session);
         }
         AbiVersion = NativeMethods.AbiVersion();
-        if (AbiVersion != 11 || Marshal.SizeOf<ViewportStats>() != 256 || Marshal.SizeOf<CloseReport>() != 24 ||
+        if (AbiVersion != 12 || Marshal.SizeOf<ViewportStats>() != 256 || Marshal.SizeOf<CloseReport>() != 24 ||
             Marshal.SizeOf<ViewportConfig>() != 112 || Marshal.SizeOf<ViewportConfigState>() != 272)
         {
             throw new InvalidOperationException("Managed/native bridge ABI mismatch.");

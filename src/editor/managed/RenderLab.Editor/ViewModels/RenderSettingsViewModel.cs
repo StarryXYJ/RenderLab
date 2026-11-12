@@ -15,7 +15,7 @@ public sealed partial class RenderSettingsViewModel : ObservableObject, IDisposa
     private bool reflecting;
     private string seenCapabilities = "";
     private static readonly HashSet<string> Editable = [nameof(Submission), nameof(RecordingThreads), nameof(AsyncCompute), nameof(MemoryAlias),
-        nameof(View), nameof(Profiling), nameof(TargetFps), nameof(Continuous), nameof(Reflections), nameof(History), nameof(Denoise), nameof(Temporal),
+        nameof(View), nameof(Profiling), nameof(TargetFps), nameof(Continuous), nameof(Reflections), nameof(History), nameof(Denoise), nameof(Temporal), nameof(PathHdrNormalize),
         nameof(Shadows), nameof(ShadowResolution), nameof(CameraSpeed), nameof(LightX), nameof(LightY), nameof(LightZ), nameof(LightR), nameof(LightG),
         nameof(LightB), nameof(LightIntensity), nameof(ShadowBias), nameof(ShadowNormalBias), nameof(EnvironmentIntensity), nameof(EnvironmentRotation)];
     public IReadOnlyList<string> Views { get; } = ["Final", "HDR", "Shadow", "Environment", "BRDF", "Reflection raw", "Reflection history", "Reflection denoised"];
@@ -33,6 +33,7 @@ public sealed partial class RenderSettingsViewModel : ObservableObject, IDisposa
     [ObservableProperty] private int shadowResolution = 1024;
     [ObservableProperty] private bool asyncCompute, memoryAlias, profiling, continuous;
     [ObservableProperty] private bool reflections = true, history = true, denoise = true, temporal = true, shadows;
+    [ObservableProperty] private bool pathHdrNormalize;
     [ObservableProperty] private double cameraSpeed = 3;
     [ObservableProperty] private double lightX, lightY, lightZ = 1, lightR = 1, lightG = 1, lightB = 1, lightIntensity;
     [ObservableProperty] private double shadowBias, shadowNormalBias, environmentIntensity = 1, environmentRotation;
@@ -55,7 +56,7 @@ public sealed partial class RenderSettingsViewModel : ObservableObject, IDisposa
         c.Submission = (uint)Submission; c.View = (uint)View; c.RecordingThreads = (uint)RecordingThreads;
         c.AsyncCompute = AsyncCompute ? 1u : 0; c.MemoryAlias = MemoryAlias ? 1u : 0;
         c.Profiling = Profiling ? 1u : 0; c.TargetFps = (uint)TargetFps; c.Continuous = Continuous ? 1u : 0;
-        c.Flags = (c.Flags & 32u) | (Reflections ? 1u : 0) | (History ? 2u : 0) | (Denoise ? 4u : 0) | (Temporal ? 8u : 0) | (Shadows ? 16u : 0);
+        c.Flags = (c.Flags & 32u) | (Reflections ? 1u : 0) | (History ? 2u : 0) | (Denoise ? 4u : 0) | (Temporal ? 8u : 0) | (Shadows ? 16u : 0) | (PathHdrNormalize ? 64u : 0);
         c.ShadowResolution = (uint)ShadowResolution; c.CameraSpeed = (float)CameraSpeed;
         c.LightX = (float)LightX; c.LightY = (float)LightY; c.LightZ = (float)LightZ;
         c.LightR = (float)LightR; c.LightG = (float)LightG; c.LightB = (float)LightB; c.LightIntensity = (float)LightIntensity;
@@ -97,6 +98,7 @@ public sealed partial class RenderSettingsViewModel : ObservableObject, IDisposa
             TargetFps = (int)c.TargetFps; Continuous = c.Continuous != 0;
             Reflections = (c.Flags & 1) != 0; History = (c.Flags & 2) != 0; Denoise = (c.Flags & 4) != 0;
             Temporal = (c.Flags & 8) != 0; Shadows = (c.Flags & 16) != 0;
+            PathHdrNormalize = (c.Flags & 64) != 0;
             ShadowResolution = (int)c.ShadowResolution; CameraSpeed = c.CameraSpeed;
             LightX = c.LightX; LightY = c.LightY; LightZ = c.LightZ;
             LightR = c.LightR; LightG = c.LightG; LightB = c.LightB; LightIntensity = c.LightIntensity;

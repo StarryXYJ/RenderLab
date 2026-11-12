@@ -115,6 +115,7 @@ struct SceneRenderer::Impl
     std::shared_ptr<rhi::ShaderTable> reflectionTable, reflectionTableWithoutGuide, pathTable;
     std::shared_ptr<rhi::Pipeline> pathDenoise, pathDenoiseComponents, pathHistory, pathStatistics,
         pathTemporal, pathIdentity;
+    std::shared_ptr<rhi::Pipeline> pathDenoiseNormalized, pathDenoiseComponentsNormalized;
     std::shared_ptr<rhi::Pipeline> reflectionHistory, reflectionStatistics, reflectionCombine,
         reflectionDenoise, reflectionTemporal;
     std::shared_ptr<rhi::Buffer> emptyReflectionStatistics;
@@ -206,7 +207,7 @@ struct SceneRenderer::Impl
         math::Vec3 cameraPosition{};
         uint32_t index = 0, frames = 0;
         uint64_t completion = 0;
-        bool active = false;
+        bool active = false, pathHdrNormalize = false;
     } temporalHistory;
     RenderPipeline forwardPipeline =
         CreatePipeline(PipelineType::Forward)
@@ -613,6 +614,37 @@ struct SceneRenderer::Impl
         desc.compute =
             runtime.CreateShader(rhi::ShaderStage::Compute, compiler.Compile(request), "Denoise");
         pathDenoiseComponents = runtime.CreatePipeline(desc);
+    }
+    void EnsurePathNormalizedProgram(bool components)
+    {
+        auto& pipeline = components ? pathDenoiseComponentsNormalized : pathDenoiseNormalized;
+        if (pipeline)
+            return;
+        shader::DxcCompiler compiler;
+        shader::ProgramRequest request;
+        request.entry = {rhi::ShaderStage::Compute,
+                         project.engine / "RenderLab" / "PathDenoise.hlsl", "Denoise"};
+        request.target = shaderTarget;
+        if (shaderTarget == shader::Target::Spirv)
+            request.defines["SPIRV"] = "1";
+        request.defines["PATH_HDR_NORMALIZE"] = "1";
+        if (components)
+            request.defines["PATH_COMPONENT_OUTPUTS"] = "1";
+        std::vector<rhi::BindingDesc> layout{
+            {0, rhi::BindingKind::SampledTexture}, {1, rhi::BindingKind::SampledTexture},
+            {2, rhi::BindingKind::StorageTexture}, {3, rhi::BindingKind::ConstantBuffer},
+            {4, rhi::BindingKind::SampledTexture}, {5, rhi::BindingKind::ReadOnlyBuffer},
+            {6, rhi::BindingKind::SampledTexture}, {7, rhi::BindingKind::SampledTexture}};
+        if (components)
+        {
+            layout.push_back({8, rhi::BindingKind::StorageTexture});
+            layout.push_back({9, rhi::BindingKind::StorageTexture});
+        }
+        rhi::PipelineDesc desc;
+        desc.layout = runtime.CreateLayout(std::move(layout));
+        desc.compute =
+            runtime.CreateShader(rhi::ShaderStage::Compute, compiler.Compile(request), "Denoise");
+        pipeline = runtime.CreatePipeline(desc);
     }
     void EnsurePathIdentityProgram()
     {
@@ -1848,13 +1880,23 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
         frame.rayTracing.historyPipeline = pathTracing ? self.pathHistory : self.reflectionHistory;
         if (pathTracing && options.reflectionDenoise)
         {
-            if (options.pathComponentDiagnostics || options.reflectionTemporal)
-                self.EnsurePathComponentProgram();
             frame.rayTracing.pathFilteredComponents =
                 options.pathComponentDiagnostics || options.reflectionTemporal;
-            frame.rayTracing.pathDenoisePipeline = frame.rayTracing.pathFilteredComponents
-                                                       ? self.pathDenoiseComponents
-                                                       : self.pathDenoise;
+            if (options.pathHdrNormalize)
+            {
+                self.EnsurePathNormalizedProgram(frame.rayTracing.pathFilteredComponents);
+                frame.rayTracing.pathDenoisePipeline = frame.rayTracing.pathFilteredComponents
+                                                           ? self.pathDenoiseComponentsNormalized
+                                                           : self.pathDenoiseNormalized;
+            }
+            else
+            {
+                if (frame.rayTracing.pathFilteredComponents)
+                    self.EnsurePathComponentProgram();
+                frame.rayTracing.pathDenoisePipeline = frame.rayTracing.pathFilteredComponents
+                                                           ? self.pathDenoiseComponents
+                                                           : self.pathDenoise;
+            }
         }
         if (pathTracing)
             frame.rayTracing.pathStatisticsPipeline = self.pathStatistics;
@@ -1878,6 +1920,7 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
             const bool validTemporal =
                 temporal.active && temporal.signature == temporalSignature &&
                 temporal.viewId == viewId &&
+                (!pathTracing || temporal.pathHdrNormalize == options.pathHdrNormalize) &&
                 math::Length(temporal.cameraPosition - self.snapshot.cameraPosition) <= 1.f &&
                 math::Dot(direction(temporal.view), direction(self.snapshot.view)) >= .8660254f;
             temporalFrames = validTemporal ? temporal.frames : 0;
@@ -2869,6 +2912,7 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
     if (temporal.active)
     {
         temporal.signature = std::move(temporalSignature);
+        temporal.pathHdrNormalize = pathTracing && options.pathHdrNormalize;
         temporal.viewId =
             pathTracing ? "path/" + self.document.activeCamera : self.document.activeCamera;
         temporal.index = temporalOutput;
