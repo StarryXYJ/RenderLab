@@ -97,11 +97,13 @@ void MeasurePathMotionSequences(rhi::Runtime& runtime, shader::Target target,
             file.write(reinterpret_cast<const char*>(pixels.data() + row * width * 3),
                        width * 3 * sizeof(float));
     };
-    const std::array<const char*, 3> names{"gentle", "fast", "reveal"};
+    const std::array<const char*, 4> names{"gentle", "fast", "reveal", "rotation"};
     for (size_t trajectory = 0; trajectory < names.size(); ++trajectory)
     {
         std::array<std::vector<std::vector<std::byte>>, 6> sequences;
         std::array<std::vector<std::vector<float>>, 6> hdrSequences;
+        std::array<std::vector<std::vector<float>>, 3> rawSequences;
+        std::array<std::vector<double>, 3> acceptedFractions;
         std::vector<scene::Scene> poses;
         const auto base = output / "path-sequence" / names[trajectory];
         for (size_t mode = 0; mode < sequences.size(); ++mode)
@@ -127,17 +129,19 @@ void MeasurePathMotionSequences(rhi::Runtime& runtime, shader::Target target,
                 if (frame < motionFrames)
                     scene.Document().MoveCamera({trajectory == 0   ? .02f
                                                  : trajectory == 1 ? .08f
-                                                                   : .12f,
+                                                 : trajectory == 2 ? .12f
+                                                                   : 0.f,
                                                  0, 0},
                                                 {0,
                                                  trajectory == 0   ? .15f
                                                  : trajectory == 1 ? .8f
-                                                                   : -.6f,
+                                                 : trajectory == 2 ? -.6f
+                                                                   : 1.2f,
                                                  0});
                 if (mode == 0)
                     poses.push_back(scene.Document());
                 const bool inspect = trajectory == 0 && options.pathSeed == 3 && frame == 7;
-                options.pathComponentDiagnostics = inspect;
+                options.pathComponentDiagnostics = true;
                 const auto result = render(true);
                 options.pathComponentDiagnostics = false;
                 sequences[mode].push_back(
@@ -145,6 +149,33 @@ void MeasurePathMotionSequences(rhi::Runtime& runtime, shader::Target target,
                                         (mode % 2 == 0 ? "spatial" : "temporal") /
                                         std::format("{:02}.bmp", frame)));
                 hdrSequences[mode].push_back(captureHdr(result));
+                if (mode % 2 == 0)
+                {
+                    rawSequences[mode / 2].push_back(
+                        captureHdrBuffer(result.pathComponents[0], true));
+                    saveHdr(base / std::format("seed-{}", options.pathSeed) / "raw" /
+                                std::format("{:02}.pfm", frame),
+                            rawSequences[mode / 2].back());
+                }
+                else
+                {
+                    const auto history = result.pathTemporalComponents[0]->Map();
+                    const auto hdrPitch = rhi::TextureRowPitch(width, rhi::Format::Rgba32Float);
+                    uint32_t eligible = 0, accepted = 0;
+                    for (uint32_t y = 0; y < height; ++y)
+                        for (uint32_t x = 0; x < width; ++x)
+                        {
+                            float count = 0;
+                            std::memcpy(&count, history.data() + y * hdrPitch + x * 16 + 12, 4);
+                            if (count >= 1)
+                            {
+                                ++eligible;
+                                accepted += count > 1.001f;
+                            }
+                        }
+                    acceptedFractions[mode / 2].push_back(eligible ? double(accepted) / eligible
+                                                                   : 0);
+                }
                 saveHdr(base / std::format("seed-{}", options.pathSeed) /
                             (mode % 2 == 0 ? "spatial" : "temporal") /
                             std::format("{:02}.pfm", frame),
@@ -230,6 +261,7 @@ void MeasurePathMotionSequences(rhi::Runtime& runtime, shader::Target target,
             hdrReferences.push_back(hdrReferences.back());
         std::array<double, 6> mse{}, residualDelta{}, signedError{}, largeError{}, sphereRoiMse{},
             stoppedMse{}, hdrMse{}, hdrStoppedMse{};
+        std::array<double, 3> rawHdrMse{};
         constexpr double components = double(width) * height * 3;
         for (uint32_t frame = 0; frame < sequenceFrames; ++frame)
             for (uint32_t y = 0; y < height; ++y)
@@ -243,6 +275,13 @@ void MeasurePathMotionSequences(rhi::Runtime& runtime, shader::Target target,
                                 int(std::to_integer<uint8_t>(sequences[mode][frame][pixel])) -
                                 int(std::to_integer<uint8_t>(references[frame][pixel]));
                             const auto hdrPixel = (y * width + x) * 3 + channel;
+                            if (mode % 2 == 0)
+                            {
+                                const double rawError = rawSequences[mode / 2][frame][hdrPixel] -
+                                                        hdrReferences[frame][hdrPixel];
+                                rawHdrMse[mode / 2] +=
+                                    rawError * rawError / components / sequenceFrames;
+                            }
                             const double hdrError = hdrSequences[mode][frame][hdrPixel] -
                                                     hdrReferences[frame][hdrPixel];
                             hdrMse[mode] += hdrError * hdrError / components / sequenceFrames;
@@ -296,6 +335,41 @@ void MeasurePathMotionSequences(rhi::Runtime& runtime, shader::Target target,
                     stoppedMse[temporal] <= stoppedMse[spatial] * 1.05,
                 "Path temporal sequence significantly worsened against spatial baseline");
 #endif
+            std::ofstream historyFile(base / std::format("seed-{}", seed + 1) / "history.csv",
+                                      std::ios::binary);
+            historyFile
+                << "frame,accepted_fraction,raw_hdr_mse,spatial_hdr_mse,"
+                   "temporal_hdr_mse,temporal_hdr_signed_error,temporal_residual_delta_mse\n";
+            for (uint32_t frame = 0; frame < sequenceFrames; ++frame)
+            {
+                double rawError = 0, spatialError = 0, temporalError = 0, frameSignedError = 0,
+                       frameResidualDelta = 0;
+                for (size_t i = 0; i < hdrReferences[frame].size(); ++i)
+                {
+                    const double raw = rawSequences[seed][frame][i] - hdrReferences[frame][i];
+                    const double frameSpatial =
+                        hdrSequences[seed * 2][frame][i] - hdrReferences[frame][i];
+                    const double frameTemporal =
+                        hdrSequences[seed * 2 + 1][frame][i] - hdrReferences[frame][i];
+                    rawError += raw * raw / components;
+                    spatialError += frameSpatial * frameSpatial / components;
+                    temporalError += frameTemporal * frameTemporal / components;
+                    frameSignedError += frameTemporal / components;
+                    if (frame > 0)
+                    {
+                        const double previous =
+                            hdrSequences[seed * 2 + 1][frame - 1][i] - hdrReferences[frame - 1][i];
+                        frameResidualDelta +=
+                            (frameTemporal - previous) * (frameTemporal - previous) / components;
+                    }
+                }
+                historyFile << std::format("{},{:.9f},{:.9f},{:.9f},{:.9f},{:.9f},{:.9f}\n", frame,
+                                           acceptedFractions[seed][frame], rawError, spatialError,
+                                           temporalError, frameSignedError, frameResidualDelta);
+            }
+            historyFile.close();
+            logger.Write(LogLevel::Info, std::format("Path raw HDR MSE {} seed {}: {:.9f}",
+                                                     names[trajectory], seed + 1, rawHdrMse[seed]));
             std::ofstream reportFile(base / std::format("seed-{}", seed + 1) / "metrics.json",
                                      std::ios::binary);
             reportFile.exceptions(std::ios::failbit | std::ios::badbit);

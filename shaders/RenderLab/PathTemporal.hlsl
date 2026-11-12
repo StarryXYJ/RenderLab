@@ -190,7 +190,7 @@ void Temporal(uint3 id : SV_DispatchThreadID)
     Output[pixel] = float4(value, min(count + 1, 16));
     Specular[pixel] = float4(specularValue, min(specularCount + 1, 16));
     float preview = saturate(1 - max(0, Options.y - 8) / 24);
-    float weight = preview * .5 / (1 + .5 * motionPixels);
+    float weight = preview * .75 / (1 + .2 * motionPixels);
     float3 correction = (value - current) * saturate(count / 2) +
                         (specularValue - currentSpecular) * saturate(specularCount / 2);
     Display[pixel] = float4(max(0, filtered.rgb + weight * correction), filtered.a);
