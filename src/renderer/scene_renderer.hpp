@@ -72,6 +72,8 @@ struct SceneRenderOptions
     bool pathComponentDiagnostics = false;
     /// Read back the linear path display before tone mapping; never affects accumulation.
     bool pathHdrDiagnostics = false;
+    /// Trace and read the first primary hit for validation; disabled by default.
+    bool pathIdentityDiagnostics = false;
     /// Read back the pipeline's linear final color before display tone mapping.
     bool sceneHdrDiagnostics = false;
     /// Reproducible path sampling stream; changing it resets path histories.
@@ -110,6 +112,11 @@ struct SceneReadback
     std::array<std::shared_ptr<rhi::Buffer>, 2> pathTemporalComponents;
     /// Optional linear RGBA32F display branch, pitched by TextureRowPitch; wait before mapping.
     std::shared_ptr<rhi::Buffer> pathHdrDisplay;
+    /// Optional RGBA32F primary hit kind, snapshot-local instance/light index, reserved, ray
+    /// distance.
+    std::shared_ptr<rhi::Buffer> pathPrimaryIdentity;
+    /// Matching first-sample normal and signed ray distance for identity validation.
+    std::shared_ptr<rhi::Buffer> pathPrimarySurface;
     /// Optional final linear RGBA32F, pitched by TextureRowPitch; wait before mapping.
     std::shared_ptr<rhi::Buffer> sceneHdr;
     uint64_t compileNs = 0, prepareNs = 0, recordNs = 0;

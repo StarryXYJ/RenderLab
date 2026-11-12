@@ -44,6 +44,53 @@ void Check(rhi::Runtime& runtime, shader::Target target, const std::filesystem::
     options.pipeline = renderer::PipelineType::PathTracing;
     options.reflectionDenoise = false;
     options.reflectionTemporal = false;
+    {
+        auto& document = renderer.Document();
+        auto light = std::ranges::find_if(document.objects, [](const auto& object)
+                                          { return object.areaLight.has_value(); });
+        Require(light != document.objects.end(), "Identity fixture needs an area light");
+        const auto lightId = light->id;
+        for (auto& object : document.objects)
+            if (object.mesh || (object.areaLight && object.id != lightId))
+                object.enabled = false;
+        auto& camera = document.Get(document.activeCamera);
+        camera.transform.position = {0, 0, 3};
+        camera.transform.rotation = {0, 0, 0, 1};
+        auto& emitter = document.Get(lightId);
+        emitter.enabled = true;
+        emitter.transform.position = {0, 0, 0};
+        emitter.transform.rotation = {0, 1, 0, 0};
+        emitter.transform.scale = {1, 1, 1};
+        emitter.areaLight->width = 2;
+        emitter.areaLight->height = 2;
+        document.environmentIntensity = 0;
+        options.pathIdentityDiagnostics = true;
+        options.pathComponentDiagnostics = true;
+        const auto frame = renderer.Render(targetImage, state, nullptr, false, {}, options);
+        state = rhi::State::CopySource;
+        runtime.Wait(frame.completion);
+        Require(frame.pathPrimaryIdentity && frame.pathPrimarySurface && frame.pathComponents[1],
+                "Missing primary identity fixture readback");
+        const auto pitch = rhi::TextureRowPitch(Width, rhi::Format::Rgba32Float);
+        const auto get = [&](const std::shared_ptr<rhi::Buffer>& buffer, uint32_t x, uint32_t y)
+        {
+            std::array<float, 4> value{};
+            std::memcpy(value.data(), buffer->Map().data() + y * pitch + x * 16, 16);
+            return value;
+        };
+        const auto center = get(frame.pathPrimaryIdentity, Width / 2, Height / 2);
+        const auto corner = get(frame.pathPrimaryIdentity, 0, 0);
+        const auto surface = get(frame.pathPrimarySurface, Width / 2, Height / 2);
+        const auto direct = get(frame.pathComponents[1], Width / 2, Height / 2);
+        Require(center[0] == 2 && center[1] == 0 && center[3] > 3 && center[3] < 3.1f &&
+                    surface[3] == 0 && direct[0] > 0,
+                "Primary identity did not identify the visible analytic emitter");
+        Require(corner[0] == 0 && corner[3] == 10000,
+                "Primary identity did not identify an environment miss");
+        options.pathIdentityDiagnostics = false;
+        options.pathComponentDiagnostics = false;
+        renderer.Document() = original;
+    }
     const auto capture = [&](uint16_t seed, bool nee, uint32_t frames)
     {
         options.pathSeed = seed;

@@ -114,7 +114,7 @@ struct SceneRenderer::Impl
     std::shared_ptr<rhi::Pipeline> rayQueryShadow;
     std::shared_ptr<rhi::ShaderTable> reflectionTable, reflectionTableWithoutGuide, pathTable;
     std::shared_ptr<rhi::Pipeline> pathDenoise, pathDenoiseComponents, pathHistory, pathStatistics,
-        pathTemporal;
+        pathTemporal, pathIdentity;
     std::shared_ptr<rhi::Pipeline> reflectionHistory, reflectionStatistics, reflectionCombine,
         reflectionDenoise, reflectionTemporal;
     std::shared_ptr<rhi::Buffer> emptyReflectionStatistics;
@@ -607,6 +607,26 @@ struct SceneRenderer::Impl
         desc.compute =
             runtime.CreateShader(rhi::ShaderStage::Compute, compiler.Compile(request), "Denoise");
         pathDenoiseComponents = runtime.CreatePipeline(desc);
+    }
+    void EnsurePathIdentityProgram()
+    {
+        if (pathIdentity)
+            return;
+        shader::DxcCompiler compiler;
+        shader::ProgramRequest request;
+        request.entry = {rhi::ShaderStage::Compute,
+                         project.engine / "RenderLab" / "PathIdentity.hlsl", "CSMain"};
+        request.target = shaderTarget;
+        request.targetProfile = "cs_6_5";
+        if (shaderTarget == shader::Target::Spirv)
+            request.defines["SPIRV"] = "1";
+        rhi::PipelineDesc desc;
+        desc.layout = runtime.CreateLayout({{0, rhi::BindingKind::AccelerationStructure},
+                                            {1, rhi::BindingKind::StorageTexture},
+                                            {4, rhi::BindingKind::ConstantBuffer}});
+        desc.compute =
+            runtime.CreateShader(rhi::ShaderStage::Compute, compiler.Compile(request), "CSMain");
+        pathIdentity = runtime.CreatePipeline(desc);
     }
     void EnsureReflectionPrograms()
     {
@@ -1193,7 +1213,9 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
     }
     const bool pathTracing = options.pipeline == PipelineType::PathTracing;
     const bool rayTracing = options.pipeline == PipelineType::RayTracing || pathTracing;
-    if ((options.pathComponentDiagnostics || options.pathHdrDiagnostics) && !pathTracing)
+    if ((options.pathComponentDiagnostics || options.pathHdrDiagnostics ||
+         options.pathIdentityDiagnostics) &&
+        !pathTracing)
         throw std::invalid_argument("Path diagnostics require the path tracing pipeline");
     if (options.pipeline != PipelineType::Forward && options.pipeline != PipelineType::Deferred &&
         !rayTracing)
@@ -1705,6 +1727,11 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
             importBuffer(slice.buffer, "RayTracing.ReflectionParameters", rhi::State::HostWrite),
             rendergraph::Use::Uniform,
             {slice.offset, slice.size}};
+        if (pathTracing && options.pathIdentityDiagnostics)
+        {
+            self.EnsurePathIdentityProgram();
+            frame.rayTracing.pathIdentityPipeline = self.pathIdentity;
+        }
         frame.rayTracing.historyPipeline = pathTracing ? self.pathHistory : self.reflectionHistory;
         if (pathTracing && options.reflectionDenoise)
         {
@@ -2386,6 +2413,33 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
             context.Draw(3);
         });
     SceneReadback result;
+    if (frame.rayTracing.pathIdentityPipeline)
+    {
+        const auto pitch = rhi::TextureRowPitch(target->desc.width, rhi::Format::Rgba32Float);
+        result.pathPrimaryIdentity =
+            self.runtime.CreateBuffer({uint64_t(pitch) * target->desc.height, rhi::Memory::Readback,
+                                       "PathTracing.PrimaryIdentity"});
+        auto buffer = graph.ImportBuffer("PathTracing.PrimaryIdentity.Readback",
+                                         result.pathPrimaryIdentity, {rhi::State::CopyDest, false});
+        auto pass = graph.AddCopyPass("PathTracing.PrimaryIdentity.Readback");
+        const auto source = pass.ReadTexture("PathTracing.PrimaryIdentity");
+        buffer = pass.WriteBuffer(buffer);
+        pass.Execute([buffer, source, pitch](rendergraph::CopyContext& context)
+                     { context.CopyTexture(buffer, source, pitch, false); });
+        graph.Export(buffer, rhi::State::HostRead);
+        result.pathPrimarySurface =
+            self.runtime.CreateBuffer({uint64_t(pitch) * target->desc.height, rhi::Memory::Readback,
+                                       "PathTracing.PrimarySurface"});
+        auto surfaceBuffer =
+            graph.ImportBuffer("PathTracing.PrimarySurface.Readback", result.pathPrimarySurface,
+                               {rhi::State::CopyDest, false});
+        auto surfacePass = graph.AddCopyPass("PathTracing.PrimarySurface.Readback");
+        const auto surface = surfacePass.ReadTexture("PathTracing.SurfaceGuide");
+        surfaceBuffer = surfacePass.WriteBuffer(surfaceBuffer);
+        surfacePass.Execute([surfaceBuffer, surface, pitch](rendergraph::CopyContext& context)
+                            { context.CopyTexture(surfaceBuffer, surface, pitch, false); });
+        graph.Export(surfaceBuffer, rhi::State::HostRead);
+    }
     if (options.sceneHdrDiagnostics)
     {
         const auto pitch = rhi::TextureRowPitch(target->desc.width, rhi::Format::Rgba32Float);
