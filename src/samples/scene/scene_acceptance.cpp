@@ -304,6 +304,105 @@ void MeasurePathMotionSequences(rhi::Runtime& runtime, shader::Target target,
         }
     }
 }
+void VerifyPathMovingObject(rhi::Runtime& runtime, shader::Target target,
+                            const std::filesystem::path& project,
+                            const std::filesystem::path& engine,
+                            const std::filesystem::path& output, Logger& logger)
+{
+    constexpr uint32_t width = 96, height = 54, frames = 4;
+    const auto hdrPitch = rhi::TextureRowPitch(width, rhi::Format::Rgba32Float);
+    const auto colorPitch = rhi::TextureRowPitch(width);
+    std::array<std::vector<std::vector<float>>, 2> images;
+    for (size_t mode = 0; mode < images.size(); ++mode)
+    {
+        renderer::SceneRenderer scene(runtime, target, project, engine);
+        const auto actor =
+            std::ranges::find_if(scene.Document().objects, [](const auto& object)
+                                 { return object.name == "gallery-4-4" && object.mesh; });
+        detail::Require(actor != scene.Document().objects.end(), "Moving fixture needs a sphere");
+        const auto actorId = actor->id;
+        const float startX = actor->transform.position.x;
+        auto image = runtime.CreateTexture(
+            {width, height, rhi::Format::Rgba8Srgb, false, true, "PathTracing.MovingObject"});
+        auto state = rhi::State::Undefined;
+        renderer::SceneRenderOptions options;
+        options.pipeline = renderer::PipelineType::PathTracing;
+        options.reflectionTemporal = mode == 1;
+        options.pathHdrDiagnostics = true;
+        const auto render = [&]()
+        {
+            auto frame = scene.Render(image, state, nullptr, true, {}, options);
+            state = rhi::State::CopySource;
+            runtime.Wait(frame.completion);
+            return frame;
+        };
+        for (uint32_t i = 0; i < 3; ++i)
+            render();
+        for (uint32_t i = 0; i < frames; ++i)
+        {
+            scene.Document().Get(actorId).transform.position.x = startX + .45f * float(i + 1);
+            const auto frame = render();
+            detail::Require(frame.reflectionHistoryReset &&
+                                frame.reflectionSamples == renderer::PathSamplesPerFrame &&
+                                frame.reflectionTemporalFrames == (mode == 1 ? 1u : 0u),
+                            "Moving geometry did not invalidate path histories");
+            detail::Require(frame.pathHdrDisplay != nullptr, "Missing moving-object HDR readback");
+            const auto bytes = frame.pathHdrDisplay->Map();
+            std::vector<float> pixels(width * height * 3);
+            for (uint32_t y = 0; y < height; ++y)
+                for (uint32_t x = 0; x < width; ++x)
+                {
+                    std::array<float, 4> pixel{};
+                    std::memcpy(pixel.data(), bytes.data() + y * hdrPitch + x * 16, 16);
+                    for (size_t c = 0; c < 3; ++c)
+                    {
+                        detail::Require(std::isfinite(pixel[c]) && pixel[c] >= 0,
+                                        "Moving-object HDR is invalid");
+                        pixels[(y * width + x) * 3 + c] = pixel[c];
+                    }
+                }
+            images[mode].push_back(std::move(pixels));
+            const auto name = output / "path-moving-object" / (mode == 0 ? "spatial" : "temporal") /
+                              std::format("{:02}.bmp", i);
+            std::filesystem::create_directories(name.parent_path());
+            SaveImage(name, frame.pixels->Map(), width, height, colorPitch);
+        }
+        for (uint32_t i = 0; i < 2; ++i)
+        {
+            const auto frame = render();
+            detail::Require(!frame.reflectionHistoryReset &&
+                                frame.reflectionSamples ==
+                                    (i + 2) * renderer::PathSamplesPerFrame &&
+                                frame.reflectionTemporalFrames == (mode == 1 ? i + 2 : 0),
+                            "Stationary path histories did not resume after object motion");
+        }
+    }
+    uint32_t changedPixels = 0;
+    double largestDifference = 0;
+    for (uint32_t frame = 0; frame < frames; ++frame)
+        for (size_t i = 0; i < images[0][frame].size(); ++i)
+        {
+            const auto a = images[0][frame][i], b = images[1][frame][i];
+            largestDifference = std::max(largestDifference, double(std::abs(a - b)));
+            detail::Require(
+                std::abs(a - b) <= 1e-5f * std::max(1.f, std::abs(a)),
+                "Cold temporal output differed from spatial output during object motion");
+        }
+    for (size_t i = 0; i < images[0][0].size(); i += 3)
+    {
+        const auto& first = images[0].front();
+        const auto& last = images[0].back();
+        changedPixels += std::abs(first[i] - last[i]) + std::abs(first[i + 1] - last[i + 1]) +
+                             std::abs(first[i + 2] - last[i + 2]) >
+                         .2f;
+    }
+    detail::Require(changedPixels > 16,
+                    std::format("Moving sphere changed only {} pixels", changedPixels));
+    logger.Write(LogLevel::Info,
+                 std::format("Moving-object path preview: {} changed pixels; maximum cold HDR "
+                             "difference {:.9g}",
+                             changedPixels, largestDifference));
+}
 } // namespace
 
 void VerifyScene(rhi::Runtime& runtime, shader::Target target, const std::filesystem::path& project,
@@ -587,6 +686,9 @@ void VerifyScene(rhi::Runtime& runtime, shader::Target target, const std::filesy
 #ifdef NDEBUG
         detail::Require(error[1] < error[0], "Path temporal motion increased endpoint MSE");
 #endif
+        VerifyPathMovingObject(runtime, target,
+                               project.parent_path() / "PathTracingGallery.rlproject", engine,
+                               output, logger);
         MeasurePathMotionSequences(runtime, target,
                                    project.parent_path() / "PathTracingGallery.rlproject", engine,
                                    output, logger);
