@@ -129,3 +129,18 @@ DX12 三个种子的全图 MSE 分别从 64 spp 的 0.003158、0.002196、0.0071
 仅矩形灯候选额外做 DX12、640×360、关闭验证和滤波、预热 32 帧、测量 128 帧的两次交错短测；Trace 均值旧版 1.728/1.741 ms、候选 1.808/1.809 ms，成本约增加 4%，不能假设微小 MSE 收益覆盖成本。该候选不改变无矩形灯的方向光路径，不能解决前述高光白点。仅后续维度候选的 GPU BSDF 半球数值对照曾在两后端通过，但最终版本未继续做双后端完整验收；各候选均无长期交互或跨设备证据。单机场景、有限参考和有限种子不能证明一般退化、无偏或性能排名。
 
 数据、临时 Shader、12 种子运行源码和比较 JSON 位于 `out/path-strata-eval`；例如 `python tools/compare_path_hdr.py out/path-strata-eval/cornell-baseline/dx12/path-raw-convergence/reference-mean.pfm out/path-strata-eval/cornell-baseline/dx12/path-raw-convergence out/path-strata-eval/area-cornell12/dx12/path-raw-convergence --output out/path-strata-eval/area-comparison.json`。标准场景回归当前保存三个种子，复算时可传 `--seeds 3`；12 种子结果来自临时专项运行。
+
+## 路径正则化隔离实验（2026 年 11 月 12 日）
+
+依据 [pbrt-v4 的路径正则化](https://pbr-book.org/4ed/Light_Transport_I_Surface_Reflection/A_Better_Path_Tracer) 和 [SVGF 论文](https://cwyman.org/papers/hpg17_svgf.pdf) 的思路，在临时 Shader 中将第一次散射之后的非 Unlit 表面 GGX alpha 做粗糙化；本项目 alpha 为 perceptual roughness 的平方，实验采用 alpha 小于 0.3 时将其加倍并限制在 [0.1,0.3]，再开方还原。修改同时用于后续直接光 BRDF、方向采样与 PDF，不更改主射线材质；这改变积分器的被积函数，有偏，不是方差降低后的同一原始积分。代码仅在 `out/path-regularization-eval/PathTrace-regularized.hlsl`，从未进入默认渲染。
+
+RTX 5060 Release/DX12，96×54，固定 Gallery 与 Cornell；12 个种子，64–4096 spp，原版另外三个种子各 16384 spp 的均值作为共同未滤波 HDR 参考。每格为 12 种子线性 RGB MSE 均值，括号是候选更差的种子数：
+
+| 场景 | 64 spp 原版 / 正则化 | 1024 spp 原版 / 正则化 | 4096 spp 原版 / 正则化 |
+| --- | ---: | ---: | ---: |
+| Gallery | 0.003781 / 0.002776 (0/12) | 0.00032036 / 0.00028573 (0/12) | 0.00008042 / 0.00009281 (11/12) |
+| Cornell | 0.005448 / 0.004901 (0/12) | 0.00033987 / 0.00030720 (0/12) | 0.00009743 / 0.00008911 (0/12) |
+
+Gallery 的 seed 3、(43,33) 蓝色通道 1024 spp 从 0.4161 变为 0.0808，原版参考均值 0.0631；4096 spp 从 0.1512 变为 0.0732。该阈值下的高亮异常通道均值在 Gallery 64 spp 从 7.75 降至 0.50，在 Cornell 从 4.75 降至 0.58；阈值仍是 `4 × 原版参考 + 0.1`，只是诊断指标。
+
+偏差不能用低样本降噪收益抵消：与候选种子 1–12 不同的三个种子各 16384 spp，正则化均值图与原版均值图相比，Gallery 全图 RGB 均值 0.0612265 / 0.0611393（约 -0.14%），Cornell 0.2397289 / 0.2395873（约 -0.059%）；这些差异仍包含有限参考噪声。Gallery (44,39) 蓝色通道的原版三个值为 0.8859、0.9155、0.8904，正则化为 0.6082、0.6199、0.6213，均值由 0.8973 降到 0.6164；这说明局部真实高光损失远大于全图均值变化。额外在同一设备以 Gallery 640×360、关闭验证和滤波、预热 32 帧、测量 128 帧做两次交错短测，Trace 均值原版为 0.7845/0.7813 ms、候选为 0.7828/0.7916 ms；差异与波动同量级，不作稳定性能结论。未测运动、其它设备或场景，不能推断普遍收益；也未建立对无偏路径引导或 ReSTIR 的实现。候选输出、临时运行源码、对照 JSON 和日志在 `out/path-regularization-eval`。

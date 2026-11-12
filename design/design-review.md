@@ -4,6 +4,22 @@
 
 这里引用的是公开说明的机制与限制，不能据此断言相关项目存在未修复缺陷。以下取舍是 RenderLab 自己的设计决策；修订已并入 [总体设计](architecture.md)，实现验收进入 [阶段计划](phaseplan.md)。运行正确性与性能结论以阶段计划的实际验收为准。
 
+## 间接镜面白点：文献与实现对照（2026 年 11 月 12 日）
+
+本次针对已经复现的 Gallery 样本：第三个命中点的方向光与低粗糙度 BRDF 产生罕见高能贡献，既不是简单的灯选取问题，也不能仅凭这一条路径推断 PDF 有错。以下是可用于本项目的机制和取舍，不代表对应 SDK 已接入。
+
+| 资料 | 可借鉴机制 | 对 RenderLab 的含义 |
+| --- | --- | --- |
+| [pbrt-v4 的 Path Regularization](https://pbr-book.org/4ed/Light_Transport_I_Surface_Reflection/A_Better_Path_Tracer) 和 [参数说明](https://www.pbrt.org/fileformat-v4) | 在出现非镜面散射后的后续顶点对微表面分布做粗糙化；pbrt 的开关默认关闭 | 可以扩大间接窄高光采样足迹，但改变被积函数并引入偏差；不能写入现有原始 HDR 参考。项目的 perceptual roughness 需先平方为 GGX alpha，再映射回 roughness，且 BSDF、PDF、NEE/MIS 必须一致 |
+| [SVGF 论文](https://cwyman.org/papers/hpg17_svgf.pdf) | 实时路径追踪在首次散射后的非漫反射表面采用路径空间正则化，再做时空重建 | 说明有偏实时方案可行，不意味着原始积分无偏；需分别评估输入改变与降噪带来的效果 |
+| [Practical Path Guiding 论文](https://la.disneyresearch.com/publication/practical-path-guiding-for-efficient-light-transport-simulation/) 和 [作者实现](https://github.com/Tom94/practical-path-guiding) | 学习空间与方向相关的入射辐射分布，与 BSDF 采样组合以引导重要路径 | 是改善原始采样的候选：需保证混合分布完整支持、以实际混合 PDF 加权，分别评估训练冷启动、开销、动态失效与误差；稀有路径在训练前仍可能没被发现 |
+| [RTXDI ReSTIR GI](https://github.com/NVIDIA-RTX/RTXDI/blob/main/Doc/RestirGI.md) 和 [ReSTIR PT](https://github.com/NVIDIA-RTX/RTXDI/blob/main/Doc/RestirPT.md) | 对间接路径进行时空重采样；PT 的 hybrid shift 处理包含光滑顶点的路径 | 方向上更贴近实时多反弹，但 GI 文档明确其基础次级辐射近似和锐利焦散限制；不能把当前逐像素位置诊断当成完整的重连、可见性、PDF 或运动引导。需先做资源/生命周期、SDK 许可证和双后端适配评估 |
+| [pbrt 的亮度裁剪说明](https://pbr-book.org/4ed/Cameras_and_Film/Film_and_Imaging) | 直接截断可以压低离群，但会损失能量 | 只可作为明确有偏的显示候选；不得替代未滤波积分结果或被称为收敛改善 |
+
+隔离实验借鉴 pbrt 的 alpha 粗糙化形状，仅修改首次散射后的材质，并同步作用于光照、BSDF 采样及 PDF；没有写入产品。Gallery/Cornell 的 12 种子线性 HDR 对照中，1024 spp 的目标白点从 0.416 降到 0.081，但 Gallery 另一像素的三个 16384 spp 参考均值从 0.897 降到 0.616，真实高光被压低。有限数据、实现差异和未测的 GPU 成本限制结论，完整数值见 [验证记录](../docs/performance/m8-path-tracing.md#路径正则化隔离实验2026-年-11-月-12-日)。
+
+实施优先级：原始分支继续保持原材质及采样，先设计可关闭、可比较的引导试验，记录训练数据、PDF/权重、冷启动和变更失效；在相同射线预算和相同时间预算下与原始 HDR 对照。若再评估粗糙化，只能作为单独的有偏预览路径，并保留原始参考与明确开关；需要证明资源开销、历史重置和偏差，不能复用一份已改变的累积结果冒充未滤波积分。现阶段不接入 OpenPGL：其 [官方仓库](https://github.com/OpenPathGuidingLibrary/openpgl) 当前列出 CPU 后端、GPU 后端仍为计划，不能直接作为本项目双后端 GPU 实现。未下载或分发这些第三方代码。
+
 ## HDRP 参考的光栅面光源
 
 2026 年 11 月 10 日用户授权参考 HDRP 的矩形光源工作流，分离灯数据、显示几何、LTC 直接照明与阴影；Path Tracing 继续作为可关闭滤波的数值参考。Unity Graphics 的源码/表受 Unity Companion License 限制，本独立引擎不复制；LTC 算法参考公开论文，首版拟合表采用作者许可允许再分发的固定版本并随产物保留完整许可，来源见 [面光源契约](../docs/area-lights.md#光栅-ltc-数据准备)。各项能力是否完成以阶段计划与验证为准。
