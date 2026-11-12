@@ -541,7 +541,9 @@ void AccessValidation()
         Graph g;
         auto t = Texture(g);
         auto p = g.AddCopyPass("Wrong");
-        Fails([&] { p.ReadTexture(t, Use::Sampled); }, "Copy pass");
+        Fails([&] { p.ReadTexture(t, Use::Sampled); },
+              "Copy pass contains shader/raster access in Wrong (");
+        Fails([&] { p.ReadTexture(t, Use::Sampled); }, "on Test.Texture");
     }
     {
         Graph g;

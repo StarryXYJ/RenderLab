@@ -93,63 +93,67 @@ void Graph::Impl::ValidateUse(uint32_t index, const detail::Resource& r, Use use
     const auto& pass = passes[index];
     Require(use != Use::ShaderTableRead || (!r.isTexture && r.bufferDesc.shaderTable),
             "Invalid SBT resource");
-    const auto suffix = " in " + pass.name + " (" + pass.source + ") on " + r.Name();
-    Require(!write || !IsReadOnly(use), "Write to read-only use" + suffix);
-    Require(write || (use != Use::CopyDestination && use != Use::Color && use != Use::Depth &&
+    const auto require = [&](bool condition, const char* message)
+    {
+        if (!condition)
+            Require(false, std::string(message) + " in " + pass.name + " (" + pass.source +
+                               ") on " + r.Name());
+    };
+    require(!write || !IsReadOnly(use), "Write to read-only use");
+    require(write || (use != Use::CopyDestination && use != Use::Color && use != Use::Depth &&
                       use != Use::AccelerationStructureBuildWrite),
-            "Read requires a read usage" + suffix);
-    Require(pass.kind != PassKind::Copy || use == Use::CopySource || use == Use::CopyDestination,
-            "Copy pass contains shader/raster access" + suffix);
-    Require((pass.kind != PassKind::Compute && pass.kind != PassKind::RayTracing) ||
+            "Read requires a read usage");
+    require(pass.kind != PassKind::Copy || use == Use::CopySource || use == Use::CopyDestination,
+            "Copy pass contains shader/raster access");
+    require((pass.kind != PassKind::Compute && pass.kind != PassKind::RayTracing) ||
                 (use != Use::Color && use != Use::Depth && use != Use::DepthRead &&
                  use != Use::Vertex && use != Use::Index && use != Use::Indirect),
-            "Compute pass contains raster access" + suffix);
+            "Compute pass contains raster access");
     if (r.isTexture)
     {
-        Require(use == Use::Sampled || use == Use::Storage || use == Use::Color ||
+        require(use == Use::Sampled || use == Use::Storage || use == Use::Color ||
                     use == Use::Depth || use == Use::DepthRead || use == Use::CopySource ||
                     use == Use::CopyDestination,
-                "Buffer usage on texture" + suffix);
-        Require(use != Use::Storage || r.textureDesc.storage,
-                "Texture lacks storage usage" + suffix);
-        Require(use != Use::Color ||
+                "Buffer usage on texture");
+        require(use != Use::Storage || r.textureDesc.storage, "Texture lacks storage usage");
+        require(use != Use::Color ||
                     (r.textureDesc.attachment && !rhi::IsDepthFormat(r.textureDesc.format)),
-                "Invalid color attachment" + suffix);
-        Require((use != Use::Depth && use != Use::DepthRead) ||
+                "Invalid color attachment");
+        require((use != Use::Depth && use != Use::DepthRead) ||
                     (r.textureDesc.attachment && rhi::IsDepthFormat(r.textureDesc.format)),
-                "Invalid depth attachment" + suffix);
-        Require((use != Use::CopySource && use != Use::CopyDestination) ||
+                "Invalid depth attachment");
+        require((use != Use::CopySource && use != Use::CopyDestination) ||
                     !rhi::IsDepthFormat(r.textureDesc.format),
-                "Depth/stencil copies are not implemented" + suffix);
+                "Depth/stencil copies are not implemented");
     }
     else
     {
-        Require(!r.bufferDesc.accelerationStructureStorage ||
+        require(!r.bufferDesc.accelerationStructureStorage ||
                     use == Use::AccelerationStructureBuildWrite ||
                     use == Use::AccelerationStructureRead,
-                "AS storage cannot be used as an ordinary buffer" + suffix);
-        Require(use != Use::Sampled && use != Use::Color && use != Use::Depth &&
+                "AS storage cannot be used as an ordinary buffer");
+        require(use != Use::Sampled && use != Use::Color && use != Use::Depth &&
                     use != Use::DepthRead,
-                "Texture usage on buffer" + suffix);
-        Require(use != Use::Storage || r.bufferDesc.storage, "Buffer lacks storage usage" + suffix);
-        Require(r.bufferDesc.memory != rhi::Memory::Readback ||
+                "Texture usage on buffer");
+        require(use != Use::Storage || r.bufferDesc.storage, "Buffer lacks storage usage");
+        require(r.bufferDesc.memory != rhi::Memory::Readback ||
                     (write && use == Use::CopyDestination),
-                "Readback buffer is a copy destination only" + suffix);
-        Require(r.bufferDesc.memory != rhi::Memory::Upload ||
+                "Readback buffer is a copy destination only");
+        require(r.bufferDesc.memory != rhi::Memory::Upload ||
                     (!write &&
                      (use == Use::CopySource || use == Use::Uniform || use == Use::ShaderRead ||
                       use == Use::ShaderTableRead || use == Use::AccelerationStructureBuildInput)),
-                "Upload buffer is a GPU read source only" + suffix);
-        Require(use != Use::AccelerationStructureBuildInput ||
+                "Upload buffer is a GPU read source only");
+        require(use != Use::AccelerationStructureBuildInput ||
                     (r.bufferDesc.deviceAddress && r.bufferDesc.accelerationStructureInput),
-                "Acceleration structure input buffer lacks required usage" + suffix);
-        Require((use != Use::AccelerationStructureBuildWrite &&
+                "Acceleration structure input buffer lacks required usage");
+        require((use != Use::AccelerationStructureBuildWrite &&
                  use != Use::AccelerationStructureRead) ||
                     (r.bufferDesc.deviceAddress &&
                      (r.bufferDesc.accelerationStructureStorage || r.bufferDesc.storage)),
-                "Acceleration structure storage buffer lacks required usage" + suffix);
-        Require(use != Use::AccelerationStructureRead || r.bufferDesc.accelerationStructureStorage,
-                "Acceleration structure traversal requires AS storage" + suffix);
+                "Acceleration structure storage buffer lacks required usage");
+        require(use != Use::AccelerationStructureRead || r.bufferDesc.accelerationStructureStorage,
+                "Acceleration structure traversal requires AS storage");
     }
 }
 void Graph::Impl::Scope(uint32_t pass) const
@@ -162,16 +166,16 @@ detail::Resource& Graph::Impl::Resolve(uint32_t pass, uint64_t graph, uint32_t r
 {
     auto& r = Validate(graph, resource, version, texture);
     const auto& accesses = passes[pass].accesses;
-    Require(std::ranges::any_of(accesses,
-                                [&](const auto& a)
-                                {
-                                    return a.resource == resource &&
-                                           ((a.read && a.input == version) ||
-                                            (a.write && a.output == version)) &&
-                                           (!use || a.use == *use);
-                                }),
-            "Undeclared resource/version/use in " + passes[pass].name + " (" + passes[pass].source +
-                "): " + r.Name());
+    if (!std::ranges::any_of(accesses,
+                             [&](const auto& a)
+                             {
+                                 return a.resource == resource &&
+                                        ((a.read && a.input == version) ||
+                                         (a.write && a.output == version)) &&
+                                        (!use || a.use == *use);
+                             }))
+        Require(false, "Undeclared resource/version/use in " + passes[pass].name + " (" +
+                           passes[pass].source + "): " + r.Name());
     return r;
 }
 void Graph::Impl::ValidateBindings(uint32_t pass, const rhi::BindingGroup& group)
