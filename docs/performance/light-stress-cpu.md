@@ -49,3 +49,11 @@ Forward 的 Graph 构建按 Feature 分解，面光源阴影约 4.33 ms、方向
 Vulkan 使用按 BindingLayout 复用多组 set 的有界描述符页后，RTX 5060 Release、validation on、960×540、10 帧预热/30 帧测量，八点灯 Forward、Deferred、混合与 Path Tracing 均运行，validation errors 和关闭时跟踪内存为零；Forward、Deferred、混合分别创建 21、22、33 个原生池页。Graph 契约、双后端 RHI、描述符数组、面灯光栅与反射回归 9/9，另增加 300 个同时存活组、释放复用与预算耗尽契约，双后端 RHI 2/2。该页预算仍有上限。
 
 隔离 Release Editor 的 Vulkan validation on、profiling on、1017×773、固定相机、target-fps 0、预热 2 秒/测量 5 秒，Forward、Deferred、混合 Native P95 分别 38.21、35.79、37.53 ms，153/161/161 样本、无丢样，退出账本零泄漏、零 validation errors、零 worker_failed。validation on 与上面 DX12 validation off 不可直接比较；Vulkan 性能仍待分解。其他 GPU、窗口交互、超过该场景的规模及长期运行未验收。证据分别为本工作树 `out/vulkan-pages/` 和 `D:/Personal/RenderLab/out/vulkan-page-editor-{forward,deferred,raytracing}`。
+
+## 顺序保持的索引实例绘制（2026 年 11 月 12 日）
+
+新版 Release、RTX 5060、960×540、validation off、CPU profiling on 的 Forward 细分中，DX12 串行帧/场景准备/Graph 录制/绑定组创建分别 9.99/5.84/2.75/1.69 ms；Vulkan 6.59/4.35/1.18/0.38 ms。validation on 时 Vulkan 分别为 21.75/4.83/9.94/8.97 ms；指标嵌套，不能相加。
+
+IndexedDirect 与 CpuIndirect 合并同批次原顺序中相邻的相同几何，保留实例顺序、每实例材质和变换；未全局排序，避免改变重合几何的深度次序。固定压测中 IndexedDirect 的主画面索引 Draw 145→86，另一 64 对象夹具可见 43 个，Draw 43→1；两后端各自前后 BMP 哈希一致。DX12/Vulkan 索引场景 GPU 回归均通过，覆盖 64 同网格夹具的直接/间接实例合并、比较与 GPU 剔除图像。
+
+两种夹具各一次 20 帧预热/90 帧无验证短测：压测 DX12 帧 7.10→7.23 ms、Vulkan 4.92→4.87 ms；同网格夹具 DX12 0.50→0.53 ms、Vulkan 0.44→0.45 ms。Draw 数减少但没有测得稳定的总帧时间收益；仍默认 Direct，阴影 pass 与 GpuCulled 路径没有合批，不能据此声称默认 Editor 提速。日志 `out/instancing/`，索引回归日志 `D:/Personal/RenderLab/out/four-step-instanced-final-{dx12,vulkan}`。透明、特殊重叠/动态情况、其他设备和长时运行未完整验收。
