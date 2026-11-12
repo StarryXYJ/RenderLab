@@ -304,6 +304,161 @@ void MeasurePathMotionSequences(rhi::Runtime& runtime, shader::Target target,
         }
     }
 }
+void VerifyPathMovingObject(rhi::Runtime& runtime, shader::Target target,
+                            const std::filesystem::path& project,
+                            const std::filesystem::path& engine,
+                            const std::filesystem::path& output, Logger& logger)
+{
+    constexpr uint32_t width = 96, height = 54, frames = 4;
+    const auto hdrPitch = rhi::TextureRowPitch(width, rhi::Format::Rgba32Float);
+    const auto colorPitch = rhi::TextureRowPitch(width);
+    std::array<std::vector<std::vector<float>>, 2> images;
+    std::array<std::vector<std::vector<uint32_t>>, 2> identities;
+    std::array<std::vector<std::vector<bool>>, 2> actorMasks;
+    for (size_t mode = 0; mode < images.size(); ++mode)
+    {
+        renderer::SceneRenderer scene(runtime, target, project, engine);
+        const auto actor =
+            std::ranges::find_if(scene.Document().objects, [](const auto& object)
+                                 { return object.name == "gallery-4-4" && object.mesh; });
+        detail::Require(actor != scene.Document().objects.end(), "Moving fixture needs a sphere");
+        const auto actorId = actor->id;
+        const float startX = actor->transform.position.x;
+        auto image = runtime.CreateTexture(
+            {width, height, rhi::Format::Rgba8Srgb, false, true, "PathTracing.MovingObject"});
+        auto state = rhi::State::Undefined;
+        renderer::SceneRenderOptions options;
+        options.pipeline = renderer::PipelineType::PathTracing;
+        options.reflectionTemporal = mode == 1;
+        options.pathHdrDiagnostics = true;
+        options.pathIdentityDiagnostics = true;
+        const auto render = [&]()
+        {
+            auto frame = scene.Render(image, state, nullptr, true, {}, options);
+            state = rhi::State::CopySource;
+            runtime.Wait(frame.completion);
+            return frame;
+        };
+        for (uint32_t i = 0; i < 3; ++i)
+            render();
+        for (uint32_t i = 0; i < frames; ++i)
+        {
+            scene.Document().Get(actorId).transform.position.x = startX + .45f * float(i + 1);
+            const auto frame = render();
+            detail::Require(frame.reflectionHistoryReset &&
+                                frame.reflectionSamples == renderer::PathSamplesPerFrame &&
+                                frame.reflectionTemporalFrames == (mode == 1 ? 1u : 0u),
+                            "Moving geometry did not invalidate path histories");
+            detail::Require(frame.pathHdrDisplay != nullptr, "Missing moving-object HDR readback");
+            detail::Require(frame.pathPrimaryIdentity && frame.pathPrimarySurface,
+                            "Missing moving-object primary identity diagnostics");
+            const auto bytes = frame.pathHdrDisplay->Map();
+            const auto identityBytes = frame.pathPrimaryIdentity->Map();
+            const auto surfaceBytes = frame.pathPrimarySurface->Map();
+            const auto& instances = scene.LastSnapshot().allInstances;
+            std::vector<float> pixels(width * height * 3);
+            std::vector<uint32_t> hitIdentities(width * height);
+            std::vector<bool> hitActor(width * height);
+            for (uint32_t y = 0; y < height; ++y)
+                for (uint32_t x = 0; x < width; ++x)
+                {
+                    std::array<float, 4> pixel{};
+                    std::array<float, 4> identity{}, surface{};
+                    std::memcpy(pixel.data(), bytes.data() + y * hdrPitch + x * 16, 16);
+                    std::memcpy(identity.data(), identityBytes.data() + y * hdrPitch + x * 16, 16);
+                    std::memcpy(surface.data(), surfaceBytes.data() + y * hdrPitch + x * 16, 16);
+                    detail::Require(
+                        std::isfinite(identity[0]) && std::isfinite(identity[1]) &&
+                            std::isfinite(identity[3]) && identity[0] >= 0 && identity[0] <= 2 &&
+                            identity[0] == std::floor(identity[0]) && identity[1] >= 0 &&
+                            identity[1] == std::floor(identity[1]) && identity[3] >= .001f &&
+                            identity[3] <= 10000,
+                        "Invalid primary hit identity");
+                    const auto kind = static_cast<uint32_t>(identity[0]);
+                    const auto index = static_cast<uint32_t>(identity[1]);
+                    if (kind == 1)
+                    {
+                        detail::Require(index < instances.size(),
+                                        "Primary hit instance is outside snapshot");
+                        detail::Require(std::abs(std::abs(surface[3]) - identity[3]) <=
+                                            2e-4f * std::max(1.f, identity[3]),
+                                        "Ray query does not match path primary hit distance");
+                        hitActor[y * width + x] = instances[index].id.starts_with(actorId + "/");
+                    }
+                    else
+                    {
+                        detail::Require(surface[3] == 0,
+                                        "Non-mesh hit unexpectedly has a surface guide");
+                        if (kind == 2)
+                            detail::Require(index < scene.LastSnapshot().areaLights.size(),
+                                            "Primary light index is outside snapshot");
+                    }
+                    hitIdentities[y * width + x] = (kind << 24) | index;
+                    for (size_t c = 0; c < 3; ++c)
+                    {
+                        detail::Require(std::isfinite(pixel[c]) && pixel[c] >= 0,
+                                        "Moving-object HDR is invalid");
+                        pixels[(y * width + x) * 3 + c] = pixel[c];
+                    }
+                }
+            images[mode].push_back(std::move(pixels));
+            identities[mode].push_back(std::move(hitIdentities));
+            actorMasks[mode].push_back(std::move(hitActor));
+            const auto name = output / "path-moving-object" / (mode == 0 ? "spatial" : "temporal") /
+                              std::format("{:02}.bmp", i);
+            std::filesystem::create_directories(name.parent_path());
+            SaveImage(name, frame.pixels->Map(), width, height, colorPitch);
+        }
+        for (uint32_t i = 0; i < 2; ++i)
+        {
+            const auto frame = render();
+            detail::Require(!frame.reflectionHistoryReset &&
+                                frame.reflectionSamples ==
+                                    (i + 2) * renderer::PathSamplesPerFrame &&
+                                frame.reflectionTemporalFrames == (mode == 1 ? i + 2 : 0),
+                            "Stationary path histories did not resume after object motion");
+        }
+    }
+    uint32_t changedPixels = 0;
+    uint32_t revealedPixels = 0, coveredPixels = 0;
+    double largestDifference = 0;
+    for (uint32_t frame = 0; frame < frames; ++frame)
+        for (size_t i = 0; i < images[0][frame].size(); ++i)
+        {
+            const auto a = images[0][frame][i], b = images[1][frame][i];
+            largestDifference = std::max(largestDifference, double(std::abs(a - b)));
+            detail::Require(
+                std::abs(a - b) <= 1e-5f * std::max(1.f, std::abs(a)),
+                "Cold temporal output differed from spatial output during object motion");
+        }
+    for (size_t i = 0; i < images[0][0].size(); i += 3)
+    {
+        const auto& first = images[0].front();
+        const auto& last = images[0].back();
+        changedPixels += std::abs(first[i] - last[i]) + std::abs(first[i + 1] - last[i + 1]) +
+                             std::abs(first[i + 2] - last[i + 2]) >
+                         .2f;
+    }
+    for (uint32_t frame = 0; frame < frames; ++frame)
+        detail::Require(identities[0][frame] == identities[1][frame],
+                        "Primary hit identity changed when toggling temporal preview");
+    for (size_t pixel = 0; pixel < actorMasks[0][0].size(); ++pixel)
+    {
+        const bool before = actorMasks[0].front()[pixel];
+        const bool after = actorMasks[0].back()[pixel];
+        revealedPixels += before && !after;
+        coveredPixels += !before && after;
+    }
+    detail::Require(revealedPixels > 0 && coveredPixels > 0,
+                    "Moving sphere produced no primary visibility transitions");
+    detail::Require(changedPixels > 16,
+                    std::format("Moving sphere changed only {} pixels", changedPixels));
+    logger.Write(
+        LogLevel::Info,
+        std::format("Moving-object path preview: {} changed pixels, {} revealed and {} covered; "
+                    "maximum cold HDR difference {:.9g}",
+                    changedPixels, revealedPixels, coveredPixels, largestDifference));
+}
 } // namespace
 
 void VerifyScene(rhi::Runtime& runtime, shader::Target target, const std::filesystem::path& project,
@@ -334,6 +489,7 @@ void VerifyScene(rhi::Runtime& runtime, shader::Target target, const std::filesy
         pathOptions.captureGraph = true;
         pathOptions.pathComponentDiagnostics = true;
         pathOptions.pathHdrDiagnostics = true;
+        pathOptions.pathIdentityDiagnostics = true;
         auto state = rhi::State::Undefined;
         const auto pathFrame = [&]()
         {
@@ -344,6 +500,7 @@ void VerifyScene(rhi::Runtime& runtime, shader::Target target, const std::filesy
         };
         const auto first = pathFrame();
         const auto second = pathFrame();
+        pathOptions.pathIdentityDiagnostics = false;
         detail::Require(first.reflectionSamples == renderer::PathSamplesPerFrame &&
                             first.reflectionHistoryReset &&
                             second.reflectionSamples == 2 * renderer::PathSamplesPerFrame &&
@@ -398,6 +555,9 @@ void VerifyScene(rhi::Runtime& runtime, shader::Target target, const std::filesy
         runtime.Wait(standard.completion);
         const auto standardBytes = standard.pixels->Map();
         detail::Require(!standard.pathHdrDisplay, "Disabled HDR readback returned a buffer");
+        detail::Require(first.pathPrimaryIdentity && first.pathPrimarySurface &&
+                            !standard.pathPrimaryIdentity && !standard.pathPrimarySurface,
+                        "Primary identity diagnostics did not honor its enable flag");
         const auto diagnosticBytes = first.pixels->Map();
         detail::Require(
             std::equal(standardBytes.begin(), standardBytes.end(), diagnosticBytes.begin()),
@@ -587,6 +747,9 @@ void VerifyScene(rhi::Runtime& runtime, shader::Target target, const std::filesy
 #ifdef NDEBUG
         detail::Require(error[1] < error[0], "Path temporal motion increased endpoint MSE");
 #endif
+        VerifyPathMovingObject(runtime, target,
+                               project.parent_path() / "PathTracingGallery.rlproject", engine,
+                               output, logger);
         MeasurePathMotionSequences(runtime, target,
                                    project.parent_path() / "PathTracingGallery.rlproject", engine,
                                    output, logger);
