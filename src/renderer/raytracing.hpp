@@ -16,10 +16,12 @@ struct RayQueryParameters
     std::array<float, 16> inverseViewProjection{};
     std::array<float, 4> directionToLight{}, shadowOptions{};
     std::array<float, 40> reserved{};
+    std::array<float, 128> pointLights{};
 };
-static_assert(sizeof(RayQueryParameters) == 256 &&
+static_assert(sizeof(RayQueryParameters) == 768 &&
               offsetof(RayQueryParameters, directionToLight) == 64 &&
-              offsetof(RayQueryParameters, shadowOptions) == 80);
+              offsetof(RayQueryParameters, shadowOptions) == 80 &&
+              offsetof(RayQueryParameters, pointLights) == 256);
 struct ReflectionParameters
 {
     std::array<float, 16> inverseViewProjection{};

@@ -243,7 +243,7 @@ Hi-Z 使用跨帧历史时，规定首帧、相机跳变和分辨率变化下的
 
 当前视锥 Compute 以每批次全部候选数预留容量，64 线程分块稳定压缩，再直接消费 GPU Count；清零、Storage 写后读及 Indirect 读取显式进入图。GPU 模式跳过 CPU 相机剔除，并标记 CPU 可见集不可用；Count/索引诊断是独立的可选读回，不影响本帧提交。每帧冻结和复用同材质准备，实例表仍由场景快照投影。
 
-M4 的首个场景闭环见 [项目、场景](../docs/m4-scene.md)，Forward PBR/HDR 见 [M4.3](../docs/m4-forward-pbr.md)。Scene 使用值类型组件和层级 Transform，不引入 ECS 管理器。DirectionalLight 可有多个，按稳定 UUID 选择一个启用对象，其世界旋转、颜色和强度提取到显式 Lighting 数据；View/Object/Shadow 分块，入口把数据传给 HLSL 库。点光源正在实现，场景组件提取到世界空间，Forward、Deferred 和混合主表面提供最多八盏无阴影直接照明；路径追踪显式连接点光源并做有限距离遮挡，其他能力及验证以阶段计划为准。矩形面光源的光栅、混合和路径追踪支持及限制见 [面光源契约](../docs/area-lights.md)。
+M4 的首个场景闭环见 [项目、场景](../docs/m4-scene.md)，Forward PBR/HDR 见 [M4.3](../docs/m4-forward-pbr.md)。Scene 使用值类型组件和层级 Transform，不引入 ECS 管理器。DirectionalLight 可有多个，按稳定 UUID 选择一个启用对象，其世界旋转、颜色和强度提取到显式 Lighting 数据；View/Object/Shadow 分块，入口把数据传给 HLSL 库。点光源正在实现，场景组件提取到世界空间，Forward、Deferred 和混合主表面提供最多八盏点光源直接照明；混合主表面与路径追踪以有限距离射线查询遮挡，其他能力及验证以阶段计划为准。矩形面光源的光栅、混合和路径追踪支持及限制见 [面光源契约](../docs/area-lights.md)。
 
 ## Shader 与材质
 

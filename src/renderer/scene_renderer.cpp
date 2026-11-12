@@ -1608,6 +1608,13 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
             self.snapshot.light.shadows && self.snapshot.light.intensity > 0 ? 1.f : 0.f};
         const auto area = PackRectLights(self.snapshot.areaLights);
         std::copy(area.begin(), area.end(), parameters.reserved.begin());
+        parameters.pointLights[0] = static_cast<float>(self.snapshot.pointLights.size());
+        for (size_t i = 0; i < self.snapshot.pointLights.size(); ++i)
+        {
+            const auto& point = self.snapshot.pointLights[i];
+            const auto position = Vector(point.position, point.range);
+            std::copy(position.begin(), position.end(), parameters.pointLights.begin() + 4 + i * 8);
+        }
         const auto slice = uploads.Write(std::as_bytes(std::span{&parameters, size_t{1}}));
         const auto name =
             importBuffer(slice.buffer, "RayTracing.Parameters", rhi::State::HostWrite);

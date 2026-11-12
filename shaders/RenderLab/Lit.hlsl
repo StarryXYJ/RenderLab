@@ -21,7 +21,7 @@ float4 PSMain(Varyings input, bool frontFace : SV_IsFrontFace) : SV_Target
                                  SafeNormalize(viewDirWS), light.direction) * light.color * visibility;
     direct += EvaluatePointLights(SceneLighting, input.positionWS, surface.normalWS,
                                   SafeNormalize(viewDirWS), surface.baseColor, surface.metallic,
-                                  surface.perceptualRoughness);
+                                  surface.perceptualRoughness, 255u);
     direct += EvaluateAreaLights(SceneAreaLighting, input.positionWS, surface.normalWS,
                                  SafeNormalize(viewDirWS), surface.baseColor, surface.metallic,
                                  surface.perceptualRoughness, LtcMatrix, LtcAmplitude,

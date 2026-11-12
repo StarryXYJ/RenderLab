@@ -344,6 +344,51 @@ void Check(rhi::Runtime& runtime, shader::Target target, const std::filesystem::
               << '\n';
     Require(sunMean > .01 && shadowMean < .4 * sunMean,
             "Analytic area light failed to block directional shadow rays");
+
+    doc = original;
+    for (auto& object : doc.objects)
+        if (object.areaLight)
+            object.areaLight->enabled = false;
+    scene::Object point;
+    point.id = "e4f0a5640d4d41f39dd49fa3b4e96abb";
+    point.transform.position = {0, 2.95f, -.1f};
+    point.pointLight = scene::PointLight{{1, 1, 1}, 20, 10, true};
+    doc.objects.push_back(point);
+    options.pipeline = renderer::PipelineType::PathTracing;
+    options.sceneHdrDiagnostics = false;
+    options.reflections = true;
+    const auto pointOpen = capture(701, true, 64);
+    const auto pointHybridOpen = rasterCapture(renderer::PipelineType::RayTracing);
+    doc.objects.push_back(blocker);
+    options.pipeline = renderer::PipelineType::PathTracing;
+    options.sceneHdrDiagnostics = false;
+    options.reflections = true;
+    const auto pointBlocked = capture(702, true, 64);
+    const auto pointHybridBlocked = rasterCapture(renderer::PipelineType::RayTracing);
+    const double pointOpenMean = mean(pointOpen.direct, reference.total);
+    const double pointBlockedMean = mean(pointBlocked.direct, reference.total);
+    const double hybridOpenMean = mean(pointHybridOpen, reference.total);
+    const double hybridBlockedMean = mean(pointHybridBlocked, reference.total);
+    std::cout << "Point-light direct HDR mean: path=" << pointOpenMean << "/" << pointBlockedMean
+              << " hybrid=" << hybridOpenMean << "/" << hybridBlockedMean << '\n';
+    Require(pointOpenMean > .01 && pointBlockedMean < pointOpenMean * .15 &&
+                hybridOpenMean > .01 && hybridBlockedMean < hybridOpenMean * .15,
+            "Point-light blocker did not suppress path and hybrid direct lighting");
+    for (int i = 0; i < 7; ++i)
+    {
+        auto extra = point;
+        extra.id = "d000000000000000000000000000000" + std::to_string(i);
+        extra.pointLight->intensity = 0;
+        doc.objects.push_back(extra);
+    }
+    const auto lastBitBlocked = rasterCapture(renderer::PipelineType::RayTracing);
+    std::erase_if(doc.objects, [&](const auto& object) { return object.id == blocker.id; });
+    const auto lastBitOpen = rasterCapture(renderer::PipelineType::RayTracing);
+    const auto lastOpenMean = mean(lastBitOpen, reference.total);
+    const auto lastBlockedMean = mean(lastBitBlocked, reference.total);
+    Require(lastOpenMean > .01 && lastBlockedMean < lastOpenMean * .15 &&
+                std::abs(lastOpenMean - hybridOpenMean) < hybridOpenMean * .01,
+            "Eighth point-light visibility bit did not match the first light");
 }
 } // namespace
 int main(int argc, char** argv)

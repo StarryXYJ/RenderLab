@@ -75,7 +75,8 @@ float4 PSMain(Varyings input) : SV_Target
             : AreaShadowVisibility(SceneAreaShadow, AreaShadow0, AreaShadow1, positionWS, surface.normalWS);
     direct += EvaluatePointLights(SceneLighting, positionWS, surface.normalWS,
                                   SafeNormalize(viewDirWS), surface.baseColor, surface.metallic,
-                                  surface.perceptualRoughness);
+                                  surface.perceptualRoughness, (DeferredLightingParameters.RayTracedShadows != 0
+                                      ? (uint)round(ShadowVisibility.Load(int3(pixel, 0)).w * 255) : 255u));
     direct += EvaluateAreaLights(SceneAreaLighting, positionWS, surface.normalWS,
                                  SafeNormalize(viewDirWS), surface.baseColor, surface.metallic,
                                  surface.perceptualRoughness, LtcMatrix, LtcAmplitude, areaVisibility);
