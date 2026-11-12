@@ -5,6 +5,7 @@
 #include "assets/io.hpp"
 #include "core/log.hpp"
 #include "material/asset.hpp"
+#include "math/math.hpp"
 #include "renderer/raytracing.hpp"
 #include "renderer/scene_renderer.hpp"
 #include "rhi/runtime.hpp"
@@ -341,10 +342,33 @@ void VerifyPathMovingObject(rhi::Runtime& runtime, shader::Target target,
         };
         for (uint32_t i = 0; i < 3; ++i)
             render();
+        const auto actorInstance = [&]() -> const scene::Instance&
+        {
+            const auto& instances = scene.LastSnapshot().allInstances;
+            const auto found =
+                std::ranges::find_if(instances, [&](const auto& instance)
+                                     { return instance.id.starts_with(actorId + "/"); });
+            detail::Require(found != instances.end(), "Moving sphere instance is missing");
+            return *found;
+        };
+        auto previousWorld = actorInstance().world;
         for (uint32_t i = 0; i < frames; ++i)
         {
             scene.Document().Get(actorId).transform.position.x = startX + .45f * float(i + 1);
             const auto frame = render();
+            const auto& instance = actorInstance();
+            detail::Require(instance.previousWorld.values == previousWorld.values,
+                            "Moving instance did not retain the preceding extracted transform");
+            const math::Vec3 localPoint{.25f, -.3f, .4f};
+            const auto currentPoint = math::Point(instance.world, localPoint);
+            const auto oldPoint = math::Point(instance.previousWorld, localPoint);
+            const auto mappedPoint = math::Point(
+                instance.previousWorld, math::Point(math::Inverse(instance.world), currentPoint));
+            detail::Require(math::Length(mappedPoint - oldPoint) < 1e-4f &&
+                                math::Length((currentPoint - oldPoint) - math::Vec3{.45f, 0, 0}) <
+                                    1e-4f,
+                            "Moving instance current-to-previous mapping is inconsistent");
+            previousWorld = instance.world;
             detail::Require(frame.reflectionHistoryReset &&
                                 frame.reflectionSamples == renderer::PathSamplesPerFrame &&
                                 frame.reflectionTemporalFrames == (mode == 1 ? 1u : 0u),
