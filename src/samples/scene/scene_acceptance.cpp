@@ -465,20 +465,46 @@ void MeasurePathRawConvergence(rhi::Runtime& runtime, shader::Target target,
     std::ofstream outlierReport(base / "outliers.csv", std::ios::binary);
     outlierReport.exceptions(std::ios::failbit | std::ios::badbit);
     outlierReport << "seed,spp,x,y,channel,raw,direct,diffuse,specular,reference\n";
+    std::ofstream batchReport(base / "pixel-43-33-batches.csv", std::ios::binary);
+    batchReport.exceptions(std::ios::failbit | std::ios::badbit);
+    batchReport << "first_sample,last_sample,total,direct,diffuse,specular\n";
     for (uint16_t seed : {uint16_t{1}, uint16_t{2}, uint16_t{3}})
     {
         options.pathSeed = seed;
+        std::array<double, 3> previousSum{};
         for (uint32_t frame = 1; frame <= checkpoints.back(); ++frame)
         {
             const bool checkpoint = std::ranges::find(checkpoints, frame) != checkpoints.end();
-            const auto result = render(checkpoint);
+            const bool batchCapture = seed == 3 && frame >= 32 && frame <= 128;
+            const auto result = render(checkpoint || batchCapture);
             detail::Require(result.reflectionSamples == frame * renderer::PathSamplesPerFrame,
                             "Raw convergence sequence failed to accumulate");
-            if (!checkpoint)
+            if (!checkpoint && !batchCapture)
                 continue;
             const auto total = extract(result.pathComponents[0]);
             const auto direct = extract(result.pathComponents[1]);
             const auto diffuse = extract(result.pathComponents[2]);
+            if (batchCapture)
+            {
+                constexpr size_t pixel = (33 * width + 43) * 3 + 2;
+                const std::array<double, 3> currentSum{total[pixel] * double(frame),
+                                                       direct[pixel] * double(frame),
+                                                       diffuse[pixel] * double(frame)};
+                if (frame > 32)
+                {
+                    const double batchTotal = currentSum[0] - previousSum[0];
+                    const double batchDirect = currentSum[1] - previousSum[1];
+                    const double batchDiffuse = currentSum[2] - previousSum[2];
+                    batchReport << std::format("{},{},{:.9f},{:.9f},{:.9f},{:.9f}\n",
+                                               (frame - 1) * renderer::PathSamplesPerFrame,
+                                               frame * renderer::PathSamplesPerFrame - 1,
+                                               batchTotal, batchDirect, batchDiffuse,
+                                               batchTotal - batchDirect - batchDiffuse);
+                }
+                previousSum = currentSum;
+            }
+            if (!checkpoint)
+                continue;
             save(base / std::format("seed-{}-{}spp.pfm", seed, result.reflectionSamples), total);
             double mse = 0, mean = 0, referenceMean = 0;
             uint32_t outliers = 0;
