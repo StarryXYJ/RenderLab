@@ -5,6 +5,53 @@ float AreaShadowDistance(float depth, float nearPlane, float farPlane)
 {
     return nearPlane * farPlane / max(nearPlane + depth * (farPlane - nearPlane), 1e-8);
 }
+// Interpolate the results of depth comparisons, not the shadow-map depths.
+float AreaShadowBilinearVisibility(Texture2D<float4> shadowMap, float2 location,
+                                   float2 receiverUv, float receiverDepth, float depthBias,
+                                   float2 depthGradient, uint2 dimensions)
+{
+    float2 texel = 1.0 / float2(dimensions);
+    float2 position = location * float2(dimensions) - .5;
+    int2 base = int2(floor(position));
+    float2 fraction = frac(position);
+    float result = 0;
+    [unroll] for (int y = 0; y < 2; ++y)
+    [unroll] for (int x = 0; x < 2; ++x)
+    {
+        int2 tap = base + int2(x, y);
+        bool outside = any(tap < 0) || any(tap >= int2(dimensions));
+        float depth = shadowMap.Load(int3(clamp(tap, 0, int2(dimensions) - 1), 0)).x;
+        float receiver = receiverDepth + dot(depthGradient, (float2(tap) + .5) * texel - receiverUv);
+        float2 weight = float2(x == 0 ? 1 - fraction.x : fraction.x,
+                               y == 0 ? 1 - fraction.y : fraction.y);
+        result += (outside || receiver + depthBias >= depth ? 1 : 0) * weight.x * weight.y;
+    }
+    return result;
+}
+float2 AreaShadowBilinearBlockers(Texture2D<float4> shadowMap, float2 location,
+                                  float2 receiverUv, float receiverDepth, float depthBias,
+                                  float2 depthGradient, uint2 dimensions, float nearPlane,
+                                  float farPlane)
+{
+    float2 texel = 1.0 / float2(dimensions);
+    float2 position = location * float2(dimensions) - .5;
+    int2 base = int2(floor(position));
+    float2 fraction = frac(position);
+    float2 result = 0;
+    [unroll] for (int y = 0; y < 2; ++y)
+    [unroll] for (int x = 0; x < 2; ++x)
+    {
+        int2 tap = base + int2(x, y);
+        if (any(tap < 0) || any(tap >= int2(dimensions))) continue;
+        float depth = shadowMap.Load(int3(tap, 0)).x;
+        float receiver = receiverDepth + dot(depthGradient, (float2(tap) + .5) * texel - receiverUv);
+        float2 weight = float2(x == 0 ? 1 - fraction.x : fraction.x,
+                               y == 0 ? 1 - fraction.y : fraction.y);
+        float w = depth > receiver + depthBias ? weight.x * weight.y : 0;
+        result += float2(AreaShadowDistance(depth, nearPlane, farPlane) * w, w);
+    }
+    return result;
+}
 float SampleAreaShadow(float4x4 matrix, float4 parameters, float4 lightInfo,
                        Texture2D<float4> shadowMap, float3 position, float3 normal,
                        float2 depthGradient)
@@ -21,24 +68,23 @@ float SampleAreaShadow(float4x4 matrix, float4 parameters, float4 lightInfo,
     float depthBias = parameters.y / max(clip.w * clip.w, 1e-6);
     const float focalScale = .08748866; // 1 / tan(170 degrees / 2)
     float2 lightExtent = max(lightInfo.xy, 0);
-    float2 searchRadius = clamp(lightExtent * focalScale / (4 * max(lightInfo.w, 1e-5)) *
-                                saturate((clip.w - lightInfo.w) / clip.w), texel, .12.xx);
+    // Limit the search to the projected emitter footprint at the receiver. A search
+    // based on the tiny shadow near plane samples unrelated walls far from the ray and
+    // incorrectly turns room corners into huge occluders.
+    float2 searchRadius = clamp(lightExtent * focalScale / (2 * max(clip.w, 1e-5)),
+                                texel, .12.xx);
     float blockerDistance = 0;
     float blockers = 0;
     // Include the center separately to avoid missing a small blocker between grid samples.
-    [unroll] for (int k = 0; k < 17; ++k)
+    [loop] for (int k = 0; k < 17; ++k)
     {
         float2 offset = k == 16 ? 0 : (float2(k % 4, k / 4) + .5) / 2 - 1;
         float2 location = uv + offset * searchRadius;
-        if (any(location < 0) || any(location >= 1)) continue;
-        int2 tap = clamp(int2(location * float2(width, height)), 0, int2(width, height) - 1);
-        float depth = shadowMap.Load(int3(tap, 0)).x;
-        float receiver = projected.z + dot(depthGradient, (float2(tap) + .5) * texel - uv);
-        if (depth > receiver + depthBias)
-        {
-            blockerDistance += AreaShadowDistance(depth, lightInfo.w, lightInfo.z);
-            blockers += 1;
-        }
+        float2 sample = AreaShadowBilinearBlockers(shadowMap, location, uv, projected.z,
+                                                   depthBias, depthGradient, uint2(width, height),
+                                                   lightInfo.w, lightInfo.z);
+        blockerDistance += sample.x;
+        blockers += sample.y;
     }
     if (blockers == 0) return 1;
     blockerDistance /= blockers;
@@ -51,11 +97,8 @@ float SampleAreaShadow(float4x4 matrix, float4 parameters, float4 lightInfo,
     {
         float2 offset = (float2(x, y) + .5) / 2 - 1;
         float2 location = uv + offset * filterRadius;
-        bool outside = any(location < 0) || any(location >= 1);
-        int2 tap = clamp(int2(location * float2(width, height)), 0, int2(width, height) - 1);
-        float depth = shadowMap.Load(int3(tap, 0)).x;
-        float receiver = projected.z + dot(depthGradient, (float2(tap) + .5) * texel - uv);
-        visible += outside || receiver + depthBias >= depth ? 1 : 0;
+        visible += AreaShadowBilinearVisibility(shadowMap, location, uv, projected.z,
+                                                depthBias, depthGradient, uint2(width, height));
     }
     return visible / 16;
 }

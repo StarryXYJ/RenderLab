@@ -8,7 +8,9 @@
 #include <cstddef>
 #include <filesystem>
 #include <iostream>
+#include <set>
 #include <stdexcept>
+#include <vector>
 
 namespace
 {
@@ -93,6 +95,30 @@ void Check(rhi::Runtime& runtime, shader::Target target, const std::filesystem::
     options.pipeline = renderer::PipelineType::RayTracing;
     doc.Get(blocker.id).transform.position.x = .7f;
     const auto partial = capture();
+    options.shadowDiagnostics = true;
+    const auto diagnostics = renderer.Render(targetImage, state, nullptr, false, {}, options);
+    state = rhi::State::CopySource;
+    runtime.Wait(diagnostics.completion);
+    Require(diagnostics.shadowVisibility != nullptr, "Missing area-shadow diagnostic");
+    const auto visibility = diagnostics.shadowVisibility->Map();
+    std::set<uint8_t> levels;
+    for (uint32_t y = 0; y < 80; ++y)
+        for (uint32_t x = 0; x < 80; ++x)
+            levels.insert(
+                std::to_integer<uint8_t>(visibility[y * rhi::TextureRowPitch(80) + x * 4 + 1]));
+    std::cout << "Area-shadow visibility levels=" << levels.size() << '\n';
+    Require(levels.size() > 17, "Area-shadow visibility has conspicuous 16-sample steps");
+    std::vector<std::byte> firstVisibility(visibility.begin(), visibility.end());
+    const auto repeated = renderer.Render(targetImage, state, nullptr, false, {}, options);
+    state = rhi::State::CopySource;
+    runtime.Wait(repeated.completion);
+    const auto secondVisibility = repeated.shadowVisibility->Map();
+    for (uint32_t y = 0; y < 80; ++y)
+        Require(std::equal(firstVisibility.begin() + y * rhi::TextureRowPitch(80),
+                           firstVisibility.begin() + y * rhi::TextureRowPitch(80) + 80 * 4,
+                           secondVisibility.begin() + y * rhi::TextureRowPitch(80)),
+                "Stationary area shadows changed between frames");
+    options.shadowDiagnostics = false;
     options.pipeline = renderer::PipelineType::Deferred;
     const auto rasterPartial = capture();
     options.pipeline = renderer::PipelineType::RayTracing;

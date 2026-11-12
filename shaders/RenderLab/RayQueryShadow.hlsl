@@ -16,6 +16,19 @@ cbuffer RayQueryParameters : register(b3)
 #endif
 RWTexture2D<float4> Visibility : register(u4);
 
+uint AreaShadowHash(uint x)
+{
+    x ^= x >> 16; x *= 0x7feb352d;
+    x ^= x >> 15; x *= 0x846ca68b;
+    return x ^ (x >> 16);
+}
+float2 AreaShadowJitter(uint index)
+{
+    uint x = AreaShadowHash(index ^ 0x68bc21ebu);
+    uint y = AreaShadowHash(index ^ 0x02e5be93u);
+    return float2(x >> 8, y >> 8) * (1.0 / 16777216.0);
+}
+
 [numthreads(8, 8, 1)]
 void CSMain(uint3 id : SV_DispatchThreadID)
 {
@@ -54,10 +67,11 @@ void CSMain(uint3 id : SV_DispatchThreadID)
             float4 u = RectLightData[3 * i + 1];
             float4 v = RectLightData[3 * i + 2];
             float visible = 0;
-            [unroll] for (uint y = 0; y < 4; ++y)
-            [unroll] for (uint x = 0; x < 4; ++x)
+            [loop] for (uint y = 0; y < 4; ++y)
+            [loop] for (uint x = 0; x < 8; ++x)
             {
-                float3 samplePosition = center.xyz + ((x + .5) / 4 - .5) * u.xyz + ((y + .5) / 4 - .5) * v.xyz;
+                float2 xi = (float2(x, y) + AreaShadowJitter(x + 8 * y + 32 * i)) / float2(8, 4);
+                float3 samplePosition = center.xyz + (xi.x - .5) * u.xyz + (xi.y - .5) * v.xyz;
                 float3 origin = position + normal * ShadowOptions.x;
                 float3 delta = samplePosition - origin;
                 float distance = length(delta);
@@ -87,7 +101,7 @@ void CSMain(uint3 id : SV_DispatchThreadID)
                 }
                 visible += blocked ? 0 : 1;
             }
-            areaVisibility[i] = visible / 16;
+            areaVisibility[i] = visible / 32;
         }
     }
     Visibility[id.xy] = float4(visibility, areaVisibility, 1);

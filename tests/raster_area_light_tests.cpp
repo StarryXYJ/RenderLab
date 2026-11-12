@@ -27,6 +27,7 @@ void Check(rhi::Runtime& runtime, shader::Target target, const std::filesystem::
 {
     renderer::SceneRenderer renderer(runtime, target, project, shaders);
     auto& document = renderer.Document();
+    const auto originalDocument = document;
     auto light = std::ranges::find_if(document.objects,
                                       [](const auto& o) { return o.areaLight.has_value(); });
     Require(light != document.objects.end(), "Missing area light");
@@ -66,6 +67,33 @@ void Check(rhi::Runtime& runtime, shader::Target target, const std::filesystem::
     compare(forward, capture(P::Deferred, S::Direct));
     compare(forward, capture(P::Forward, S::IndexedDirect));
     compare(forward, capture(P::Forward, S::GpuCulled));
+    if (runtime.SupportsAccelerationStructures() && runtime.SupportsRayQuery() &&
+        runtime.SupportsRayTracingPipeline())
+    {
+        for (auto& object : document.objects)
+            if (object.name == "diffuse-sphere" || object.name == "metal-sphere" ||
+                object.name == "box")
+                object.enabled = false;
+        const auto emptyRaster = capture(P::Forward, S::Direct);
+        const auto emptyRay = capture(P::RayTracing, S::Direct);
+        double emptyError = 0;
+        size_t emptyChannels = 0;
+        // Avoid the floor/wall intersection, where a single center shadow map remains approximate.
+        for (uint32_t y = 30; y < 75; ++y)
+            for (uint32_t x = 20; x < 60; ++x)
+                if (y < 55 || y >= 70)
+                    for (size_t c = 0; c < 3; ++c)
+                    {
+                        const size_t i = (y * Width + x) * 4 + c;
+                        emptyError += std::pow(double(emptyRaster[i]) - emptyRay[i], 2);
+                        ++emptyChannels;
+                    }
+        std::cout << "Empty-room raster/Ray Query MSE=" << emptyError / emptyChannels << '\n';
+        Require(emptyError / emptyChannels < 15, "Area shadow map darkened an unobstructed room");
+        document = originalDocument;
+    }
+    else
+        std::cout << "Skipped empty-room Ray Query comparison: ray tracing unavailable\n";
     scene::Object shadowBlocker;
     shadowBlocker.id = "e4f0a5640d4d41f39dd49fa3b4e96abb";
     shadowBlocker.transform.position = {0, 2.84f, -.1f};

@@ -1097,6 +1097,8 @@ const scene::Snapshot& SceneRenderer::LastSnapshot() const
 }
 void SceneRenderer::ValidateOptions(const SceneRenderOptions& options)
 {
+    if (options.shadowDiagnostics && options.pipeline != PipelineType::RayTracing)
+        throw std::invalid_argument("Shadow diagnostics require the ray tracing pipeline");
     ValidatePipeline(options.pipeline);
     auto& self = *impl_;
     if (options.pipeline == PipelineType::PathTracing &&
@@ -1193,6 +1195,8 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
     }
     const bool pathTracing = options.pipeline == PipelineType::PathTracing;
     const bool rayTracing = options.pipeline == PipelineType::RayTracing || pathTracing;
+    if (options.shadowDiagnostics && options.pipeline != PipelineType::RayTracing)
+        throw std::invalid_argument("Shadow diagnostics require the ray tracing pipeline");
     if ((options.pathComponentDiagnostics || options.pathHdrDiagnostics) && !pathTracing)
         throw std::invalid_argument("Path diagnostics require the path tracing pipeline");
     if (options.pipeline != PipelineType::Forward && options.pipeline != PipelineType::Deferred &&
@@ -2386,6 +2390,21 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
             context.Draw(3);
         });
     SceneReadback result;
+    if (options.shadowDiagnostics)
+    {
+        const auto pitch = rhi::TextureRowPitch(target->desc.width);
+        result.shadowVisibility =
+            self.runtime.CreateBuffer({uint64_t(pitch) * target->desc.height, rhi::Memory::Readback,
+                                       "Scene.ShadowVisibility"});
+        auto buffer = graph.ImportBuffer("Scene.ShadowVisibility.Readback", result.shadowVisibility,
+                                         {rhi::State::CopyDest, false});
+        auto pass = graph.AddCopyPass("Scene.ShadowVisibility.Readback");
+        const auto source = pass.ReadTexture("RayTracing.ShadowVisibility");
+        buffer = pass.WriteBuffer(buffer);
+        pass.Execute([buffer, source, pitch](rendergraph::CopyContext& context)
+                     { context.CopyTexture(buffer, source, pitch, false); });
+        graph.Export(buffer, rhi::State::HostRead);
+    }
     if (options.sceneHdrDiagnostics)
     {
         const auto pitch = rhi::TextureRowPitch(target->desc.width, rhi::Format::Rgba32Float);
