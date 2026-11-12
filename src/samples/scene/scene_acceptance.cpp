@@ -379,6 +379,146 @@ void MeasurePathMotionSequences(rhi::Runtime& runtime, shader::Target target,
         }
     }
 }
+void MeasurePathRawConvergence(rhi::Runtime& runtime, shader::Target target,
+                               const std::filesystem::path& project,
+                               const std::filesystem::path& engine,
+                               const std::filesystem::path& output, Logger& logger)
+{
+    constexpr uint32_t width = 96, height = 54;
+#ifdef NDEBUG
+    constexpr uint32_t referenceFrames = 2048;
+    constexpr std::array<uint32_t, 4> checkpoints{8, 32, 128, 512};
+#else
+    constexpr uint32_t referenceFrames = 64;
+    constexpr std::array<uint32_t, 4> checkpoints{2, 4, 8, 16};
+#endif
+    constexpr size_t channels = width * height * 3;
+    const auto pitch = rhi::TextureRowPitch(width, rhi::Format::Rgba32Float);
+    const auto image = runtime.CreateTexture(
+        {width, height, rhi::Format::Rgba8Srgb, false, true, "PathTracing.RawConvergence"});
+    renderer::SceneRenderer scene(runtime, target, project, engine);
+    renderer::SceneRenderOptions options;
+    options.pipeline = renderer::PipelineType::PathTracing;
+    options.reflectionDenoise = false;
+    options.reflectionTemporal = false;
+    rhi::State state = rhi::State::Undefined;
+    const auto render = [&](bool inspect)
+    {
+        options.pathComponentDiagnostics = inspect;
+        auto frame = scene.Render(image, state, nullptr, false, {}, options);
+        state = rhi::State::CopySource;
+        runtime.Wait(frame.completion);
+        return frame;
+    };
+    const auto extract = [&](const std::shared_ptr<rhi::Buffer>& buffer)
+    {
+        detail::Require(buffer != nullptr, "Missing raw convergence component");
+        const auto bytes = buffer->Map();
+        std::vector<float> values(channels);
+        for (uint32_t y = 0; y < height; ++y)
+            for (uint32_t x = 0; x < width; ++x)
+            {
+                std::array<float, 4> pixel{};
+                std::memcpy(pixel.data(), bytes.data() + y * pitch + x * 16, 16);
+                for (size_t c = 0; c < 3; ++c)
+                {
+                    detail::Require(std::isfinite(pixel[c]), "Nonfinite raw convergence component");
+                    values[(y * width + x) * 3 + c] = pixel[c];
+                }
+            }
+        return values;
+    };
+    const auto base = output / "path-raw-convergence";
+    std::filesystem::create_directories(base);
+    const auto save = [&](const std::filesystem::path& path, const std::vector<float>& values)
+    {
+        std::ofstream file(path, std::ios::binary);
+        file.exceptions(std::ios::failbit | std::ios::badbit);
+        file << "PF\n" << width << ' ' << height << "\n-1.0\n";
+        for (uint32_t row = height; row-- > 0;)
+            file.write(reinterpret_cast<const char*>(values.data() + row * width * 3),
+                       width * 3 * sizeof(float));
+    };
+    std::vector<float> reference(channels);
+    for (uint16_t seed : {uint16_t{1000}, uint16_t{1001}, uint16_t{1002}})
+    {
+        options.pathSeed = seed;
+        for (uint32_t frame = 0; frame < referenceFrames; ++frame)
+        {
+            const auto result = render(frame + 1 == referenceFrames);
+            detail::Require(result.reflectionSamples == (frame + 1) * renderer::PathSamplesPerFrame,
+                            "Raw reference failed to accumulate");
+            if (frame + 1 == referenceFrames)
+            {
+                const auto values = extract(result.pathComponents[0]);
+                save(base / std::format("reference-{}.pfm", seed), values);
+                for (size_t i = 0; i < channels; ++i)
+                    reference[i] += values[i] / 3;
+            }
+        }
+    }
+    save(base / "reference-mean.pfm", reference);
+    std::ofstream report(base / "metrics.csv", std::ios::binary);
+    report.exceptions(std::ios::failbit | std::ios::badbit);
+    report << "seed,spp,mse,mean,reference_mean,outlier_channels,max_excess,x,y,channel,"
+              "raw,direct,diffuse,specular,reference\n";
+    std::ofstream outlierReport(base / "outliers.csv", std::ios::binary);
+    outlierReport.exceptions(std::ios::failbit | std::ios::badbit);
+    outlierReport << "seed,spp,x,y,channel,raw,direct,diffuse,specular,reference\n";
+    for (uint16_t seed : {uint16_t{1}, uint16_t{2}, uint16_t{3}})
+    {
+        options.pathSeed = seed;
+        for (uint32_t frame = 1; frame <= checkpoints.back(); ++frame)
+        {
+            const bool checkpoint = std::ranges::find(checkpoints, frame) != checkpoints.end();
+            const auto result = render(checkpoint);
+            detail::Require(result.reflectionSamples == frame * renderer::PathSamplesPerFrame,
+                            "Raw convergence sequence failed to accumulate");
+            if (!checkpoint)
+                continue;
+            const auto total = extract(result.pathComponents[0]);
+            const auto direct = extract(result.pathComponents[1]);
+            const auto diffuse = extract(result.pathComponents[2]);
+            save(base / std::format("seed-{}-{}spp.pfm", seed, result.reflectionSamples), total);
+            double mse = 0, mean = 0, referenceMean = 0;
+            uint32_t outliers = 0;
+            float maxExcess = 0;
+            size_t hottest = 0;
+            for (size_t i = 0; i < channels; ++i)
+            {
+                detail::Require(total[i] >= 0, "Negative raw path radiance");
+                const double delta = total[i] - reference[i];
+                mse += delta * delta / channels;
+                mean += total[i] / double(channels);
+                referenceMean += reference[i] / double(channels);
+                if (total[i] > reference[i] * 4 + .1f)
+                {
+                    ++outliers;
+                    outlierReport << std::format(
+                        "{},{},{},{},{},{:.9f},{:.9f},{:.9f},{:.9f},{:.9f}\n", seed,
+                        result.reflectionSamples, (i / 3) % width, (i / 3) / width, i % 3, total[i],
+                        direct[i], diffuse[i], total[i] - direct[i] - diffuse[i], reference[i]);
+                }
+                if (delta > maxExcess)
+                {
+                    maxExcess = static_cast<float>(delta);
+                    hottest = i;
+                }
+            }
+            report << std::format("{},{},{:.9f},{:.9f},{:.9f},{},{:.9f},{},{},{},"
+                                  "{:.9f},{:.9f},{:.9f},{:.9f},{:.9f}\n",
+                                  seed, result.reflectionSamples, mse, mean, referenceMean,
+                                  outliers, maxExcess, (hottest / 3) % width, (hottest / 3) / width,
+                                  hottest % 3, total[hottest], direct[hottest], diffuse[hottest],
+                                  total[hottest] - direct[hottest] - diffuse[hottest],
+                                  reference[hottest]);
+            logger.Write(LogLevel::Info,
+                         std::format("Raw path seed {} spp {}: MSE {:.9f}, {} high channels, "
+                                     "maximum excess {:.6f}",
+                                     seed, result.reflectionSamples, mse, outliers, maxExcess));
+        }
+    }
+}
 void VerifyPathMovingObject(rhi::Runtime& runtime, shader::Target target,
                             const std::filesystem::path& project,
                             const std::filesystem::path& engine,
@@ -1048,6 +1188,9 @@ void VerifyScene(rhi::Runtime& runtime, shader::Target target, const std::filesy
         MeasurePathMotionSequences(runtime, target,
                                    project.parent_path() / "PathTracingGallery.rlproject", engine,
                                    output, logger);
+        MeasurePathRawConvergence(runtime, target,
+                                  project.parent_path() / "PathTracingGallery.rlproject", engine,
+                                  output, logger);
         pathOptions.reflectionDenoise = true;
         const auto temporalCold = pathFrame();
         detail::Require(temporalCold.reflectionTemporalFrames == 1,
