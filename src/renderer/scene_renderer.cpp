@@ -112,7 +112,8 @@ struct SceneRenderer::Impl
     AccelerationScene accelerationScene;
     std::unique_ptr<IndexedScene> indexedScene;
     std::shared_ptr<rhi::Pipeline> rayQueryShadow;
-    std::shared_ptr<rhi::ShaderTable> reflectionTable, reflectionTableWithoutGuide, pathTable;
+    std::shared_ptr<rhi::ShaderTable> reflectionTable, reflectionTableWithoutGuide, pathTable,
+        pathTableNormalized;
     std::shared_ptr<rhi::Pipeline> pathDenoise, pathDenoiseComponents, pathHistory, pathStatistics,
         pathTemporal, pathIdentity;
     std::shared_ptr<rhi::Pipeline> pathDenoiseNormalized, pathDenoiseComponentsNormalized;
@@ -494,9 +495,9 @@ struct SceneRenderer::Impl
             runtime.CreateShader(rhi::ShaderStage::Compute, compiler.Compile(request), "CSMain");
         rayQueryShadow = runtime.CreatePipeline(std::move(description));
     }
-    void EnsurePathProgram()
+    void EnsurePathProgram(bool normalized = false)
     {
-        if (pathTable)
+        if (normalized ? pathTableNormalized != nullptr : pathTable != nullptr)
             return;
         shader::DxcCompiler compiler;
         const auto module = [&](rhi::ShaderStage stage, const char* entry)
@@ -504,6 +505,8 @@ struct SceneRenderer::Impl
             shader::ProgramRequest request;
             request.entry = {stage, project.engine / "RenderLab" / "PathTrace.hlsl", entry};
             request.target = shaderTarget;
+            if (normalized)
+                request.defines["PATH_SAMPLE_NORMALIZE"] = "1";
             if (shaderTarget == shader::Target::Spirv)
                 request.defines["SPIRV"] = "1";
             return runtime.CreateShader(stage, compiler.Compile(request), entry);
@@ -583,7 +586,10 @@ struct SceneRenderer::Impl
             runtime.CreateShader(rhi::ShaderStage::Compute, compiler.Compile(request), "Temporal");
         auto temporal = runtime.CreatePipeline(desc);
         pathTemporal = std::move(temporal);
-        pathTable = std::move(table);
+        if (normalized)
+            pathTableNormalized = std::move(table);
+        else
+            pathTable = std::move(table);
         pathDenoise = std::move(filter);
         pathHistory = std::move(history);
         pathStatistics = std::move(statistics);
@@ -1687,6 +1693,8 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
             parameters.environment[3] = float(options.pathSeed);
             if (!self.snapshot.areaLights.empty() && options.pathAreaLightSampling)
                 parameters.reserved[1] = 1;
+            parameters.reserved[2] =
+                options.pathHdrNormalize && options.reflectionDenoise ? 1.f : 0.f;
         }
         parameters.options[2] = self.snapshot.light.shadows ? 1.f : 0.f;
         parameters.options[3] = static_cast<float>(MaxReflectionSamples);
@@ -1907,7 +1915,12 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
               (options.view == SceneView::Final || options.view == SceneView::Hdr)) ||
              options.view == SceneView::ReflectionDenoised))
             frame.rayTracing.denoisePipeline = self.reflectionDenoise;
-        frame.rayTracing.reflectionTable = pathTracing ? self.pathTable
+        if (pathTracing && options.pathHdrNormalize && options.reflectionDenoise)
+            self.EnsurePathProgram(true);
+        frame.rayTracing.reflectionTable = pathTracing ? (options.pathHdrNormalize &&
+                                                                   options.reflectionDenoise
+                                                               ? self.pathTableNormalized
+                                                               : self.pathTable)
                                            : frame.rayTracing.denoisePipeline
                                                ? self.reflectionTable
                                                : self.reflectionTableWithoutGuide;

@@ -333,7 +333,7 @@ internal sealed class SmokeTest
                                 --stage;
                                 break;
                             }
-                            if (stats.ReflectionSamples <= savedReflectionSamples) { --stage; break; }
+                            if (configState.AppliedId != configurationRequest || stats.ReflectionSamples < 2) { --stage; break; }
                             if (pathHdrPhase == 1)
                             {
                                 Require((configState.Applied.Flags & 64u) != 0 && window.ViewModel.Settings.PathHdrNormalize,
@@ -347,7 +347,7 @@ internal sealed class SmokeTest
                             }
                             Require((configState.Applied.Flags & 64u) == 0 && !window.ViewModel.Settings.PathHdrNormalize,
                                 "Path HDR filter was not disabled.");
-                            checks.Add("path HDR filter enables and disables without resetting raw accumulation");
+                            checks.Add("path HDR filter enables and disables with accumulation");
                         }
                         checks.Add("supported pipeline/submission modes including path tracing, threaded/async/alias options and frame configuration identity");
                         var invalid = service.EditableConfig; invalid.ShadowResolution = 192; invalid.RequestId = configState.RequestedId + 1;

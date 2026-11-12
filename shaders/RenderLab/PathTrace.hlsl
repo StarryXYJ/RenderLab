@@ -343,6 +343,13 @@ void RayGeneration()
         uint secondarySpecular;
         float3 sample = TracePath(pixel, size, uint(Options.x) + i, sampleGuide, sampleMaterial,
                                   sampleDirect, sampleDiffuse, secondaryDistance, secondarySpecular);
+#ifdef PATH_SAMPLE_NORMALIZE
+        // Compress each complete path with one shared scale so components still sum to total.
+        float sampleScale = 1.0 / (1.0 + dot(max(sample, 0), float3(.2126, .7152, .0722)));
+        sample *= sampleScale;
+        sampleDirect *= sampleScale;
+        sampleDiffuse *= sampleScale;
+#endif
         directSum += sampleDirect;
         diffuseSum += sampleDiffuse;
         if (i == 0) { guide = sampleGuide; material = sampleMaterial; }

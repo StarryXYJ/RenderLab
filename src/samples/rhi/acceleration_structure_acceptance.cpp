@@ -347,8 +347,21 @@ void VerifyPathDirectDenoise(Runtime& runtime, shader::Target target,
         Image surface, material;
         surface.fill({0, 0, 1, 1});
         material.fill({.5f, .5f, .5f, .5f});
-        auto color = upload(radiance), directView = upload(direct), guide = upload(surface),
-             materialView = upload(material), diffuseView = upload(diffuse);
+        auto packedRadiance = radiance, packedDirect = direct, packedDiffuse = diffuse;
+        if (normalize)
+            for (size_t i = 0; i < radiance.size(); ++i)
+            {
+                const float scale = 1.f / (1.f + .2126f * radiance[i][0] +
+                                           .7152f * radiance[i][1] + .0722f * radiance[i][2]);
+                for (size_t c = 0; c < 3; ++c)
+                {
+                    packedRadiance[i][c] *= scale;
+                    packedDirect[i][c] *= scale;
+                    packedDiffuse[i][c] *= scale;
+                }
+            }
+        auto color = upload(packedRadiance), directView = upload(packedDirect), guide = upload(surface),
+             materialView = upload(material), diffuseView = upload(packedDiffuse);
         std::array<std::array<float, 2>, width * height> moments;
         moments.fill({1, 100});
         auto momentBuffer = runtime.CreateBuffer({sizeof(moments), Memory::Upload, "Path.Moments"});
@@ -402,7 +415,7 @@ void VerifyPathDirectDenoise(Runtime& runtime, shader::Target target,
     if (std::abs(directResult[4][0] - 101) > 1e-4f || std::abs(directResult[3][0] - 1) > 1e-4f)
         throw std::runtime_error("Path direct highlight was filtered or spread to neighbors");
     const auto normalizedDirect = run(radiance, direct, diffuse, true);
-    if (std::abs(normalizedDirect[4][0] - 101) > 1e-4f)
+    if (std::abs(normalizedDirect[4][0] - 101) > .01f)
         throw std::runtime_error("Path HDR normalization changed direct highlight");
     direct.fill({0, 0, 0, 0});
     const auto indirectResult = run(radiance, direct, diffuse);

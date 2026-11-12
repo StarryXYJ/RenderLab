@@ -300,7 +300,7 @@ std::string_view Usage()
            "  --quality scene|low|medium|high  Scene shadows, or 128/512/1024 resolution\n"
            "  --temporal-denoise on|off        Camera reprojection denoising (default on)\n"
            "  --denoise on|off                 Spatial ray-tracing denoising (default on)\n"
-           "  --path-hdr-normalize on|off      Experimental path HDR spatial filter (default off)\n"
+           "  --path-hdr-normalize on|off      Experimental path sample HDR compression (default off)\n"
            "  --view "
            "final|hdr|shadow|environment|brdf|reflection-raw|reflection-history|reflection-"
            "denoised  Select "

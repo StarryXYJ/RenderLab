@@ -240,8 +240,12 @@ void MeasurePathMotionSequences(rhi::Runtime& runtime, shader::Target target,
                 const auto result = render(true);
                 options.pathComponentDiagnostics = false;
                 const auto raw = captureHdrBuffer(result.pathComponents[0], true);
-                detail::Require(raw == rawSequences[seed - 1][frame],
-                                "HDR normalization changed raw path accumulation");
+                detail::Require(raw.size() == rawSequences[seed - 1][frame].size(),
+                                "Compressed path history has an unexpected size");
+                for (size_t i = 0; i < raw.size(); i += 3)
+                    detail::Require(.2126f * raw[i] + .7152f * raw[i + 1] +
+                                            .0722f * raw[i + 2] < 1.f,
+                                    "Compressed path history exceeded its luminance bound");
                 normalizedSequences[seed - 1].push_back(captureHdr(result));
                 const auto destination = base / std::format("seed-{}", seed) / "normalized";
                 capture(result, destination / std::format("{:02}.bmp", frame));
@@ -638,8 +642,15 @@ void MeasurePathRawConvergence(rhi::Runtime& runtime, shader::Target target,
                 if (mode == 0)
                     rawBaseline[seed - 1][checkpointIndex] = raw;
                 else
-                    detail::Require(raw == rawBaseline[seed - 1][checkpointIndex],
-                                    "HDR normalization changed stationary raw history");
+                {
+                    detail::Require(raw.size() == rawBaseline[seed - 1][checkpointIndex].size() &&
+                                        raw != rawBaseline[seed - 1][checkpointIndex],
+                                    "Compressed path history was not generated");
+                    for (size_t i = 0; i < raw.size(); i += 3)
+                        detail::Require(.2126f * raw[i] + .7152f * raw[i + 1] +
+                                                .0722f * raw[i + 2] < 1.f,
+                                        "Compressed path history exceeded its luminance bound");
+                }
                 const auto display = extract(result.pathHdrDisplay);
                 double mse = 0, mean = 0;
                 for (size_t i = 0; i < channels; ++i)
@@ -1352,19 +1363,16 @@ void VerifyScene(rhi::Runtime& runtime, shader::Target target, const std::filesy
                         "Path temporal re-enable did not restart display history");
         pathOptions.pathHdrNormalize = true;
         const auto normalized = pathFrame();
-        detail::Require(!normalized.reflectionHistoryReset &&
-                            normalized.reflectionSamples ==
-                                temporalRestart.reflectionSamples + renderer::PathSamplesPerFrame &&
+        detail::Require(normalized.reflectionHistoryReset &&
+                            normalized.reflectionSamples == renderer::PathSamplesPerFrame &&
                             normalized.reflectionTemporalFrames == 1,
-                        "HDR filter toggle did not preserve raw history and reset display history");
+                        "HDR sample compression did not reset incompatible histories");
         pathOptions.pathHdrNormalize = false;
         const auto unnormalized = pathFrame();
-        detail::Require(
-            !unnormalized.reflectionHistoryReset &&
-                unnormalized.reflectionSamples ==
-                    normalized.reflectionSamples + renderer::PathSamplesPerFrame &&
-                unnormalized.reflectionTemporalFrames == 1,
-            "HDR filter disable did not preserve raw history and reset display history");
+        detail::Require(unnormalized.reflectionHistoryReset &&
+                            unnormalized.reflectionSamples == renderer::PathSamplesPerFrame &&
+                            unnormalized.reflectionTemporalFrames == 1,
+                        "Disabling HDR sample compression did not reset incompatible histories");
         pathOptions.pathComponentDiagnostics = true;
         pathRenderer.Document().MoveCamera({.5f, 0, 0}, {0, 5, 0});
         const auto moved = pathFrame();

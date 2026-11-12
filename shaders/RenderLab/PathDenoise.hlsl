@@ -41,6 +41,13 @@ void Denoise(uint3 id : SV_DispatchThreadID)
     float4 combined = Radiance.Load(int3(pixel, 0));
     float3 direct = DirectRadiance.Load(int3(pixel, 0)).rgb;
     float3 centerDiffuse = max(0, DiffuseRadiance.Load(int3(pixel, 0)).rgb);
+#ifdef PATH_HDR_NORMALIZE
+    // Reconstruct the compressed path mean and all its components with the same scale.
+    float centerScale = 1.0 / max(1.0 - Luminance(combined.rgb), 1e-6);
+    combined.rgb *= centerScale;
+    direct *= centerScale;
+    centerDiffuse *= centerScale;
+#endif
     float3 centerSpecular = max(0, combined.rgb - direct - centerDiffuse);
     float4 guide = SurfaceGuide.Load(int3(pixel, 0));
     float4 material = MaterialGuide.Load(int3(pixel, 0));
@@ -73,8 +80,18 @@ void Denoise(uint3 id : SV_DispatchThreadID)
             abs(guide.w - g.w) > max(.02, guide.w * .025) ||
             length(material.rgb - m.rgb) > .12 || abs(material.a - m.a) > .1) continue;
         float3 diffuse = max(0, DiffuseRadiance.Load(int3(q, 0)).rgb);
+#ifdef PATH_HDR_NORMALIZE
+        float3 totalRadiance = Radiance.Load(int3(q, 0)).rgb;
+        float3 directRadiance = DirectRadiance.Load(int3(q, 0)).rgb;
+        float scale = 1.0 / max(1.0 - Luminance(totalRadiance), 1e-6);
+        diffuse *= scale;
+        totalRadiance *= scale;
+        directRadiance *= scale;
+        float3 specular = max(0, totalRadiance - directRadiance - diffuse);
+#else
         float3 specular = max(0, Radiance.Load(int3(q, 0)).rgb -
                                   DirectRadiance.Load(int3(q, 0)).rgb - diffuse);
+#endif
 #ifdef PATH_HDR_NORMALIZE
         diffuse = CompressHDR(diffuse);
         specular = CompressHDR(specular);
