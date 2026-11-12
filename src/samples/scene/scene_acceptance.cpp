@@ -386,11 +386,13 @@ void VerifyPathMovingObject(rhi::Runtime& runtime, shader::Target target,
                                 frame.reflectionTemporalFrames == (mode == 1 ? 1u : 0u),
                             "Moving geometry did not invalidate path histories");
             detail::Require(frame.pathHdrDisplay != nullptr, "Missing moving-object HDR readback");
-            detail::Require(frame.pathPrimaryIdentity && frame.pathPrimarySurface,
+            detail::Require(frame.pathPrimaryIdentity && frame.pathPrimarySurface &&
+                                frame.pathPreviousPosition,
                             "Missing moving-object primary identity diagnostics");
             const auto bytes = frame.pathHdrDisplay->Map();
             const auto identityBytes = frame.pathPrimaryIdentity->Map();
             const auto surfaceBytes = frame.pathPrimarySurface->Map();
+            const auto positionBytes = frame.pathPreviousPosition->Map();
             const auto& instances = scene.LastSnapshot().allInstances;
             std::vector<float> pixels(width * height * 3);
             std::vector<uint32_t> hitIdentities(width * height);
@@ -399,10 +401,12 @@ void VerifyPathMovingObject(rhi::Runtime& runtime, shader::Target target,
                 for (uint32_t x = 0; x < width; ++x)
                 {
                     std::array<float, 4> pixel{};
-                    std::array<float, 4> identity{}, surface{};
+                    std::array<float, 4> identity{}, surface{}, previousPosition{};
                     std::memcpy(pixel.data(), bytes.data() + y * hdrPitch + x * 16, 16);
                     std::memcpy(identity.data(), identityBytes.data() + y * hdrPitch + x * 16, 16);
                     std::memcpy(surface.data(), surfaceBytes.data() + y * hdrPitch + x * 16, 16);
+                    std::memcpy(previousPosition.data(),
+                                positionBytes.data() + y * hdrPitch + x * 16, 16);
                     detail::Require(
                         std::isfinite(identity[0]) && std::isfinite(identity[1]) &&
                             std::isfinite(identity[3]) && identity[0] >= 0 && identity[0] <= 2 &&
@@ -420,11 +424,46 @@ void VerifyPathMovingObject(rhi::Runtime& runtime, shader::Target target,
                                             2e-4f * std::max(1.f, identity[3]),
                                         "Ray query does not match path primary hit distance");
                         hitActor[y * width + x] = instances[index].id.starts_with(actorId + "/");
+                        if (mode == 1)
+                        {
+                            detail::Require(previousPosition[3] == 1 &&
+                                                std::isfinite(previousPosition[0]) &&
+                                                std::isfinite(previousPosition[1]) &&
+                                                std::isfinite(previousPosition[2]),
+                                            "Missing previous world position for mesh hit");
+                            const math::Vec3 current{previousPosition[0] +
+                                                         (hitActor[y * width + x] ? .45f : 0),
+                                                     previousPosition[1], previousPosition[2]};
+                            const auto& m = scene.LastSnapshot().viewProjection;
+                            const auto clip = [&](size_t row)
+                            {
+                                return m.At(row, 0) * current.x + m.At(row, 1) * current.y +
+                                       m.At(row, 2) * current.z + m.At(row, 3);
+                            };
+                            const float w = clip(3);
+                            const float projectedX = (clip(0) / w * .5f + .5f) * width;
+                            const float projectedY = (.5f - clip(1) / w * .5f) * height;
+                            detail::Require(
+                                std::abs(
+                                    math::Length(current - scene.LastSnapshot().cameraPosition) -
+                                    identity[3]) <= 2e-4f * std::max(1.f, identity[3]),
+                                "Previous world position has inconsistent ray distance");
+                            detail::Require(
+                                w > 0 && projectedX >= x - .01f && projectedX <= x + 1.01f &&
+                                    projectedY >= y - .01f && projectedY <= y + 1.01f,
+                                "Previous world position does not map to the primary ray");
+                        }
+                        else
+                            detail::Require(
+                                previousPosition[3] == 0,
+                                "Inactive temporal preview produced previous positions");
                     }
                     else
                     {
                         detail::Require(surface[3] == 0,
                                         "Non-mesh hit unexpectedly has a surface guide");
+                        detail::Require(previousPosition[3] == 0,
+                                        "Non-mesh hit unexpectedly has a previous position");
                         if (kind == 2)
                             detail::Require(index < scene.LastSnapshot().areaLights.size(),
                                             "Primary light index is outside snapshot");
@@ -689,7 +728,8 @@ void VerifyScene(rhi::Runtime& runtime, shader::Target target, const std::filesy
         const auto standardBytes = standard.pixels->Map();
         detail::Require(!standard.pathHdrDisplay, "Disabled HDR readback returned a buffer");
         detail::Require(first.pathPrimaryIdentity && first.pathPrimarySurface &&
-                            !standard.pathPrimaryIdentity && !standard.pathPrimarySurface,
+                            !standard.pathPrimaryIdentity && !standard.pathPrimarySurface &&
+                            !standard.pathPreviousPosition,
                         "Primary identity diagnostics did not honor its enable flag");
         const auto diagnosticBytes = first.pixels->Map();
         detail::Require(

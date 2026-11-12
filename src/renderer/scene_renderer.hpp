@@ -120,6 +120,8 @@ struct SceneReadback
     std::shared_ptr<rhi::Buffer> pathPrimaryIdentity;
     /// Matching first-sample normal and signed ray distance for identity validation.
     std::shared_ptr<rhi::Buffer> pathPrimarySurface;
+    /// Previous committed world position for the first primary mesh hit (RGBA32F; W=valid).
+    std::shared_ptr<rhi::Buffer> pathPreviousPosition;
     /// Previous committed temporal-slot transforms aligned with LastSnapshot().allInstances.
     /// Present only for identity diagnostics with path temporal enabled; empty entries have no
     /// match.

@@ -75,6 +75,7 @@ struct RenderFrame
         std::shared_ptr<rhi::Pipeline> temporalPipeline;
         std::shared_ptr<rhi::Pipeline> pathDenoisePipeline, pathStatisticsPipeline;
         std::shared_ptr<rhi::Pipeline> pathIdentityPipeline;
+        BufferBinding pathIdentityTransforms;
         bool pathFilteredComponents = false;
         // Prepare, three variance-guided scales and material/display resolve.
         std::array<std::shared_ptr<rhi::Pipeline>, 5> reconstructionPipelines;
