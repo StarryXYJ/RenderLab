@@ -4,4 +4,21 @@
     [id("MainLightColor")] float4 MainLightColor = (0, 0, 0, 0);
     [id("AmbientColor")] float4 AmbientColor = (0.035, 0.035, 0.035, 0);
     [id("EnvironmentParameters")] float4 EnvironmentParameters = (1, 0, 0, 0);
+    [id("PointLightCount")] float4 PointLightCount = (0, 0, 0, 0);
+    [id("PointPositionRange0")] float4 PointPositionRange0 = (0, 0, 0, 0);
+    [id("PointColorIntensity0")] float4 PointColorIntensity0 = (0, 0, 0, 0);
+    [id("PointPositionRange1")] float4 PointPositionRange1 = (0, 0, 0, 0);
+    [id("PointColorIntensity1")] float4 PointColorIntensity1 = (0, 0, 0, 0);
+    [id("PointPositionRange2")] float4 PointPositionRange2 = (0, 0, 0, 0);
+    [id("PointColorIntensity2")] float4 PointColorIntensity2 = (0, 0, 0, 0);
+    [id("PointPositionRange3")] float4 PointPositionRange3 = (0, 0, 0, 0);
+    [id("PointColorIntensity3")] float4 PointColorIntensity3 = (0, 0, 0, 0);
+    [id("PointPositionRange4")] float4 PointPositionRange4 = (0, 0, 0, 0);
+    [id("PointColorIntensity4")] float4 PointColorIntensity4 = (0, 0, 0, 0);
+    [id("PointPositionRange5")] float4 PointPositionRange5 = (0, 0, 0, 0);
+    [id("PointColorIntensity5")] float4 PointColorIntensity5 = (0, 0, 0, 0);
+    [id("PointPositionRange6")] float4 PointPositionRange6 = (0, 0, 0, 0);
+    [id("PointColorIntensity6")] float4 PointColorIntensity6 = (0, 0, 0, 0);
+    [id("PointPositionRange7")] float4 PointPositionRange7 = (0, 0, 0, 0);
+    [id("PointColorIntensity7")] float4 PointColorIntensity7 = (0, 0, 0, 0);
 }

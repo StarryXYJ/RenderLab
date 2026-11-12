@@ -4,9 +4,9 @@
 
 ## 当前状态
 
-- 点光源 IN_PROGRESS（2026 年 11 月 12 日）：场景组件、序列化、层级提取及 Release CPU 契约测试已完成；线性色彩、坎德拉强度、世界空间范围，缩放不改变范围。渲染尚未接入；后续实现直接照明及遮挡、路径追踪和多灯场景并逐管线验证。
+- 点光源 IN_PROGRESS（2026 年 11 月 12 日）：场景组件、序列化、层级提取及 Release CPU 契约测试已完成；线性色彩、坎德拉强度、世界空间范围，缩放不改变范围。Forward、Deferred 和混合主表面支持最多八盏无阴影点光源；双后端小场景开关对照和 DX12 八灯场景短测完成，DX12 Indexed Direct、CPU Indirect 与 GPU Culled 的八灯画面和 Direct 哈希一致；Vulkan Indexed 未验证。光栅及混合点光源遮挡、反射命中照明与 Path Tracing 尚未实现，路径追踪遇到启用点灯明确报错；接口见 [点光源](../docs/point-lights.md)，继续实现并验收。
 
-- 多物体光照压测场景 DONE（2026 年 11 月 12 日）：145 个可见网格、两盏矩形面灯和一盏主方向光，RTX 5060 Release 短测 DX12 四管线及 Vulkan Path Tracing 完成且 validation errors 为零；Vulkan Forward、Deferred、混合光追因描述符块预算耗尽不能加载，DX12 有 clear value 警告。验证入口和限制见 [手册](../manual/build.md#多物体光照压测)。当前无点光源，不能作为多点光源压测；更多光源及 Vulkan 资源预算仍待处理。
+- 多物体光照压测场景 DONE（2026 年 11 月 12 日）：145 个可见网格、两盏矩形面灯和一盏主方向光，RTX 5060 Release 短测 DX12 四管线及 Vulkan Path Tracing 完成且 validation errors 为零；Vulkan Forward、Deferred、混合光追因描述符块预算耗尽不能加载，DX12 有 clear value 警告。验证入口和限制见 [手册](../manual/build.md#多物体光照压测)。后续已加入八盏无阴影点光源，见上述工作项；Vulkan 资源预算仍待处理。
 
 - 面光源非路径追踪阴影平滑修复 DONE（2026 年 11 月 12 日）：光栅阴影的深度比较及遮挡物搜索改为双线性加权，并按接收点灯面投影限制搜索，减少阶梯与空房间错误暗斑；混合管线改为固定 32 点抖动分层采样和深度/法线引导的 3×3 空间滤波。隔离 Debug/Release 的 DX12/Vulkan 光栅、HDR、反射、滤波与材质测试各 10/10；空房间内部显示值对 Ray Query MSE 为 0、旧搜索负对照为 24.92，遮挡边界子纹素最大跳变由 0.25 降至 0.0254；静止帧原始可见性一致。RTX 5060、512²、单灯短测与性能代价见 [面光源](../docs/area-lights.md#有限性能测量)；Windows Release Editor bridge 和托管构建通过。有限范围的单张中心阴影图仍可能漏掉近灯小遮挡物，表面边界仍是近似；混合阴影至多两灯共 64 射线且未做时域滤波，长时运动、复杂场景及更多 GPU 未验收。
 

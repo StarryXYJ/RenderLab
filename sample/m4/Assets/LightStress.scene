@@ -4341,6 +4341,270 @@
           "18609d7bc4b25b3094ca40a95c490f5a": "984be79c5226529a90078b6f1d97cdfe"
         }
       }
+    },
+    {
+      "id": "f3f2779806dd5dd1a2f67dfe8d2caa98",
+      "name": "point-light-1",
+      "enabled": true,
+      "transform": {
+        "position": [
+          -6,
+          2.8,
+          -4
+        ],
+        "rotation": [
+          0,
+          0,
+          0,
+          1
+        ],
+        "scale": [
+          1,
+          1,
+          1
+        ]
+      },
+      "pointLight": {
+        "color": [
+          1,
+          0.24,
+          0.12
+        ],
+        "intensity": 25,
+        "range": 7,
+        "enabled": true
+      }
+    },
+    {
+      "id": "9e319894a3e254b8805a3191f8e121e4",
+      "name": "point-light-2",
+      "enabled": true,
+      "transform": {
+        "position": [
+          -2,
+          2.8,
+          -4
+        ],
+        "rotation": [
+          0,
+          0,
+          0,
+          1
+        ],
+        "scale": [
+          1,
+          1,
+          1
+        ]
+      },
+      "pointLight": {
+        "color": [
+          0.2,
+          0.5,
+          1
+        ],
+        "intensity": 25,
+        "range": 7,
+        "enabled": true
+      }
+    },
+    {
+      "id": "e97c714fd2cf5c7d97504c9e58a737d0",
+      "name": "point-light-3",
+      "enabled": true,
+      "transform": {
+        "position": [
+          2,
+          2.8,
+          -4
+        ],
+        "rotation": [
+          0,
+          0,
+          0,
+          1
+        ],
+        "scale": [
+          1,
+          1,
+          1
+        ]
+      },
+      "pointLight": {
+        "color": [
+          0.3,
+          1,
+          0.35
+        ],
+        "intensity": 25,
+        "range": 7,
+        "enabled": true
+      }
+    },
+    {
+      "id": "a31cb21543715160b8c00f02cbf20c74",
+      "name": "point-light-4",
+      "enabled": true,
+      "transform": {
+        "position": [
+          6,
+          2.8,
+          -4
+        ],
+        "rotation": [
+          0,
+          0,
+          0,
+          1
+        ],
+        "scale": [
+          1,
+          1,
+          1
+        ]
+      },
+      "pointLight": {
+        "color": [
+          1,
+          0.7,
+          0.2
+        ],
+        "intensity": 25,
+        "range": 7,
+        "enabled": true
+      }
+    },
+    {
+      "id": "37034bf138e1583a9d7f2cd081560f4c",
+      "name": "point-light-5",
+      "enabled": true,
+      "transform": {
+        "position": [
+          -6,
+          2.8,
+          4
+        ],
+        "rotation": [
+          0,
+          0,
+          0,
+          1
+        ],
+        "scale": [
+          1,
+          1,
+          1
+        ]
+      },
+      "pointLight": {
+        "color": [
+          0.7,
+          0.25,
+          1
+        ],
+        "intensity": 25,
+        "range": 7,
+        "enabled": true
+      }
+    },
+    {
+      "id": "1ca626eba54251119ed2868c07393171",
+      "name": "point-light-6",
+      "enabled": true,
+      "transform": {
+        "position": [
+          -2,
+          2.8,
+          4
+        ],
+        "rotation": [
+          0,
+          0,
+          0,
+          1
+        ],
+        "scale": [
+          1,
+          1,
+          1
+        ]
+      },
+      "pointLight": {
+        "color": [
+          0.2,
+          1,
+          1
+        ],
+        "intensity": 25,
+        "range": 7,
+        "enabled": true
+      }
+    },
+    {
+      "id": "e2b30e8df9de522997785719812a77f0",
+      "name": "point-light-7",
+      "enabled": true,
+      "transform": {
+        "position": [
+          2,
+          2.8,
+          4
+        ],
+        "rotation": [
+          0,
+          0,
+          0,
+          1
+        ],
+        "scale": [
+          1,
+          1,
+          1
+        ]
+      },
+      "pointLight": {
+        "color": [
+          1,
+          0.3,
+          0.6
+        ],
+        "intensity": 25,
+        "range": 7,
+        "enabled": true
+      }
+    },
+    {
+      "id": "1b0ccf8fbf0c506b9b0c7765139ec054",
+      "name": "point-light-8",
+      "enabled": true,
+      "transform": {
+        "position": [
+          6,
+          2.8,
+          4
+        ],
+        "rotation": [
+          0,
+          0,
+          0,
+          1
+        ],
+        "scale": [
+          1,
+          1,
+          1
+        ]
+      },
+      "pointLight": {
+        "color": [
+          0.7,
+          1,
+          0.3
+        ],
+        "intensity": 25,
+        "range": 7,
+        "enabled": true
+      }
     }
   ]
 }

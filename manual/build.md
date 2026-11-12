@@ -573,4 +573,4 @@ M1 首期资源为单 mip/layer 的 2D 纹理、显式单流顶点布局和单 G
 ./out/build/area-light-release/renderlab_sandbox.exe --backend dx12 --headless --validation on --benchmark 8 --warmup-frames 2 --width 960 --height 540 --pipeline forward --project sample/m4/LightStress.rlproject --output out/light-stress/forward --profile out/light-stress/forward.json --log out/light-stress/forward.log
 ```
 
-可将 `--pipeline` 改为 `deferred`、`raytracing` 或 `pathtracing`。RTX 5060 的 Release 短测中 DX12 四种管线与 Vulkan Path Tracing 运行完毕，validation errors 为零；DX12 有 ClearRenderTargetView clear value 警告。Vulkan Forward、Deferred、Ray Tracing 在加载阶段报 `Vulkan descriptor block budget exhausted`，尚不能运行此规模场景；见 `out/light-stress/` 日志。窗口模式、其他设备与长期性能未验证。更多场景细节见 [示例说明](../sample/m4/README.md#多物体光照压测)。
+可将 `--pipeline` 改为 `deferred` 或 `raytracing`。点光源尚不支持 Path Tracing；在场景文件中禁用全部点光源后才能运行该管线。加入点光源以前，RTX 5060 的 Release 短测中 DX12 四种管线与 Vulkan Path Tracing 运行完毕，validation errors 为零；DX12 有 ClearRenderTargetView clear value 警告。Vulkan Forward、Deferred、Ray Tracing 在加载阶段报 `Vulkan descriptor block budget exhausted`，尚不能运行此规模场景；见 `out/light-stress/` 日志。窗口模式、其他设备与长期性能未验证。更多场景细节见 [示例说明](../sample/m4/README.md#多物体光照压测)。

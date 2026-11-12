@@ -1,6 +1,7 @@
 #include <renderlab/generated/parameters.hlsli>
 #include "Core.hlsli"
 #include "Lighting.hlsli"
+#include "PointLighting.hlsli"
 #include "AreaLighting.hlsli"
 #include "AreaShadow.hlsli"
 #include "AreaVisibilityFilter.hlsli"
@@ -72,6 +73,9 @@ float4 PSMain(Varyings input) : SV_Target
                                    max(.00005, min(depth * .04,
                                        2 * max(abs(ddx(depth)), abs(ddy(depth))))))
             : AreaShadowVisibility(SceneAreaShadow, AreaShadow0, AreaShadow1, positionWS, surface.normalWS);
+    direct += EvaluatePointLights(SceneLighting, positionWS, surface.normalWS,
+                                  SafeNormalize(viewDirWS), surface.baseColor, surface.metallic,
+                                  surface.perceptualRoughness);
     direct += EvaluateAreaLights(SceneAreaLighting, positionWS, surface.normalWS,
                                  SafeNormalize(viewDirWS), surface.baseColor, surface.metallic,
                                  surface.perceptualRoughness, LtcMatrix, LtcAmplitude, areaVisibility);

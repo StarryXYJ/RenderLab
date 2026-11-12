@@ -1035,6 +1035,57 @@ struct SceneRenderer::Impl
         lighting.EnvironmentParameters = {
             snapshot.environmentIntensity,
             static_cast<float>(snapshot.environmentRotation * 3.141592653589793 / 180), 0, 0};
+        if (snapshot.pointLights.size() > 8)
+            throw std::invalid_argument("Rendering supports at most eight point lights");
+        lighting.PointLightCount[0] = static_cast<float>(snapshot.pointLights.size());
+        if (snapshot.pointLights.size() > 0)
+        {
+            const auto& point = snapshot.pointLights[0];
+            lighting.PointPositionRange0 = Vector(point.position, point.range);
+            lighting.PointColorIntensity0 = Vector(point.color, point.intensity);
+        }
+        if (snapshot.pointLights.size() > 1)
+        {
+            const auto& point = snapshot.pointLights[1];
+            lighting.PointPositionRange1 = Vector(point.position, point.range);
+            lighting.PointColorIntensity1 = Vector(point.color, point.intensity);
+        }
+        if (snapshot.pointLights.size() > 2)
+        {
+            const auto& point = snapshot.pointLights[2];
+            lighting.PointPositionRange2 = Vector(point.position, point.range);
+            lighting.PointColorIntensity2 = Vector(point.color, point.intensity);
+        }
+        if (snapshot.pointLights.size() > 3)
+        {
+            const auto& point = snapshot.pointLights[3];
+            lighting.PointPositionRange3 = Vector(point.position, point.range);
+            lighting.PointColorIntensity3 = Vector(point.color, point.intensity);
+        }
+        if (snapshot.pointLights.size() > 4)
+        {
+            const auto& point = snapshot.pointLights[4];
+            lighting.PointPositionRange4 = Vector(point.position, point.range);
+            lighting.PointColorIntensity4 = Vector(point.color, point.intensity);
+        }
+        if (snapshot.pointLights.size() > 5)
+        {
+            const auto& point = snapshot.pointLights[5];
+            lighting.PointPositionRange5 = Vector(point.position, point.range);
+            lighting.PointColorIntensity5 = Vector(point.color, point.intensity);
+        }
+        if (snapshot.pointLights.size() > 6)
+        {
+            const auto& point = snapshot.pointLights[6];
+            lighting.PointPositionRange6 = Vector(point.position, point.range);
+            lighting.PointColorIntensity6 = Vector(point.color, point.intensity);
+        }
+        if (snapshot.pointLights.size() > 7)
+        {
+            const auto& point = snapshot.pointLights[7];
+            lighting.PointPositionRange7 = Vector(point.position, point.range);
+            lighting.PointColorIntensity7 = Vector(point.color, point.intensity);
+        }
         const auto packed = PackRectLights(snapshot.areaLights);
         SceneAreaLightingData area;
         std::copy_n(packed.begin(), 4, area.Header.begin());
@@ -1083,6 +1134,10 @@ void SceneRenderer::ValidatePipeline(PipelineType pipeline)
     scene::Extractor extractor;
     const auto snapshot = extractor.Extract(self.document, 1, self.models);
     (void)PackRectLights(snapshot.areaLights);
+    if (snapshot.pointLights.size() > 8)
+        throw std::invalid_argument("Rendering supports at most eight point lights");
+    if (pipeline == PipelineType::PathTracing && !snapshot.pointLights.empty())
+        throw std::invalid_argument("Point lights are not yet supported by Path Tracing");
     if (pipeline == PipelineType::Forward)
         return;
     for (const auto& instance : snapshot.allInstances)
@@ -1250,6 +1305,8 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
     self.snapshot = self.extractor.Extract(
         self.document, float(target->desc.width) / float(target->desc.height), self.models,
         options.submission != GeometrySubmission::GpuCulled);
+    if (pathTracing && !self.snapshot.pointLights.empty())
+        throw std::invalid_argument("Point lights are not yet supported by Path Tracing");
     const auto extractEnd = options.cpuDiagnostics ? std::chrono::steady_clock::now()
                                                    : std::chrono::steady_clock::time_point{};
     if (options.lightOverride)
