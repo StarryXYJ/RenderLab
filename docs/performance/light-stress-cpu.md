@@ -35,3 +35,9 @@ Forward 的 Graph 构建按 Feature 分解，面光源阴影约 4.33 ms、方向
 在前两轮基础上为 Graph 字面量诊断增加无分配成功路径，绑定/缓冲范围检查仅在失败时拼接动态消息，保留检查与错误内容。Release Graph 契约及重链接后的 DX12/Vulkan 面灯光栅和反射 5/5。RTX 5060 DX12 Release、960×540、validation 和 CPU profiling 关闭，两次 30 帧预热/120 帧测量并反向执行顺序：Forward 帧均值 14.68/14.77 → 9.55/9.78 ms，Deferred 14.36/14.43 → 9.47/8.98 ms，混合光追 15.57/15.14 → 10.73/10.93 ms。各管线第一组前后截图哈希一致；Graph 录制 Forward 约 5.7 → 2.7 ms。日志 `out/cpu-opt/graph2-*`。这是短时 headless 串行对照；窗口、其他设备和并行点灯组合未验证。
 
 后续试验：`BindBuffer` 已解析句柄后跳过范围检查内部的第二次解析，Release Graph 契约和双后端面灯回归通过。RTX 5060 DX12 Forward 两次交替短测，原版串行帧 9.015/9.078 ms，候选 9.019/9.080 ms，Graph 录制 2.645/2.659 → 2.632/2.624 ms；差异很小且不能证明整体收益，因此撤回候选，保留原有统一校验接口。
+
+## 点光源整合与 Editor 验证（2026 年 11 月 12 日）
+
+将 CPU 优化与 `172b1d0` 的点光源及路径诊断合并后，Release 原生目标及 Editor 构建通过；Graph 契约、DX12/Vulkan 材质与面光源 GPU 回归共 9/9。RTX 5060 DX12、validation on、960×540、10 帧预热/30 帧测量，八点灯场景 Forward、Deferred、混合和 Path Tracing 均运行完成，validation errors 为零；串行帧均值分别为 19.20、15.15、15.94、4.73 ms。验证开销、点灯和以前的测量条件不同，不能将数字直接比较。
+
+实际 Release Editor DX12 Forward 打开八点灯场景，1017×464，validation off、profiling on、target-fps 0，预热 2 秒、测量 5 秒；555 个样本、无丢样，Native P95 10.55 ms、Render P95 10.03 ms、Scene Prepare P95 6.12 ms，报告的完成帧吞吐约 110.9 FPS，关闭报告的资源残留及 worker_failed 均为零。日志位于隔离工作区 `out/merge-validation/` 与 `out/merge-editor-forward/`。这不是用户现有 Debug Editor 的数据；动态交互、其他管线的 Editor 窗口、其他 GPU 与 Vulkan 大场景仍未验证。
