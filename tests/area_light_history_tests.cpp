@@ -67,6 +67,29 @@ void Check(rhi::Runtime& runtime, shader::Target target, const std::filesystem::
     Require(result.reflectionHistoryReset && result.reflectionTemporalFrames == 1,
             "Disabling light did not invalidate histories");
     renderer.Document().Get(light.id).areaLight->enabled = true;
+    scene::Object point;
+    point.id = "6e6f5f4af2cf4c7fa81ea84cd230b6fa";
+    point.pointLight = scene::PointLight{};
+    point.transform.position = {0, 2, 0};
+    renderer.Document().objects.push_back(point);
+    result = frame();
+    Require(result.reflectionHistoryReset && result.reflectionTemporalFrames == 1,
+            "Adding point light did not invalidate histories");
+    result = frame();
+    Require(!result.reflectionHistoryReset && result.reflectionTemporalFrames > 1,
+            "Stable point light did not reuse history");
+    renderer.Document().Get(point.id).pointLight->intensity = 2;
+    result = frame();
+    Require(result.reflectionHistoryReset && result.reflectionTemporalFrames == 1,
+            "Changing point light did not invalidate histories");
+    renderer.Document().Get(point.id).transform.position.x = 1;
+    result = frame();
+    Require(result.reflectionHistoryReset && result.reflectionTemporalFrames == 1,
+            "Moving point light did not invalidate histories");
+    renderer.Document().Get(point.id).pointLight->enabled = false;
+    result = frame();
+    Require(result.reflectionHistoryReset && result.reflectionTemporalFrames == 1,
+            "Disabling point light did not invalidate histories");
     for (int i = 0; i < 2; ++i)
     {
         auto extra = light;

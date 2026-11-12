@@ -10,6 +10,9 @@ cbuffer RayQueryParameters : register(b3)
     float4 ShadowOptions;
     float4 RectLightHeader;
     float4 RectLightData[6];
+    float4 ReservedRayParameters[3];
+    float4 PointLightHeader;
+    float4 PointLightData[16];
 };
 #ifdef SPIRV
 [[vk::image_format("rgba8")]]
@@ -104,5 +107,46 @@ void CSMain(uint3 id : SV_DispatchThreadID)
             areaVisibility[i] = visible / 32;
         }
     }
-    Visibility[id.xy] = float4(visibility, areaVisibility, 1);
+    uint pointVisibility = 255u;
+    if (depth > 1e-7 && NormalRoughness.Load(int3(id.xy, 0)).w >= 0)
+    {
+        float2 ndc = float2((id.x + .5) * 2 / width - 1, 1 - (id.y + .5) * 2 / height);
+        float4 world = mul(InverseViewProjection, float4(ndc, depth, 1));
+        float3 position = world.xyz / world.w;
+        float3 normal = normalize(NormalRoughness.Load(int3(id.xy, 0)).xyz);
+        [loop] for (uint i = 0; i < min((uint)PointLightHeader.x, 8u); ++i)
+        {
+            float4 pr = PointLightData[2 * i];
+            float3 delta = pr.xyz - position;
+            if (dot(delta, delta) >= pr.w * pr.w || dot(normal, delta) <= 0) continue;
+            float3 origin = position + normal * ShadowOptions.x;
+            float3 shadowDelta = pr.xyz - origin;
+            float distance = length(shadowDelta);
+            if (distance <= ShadowOptions.y * 2) continue;
+            RayDesc ray;
+            ray.Origin = origin;
+            ray.Direction = shadowDelta / distance;
+            ray.TMin = ShadowOptions.y;
+            ray.TMax = distance - ShadowOptions.y;
+            RayQuery<RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH> query;
+            query.TraceRayInline(Scene, RAY_FLAG_NONE, 0x01, ray);
+            while (query.Proceed()) {}
+            bool blocked = query.CommittedStatus() == COMMITTED_TRIANGLE_HIT;
+            [loop] for (uint j = 0; j < min((uint)RectLightHeader.x, 2u) && !blocked; ++j)
+            {
+                RectEmitter other;
+                other.center = RectLightData[3 * j].xyz;
+                other.edgeU = RectLightData[3 * j + 1].xyz;
+                other.edgeV = RectLightData[3 * j + 2].xyz;
+                float3 crossUV = cross(other.edgeU, other.edgeV);
+                other.area = length(crossUV);
+                other.normal = other.area > 0 ? -crossUV / other.area : 0;
+                float hitDistance;
+                blocked = IntersectRectEmitter(other, ray.Origin, ray.Direction,
+                                                ray.TMin, ray.TMax, hitDistance);
+            }
+            if (blocked) pointVisibility &= ~(1u << i);
+        }
+    }
+    Visibility[id.xy] = float4(visibility, areaVisibility, pointVisibility / 255.0);
 }

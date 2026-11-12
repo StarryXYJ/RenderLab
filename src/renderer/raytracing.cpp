@@ -78,18 +78,27 @@ void PathTracingFeature::Build(rendergraph::Graph& graph, const RenderFrame& fra
     {
         graph.CreateTexture("PathTracing.PrimaryIdentity",
                             {camera.width, camera.height, rhi::Format::Rgba32Float, true, false});
+        graph.CreateTexture("PathTracing.PreviousPosition",
+                            {camera.width, camera.height, rhi::Format::Rgba32Float, true, false});
         auto identity = graph.AddComputePass("PathTracing.PrimaryIdentity");
         const auto identityScene =
             identity.ReadBuffer(input.storage, Use::AccelerationStructureRead);
         const auto identityConstants =
             identity.ReadBuffer(parameters.buffer, Use::Uniform, parameters.range);
         const auto identityOutput = identity.WriteTexture("PathTracing.PrimaryIdentity");
+        const auto previousPosition = identity.WriteTexture("PathTracing.PreviousPosition");
+        const auto transformBinding = input.pathIdentityTransforms;
+        const auto transforms =
+            identity.ReadBuffer(transformBinding.buffer, Use::ShaderRead, transformBinding.range);
         identity.Execute(
             [=](ComputeContext& context)
             {
                 context.Bind(input.pathIdentityPipeline);
                 context.BindAccelerationStructure(0, input.scene, identityScene);
                 context.BindTexture(1, identityOutput);
+                context.BindTexture(2, previousPosition);
+                context.BindBuffer(3, transforms, transformBinding.range.offset,
+                                   transformBinding.range.size, transformBinding.stride);
                 context.BindBuffer(4, identityConstants, parameters.range.offset,
                                    parameters.range.size);
                 context.Dispatch((camera.width + 7) / 8, (camera.height + 7) / 8);

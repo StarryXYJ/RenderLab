@@ -37,6 +37,8 @@ cbuffer PathParameters : register(b4)
     float4 Options;
     float4 RectLightHeader;
     float4 RectLightData[6];
+    float4 PointLightHeader;
+    float4 PointLightData[16];
 };
 Texture2D<float4> EnvironmentAtlas : register(t13);
 
@@ -196,6 +198,55 @@ float3 TracePath(uint2 pixel, uint2 size, uint sampleIndex, out float4 surfaceGu
                 result += direct;
                 if (bounce == 0) primary += direct;
                 else indirectDiffuse += direct * diffuseFraction;
+            }
+        }
+        // Delta point emitters are connected explicitly; a BSDF sample cannot hit a point.
+        if (bounce < 3)
+        {
+            [loop] for (uint pointIndex = 0; pointIndex < min((uint)PointLightHeader.x, 8u); ++pointIndex)
+            {
+                float4 pr = PointLightData[2 * pointIndex];
+                float4 ci = PointLightData[2 * pointIndex + 1];
+                float3 delta = pr.xyz - payload.position;
+                float distance2 = dot(delta, delta);
+                float q = distance2 / (pr.w * pr.w);
+                float falloff = saturate(1 - q * q);
+                float3 direction = delta * rsqrt(max(distance2, 1e-8));
+                if (falloff <= 0 || dot(payload.normal, direction) <= 0) continue;
+                float3 origin = payload.position + payload.normal * .002;
+                float3 shadowDelta = pr.xyz - origin;
+                float shadowDistance = length(shadowDelta);
+                bool visible = shadowDistance > .002;
+                if (visible)
+                {
+                    RayDesc shadow;
+                    shadow.Origin = origin;
+                    shadow.Direction = shadowDelta / shadowDistance;
+                    shadow.TMin = .001;
+                    shadow.TMax = shadowDistance - .001;
+                    RayQuery<RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH> query;
+                    query.TraceRayInline(Scene, RAY_FLAG_NONE, 0x01, shadow);
+                    while (query.Proceed()) {}
+                    visible = query.CommittedStatus() != COMMITTED_TRIANGLE_HIT;
+                    [loop] for (uint emitter = 0; emitter < rectLightCount && visible; ++emitter)
+                    {
+                        float3 ignored;
+                        RectEmitter blocker = PathRectLight(emitter, ignored);
+                        float blockerDistance;
+                        if (IntersectRectEmitter(blocker, shadow.Origin, shadow.Direction,
+                                                 shadow.TMin, shadow.TMax, blockerDistance))
+                            visible = false;
+                    }
+                }
+                if (visible)
+                {
+                    float3 direct = throughput * EvaluateBRDF(payload.albedo, payload.metallic,
+                        payload.roughness, payload.normal, -ray.Direction, direction) * ci.rgb * ci.a *
+                        (falloff * falloff / max(distance2, 1e-4));
+                    result += direct;
+                    if (bounce == 0) primary += direct;
+                    else indirectDiffuse += direct * diffuseFraction;
+                }
             }
         }
         // A light connection consumes the next path segment, matching the four-segment limit.

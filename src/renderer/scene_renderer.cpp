@@ -192,6 +192,12 @@ struct SceneRenderer::Impl
     }
     struct TemporalHistory
     {
+        struct InstanceTransform
+        {
+            std::string model, mesh;
+            math::Mat4 world;
+        };
+        std::map<std::string, InstanceTransform> pathInstances;
         std::string signature, viewId;
         std::array<std::array<std::shared_ptr<rhi::Texture>, 4>, 2> textures;
         std::array<std::shared_ptr<rhi::Texture>, 2> pathSpecular;
@@ -623,6 +629,8 @@ struct SceneRenderer::Impl
         rhi::PipelineDesc desc;
         desc.layout = runtime.CreateLayout({{0, rhi::BindingKind::AccelerationStructure},
                                             {1, rhi::BindingKind::StorageTexture},
+                                            {2, rhi::BindingKind::StorageTexture},
+                                            {3, rhi::BindingKind::ReadOnlyBuffer},
                                             {4, rhi::BindingKind::ConstantBuffer}});
         desc.compute =
             runtime.CreateShader(rhi::ShaderStage::Compute, compiler.Compile(request), "CSMain");
@@ -1035,6 +1043,57 @@ struct SceneRenderer::Impl
         lighting.EnvironmentParameters = {
             snapshot.environmentIntensity,
             static_cast<float>(snapshot.environmentRotation * 3.141592653589793 / 180), 0, 0};
+        if (snapshot.pointLights.size() > 8)
+            throw std::invalid_argument("Rendering supports at most eight point lights");
+        lighting.PointLightCount[0] = static_cast<float>(snapshot.pointLights.size());
+        if (snapshot.pointLights.size() > 0)
+        {
+            const auto& point = snapshot.pointLights[0];
+            lighting.PointPositionRange0 = Vector(point.position, point.range);
+            lighting.PointColorIntensity0 = Vector(point.color, point.intensity);
+        }
+        if (snapshot.pointLights.size() > 1)
+        {
+            const auto& point = snapshot.pointLights[1];
+            lighting.PointPositionRange1 = Vector(point.position, point.range);
+            lighting.PointColorIntensity1 = Vector(point.color, point.intensity);
+        }
+        if (snapshot.pointLights.size() > 2)
+        {
+            const auto& point = snapshot.pointLights[2];
+            lighting.PointPositionRange2 = Vector(point.position, point.range);
+            lighting.PointColorIntensity2 = Vector(point.color, point.intensity);
+        }
+        if (snapshot.pointLights.size() > 3)
+        {
+            const auto& point = snapshot.pointLights[3];
+            lighting.PointPositionRange3 = Vector(point.position, point.range);
+            lighting.PointColorIntensity3 = Vector(point.color, point.intensity);
+        }
+        if (snapshot.pointLights.size() > 4)
+        {
+            const auto& point = snapshot.pointLights[4];
+            lighting.PointPositionRange4 = Vector(point.position, point.range);
+            lighting.PointColorIntensity4 = Vector(point.color, point.intensity);
+        }
+        if (snapshot.pointLights.size() > 5)
+        {
+            const auto& point = snapshot.pointLights[5];
+            lighting.PointPositionRange5 = Vector(point.position, point.range);
+            lighting.PointColorIntensity5 = Vector(point.color, point.intensity);
+        }
+        if (snapshot.pointLights.size() > 6)
+        {
+            const auto& point = snapshot.pointLights[6];
+            lighting.PointPositionRange6 = Vector(point.position, point.range);
+            lighting.PointColorIntensity6 = Vector(point.color, point.intensity);
+        }
+        if (snapshot.pointLights.size() > 7)
+        {
+            const auto& point = snapshot.pointLights[7];
+            lighting.PointPositionRange7 = Vector(point.position, point.range);
+            lighting.PointColorIntensity7 = Vector(point.color, point.intensity);
+        }
         const auto packed = PackRectLights(snapshot.areaLights);
         SceneAreaLightingData area;
         std::copy_n(packed.begin(), 4, area.Header.begin());
@@ -1083,6 +1142,8 @@ void SceneRenderer::ValidatePipeline(PipelineType pipeline)
     scene::Extractor extractor;
     const auto snapshot = extractor.Extract(self.document, 1, self.models);
     (void)PackRectLights(snapshot.areaLights);
+    if (snapshot.pointLights.size() > 8)
+        throw std::invalid_argument("Rendering supports at most eight point lights");
     if (pipeline == PipelineType::Forward)
         return;
     for (const auto& instance : snapshot.allInstances)
@@ -1555,6 +1616,13 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
             self.snapshot.light.shadows && self.snapshot.light.intensity > 0 ? 1.f : 0.f};
         const auto area = PackRectLights(self.snapshot.areaLights);
         std::copy(area.begin(), area.end(), parameters.reserved.begin());
+        parameters.pointLights[0] = static_cast<float>(self.snapshot.pointLights.size());
+        for (size_t i = 0; i < self.snapshot.pointLights.size(); ++i)
+        {
+            const auto& point = self.snapshot.pointLights[i];
+            const auto position = Vector(point.position, point.range);
+            std::copy(position.begin(), position.end(), parameters.pointLights.begin() + 4 + i * 8);
+        }
         const auto slice = uploads.Write(std::as_bytes(std::span{&parameters, size_t{1}}));
         const auto name =
             importBuffer(slice.buffer, "RayTracing.Parameters", rhi::State::HostWrite);
@@ -1572,6 +1640,15 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
             self.snapshot.environmentIntensity,
             self.snapshot.environmentRotation * float(3.141592653589793 / 180), 0, 0};
         parameters.reserved = PackRectLights(self.snapshot.areaLights);
+        parameters.pointLights[0] = static_cast<float>(self.snapshot.pointLights.size());
+        for (size_t i = 0; i < self.snapshot.pointLights.size(); ++i)
+        {
+            const auto& point = self.snapshot.pointLights[i];
+            const auto position = Vector(point.position, point.range);
+            const auto color = Vector(point.color, point.intensity);
+            std::copy(position.begin(), position.end(), parameters.pointLights.begin() + 4 + i * 8);
+            std::copy(color.begin(), color.end(), parameters.pointLights.begin() + 8 + i * 8);
+        }
         if (pathTracing)
         {
             parameters.environment[2] = float(PathSamplesPerFrame);
@@ -1598,6 +1675,7 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
         appendTemporal(parameters.environment);
         appendTemporal(parameters.options);
         appendTemporal(parameters.reserved);
+        appendTemporal(parameters.pointLights);
         appendTemporal(self.snapshot.projection.values);
         append(target->desc.width);
         append(target->desc.height);
@@ -1735,6 +1813,37 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
         {
             self.EnsurePathIdentityProgram();
             frame.rayTracing.pathIdentityPipeline = self.pathIdentity;
+            std::vector<std::array<float, 4>> transforms(
+                std::max<size_t>(1, self.snapshot.allInstances.size()) * 4);
+            const auto& temporal = self.temporalHistory;
+            const bool sameView = temporal.active && temporal.viewId == viewId &&
+                                  options.reflectionDenoise && options.reflectionTemporal &&
+                                  accumulate;
+            for (size_t i = 0; i < self.snapshot.allInstances.size(); ++i)
+            {
+                const auto& instance = self.snapshot.allInstances[i];
+                const auto previous = temporal.pathInstances.find(instance.id);
+                if (!sameView || previous == temporal.pathInstances.end() ||
+                    previous->second.model != instance.model ||
+                    previous->second.mesh != instance.mesh)
+                    continue;
+                const auto matrix = previous->second.world * math::Inverse(instance.world);
+                for (size_t row = 0; row < 4; ++row)
+                    for (size_t column = 0; column < 4; ++column)
+                        transforms[i * 4 + row][column] = matrix.At(row, column);
+            }
+            const auto transformBytes = std::as_bytes(std::span{transforms});
+            const auto transformBuffer = self.runtime.CreateBuffer(
+                {transformBytes.size(), rhi::Memory::Upload, "PathTracing.IdentityTransforms"});
+            std::memcpy(transformBuffer->Map().data(), transformBytes.data(),
+                        transformBytes.size());
+            frame.rayTracing.pathIdentityTransforms = {
+                3,
+                importBuffer(transformBuffer, "PathTracing.IdentityTransforms",
+                             rhi::State::HostWrite),
+                rendergraph::Use::ShaderRead,
+                {0, transformBytes.size()},
+                16};
         }
         frame.rayTracing.historyPipeline = pathTracing ? self.pathHistory : self.reflectionHistory;
         if (pathTracing && options.reflectionDenoise)
@@ -2507,6 +2616,18 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
         surfacePass.Execute([surfaceBuffer, surface, pitch](rendergraph::CopyContext& context)
                             { context.CopyTexture(surfaceBuffer, surface, pitch, false); });
         graph.Export(surfaceBuffer, rhi::State::HostRead);
+        result.pathPreviousPosition =
+            self.runtime.CreateBuffer({uint64_t(pitch) * target->desc.height, rhi::Memory::Readback,
+                                       "PathTracing.PreviousPosition"});
+        auto previousBuffer =
+            graph.ImportBuffer("PathTracing.PreviousPosition.Readback", result.pathPreviousPosition,
+                               {rhi::State::CopyDest, false});
+        auto previousPass = graph.AddCopyPass("PathTracing.PreviousPosition.Readback");
+        const auto previous = previousPass.ReadTexture("PathTracing.PreviousPosition");
+        previousBuffer = previousPass.WriteBuffer(previousBuffer);
+        previousPass.Execute([previousBuffer, previous, pitch](rendergraph::CopyContext& context)
+                             { context.CopyTexture(previousBuffer, previous, pitch, false); });
+        graph.Export(previousBuffer, rhi::State::HostRead);
     }
     if (options.sceneHdrDiagnostics)
     {
@@ -2687,6 +2808,30 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
         result.sceneExtractNs = ns(extractEnd - extractStart);
         result.environmentUpdateNs = ns(environmentEnd - environmentStart);
     }
+    std::map<std::string, Impl::TemporalHistory::InstanceTransform> nextPathInstances;
+    if (pathTracing && frame.rayTracing.temporalPipeline)
+    {
+        const auto& temporal = self.temporalHistory;
+        const bool sameView =
+            temporal.active && temporal.viewId == "path/" + self.document.activeCamera;
+        if (options.pathIdentityDiagnostics)
+            result.pathPreviousWorld.reserve(self.snapshot.allInstances.size());
+        for (const auto& instance : self.snapshot.allInstances)
+        {
+            if (options.pathIdentityDiagnostics)
+            {
+                const auto old = temporal.pathInstances.find(instance.id);
+                if (sameView && old != temporal.pathInstances.end() &&
+                    old->second.model == instance.model && old->second.mesh == instance.mesh)
+                    result.pathPreviousWorld.emplace_back(old->second.world);
+                else
+                    result.pathPreviousWorld.emplace_back(std::nullopt);
+            }
+            nextPathInstances.emplace(
+                instance.id, Impl::TemporalHistory::InstanceTransform{instance.model, instance.mesh,
+                                                                      instance.world});
+        }
+    }
     graph.Compile({.profile = options.profile,
                    .recordingThreads = options.recordingThreads,
                    .asyncCompute = options.asyncCompute,
@@ -2720,6 +2865,7 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
     }
     auto& temporal = self.temporalHistory;
     temporal.active = bool(frame.rayTracing.temporalPipeline);
+    temporal.pathInstances = std::move(nextPathInstances);
     if (temporal.active)
     {
         temporal.signature = std::move(temporalSignature);
