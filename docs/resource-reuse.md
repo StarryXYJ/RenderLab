@@ -45,3 +45,5 @@ Graph profiling 从同一个有界 Graph Pool 取得 512 字节 Readback Buffer�
 静态资源使用其已有的 View；SceneRenderer 只额外持有一个 offscreen Display View。窗口交换链持有每张图像的 View，并在等待展示完成后的 resize 路径先清 View、再释放图像和重建。Renderer 不缓存交换链目标，避免 ResizeBuffers 被隐式引用阻挡；Vulkan 在销毁旧 swapchain 前同样清理 View。
 
 `rhiViewCreateMs` 从 B3.4 起只覆盖默认 View 缓存未命中时的实际对象构造，缓存查询不计为创建。B2/B3.3 之前未缓存，每次调用都构造对象。双后端图验收保留一个已完成的 GpuProfile，再运行八个图并重复读旧结果；需保持 tick 字节不变、只用两份读回分配，最后释放结果后 Trim 清空。CPU 测试另验证保留 View 阻止复用、内部 View 不阻止合法复用、无引用环。
+
+`material::Runtime::Validate` 将一次迁移结果和精确 Shader 包代际封装为不可变值快照，`Prepare` 可对该快照准备多个 pass；之后修改源 Asset 不改变已创建的快照。调用方需在材质或包变化时创建新快照。SceneRenderer 仅在同一帧、同一材质输入内复用快照，每帧重新获取材质和验证，不把帧内缓存延伸到文件更新或 Shader 热重载之后。原 `Prepare(package, asset, ...)` 仍会每次迁移和验证。

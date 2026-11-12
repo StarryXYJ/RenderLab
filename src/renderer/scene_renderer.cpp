@@ -1900,6 +1900,7 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
         std::optional<size_t> shadowBinding;
     };
     std::map<std::string, ShadowTemplate> shadowTemplates;
+    std::map<const Impl::MaterialInput*, material::ValidatedMaterial> validatedMaterials;
     const auto prepareDraw = [&](const scene::Instance& instance, shader::PassRole requestedRole,
                                  int areaShadowIndex = -1)
     {
@@ -2028,7 +2029,13 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
         }
         if (bindings.shadowMap)
             prepare.deferredResources.insert(*bindings.shadowMap);
-        auto prepared = self.materials.Prepare(material.package, material.asset, prepare, resolve);
+        auto validated = validatedMaterials.find(&material);
+        if (validated == validatedMaterials.end())
+            validated =
+                validatedMaterials
+                    .emplace(&material, self.materials.Validate(material.package, material.asset))
+                    .first;
+        auto prepared = self.materials.Prepare(validated->second, prepare, resolve);
         self.generations[material.package.get()] = prepared.generation;
         if (indexedDraw)
         {
@@ -2168,8 +2175,12 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
             if (bindings.shadow)
             {
                 const auto& block = material.package->GetBlock(*bindings.shadow);
-                const auto found = std::ranges::find_if(draw.buffers, [&](const auto& binding)
-                { return binding.slot == block.slot && binding.space == uint32_t(block.scope); });
+                const auto found = std::ranges::find_if(
+                    draw.buffers,
+                    [&](const auto& binding)
+                    {
+                        return binding.slot == block.slot && binding.space == uint32_t(block.scope);
+                    });
                 if (found == draw.buffers.end())
                     throw std::logic_error("Shadow parameter binding missing from draw");
                 shadowBinding = static_cast<size_t>(found - draw.buffers.begin());

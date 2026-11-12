@@ -27,14 +27,30 @@ struct GpuGeneration
 Runtime::Runtime(rhi::Runtime& runtime, shader::Target target) : runtime_(runtime), target_(target)
 {
 }
-Prepared Runtime::Prepare(std::shared_ptr<const shader::Package> package, const Asset& asset,
-                          const Preparation& preparation, const ResourceResolver& resolve)
+ValidatedMaterial Runtime::Validate(std::shared_ptr<const shader::Package> package,
+                                    const Asset& asset)
 {
     if (std::this_thread::get_id() != owner_)
         throw std::logic_error("Material preparation requires owner thread");
     if (!package)
         throw std::invalid_argument("Material preparation needs a shader package");
-    const auto validated = Migrate(asset, shader::MaterialTemplate(package));
+    auto validated = Migrate(asset, shader::MaterialTemplate(package));
+    return ValidatedMaterial(std::move(package), std::move(validated));
+}
+Prepared Runtime::Prepare(std::shared_ptr<const shader::Package> package, const Asset& asset,
+                          const Preparation& preparation, const ResourceResolver& resolve)
+{
+    return Prepare(Validate(std::move(package), asset), preparation, resolve);
+}
+Prepared Runtime::Prepare(const ValidatedMaterial& material, const Preparation& preparation,
+                          const ResourceResolver& resolve)
+{
+    if (std::this_thread::get_id() != owner_)
+        throw std::logic_error("Material preparation requires owner thread");
+    const auto& package = material.package_;
+    if (!package)
+        throw std::invalid_argument("Material preparation needs a shader package");
+    const auto& validated = material.asset_;
     const auto passHandle = package->ResolvePass(preparation.pass);
     const auto& pass = package->GetPass(passHandle);
     if (!PassEnabled(package->definition, pass, validated))

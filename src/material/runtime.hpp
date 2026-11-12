@@ -11,6 +11,7 @@
 #include <set>
 #include <string>
 #include <thread>
+#include <utility>
 #include <vector>
 
 namespace renderlab::material
@@ -33,6 +34,17 @@ struct Preparation
 };
 using ResourceResolver = std::function<rhi::Binding(const shader::Property&, const std::string&)>;
 struct GpuGeneration;
+/// Immutable material values migrated for one specific shader package generation.
+class ValidatedMaterial final
+{
+    friend class Runtime;
+    ValidatedMaterial(std::shared_ptr<const shader::Package> package, Asset asset)
+        : package_(std::move(package)), asset_(std::move(asset))
+    {
+    }
+    std::shared_ptr<const shader::Package> package_;
+    Asset asset_;
+};
 /** @brief Immutable recording snapshot. Commands retain its pipeline and resources when bound. */
 struct Prepared
 {
@@ -50,6 +62,11 @@ class Runtime final
 {
 public:
     Runtime(rhi::Runtime& runtime, shader::Target target);
+    /// @brief Migrate once into an immutable snapshot tied to this package generation.
+    ValidatedMaterial Validate(std::shared_ptr<const shader::Package> package, const Asset& asset);
+    /// @brief Prepare another pass using an immutable validated snapshot.
+    Prepared Prepare(const ValidatedMaterial& material, const Preparation& preparation,
+                     const ResourceResolver& resolve = {});
     /// @brief Creates immutable binding values; caller imports them into Graph or builds a group.
     Prepared Prepare(std::shared_ptr<const shader::Package> package, const Asset& asset,
                      const Preparation& preparation, const ResourceResolver& resolve = {});
