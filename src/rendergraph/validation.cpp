@@ -209,29 +209,28 @@ void Graph::Impl::ValidateBindings(uint32_t pass, const rhi::BindingGroup& group
                     return found->buffer ? r.buffer == found->buffer
                                          : found->view && r.texture == found->view->texture;
                 });
-            Require(resource != resources.end(),
-                    "Binding references a resource outside the graph in " + passes[pass].name);
+            if (resource == resources.end())
+                Require(false,
+                        "Binding references a resource outside the graph in " + passes[pass].name);
             const auto index = static_cast<uint32_t>(resource - resources.begin());
-            Require(
-                std::ranges::any_of(passes[pass].accesses,
-                                    [&](auto& a)
-                                    {
-                                        return a.resource == index && a.use == use &&
-                                               ((entry.kind != rhi::BindingKind::StorageBuffer &&
-                                                 entry.kind != rhi::BindingKind::StorageTexture) ||
-                                                a.write);
-                                    }),
-                "Binding access was not declared in " + passes[pass].name + ": " +
-                    resource->Name());
+            if (!std::ranges::any_of(passes[pass].accesses,
+                                     [&](auto& a)
+                                     {
+                                         return a.resource == index && a.use == use &&
+                                                ((entry.kind != rhi::BindingKind::StorageBuffer &&
+                                                  entry.kind != rhi::BindingKind::StorageTexture) ||
+                                                 a.write);
+                                     }))
+                Require(false, "Binding access was not declared in " + passes[pass].name + ": " +
+                                   resource->Name());
             if (found->buffer)
             {
                 const auto& a =
                     *std::ranges::find(passes[pass].accesses, index, &detail::Access::resource);
-                Require(found->offset >= a.bufferRange.offset &&
-                            found->offset - a.bufferRange.offset <= a.bufferRange.size &&
-                            found->size <=
-                                a.bufferRange.size - (found->offset - a.bufferRange.offset),
-                        "Binding exceeds declared buffer range in " + passes[pass].name);
+                if (found->offset < a.bufferRange.offset ||
+                    found->offset - a.bufferRange.offset > a.bufferRange.size ||
+                    found->size > a.bufferRange.size - (found->offset - a.bufferRange.offset))
+                    Require(false, "Binding exceeds declared buffer range in " + passes[pass].name);
             }
         }
     }
@@ -242,10 +241,10 @@ void Graph::Impl::CheckBufferRange(uint32_t pass, BufferHandle handle, uint64_t 
     Resolve(pass, handle.graph, handle.resource, handle.version, false);
     const auto& a =
         *std::ranges::find(passes[pass].accesses, handle.resource, &detail::Access::resource);
-    Require(size && offset >= a.bufferRange.offset &&
-                offset - a.bufferRange.offset <= a.bufferRange.size &&
-                size <= a.bufferRange.size - (offset - a.bufferRange.offset),
-            "Command exceeds declared buffer range in " + passes[pass].name);
+    if (!size || offset < a.bufferRange.offset ||
+        offset - a.bufferRange.offset > a.bufferRange.size ||
+        size > a.bufferRange.size - (offset - a.bufferRange.offset))
+        Require(false, "Command exceeds declared buffer range in " + passes[pass].name);
 }
 uint64_t detail::EstimatedBytes(const Resource& r)
 {
