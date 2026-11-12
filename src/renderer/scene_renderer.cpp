@@ -1136,8 +1136,6 @@ void SceneRenderer::ValidatePipeline(PipelineType pipeline)
     (void)PackRectLights(snapshot.areaLights);
     if (snapshot.pointLights.size() > 8)
         throw std::invalid_argument("Rendering supports at most eight point lights");
-    if (pipeline == PipelineType::PathTracing && !snapshot.pointLights.empty())
-        throw std::invalid_argument("Point lights are not yet supported by Path Tracing");
     if (pipeline == PipelineType::Forward)
         return;
     for (const auto& instance : snapshot.allInstances)
@@ -1305,8 +1303,6 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
     self.snapshot = self.extractor.Extract(
         self.document, float(target->desc.width) / float(target->desc.height), self.models,
         options.submission != GeometrySubmission::GpuCulled);
-    if (pathTracing && !self.snapshot.pointLights.empty())
-        throw std::invalid_argument("Point lights are not yet supported by Path Tracing");
     const auto extractEnd = options.cpuDiagnostics ? std::chrono::steady_clock::now()
                                                    : std::chrono::steady_clock::time_point{};
     if (options.lightOverride)
@@ -1629,6 +1625,15 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
             self.snapshot.environmentIntensity,
             self.snapshot.environmentRotation * float(3.141592653589793 / 180), 0, 0};
         parameters.reserved = PackRectLights(self.snapshot.areaLights);
+        parameters.pointLights[0] = static_cast<float>(self.snapshot.pointLights.size());
+        for (size_t i = 0; i < self.snapshot.pointLights.size(); ++i)
+        {
+            const auto& point = self.snapshot.pointLights[i];
+            const auto position = Vector(point.position, point.range);
+            const auto color = Vector(point.color, point.intensity);
+            std::copy(position.begin(), position.end(), parameters.pointLights.begin() + 4 + i * 8);
+            std::copy(color.begin(), color.end(), parameters.pointLights.begin() + 8 + i * 8);
+        }
         if (pathTracing)
         {
             parameters.environment[2] = float(PathSamplesPerFrame);
@@ -1655,6 +1660,7 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
         appendTemporal(parameters.environment);
         appendTemporal(parameters.options);
         appendTemporal(parameters.reserved);
+        appendTemporal(parameters.pointLights);
         appendTemporal(self.snapshot.projection.values);
         append(target->desc.width);
         append(target->desc.height);

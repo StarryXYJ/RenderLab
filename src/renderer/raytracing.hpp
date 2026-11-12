@@ -27,9 +27,12 @@ struct ReflectionParameters
     // Sample index, history sample count, directional shadow enabled, sample count limit.
     std::array<float, 4> options{};
     std::array<float, 28> reserved{};
+    // Point-light header and eight pairs of position/range and color/intensity float4s.
+    std::array<float, 128> pointLights{};
 };
-static_assert(sizeof(ReflectionParameters) == 256 &&
-              offsetof(ReflectionParameters, options) == 128);
+static_assert(sizeof(ReflectionParameters) == 768 &&
+              offsetof(ReflectionParameters, options) == 128 &&
+              offsetof(ReflectionParameters, pointLights) == 256);
 struct ReflectionTemporalParameters
 {
     std::array<float, 16> inverseViewProjection{}, previousViewProjection{};
