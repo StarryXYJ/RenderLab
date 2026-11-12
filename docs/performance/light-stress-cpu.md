@@ -63,3 +63,7 @@ IndexedDirect 与 CpuIndirect 合并同批次原顺序中相邻的相同几何�
 在有界描述符页上，将同一个 BindingGroup 内的 descriptor 更新合并为一次 Vulkan 调用；保留逐项校验、独立描述符组以及加速结构扩展数据的生命周期。Release 双后端 RHI、描述符数组、材质、面灯光栅、路径和反射回归 12/12，八点灯 Forward 前后 BMP 哈希相同。
 
 RTX 5060 Vulkan Release、960×540、CPU profiling on、30 帧预热/200 帧测量，按前后后前顺序各两次：validation on 的串行帧均值 27.69/26.68 → 25.07/25.29 ms，绑定组创建 10.93/10.56 → 8.82/8.87 ms；validation off 的帧均值 7.06/7.39 → 7.40/7.33 ms，绑定组创建 0.41/0.43 → 0.48/0.47 ms。关闭 validation 时小幅额外 CPU 开销没有稳定的总帧收益，开启时此设备的短测有收益；不能推断其他设备或 Editor 帧率。日志 `out/descriptor-batch/`。
+
+## 合并后验收（2026 年 11 月 12 日）
+
+整合 `cd2d48a` 的 Release 原生目标构建通过，Graph 契约及 DX12/Vulkan RHI、描述符数组、材质、面灯光栅、路径和反射回归 13/13。主工作区托管 Debug/原生 Release Editor 已重建，桥接 DLL 与原生 Release 输出的 SHA-256 一致。RTX 5060、Vulkan Forward、八点灯、validation on、profiling on、target-fps 0，预热 2 秒/测量 5 秒，215 个样本、无丢样，Native P95 25.04 ms、Render P95 23.96 ms；正常退出、validation errors、资源残留和 worker_failed 为零。日志 `D:/Personal/RenderLab/out/vulkan-merged-editor/`。该有限窗口短测不覆盖真实交互、其他设备及长期运行；其他并行工作未纳入本次验收。
