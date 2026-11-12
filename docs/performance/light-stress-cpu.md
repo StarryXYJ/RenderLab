@@ -41,3 +41,11 @@ Forward 的 Graph 构建按 Feature 分解，面光源阴影约 4.33 ms、方向
 将 CPU 优化与 `172b1d0` 的点光源及路径诊断合并后，Release 原生目标及 Editor 构建通过；Graph 契约、DX12/Vulkan 材质与面光源 GPU 回归共 9/9。RTX 5060 DX12、validation on、960×540、10 帧预热/30 帧测量，八点灯场景 Forward、Deferred、混合和 Path Tracing 均运行完成，validation errors 为零；串行帧均值分别为 19.20、15.15、15.94、4.73 ms。验证开销、点灯和以前的测量条件不同，不能将数字直接比较。
 
 实际 Release Editor DX12 Forward 打开八点灯场景，1017×464，validation off、profiling on、target-fps 0，预热 2 秒、测量 5 秒；555 个样本、无丢样，Native P95 10.55 ms、Render P95 10.03 ms、Scene Prepare P95 6.12 ms，报告的完成帧吞吐约 110.9 FPS，关闭报告的资源残留及 worker_failed 均为零。日志位于隔离工作区 `out/merge-validation/` 与 `out/merge-editor-forward/`。这不是用户现有 Debug Editor 的数据；动态交互、其他管线的 Editor 窗口、其他 GPU 与 Vulkan 大场景仍未验证。
+
+## Editor 三管线与 Vulkan 描述符页（2026 年 11 月 12 日）
+
+原 `dev` 的托管 Debug/原生 Release Editor，RTX 5060 DX12、1017×773、validation off、profiling on、固定相机、target-fps 0，预热 2 秒/测量 5 秒：Deferred 与混合光追的 Native P95 分别 8.60 和 8.73 ms，636/620 样本、无丢样，关闭资源残留与 worker_failed 为零。仅固定相机短测；窗口交互仍待验收。日志 `D:/Personal/RenderLab/out/four-step-editor-{deferred,raytracing}`。
+
+Vulkan 使用按 BindingLayout 复用多组 set 的有界描述符页后，RTX 5060 Release、validation on、960×540、10 帧预热/30 帧测量，八点灯 Forward、Deferred、混合与 Path Tracing 均运行，validation errors 和关闭时跟踪内存为零；Forward、Deferred、混合分别创建 21、22、33 个原生池页。Graph 契约、双后端 RHI、描述符数组、面灯光栅与反射回归 9/9，另增加 300 个同时存活组、释放复用与预算耗尽契约，双后端 RHI 2/2。该页预算仍有上限。
+
+隔离 Release Editor 的 Vulkan validation on、profiling on、1017×773、固定相机、target-fps 0、预热 2 秒/测量 5 秒，Forward、Deferred、混合 Native P95 分别 38.21、35.79、37.53 ms，153/161/161 样本、无丢样，退出账本零泄漏、零 validation errors、零 worker_failed。validation on 与上面 DX12 validation off 不可直接比较；Vulkan 性能仍待分解。其他 GPU、窗口交互、超过该场景的规模及长期运行未验收。证据分别为本工作树 `out/vulkan-pages/` 和 `D:/Personal/RenderLab/out/vulkan-page-editor-{forward,deferred,raytracing}`。

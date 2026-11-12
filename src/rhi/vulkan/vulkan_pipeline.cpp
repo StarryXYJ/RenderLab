@@ -3,6 +3,7 @@
 
 #include <algorithm>
 #include <array>
+#include <bit>
 #include <cstring>
 #include <stdexcept>
 
@@ -110,21 +111,49 @@ std::shared_ptr<BindingLayout> VulkanRuntime::CreateLayout(std::vector<BindingDe
 std::shared_ptr<VkDescriptorBlock>
 VulkanRuntime::AcquireDescriptors(std::shared_ptr<BindingLayout> layout)
 {
-    for (const auto& allocation : descriptorBlocks_)
-        if (allocation.use_count() == 1 && allocation->layout == layout)
-            return allocation;
-    if (descriptorBlocks_.size() == 256)
+    const auto acquire =
+        [](const std::shared_ptr<VkDescriptorPage>& page) -> std::shared_ptr<VkDescriptorBlock>
     {
-        const auto idle = std::ranges::find_if(descriptorBlocks_, [](const auto& item)
-                                               { return item.use_count() == 1; });
-        if (idle == descriptorBlocks_.end())
+        auto available = page->available.load(std::memory_order_acquire);
+        if (!available)
+            return {};
+        auto block = std::make_shared<VkDescriptorBlock>();
+        while (available)
+        {
+            const auto slot = static_cast<uint32_t>(std::countr_zero(available));
+            const auto next = available & ~(uint32_t{1} << slot);
+            if (page->available.compare_exchange_weak(available, next, std::memory_order_acq_rel))
+            {
+                block->page = page;
+                block->slot = slot;
+                block->native = page->sets[slot];
+                return block;
+            }
+        }
+        return {};
+    };
+    for (const auto& page : descriptorPages_)
+        if (page->layout == layout)
+            if (auto block = acquire(page))
+                return block;
+    constexpr size_t MaxPages = 64;
+    if (descriptorPages_.size() == MaxPages)
+    {
+        const auto idle = std::ranges::find_if(descriptorPages_, [](const auto& page)
+                                               { return page.use_count() == 1; });
+        if (idle == descriptorPages_.end())
             throw std::runtime_error(
-                "Vulkan descriptor block budget exhausted; release groups or retire work");
-        descriptorBlocks_.erase(idle);
+                "Vulkan descriptor page budget exhausted; release groups or retire work");
+        descriptorPages_.erase(idle);
     }
-    auto allocation = std::make_shared<VkDescriptorBlock>();
-    allocation->device = device_;
-    allocation->layout = layout;
+    auto page = std::make_shared<VkDescriptorPage>();
+    page->device = device_;
+    page->layout = layout;
+    // Bound each page's descriptor count for large bindless tables as well as page count.
+    constexpr uint32_t MaxGroupsPerPage = 32, MaxDescriptorsPerPage = 8192;
+    const auto descriptorCount = layout->DescriptorCount();
+    const uint32_t groupCount = std::min(
+        MaxGroupsPerPage, std::max(1u, MaxDescriptorsPerPage / std::max(1u, descriptorCount)));
     std::vector<VkDescriptorPoolSize> sizes;
     for (auto type :
          {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
@@ -136,29 +165,40 @@ VulkanRuntime::AcquireDescriptors(std::shared_ptr<BindingLayout> layout)
             if (DescriptorType(entry.kind) == type)
                 count += entry.count;
         if (count)
-            sizes.push_back({type, count});
+            sizes.push_back({type, count * groupCount});
     }
     VkDescriptorPoolCreateInfo pool{};
     pool.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
-    pool.maxSets = 4;
+    pool.maxSets = 4 * groupCount;
     pool.poolSizeCount = static_cast<uint32_t>(sizes.size());
     pool.pPoolSizes = sizes.data();
     {
         auto cpuTimer = ProfileCpu(CpuOperation::DescriptorPageCreate);
-        Check(vkCreateDescriptorPool(device_, &pool, nullptr, &allocation->pool), "DescriptorPool");
+        Check(vkCreateDescriptorPool(device_, &pool, nullptr, &page->pool), "DescriptorPool");
     }
+    std::vector<VkDescriptorSetLayout> layouts;
+    layouts.reserve(4 * groupCount);
+    for (uint32_t i = 0; i < groupCount; ++i)
+        layouts.insert(layouts.end(), As<VkLayout>(layout).sets.begin(),
+                       As<VkLayout>(layout).sets.end());
+    std::vector<VkDescriptorSet> sets(layouts.size());
     VkDescriptorSetAllocateInfo allocate{};
     allocate.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
-    allocate.descriptorPool = allocation->pool;
-    allocate.descriptorSetCount = 4;
-    allocate.pSetLayouts = As<VkLayout>(layout).sets.data();
-    Check(vkAllocateDescriptorSets(device_, &allocate, allocation->native.data()), "DescriptorSet");
-    allocation->stats = descriptorStats_;
+    allocate.descriptorPool = page->pool;
+    allocate.descriptorSetCount = static_cast<uint32_t>(layouts.size());
+    allocate.pSetLayouts = layouts.data();
+    Check(vkAllocateDescriptorSets(device_, &allocate, sets.data()), "DescriptorSet");
+    page->sets.resize(groupCount);
+    for (uint32_t i = 0; i < groupCount; ++i)
+        std::copy_n(sets.begin() + 4 * i, 4, page->sets[i].begin());
+    page->available.store(groupCount == 32 ? UINT32_MAX : (uint32_t{1} << groupCount) - 1,
+                          std::memory_order_release);
+    page->stats = descriptorStats_;
     ++descriptorStats_->pages;
     ++descriptorStats_->creations;
-    descriptorStats_->capacity += layout->DescriptorCount();
-    descriptorBlocks_.push_back(allocation);
-    return allocation;
+    descriptorStats_->capacity += descriptorCount * groupCount;
+    descriptorPages_.push_back(page);
+    return acquire(page);
 }
 
 std::shared_ptr<BindingGroup> VulkanRuntime::CreateGroup(std::shared_ptr<BindingLayout> layout,

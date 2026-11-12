@@ -26,7 +26,7 @@ Material Runtime 在每个 GPU 包代际中保留至多 64 个常量版本，以
 
 DX12 Runtime 持有资源 heap 页（每页 4096 项）和 sampler heap 页（每页 256 项），每类最多八页，均在基础 API 限制内。BindingGroup 以 first-fit 分配每类的连续区间，持有区间和原生 heap；区间释放不分配内存，也不搬迁存活内容。每组同类描述符只来自一页，设置新的 heap 组合后重新设置所有 root table。同命令列表内连续使用同一组合时省去重复 SetDescriptorHeaps。
 
-Vulkan 首版复用与 BindingLayout 身份关联的 pool/set 块，每块包含四个 set。最多保留 256 块，优先复用无外部引用的同布局块；达到预算时只淘汰空闲块，全部被引用则明确报错。不按 CPU 帧号 Reset pool，不改用 dynamic uniform offset 或 update-after-bind。
+Vulkan 描述符页与 BindingLayout 身份关联，每页容纳最多 32 个绑定组的四个 set；按布局描述符数量将每页预留控制在 8192 项左右，单组本身超过该数时保留一组。Runtime 最多保留 64 页，优先在同布局页复用已释放槽；达到预算时只淘汰没有活动组的页，全部被引用则明确报错。槽位由绑定组保活并在其销毁后归还，不按 CPU 帧号 Reset pool，也不使用 dynamic uniform offset 或 update-after-bind。
 
 两后端均由逻辑 BindingGroup 的拥有权保护分配：CPU 保存的组、已录制未提交命令和 Runtime 的待完成命令包都会阻止重用。取消只释放 CPU 引用；已提交组在真实完成后退休。缓存的分配页/块不拥有 Buffer/Texture，避免长期钉住 Graph 资源和上传页。构造失败通过 RAII 归还已取得的区间。
 
