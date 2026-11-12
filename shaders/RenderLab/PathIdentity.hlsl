@@ -6,6 +6,11 @@ RaytracingAccelerationStructure Scene : register(t0);
 [[vk::image_format("rgba32f")]]
 #endif
 RWTexture2D<float4> Identity : register(u1);
+#ifdef SPIRV
+[[vk::image_format("rgba32f")]]
+#endif
+RWTexture2D<float4> PreviousPosition : register(u2);
+StructuredBuffer<float4> PreviousTransforms : register(t3);
 cbuffer PathParameters : register(b4)
 {
     row_major float4x4 InverseViewProjection;
@@ -56,4 +61,16 @@ void CSMain(uint3 id : SV_DispatchThreadID)
         }
     }
     Identity[id.xy] = float4(kind, index, 0, distance);
+    PreviousPosition[id.xy] = 0;
+    if (kind == 1)
+    {
+        uint base = uint(index) * 4;
+        if (PreviousTransforms[base + 3].w > 0)
+        {
+            float4 current = float4(ray.Origin + ray.Direction * distance, 1);
+            PreviousPosition[id.xy] = float4(dot(PreviousTransforms[base], current),
+                                               dot(PreviousTransforms[base + 1], current),
+                                               dot(PreviousTransforms[base + 2], current), 1);
+        }
+    }
 }

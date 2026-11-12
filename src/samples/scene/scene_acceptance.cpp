@@ -5,6 +5,7 @@
 #include "assets/io.hpp"
 #include "core/log.hpp"
 #include "material/asset.hpp"
+#include "math/math.hpp"
 #include "renderer/raytracing.hpp"
 #include "renderer/scene_renderer.hpp"
 #include "rhi/runtime.hpp"
@@ -341,20 +342,57 @@ void VerifyPathMovingObject(rhi::Runtime& runtime, shader::Target target,
         };
         for (uint32_t i = 0; i < 3; ++i)
             render();
+        const auto actorInstance = [&]() -> const scene::Instance&
+        {
+            const auto& instances = scene.LastSnapshot().allInstances;
+            const auto found =
+                std::ranges::find_if(instances, [&](const auto& instance)
+                                     { return instance.id.starts_with(actorId + "/"); });
+            detail::Require(found != instances.end(), "Moving sphere instance is missing");
+            return *found;
+        };
+        auto previousWorld = actorInstance().world;
         for (uint32_t i = 0; i < frames; ++i)
         {
             scene.Document().Get(actorId).transform.position.x = startX + .45f * float(i + 1);
             const auto frame = render();
+            const auto& instance = actorInstance();
+            if (mode == 1)
+            {
+                const auto& instances = scene.LastSnapshot().allInstances;
+                const auto index = static_cast<size_t>(&instance - instances.data());
+                detail::Require(frame.pathPreviousWorld.size() == instances.size() &&
+                                    frame.pathPreviousWorld[index] &&
+                                    frame.pathPreviousWorld[index]->values == previousWorld.values,
+                                "Committed temporal slot lost the moving instance transform");
+            }
+            else
+                detail::Require(frame.pathPreviousWorld.empty(),
+                                "Inactive temporal preview exposed instance history");
+            detail::Require(instance.previousWorld.values == previousWorld.values,
+                            "Moving instance did not retain the preceding extracted transform");
+            const math::Vec3 localPoint{.25f, -.3f, .4f};
+            const auto currentPoint = math::Point(instance.world, localPoint);
+            const auto oldPoint = math::Point(instance.previousWorld, localPoint);
+            const auto mappedPoint = math::Point(
+                instance.previousWorld, math::Point(math::Inverse(instance.world), currentPoint));
+            detail::Require(math::Length(mappedPoint - oldPoint) < 1e-4f &&
+                                math::Length((currentPoint - oldPoint) - math::Vec3{.45f, 0, 0}) <
+                                    1e-4f,
+                            "Moving instance current-to-previous mapping is inconsistent");
+            previousWorld = instance.world;
             detail::Require(frame.reflectionHistoryReset &&
                                 frame.reflectionSamples == renderer::PathSamplesPerFrame &&
                                 frame.reflectionTemporalFrames == (mode == 1 ? 1u : 0u),
                             "Moving geometry did not invalidate path histories");
             detail::Require(frame.pathHdrDisplay != nullptr, "Missing moving-object HDR readback");
-            detail::Require(frame.pathPrimaryIdentity && frame.pathPrimarySurface,
+            detail::Require(frame.pathPrimaryIdentity && frame.pathPrimarySurface &&
+                                frame.pathPreviousPosition,
                             "Missing moving-object primary identity diagnostics");
             const auto bytes = frame.pathHdrDisplay->Map();
             const auto identityBytes = frame.pathPrimaryIdentity->Map();
             const auto surfaceBytes = frame.pathPrimarySurface->Map();
+            const auto positionBytes = frame.pathPreviousPosition->Map();
             const auto& instances = scene.LastSnapshot().allInstances;
             std::vector<float> pixels(width * height * 3);
             std::vector<uint32_t> hitIdentities(width * height);
@@ -363,10 +401,12 @@ void VerifyPathMovingObject(rhi::Runtime& runtime, shader::Target target,
                 for (uint32_t x = 0; x < width; ++x)
                 {
                     std::array<float, 4> pixel{};
-                    std::array<float, 4> identity{}, surface{};
+                    std::array<float, 4> identity{}, surface{}, previousPosition{};
                     std::memcpy(pixel.data(), bytes.data() + y * hdrPitch + x * 16, 16);
                     std::memcpy(identity.data(), identityBytes.data() + y * hdrPitch + x * 16, 16);
                     std::memcpy(surface.data(), surfaceBytes.data() + y * hdrPitch + x * 16, 16);
+                    std::memcpy(previousPosition.data(),
+                                positionBytes.data() + y * hdrPitch + x * 16, 16);
                     detail::Require(
                         std::isfinite(identity[0]) && std::isfinite(identity[1]) &&
                             std::isfinite(identity[3]) && identity[0] >= 0 && identity[0] <= 2 &&
@@ -384,11 +424,46 @@ void VerifyPathMovingObject(rhi::Runtime& runtime, shader::Target target,
                                             2e-4f * std::max(1.f, identity[3]),
                                         "Ray query does not match path primary hit distance");
                         hitActor[y * width + x] = instances[index].id.starts_with(actorId + "/");
+                        if (mode == 1)
+                        {
+                            detail::Require(previousPosition[3] == 1 &&
+                                                std::isfinite(previousPosition[0]) &&
+                                                std::isfinite(previousPosition[1]) &&
+                                                std::isfinite(previousPosition[2]),
+                                            "Missing previous world position for mesh hit");
+                            const math::Vec3 current{previousPosition[0] +
+                                                         (hitActor[y * width + x] ? .45f : 0),
+                                                     previousPosition[1], previousPosition[2]};
+                            const auto& m = scene.LastSnapshot().viewProjection;
+                            const auto clip = [&](size_t row)
+                            {
+                                return m.At(row, 0) * current.x + m.At(row, 1) * current.y +
+                                       m.At(row, 2) * current.z + m.At(row, 3);
+                            };
+                            const float w = clip(3);
+                            const float projectedX = (clip(0) / w * .5f + .5f) * width;
+                            const float projectedY = (.5f - clip(1) / w * .5f) * height;
+                            detail::Require(
+                                std::abs(
+                                    math::Length(current - scene.LastSnapshot().cameraPosition) -
+                                    identity[3]) <= 2e-4f * std::max(1.f, identity[3]),
+                                "Previous world position has inconsistent ray distance");
+                            detail::Require(
+                                w > 0 && projectedX >= x - .01f && projectedX <= x + 1.01f &&
+                                    projectedY >= y - .01f && projectedY <= y + 1.01f,
+                                "Previous world position does not map to the primary ray");
+                        }
+                        else
+                            detail::Require(
+                                previousPosition[3] == 0,
+                                "Inactive temporal preview produced previous positions");
                     }
                     else
                     {
                         detail::Require(surface[3] == 0,
                                         "Non-mesh hit unexpectedly has a surface guide");
+                        detail::Require(previousPosition[3] == 0,
+                                        "Non-mesh hit unexpectedly has a previous position");
                         if (kind == 2)
                             detail::Require(index < scene.LastSnapshot().areaLights.size(),
                                             "Primary light index is outside snapshot");
@@ -501,11 +576,108 @@ void VerifyScene(rhi::Runtime& runtime, shader::Target target, const std::filesy
         const auto first = pathFrame();
         const auto second = pathFrame();
         pathOptions.pathIdentityDiagnostics = false;
+        const auto& pathInstances = pathRenderer.LastSnapshot().allInstances;
+        detail::Require(first.pathPreviousWorld.size() == pathInstances.size() &&
+                            second.pathPreviousWorld.size() == pathInstances.size(),
+                        "Temporal instance diagnostics have the wrong size");
+        for (size_t i = 0; i < pathInstances.size(); ++i)
+            detail::Require(!first.pathPreviousWorld[i] && second.pathPreviousWorld[i] &&
+                                second.pathPreviousWorld[i]->values ==
+                                    pathInstances[i].world.values,
+                            "Temporal instance history did not publish after submission");
         detail::Require(first.reflectionSamples == renderer::PathSamplesPerFrame &&
                             first.reflectionHistoryReset &&
                             second.reflectionSamples == 2 * renderer::PathSamplesPerFrame &&
                             !second.reflectionHistoryReset,
                         "Path tracing did not accumulate successive samples");
+        {
+            renderer::SceneRenderer tracked(runtime, target, fixture, engine);
+            auto& document = tracked.Document();
+            const auto originalCamera = document.activeCamera;
+            auto alternate = document.Get(originalCamera);
+            alternate.id = project::NewId();
+            const auto alternateId = alternate.id;
+            document.objects.push_back(alternate);
+            const auto actor =
+                std::ranges::find_if(document.objects, [](const auto& object)
+                                     { return object.enabled && object.mesh.has_value(); });
+            detail::Require(actor != document.objects.end(),
+                            "Transform history fixture needs a mesh");
+            const auto actorId = actor->id;
+            auto trackedTarget = runtime.CreateTexture(
+                {32, 24, rhi::Format::Rgba8Srgb, false, true, "PathTracing.TransformHistory"});
+            auto targetState = rhi::State::Undefined;
+            renderer::SceneRenderOptions options;
+            options.pipeline = renderer::PipelineType::PathTracing;
+            options.pathIdentityDiagnostics = true;
+            const auto render = [&]()
+            {
+                auto frame =
+                    tracked.Render(trackedTarget, targetState, nullptr, false, {}, options);
+                targetState = rhi::State::CopySource;
+                runtime.Wait(frame.completion);
+                return frame;
+            };
+            const auto actorHasHistory = [&](const renderer::SceneReadback& frame)
+            {
+                const auto& instances = tracked.LastSnapshot().allInstances;
+                for (size_t i = 0; i < instances.size(); ++i)
+                    if (instances[i].id.starts_with(actorId + "/"))
+                        return bool(frame.pathPreviousWorld.at(i));
+                throw std::runtime_error("Transform history fixture actor is missing");
+            };
+            const auto cold = render();
+            detail::Require(!actorHasHistory(cold), "Cold view inherited an instance transform");
+            const auto warm = render();
+            detail::Require(actorHasHistory(warm),
+                            "Submitted view did not publish instance transform");
+            const auto findActor = [&]() -> const scene::Instance&
+            {
+                const auto& instances = tracked.LastSnapshot().allInstances;
+                const auto found =
+                    std::ranges::find_if(instances, [&](const auto& instance)
+                                         { return instance.id.starts_with(actorId + "/"); });
+                detail::Require(found != instances.end(), "Committed actor instance missing");
+                return *found;
+            };
+            const auto committed = findActor().world;
+            document.Get(actorId).transform.position.x += .3f;
+            options.shadowResolution = 1;
+            bool rejected = false;
+            try
+            {
+                render();
+            }
+            catch (const std::invalid_argument&)
+            {
+                rejected = true;
+            }
+            detail::Require(rejected, "Invalid post-extraction frame unexpectedly succeeded");
+            document.Get(actorId).transform.position.x += .4f;
+            options.shadowResolution = 0;
+            const auto retried = render();
+            const auto& retryActor = findActor();
+            const auto retryIndex =
+                static_cast<size_t>(&retryActor - tracked.LastSnapshot().allInstances.data());
+            detail::Require(retried.pathPreviousWorld.at(retryIndex) &&
+                                retried.pathPreviousWorld[retryIndex]->values == committed.values &&
+                                retryActor.previousWorld.values != committed.values,
+                            "Rejected frame advanced committed temporal transform history");
+            document.Get(actorId).enabled = false;
+            render();
+            document.Get(actorId).enabled = true;
+            const auto restored = render();
+            detail::Require(!actorHasHistory(restored),
+                            "Re-enabled instance inherited stale transform");
+            document.activeCamera = alternateId;
+            const auto switched = render();
+            detail::Require(!actorHasHistory(switched),
+                            "Another view inherited an instance transform");
+            document.activeCamera = originalCamera;
+            const auto returned = render();
+            detail::Require(!actorHasHistory(returned),
+                            "Returned view inherited the active view's transform");
+        }
         const auto filteredPitch = rhi::TextureRowPitch(64, rhi::Format::Rgba32Float);
         uint32_t filteredIndirectPixels = 0;
         for (uint32_t y = 0; y < 48; ++y)
@@ -556,7 +728,8 @@ void VerifyScene(rhi::Runtime& runtime, shader::Target target, const std::filesy
         const auto standardBytes = standard.pixels->Map();
         detail::Require(!standard.pathHdrDisplay, "Disabled HDR readback returned a buffer");
         detail::Require(first.pathPrimaryIdentity && first.pathPrimarySurface &&
-                            !standard.pathPrimaryIdentity && !standard.pathPrimarySurface,
+                            !standard.pathPrimaryIdentity && !standard.pathPrimarySurface &&
+                            !standard.pathPreviousPosition,
                         "Primary identity diagnostics did not honor its enable flag");
         const auto diagnosticBytes = first.pixels->Map();
         detail::Require(

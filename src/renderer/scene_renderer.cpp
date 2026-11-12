@@ -192,6 +192,12 @@ struct SceneRenderer::Impl
     }
     struct TemporalHistory
     {
+        struct InstanceTransform
+        {
+            std::string model, mesh;
+            math::Mat4 world;
+        };
+        std::map<std::string, InstanceTransform> pathInstances;
         std::string signature, viewId;
         std::array<std::array<std::shared_ptr<rhi::Texture>, 4>, 2> textures;
         std::array<std::shared_ptr<rhi::Texture>, 2> pathSpecular;
@@ -623,6 +629,8 @@ struct SceneRenderer::Impl
         rhi::PipelineDesc desc;
         desc.layout = runtime.CreateLayout({{0, rhi::BindingKind::AccelerationStructure},
                                             {1, rhi::BindingKind::StorageTexture},
+                                            {2, rhi::BindingKind::StorageTexture},
+                                            {3, rhi::BindingKind::ReadOnlyBuffer},
                                             {4, rhi::BindingKind::ConstantBuffer}});
         desc.compute =
             runtime.CreateShader(rhi::ShaderStage::Compute, compiler.Compile(request), "CSMain");
@@ -1805,6 +1813,37 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
         {
             self.EnsurePathIdentityProgram();
             frame.rayTracing.pathIdentityPipeline = self.pathIdentity;
+            std::vector<std::array<float, 4>> transforms(
+                std::max<size_t>(1, self.snapshot.allInstances.size()) * 4);
+            const auto& temporal = self.temporalHistory;
+            const bool sameView = temporal.active && temporal.viewId == viewId &&
+                                  options.reflectionDenoise && options.reflectionTemporal &&
+                                  accumulate;
+            for (size_t i = 0; i < self.snapshot.allInstances.size(); ++i)
+            {
+                const auto& instance = self.snapshot.allInstances[i];
+                const auto previous = temporal.pathInstances.find(instance.id);
+                if (!sameView || previous == temporal.pathInstances.end() ||
+                    previous->second.model != instance.model ||
+                    previous->second.mesh != instance.mesh)
+                    continue;
+                const auto matrix = previous->second.world * math::Inverse(instance.world);
+                for (size_t row = 0; row < 4; ++row)
+                    for (size_t column = 0; column < 4; ++column)
+                        transforms[i * 4 + row][column] = matrix.At(row, column);
+            }
+            const auto transformBytes = std::as_bytes(std::span{transforms});
+            const auto transformBuffer = self.runtime.CreateBuffer(
+                {transformBytes.size(), rhi::Memory::Upload, "PathTracing.IdentityTransforms"});
+            std::memcpy(transformBuffer->Map().data(), transformBytes.data(),
+                        transformBytes.size());
+            frame.rayTracing.pathIdentityTransforms = {
+                3,
+                importBuffer(transformBuffer, "PathTracing.IdentityTransforms",
+                             rhi::State::HostWrite),
+                rendergraph::Use::ShaderRead,
+                {0, transformBytes.size()},
+                16};
         }
         frame.rayTracing.historyPipeline = pathTracing ? self.pathHistory : self.reflectionHistory;
         if (pathTracing && options.reflectionDenoise)
@@ -2528,6 +2567,18 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
         surfacePass.Execute([surfaceBuffer, surface, pitch](rendergraph::CopyContext& context)
                             { context.CopyTexture(surfaceBuffer, surface, pitch, false); });
         graph.Export(surfaceBuffer, rhi::State::HostRead);
+        result.pathPreviousPosition =
+            self.runtime.CreateBuffer({uint64_t(pitch) * target->desc.height, rhi::Memory::Readback,
+                                       "PathTracing.PreviousPosition"});
+        auto previousBuffer =
+            graph.ImportBuffer("PathTracing.PreviousPosition.Readback", result.pathPreviousPosition,
+                               {rhi::State::CopyDest, false});
+        auto previousPass = graph.AddCopyPass("PathTracing.PreviousPosition.Readback");
+        const auto previous = previousPass.ReadTexture("PathTracing.PreviousPosition");
+        previousBuffer = previousPass.WriteBuffer(previousBuffer);
+        previousPass.Execute([previousBuffer, previous, pitch](rendergraph::CopyContext& context)
+                             { context.CopyTexture(previousBuffer, previous, pitch, false); });
+        graph.Export(previousBuffer, rhi::State::HostRead);
     }
     if (options.sceneHdrDiagnostics)
     {
@@ -2708,6 +2759,30 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
         result.sceneExtractNs = ns(extractEnd - extractStart);
         result.environmentUpdateNs = ns(environmentEnd - environmentStart);
     }
+    std::map<std::string, Impl::TemporalHistory::InstanceTransform> nextPathInstances;
+    if (pathTracing && frame.rayTracing.temporalPipeline)
+    {
+        const auto& temporal = self.temporalHistory;
+        const bool sameView =
+            temporal.active && temporal.viewId == "path/" + self.document.activeCamera;
+        if (options.pathIdentityDiagnostics)
+            result.pathPreviousWorld.reserve(self.snapshot.allInstances.size());
+        for (const auto& instance : self.snapshot.allInstances)
+        {
+            if (options.pathIdentityDiagnostics)
+            {
+                const auto old = temporal.pathInstances.find(instance.id);
+                if (sameView && old != temporal.pathInstances.end() &&
+                    old->second.model == instance.model && old->second.mesh == instance.mesh)
+                    result.pathPreviousWorld.emplace_back(old->second.world);
+                else
+                    result.pathPreviousWorld.emplace_back(std::nullopt);
+            }
+            nextPathInstances.emplace(
+                instance.id, Impl::TemporalHistory::InstanceTransform{instance.model, instance.mesh,
+                                                                      instance.world});
+        }
+    }
     graph.Compile({.profile = options.profile,
                    .recordingThreads = options.recordingThreads,
                    .asyncCompute = options.asyncCompute,
@@ -2741,6 +2816,7 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
     }
     auto& temporal = self.temporalHistory;
     temporal.active = bool(frame.rayTracing.temporalPipeline);
+    temporal.pathInstances = std::move(nextPathInstances);
     if (temporal.active)
     {
         temporal.signature = std::move(temporalSignature);
