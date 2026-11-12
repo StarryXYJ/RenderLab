@@ -564,3 +564,13 @@ M1 首期资源为单 mip/layer 的 2D 纹理、显式单流顶点布局和单 G
 ```
 
 将 `--pipeline` 改为 `raytracing`、`--backend` 改为 `vulkan` 可对照其他路径；为每次运行指定不同输出。GPU pass 名称与数据的解释见 [面光源](../docs/area-lights.md#有限性能测量)。
+
+### 多物体光照压测
+
+`sample/m4/LightStress.rlproject` 可在 Editor 通过 File / Open Project 打开。命令行示例（构建路径按实际配置调整）：
+
+```powershell
+./out/build/area-light-release/renderlab_sandbox.exe --backend dx12 --headless --validation on --benchmark 8 --warmup-frames 2 --width 960 --height 540 --pipeline forward --project sample/m4/LightStress.rlproject --output out/light-stress/forward --profile out/light-stress/forward.json --log out/light-stress/forward.log
+```
+
+可将 `--pipeline` 改为 `deferred`、`raytracing` 或 `pathtracing`。RTX 5060 的 Release 短测中 DX12 四种管线与 Vulkan Path Tracing 运行完毕，validation errors 为零；DX12 有 ClearRenderTargetView clear value 警告。Vulkan Forward、Deferred、Ray Tracing 在加载阶段报 `Vulkan descriptor block budget exhausted`，尚不能运行此规模场景；见 `out/light-stress/` 日志。窗口模式、其他设备与长期性能未验证。更多场景细节见 [示例说明](../sample/m4/README.md#多物体光照压测)。
