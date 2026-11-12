@@ -242,6 +242,41 @@ void RectAreaLightContracts()
     child.areaLight->radiance.x = std::numeric_limits<float>::infinity();
     Fails([&] { extractor.Extract(fixture.document, 1, fixture.models); });
 }
+void PointLightContracts()
+{
+    Fixture fixture;
+    auto& child = fixture.document.Get(ChildId);
+    child.pointLight = scene::PointLight{{1, .5f, .25f}, 120, 8, true};
+    fixture.document.Get(OtherId).pointLight = scene::PointLight{};
+    scene::Extractor extractor;
+    auto snapshot = extractor.Extract(fixture.document, 1, fixture.models);
+    Require(snapshot.pointLights.size() == 2 && snapshot.pointLights[0].object == ChildId &&
+                snapshot.pointLights[1].object == OtherId &&
+                snapshot.pointLights[0].position ==
+                    math::Point(fixture.document.WorldTransforms().at(ChildId).matrix, {}) &&
+                snapshot.pointLights[0].intensity == 120 && snapshot.pointLights[0].range == 8,
+            "Point emitters did not preserve world pose, values or UUID order");
+    std::reverse(fixture.document.objects.begin(), fixture.document.objects.end());
+    snapshot = extractor.Extract(fixture.document, 1, fixture.models);
+    Require(snapshot.pointLights[0].object == ChildId && snapshot.pointLights[1].object == OtherId,
+            "Point emitter order changed on document reorder");
+    auto& current = fixture.document.Get(ChildId);
+    const auto path = std::filesystem::current_path() / "scene-point-light-contract.scene";
+    fixture.document.Save(path);
+    const auto loaded = scene::Scene::Load(path);
+    std::filesystem::remove(path);
+    Require(loaded.Get(ChildId).pointLight == current.pointLight,
+            "Point emitter did not round-trip through scene serialization");
+    fixture.document.Get(ParentId).enabled = false;
+    Require(extractor.Extract(fixture.document, 1, fixture.models).pointLights.size() == 1,
+            "Disabled parent did not suppress point emitter");
+    fixture.document.Get(ParentId).enabled = true;
+    current.pointLight->range = 0;
+    Fails([&] { extractor.Extract(fixture.document, 1, fixture.models); });
+    current.pointLight->range = 8;
+    current.pointLight->intensity = std::numeric_limits<float>::infinity();
+    Fails([&] { extractor.Extract(fixture.document, 1, fixture.models); });
+}
 } // namespace
 int main()
 {
@@ -249,6 +284,7 @@ int main()
     {
         Contracts();
         RectAreaLightContracts();
+        PointLightContracts();
         std::cout << "Scene cache contracts passed: edits/model/bounds/history/cancel/reorder\n";
         return 0;
     }

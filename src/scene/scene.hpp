@@ -55,6 +55,14 @@ struct RectAreaLight
     bool enabled = true;
     bool operator==(const RectAreaLight&) const = default;
 };
+/// @brief Isotropic point emitter; intensity is in candela and range is in world units.
+struct PointLight
+{
+    math::Vec3 color{1, 1, 1};
+    float intensity = 1, range = 10;
+    bool enabled = true;
+    bool operator==(const PointLight&) const = default;
+};
 /// @brief Stable scene identity with optional components and inherited parent enable state.
 struct Object
 {
@@ -65,6 +73,7 @@ struct Object
     std::optional<MeshRenderer> mesh;
     std::optional<DirectionalLight> light;
     std::optional<RectAreaLight> areaLight;
+    std::optional<PointLight> pointLight;
     bool operator==(const Object&) const = default;
 };
 /// @brief Resolved hierarchy pose; rotation excludes scale for camera and light orientation.
@@ -121,6 +130,13 @@ struct AreaLight
     math::Vec3 center, edgeU, edgeV, normal, radiance;
     float area = 0;
 };
+/// @brief Extracted isotropic emitter; scale does not change its range or intensity.
+struct PointEmitter
+{
+    std::string object;
+    math::Vec3 position, color;
+    float intensity = 1, range = 10;
+};
 /// @brief Self-contained frame values; recording consumes these without reading the Scene document.
 struct Snapshot
 {
@@ -131,6 +147,7 @@ struct Snapshot
     MainLight light;
     /// Enabled emitters in stable UUID order; renderer support is separate.
     std::vector<AreaLight> areaLights;
+    std::vector<PointEmitter> pointLights;
     std::vector<Instance> instances;
     /// Stable enabled scene instances, independent of camera culling and light/shadow settings.
     std::vector<Instance> allInstances;
