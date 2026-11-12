@@ -4,6 +4,8 @@
 
 ## 当前状态
 
+- 面光源非路径追踪阴影平滑修复 IN_PROGRESS（2026 年 11 月 12 日）：按用户反馈复现光栅与混合管线阴影，检查离散采样、边缘和遮挡；独立验证后修复，保留并行 M8 暂存改动。
+
 - HDRP 参考面光源功能基线 DONE（2026 年 11 月 10 日）：Forward、Deferred、Indexed 和透明接收使用共享矩形灯、LTC、独立阴影图及 PCSS 式近似；可见灯面参与深度；混合光追使用逐灯 Ray Query 遮挡、解析灯面反射及反射命中物面积采样。最多两盏单面恒定辐亮度灯，支持剪切变换；LTC 数据来源与许可随产品分发。隔离 Debug/Release 的 RTX 5060 DX12/Vulkan 数值、场景、材质、反射、阴影及 HDR 对照通过；Release 窗口回归双后端通过，Editor bridge 与托管 Release 构建通过；无灯路径追踪双后端 128 spp 图像与接入前 hash 一致。Intel 核显 DX12 Forward/混合各 8 帧短测无验证错误；Intel Vulkan 在 Runtime 创建前受下述既有限制阻塞，未验证此设备面灯。Cornell 单/双灯 HDR 对照和 RTX 5060 单机短测、验证入口、完整限制见 [面光源](../docs/area-lights.md) 和 [手册](../manual/build.md#面光源短测)。这是所授权功能的近似基线，并非完整 HDRP：中心图有视场、近平面与漏光限制；有限采样有噪声和偏差；阴影缓存、EVSM、质量配置、更多设备/场景、长期运动及性能尚未验收，ReSTIR 与面灯烘焙未实现。M8 并行工作仍按其状态推进。
 
 - M1 Intel Vulkan 时间戳兼容性 TODO（2026 年 11 月 10 日发现）：Intel 核显 Vulkan 队列 `timestampValidBits` 非 64，现有 `VulkanRuntime` 在创建时拒绝设备；Forward/混合面光源均未进入渲染。需设计有限位时间戳回绕与计时契约并验证，不把 DX12 或 RTX Vulkan 的通过等同于此设备通过；日志 `out/area-light-benchmark/intel-vulkan-{forward,raytracing}.log`。
@@ -15,7 +17,7 @@
 - M7 项目切换子项 DONE（2026 年 11 月 10 日）：项目 scope、File/Open Project、最近项目和失败回退；托管 Debug/Release 各 26/26，回退/取消为模拟测试；Debug/Vulkan 既有 23 项窗口自检通过（30 份关闭账本零泄漏/验证错误/worker_failed），Release/DX12 可见窗口通过文件选择器切换至 PBR 并显示最近列表。Vulkan 的项目切换、真实加载失败回退与混合 DPI 尚未实机验证；M7.2f 原有人工验收限制保留。使用既有原生构建树，未重建并发 M8 工作。操作和契约见 [手册](../manual/build.md#avalonia-嵌入原型) 与 [工作台](../docs/editor-workbench.md#项目会话与切换)。
 
 - 当前实施阶段：M8 路径追踪收敛与白点修订 IN_PROGRESS（2026 年 11 月 9 日用户反馈重新打开）；B4 继续暂停，M7 其它工作仍为 DEFERRED。
-- 当前工作项：验证分量时域预览的遮挡、动态物体和真实窗口画质，继续改善采样与研究成熟降噪器接入；三种子线性 HDR 参考与有限运动对照已完成；首个时域差值候选因运动端点退化撤回，基于空间滤波分量的预览已通过有限对照；NRD 只完成接入缺口评估；按材质调整 BSDF 混合概率的候选因固定场景误差未改善而撤回。B4.5b 仍为 DEFERRED、默认 OFF；B4.5a 的 Debug 窗口超时仍需跟踪。
+- 当前工作项：验证两点漫反射限幅在真实交互、动态物体和更多场景中的偏差；继续验证分量时域预览的遮挡画质、改善采样并研究成熟降噪器接入；三种子线性 HDR 参考与有限运动对照已完成；首个时域差值候选因运动端点退化撤回，基于空间滤波分量的预览已通过有限对照；NRD 只完成接入缺口评估；按材质调整 BSDF 混合概率的候选因固定场景误差未改善而撤回。B4.5b 仍为 DEFERRED、默认 OFF；B4.5a 的 Debug 窗口超时仍需跟踪。
 - 编辑器 Decimal 自动化修复 DONE（2026 年 11 月 10 日）：保留 RangeValue 接口并以 Double 发送数值事件，Debug/Release 托管测试各 27/27；真实 Windows UI Automation 客户端对 DX12 线程数控件写值并收到 Double 事件，30 秒短测正常退出；Debug 双后端完整 smoke 通过，见 `out/m8-uia-client-third`、`out/m8-uia-diagnostic`。此前重试存在焦点/鼠标捕获和尺寸合并断言间歇失败（`out/m8-uia-fix*`）；已增加尺寸失败诊断，原因尚未确定，不能将本次通过视为稳定性证明。30 秒短测不替代 M7.2f 长时验收。
 - 用户约定：每个子阶段验收后精简计划、标注 DONE 并提交；暂停检查点不冒充子阶段完成。恢复或切换阶段时先更新本入口，不因整个计划存在就自动执行全部阶段，也不以引入依赖本身作为性能成果。
 
@@ -314,6 +316,22 @@ M7.2 出口：给定固定场景下，两面板默认布局与菜单按需打开
 `gpu.*.reflections` 各通过 1/1，九组全序列及停帧线性 MSE 时域均略低于空间结果，
 多数差距很小。独立脚本复算一组指标并核对参考均值；Debug、动态物体与主观画质未
 验证，方法、数据和有限参考限制见 [评估](../docs/performance/m8-denoiser-evaluation.md#三种子线性-hdr-参考)。
+
+两点漫反射亮点限幅（2026 年 11 月 10 日）：定位到球体亮点因只有两个匹配样本而
+绕过滤波，对明显超限的漫反射增加保守限幅并保留两点镜面；RTX 5060 Release 的
+DX12/Vulkan 场景专项通过，固定 HDR 热点及镜面检查通过，三轨迹三种子线性 HDR
+对照整体改善但部分受影响通道变差；固定静止 504/8184 spp 截图与旧版一致。
+Release 编辑器双后端三秒 Gallery 短测正常关闭且零验证错误/剩余分配/worker_failed，
+见 `D:/Personal/RenderLab/out/hdr-guarded-editor-{dx12,vulkan}`。叠加 LTC 光栅面光源后，
+Release 的 DX12/Vulkan 光栅面光源、路径面光源和路径场景专项均通过，编辑器双后端
+Gallery 三秒短测零验证错误/剩余分配/worker_failed；证据 `D:/Personal/RenderLab/out/hdr-ltc-*`。
+Debug、真实交互及更多设备未验证，局部偏差与成本见
+[评估](../docs/performance/m8-denoiser-evaluation.md#两点漫反射亮点限幅)。
+
+合并复验（2026 年 11 月 12 日）：面光源基线与两点限幅合并后，RTX 5060、Release
+下 DX12/Vulkan 的路径追踪、光栅面光源及路径面光源 GPU 专项共 6/6 通过；构建树与
+结果为 `out/build/m5-release`。本次未重跑 Debug、编辑器窗口或人工画质验收，既有
+限制继续保留。
 
 分量时域差值候选（2026 年 11 月 10 日）在 Release/DX12 首项运动端点测试退化并已
 撤回；重建后 Release/DX12 专项通过，312 张序列图片与候选前逐字节一致；未运行

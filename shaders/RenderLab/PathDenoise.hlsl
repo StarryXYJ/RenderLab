@@ -78,7 +78,7 @@ void Denoise(uint3 id : SV_DispatchThreadID)
         weights[count] = x == 0 && y == 0 ? 2 : 1;
         ++count;
     }
-    if (count < 3)
+    if (count < 2)
     {
         Output[pixel] = combined;
 #ifdef PATH_COMPONENT_OUTPUTS
@@ -101,8 +101,12 @@ void Denoise(uint3 id : SV_DispatchThreadID)
         a = sortedSpecular[j]; b = sortedSpecular[j + 1];
         sortedSpecular[j] = min(a, b); sortedSpecular[j + 1] = max(a, b);
     }
-    float diffuseLimit = sortedDiffuse[count / 2] * 2.5 + .04;
-    float specularLimit = sortedSpecular[count / 2] * 2.5 + .04;
+    // With two matching samples, use the lower value to keep an isolated outlier
+    // from defining its own limit. Larger neighborhoods retain the prior median.
+    uint median = count == 2 ? 0 : count / 2;
+    float diffuseLimit = count == 2 ? sortedDiffuse[median] * 4 + .08
+                                    : sortedDiffuse[median] * 2.5 + .04;
+    float specularLimit = sortedSpecular[median] * 2.5 + .04;
     float3 diffuseSum = 0, specularSum = 0;
     float total = 0;
     [loop] for (uint i = 0; i < count; ++i)
@@ -111,8 +115,13 @@ void Denoise(uint3 id : SV_DispatchThreadID)
         specularSum += specularColors[i] * min(1, specularLimit / max(specularValues[i], 1e-6)) * weights[i];
         total += weights[i];
     }
-    float3 diffuseResult = lerp(centerDiffuse, diffuseSum / total, strength);
-    float3 specularResult = lerp(centerSpecular, specularSum / total, strength);
+    // Do not blur a normal value when the only neighbor is the brighter sample.
+    float3 diffuseResult = count == 2 && Luminance(centerDiffuse) <= diffuseLimit
+                               ? centerDiffuse
+                               : lerp(centerDiffuse, diffuseSum / total, strength);
+    // Two points cannot distinguish a narrow reflection from an outlier reliably.
+    float3 specularResult = count < 3 ? centerSpecular
+                                      : lerp(centerSpecular, specularSum / total, strength);
     Output[pixel] = float4(direct + diffuseResult + specularResult, combined.a);
 #ifdef PATH_COMPONENT_OUTPUTS
     FilteredDiffuse[pixel] = float4(diffuseResult, 1);

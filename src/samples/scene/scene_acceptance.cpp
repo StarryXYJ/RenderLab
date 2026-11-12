@@ -64,10 +64,10 @@ void MeasurePathMotionSequences(rhi::Runtime& runtime, shader::Target target,
         SaveImage(path, bytes, width, height, pitch);
         return std::vector<std::byte>(bytes.begin(), bytes.end());
     };
-    const auto captureHdr = [&](const renderer::SceneReadback& frame)
+    const auto captureHdrBuffer = [&](const std::shared_ptr<rhi::Buffer>& buffer, bool nonnegative)
     {
-        detail::Require(frame.pathHdrDisplay != nullptr, "Missing path HDR display readback");
-        const auto bytes = frame.pathHdrDisplay->Map();
+        detail::Require(buffer != nullptr, "Missing path HDR readback");
+        const auto bytes = buffer->Map();
         const auto hdrPitch = rhi::TextureRowPitch(width, rhi::Format::Rgba32Float);
         std::vector<float> result(width * height * 3);
         for (uint32_t y = 0; y < height; ++y)
@@ -77,13 +77,15 @@ void MeasurePathMotionSequences(rhi::Runtime& runtime, shader::Target target,
                 std::memcpy(pixel.data(), bytes.data() + y * hdrPitch + x * 16, 16);
                 for (size_t c = 0; c < 3; ++c)
                 {
-                    detail::Require(std::isfinite(pixel[c]) && pixel[c] >= 0,
+                    detail::Require(std::isfinite(pixel[c]) && (!nonnegative || pixel[c] >= 0),
                                     "Nonfinite or negative path HDR display");
                     result[(y * width + x) * 3 + c] = pixel[c];
                 }
             }
         return result;
     };
+    const auto captureHdr = [&](const renderer::SceneReadback& frame)
+    { return captureHdrBuffer(frame.pathHdrDisplay, true); };
     const auto saveHdr = [&](const std::filesystem::path& path, const std::vector<float>& pixels)
     {
         std::filesystem::create_directories(path.parent_path());
@@ -133,7 +135,10 @@ void MeasurePathMotionSequences(rhi::Runtime& runtime, shader::Target target,
                                                  0});
                 if (mode == 0)
                     poses.push_back(scene.Document());
+                const bool inspect = trajectory == 0 && options.pathSeed == 3 && frame == 7;
+                options.pathComponentDiagnostics = inspect;
                 const auto result = render(true);
+                options.pathComponentDiagnostics = false;
                 sequences[mode].push_back(
                     capture(result, base / std::format("seed-{}", options.pathSeed) /
                                         (mode % 2 == 0 ? "spatial" : "temporal") /
@@ -143,6 +148,38 @@ void MeasurePathMotionSequences(rhi::Runtime& runtime, shader::Target target,
                             (mode % 2 == 0 ? "spatial" : "temporal") /
                             std::format("{:02}.pfm", frame),
                         hdrSequences[mode].back());
+                if (inspect)
+                {
+                    const auto diagnostic =
+                        base / "diagnostics" / (mode % 2 == 0 ? "spatial" : "temporal");
+                    constexpr std::array<const char*, 3> rawNames{"raw-total", "raw-direct",
+                                                                  "raw-diffuse"};
+                    constexpr std::array<const char*, 3> filteredNames{
+                        "filtered-total", "filtered-diffuse", "filtered-specular"};
+                    for (size_t i = 0; i < rawNames.size(); ++i)
+                    {
+                        saveHdr(diagnostic / (std::string(rawNames[i]) + ".pfm"),
+                                captureHdrBuffer(result.pathComponents[i], false));
+                        saveHdr(diagnostic / (std::string(filteredNames[i]) + ".pfm"),
+                                captureHdrBuffer(result.pathFilteredComponents[i], false));
+                    }
+                    const auto rawDiffuse = captureHdrBuffer(result.pathComponents[2], false);
+                    const auto filteredDiffuse =
+                        captureHdrBuffer(result.pathFilteredComponents[1], false);
+                    const auto rawTotal = captureHdrBuffer(result.pathComponents[0], false);
+                    const auto rawDirect = captureHdrBuffer(result.pathComponents[1], false);
+                    const auto filteredSpecular =
+                        captureHdrBuffer(result.pathFilteredComponents[2], false);
+                    const auto hotPixel = (36 * width + 46) * 3;
+                    detail::Require(rawDiffuse[hotPixel] > 1 &&
+                                        filteredDiffuse[hotPixel] < rawDiffuse[hotPixel] * .2f,
+                                    "Two-sample diffuse outlier was not limited");
+                    for (size_t c = 0; c < 3; ++c)
+                        detail::Require(std::abs(filteredSpecular[hotPixel + c] -
+                                                 (rawTotal[hotPixel + c] - rawDirect[hotPixel + c] -
+                                                  rawDiffuse[hotPixel + c])) < 1e-4f,
+                                        "Two-sample diffuse filter changed specular radiance");
+                }
             }
         }
         options.pathSeed = 1000;
