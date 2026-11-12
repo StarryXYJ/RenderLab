@@ -484,6 +484,54 @@ void VerifyPathMovingObject(rhi::Runtime& runtime, shader::Target target,
             std::filesystem::create_directories(name.parent_path());
             SaveImage(name, frame.pixels->Map(), width, height, colorPitch);
         }
+        if (mode == 1)
+        {
+            const auto oldWorld = actorInstance().world;
+            scene.Document().Get(actorId).transform.rotation =
+                math::Quaternion::EulerDegrees({20, 40, 15});
+            const auto frame = render();
+            const auto& instances = scene.LastSnapshot().allInstances;
+            const auto& rotated = actorInstance();
+            const auto index = static_cast<size_t>(&rotated - instances.data());
+            detail::Require(frame.pathPreviousWorld.at(index) &&
+                                frame.pathPreviousWorld[index]->values == oldWorld.values,
+                            "Rotation lost the previous committed transform");
+            const auto identityData = frame.pathPrimaryIdentity->Map();
+            const auto positions = frame.pathPreviousPosition->Map();
+            const auto oldToCurrent = math::Inverse(oldWorld);
+            uint32_t checked = 0;
+            for (uint32_t y = 0; y < height; ++y)
+                for (uint32_t x = 0; x < width; ++x)
+                {
+                    std::array<float, 4> identity{}, position{};
+                    std::memcpy(identity.data(), identityData.data() + y * hdrPitch + x * 16, 16);
+                    std::memcpy(position.data(), positions.data() + y * hdrPitch + x * 16, 16);
+                    if (identity[0] != 1 || identity[1] != float(index))
+                        continue;
+                    detail::Require(position[3] == 1, "Rotating mesh lost previous position");
+                    const math::Vec3 previous{position[0], position[1], position[2]};
+                    const auto current =
+                        math::Point(rotated.world, math::Point(oldToCurrent, previous));
+                    const auto& m = scene.LastSnapshot().viewProjection;
+                    const auto clip = [&](size_t row)
+                    {
+                        return m.At(row, 0) * current.x + m.At(row, 1) * current.y +
+                               m.At(row, 2) * current.z + m.At(row, 3);
+                    };
+                    const auto w = clip(3);
+                    const auto px = (clip(0) / w * .5f + .5f) * width;
+                    const auto py = (.5f - clip(1) / w * .5f) * height;
+                    detail::Require(
+                        w > 0 && px >= x - .01f && px <= x + 1.01f && py >= y - .01f &&
+                            py <= y + 1.01f &&
+                            std::abs(math::Length(current - scene.LastSnapshot().cameraPosition) -
+                                     identity[3]) <= 2e-4f * std::max(1.f, identity[3]),
+                        "Rotating mesh previous position does not map to primary ray");
+                    ++checked;
+                }
+            detail::Require(checked > 0, "Rotation fixture has no visible actor pixels");
+            logger.Write(LogLevel::Info, std::format("Path rotation checked {} pixels", checked));
+        }
         for (uint32_t i = 0; i < 2; ++i)
         {
             const auto frame = render();
