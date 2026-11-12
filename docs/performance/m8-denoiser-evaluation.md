@@ -72,6 +72,15 @@ RTX 5060、Release/DX12，以上 96×54 固定相机、单球体四帧轨迹；�
 测试。实验代码补丁、图像与日志为 `D:/Personal/RenderLab/out/path-moving-candidate.patch`
 和 `D:/Personal/RenderLab/out/path-moving-candidate`。
 
+随后将基线和候选都改为在物体变换时继续推进采样序列，以避免前一实验中反复从相同
+随机起点采样；渐进历史仍重置，只有候选尝试保留显示历史。其余场景、四帧轨迹及
+1024 spp 参考不变：全图线性 RGB MSE 从 0.01342140 降至 0.01333786，参考变化
+通道 MSE 从 0.00716930 升至 0.00736415（169 通道）。候选仅在单个 DX12 种子和
+轨迹试验，既没有足够收益证据，也未能排除变化区域拖影，因而再次撤回；不把该结果
+解释为所有运动场景都会退化。补丁与日志为
+`D:/Personal/RenderLab/out/path-moving-independent.patch` 和
+`D:/Personal/RenderLab/out/path-moving-independent`。
+
 ## 两点漫反射亮点限幅
 
 三种子 HDR 对照中的 gentle/seed 3、第 8 个运动帧，在像素 (46,36) 的红色通道
