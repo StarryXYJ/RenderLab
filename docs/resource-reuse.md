@@ -28,6 +28,8 @@ DX12 Runtime 持有资源 heap 页（每页 4096 项）和 sampler heap 页（�
 
 Vulkan 描述符页与 BindingLayout 身份关联，每页容纳最多 32 个绑定组的四个 set；按布局描述符数量将每页预留控制在 8192 项左右，单组本身超过该数时保留一组。Runtime 最多保留 64 页，优先在同布局页复用已释放槽；达到预算时只淘汰没有活动组的页，全部被引用则明确报错。槽位由绑定组保活并在其销毁后归还，不按 CPU 帧号 Reset pool，也不使用 dynamic uniform offset 或 update-after-bind。
 
+Vulkan 在绑定组构造时收集该组全部 descriptor 更新并一次调用 `vkUpdateDescriptorSets`；不合并跨组的更新，更新数据及加速结构扩展链在调用结束前有效。普通小布局使用栈上空间，大布局使用动态空间。
+
 两后端均由逻辑 BindingGroup 的拥有权保护分配：CPU 保存的组、已录制未提交命令和 Runtime 的待完成命令包都会阻止重用。取消只释放 CPU 引用；已提交组在真实完成后退休。缓存的分配页/块不拥有 Buffer/Texture，避免长期钉住 Graph 资源和上传页。构造失败通过 RAII 归还已取得的区间。
 
 `Runtime::GetDescriptorStats()` 返回当前原生页/块数、容量项数、在用项数、高水位和累计创建次数。这里的单位是 descriptor slot，不是字节；不并入 RHI Buffer/Texture 的分配 ledger。统计共享状态与租约同寿命，不捕获可能已失效的分配器地址。首版缓存至 Runtime 销毁；Vulkan 另有满预算时的空闲淘汰。

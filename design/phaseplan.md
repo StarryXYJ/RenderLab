@@ -4,7 +4,7 @@
 
 ## 当前状态
 
-- 四步压测和 CPU 优化 IN_PROGRESS（2026 年 11 月 12 日）：DX12 Editor Deferred/混合及 Vulkan Editor 三管线固定相机短测已完成；Vulkan 改为有界多组描述符页，八点灯四管线可运行，双后端相关回归通过。新版 profile 已补测；IndexedDirect/CpuIndirect 保序合并相邻同网格实例，双后端索引场景回归通过、压测主画面 Draw 145→86，但短测帧时间未稳定改善，默认 Direct 与阴影 pass 未改变。继续测量并处理阴影重复工作；真实交互、其他设备及长期运行未验证。证据见 [性能记录](../docs/performance/light-stress-cpu.md#editor-三管线与-vulkan-描述符页2026-年-11-月-12-日)。
+- 四步压测和 CPU 优化 IN_PROGRESS（2026 年 11 月 12 日）：DX12 Editor Deferred/混合及 Vulkan Editor 三管线固定相机短测已完成；Vulkan 改为有界多组描述符页，八点灯四管线可运行，双后端相关回归通过。新版 profile 已补测；IndexedDirect/CpuIndirect 保序合并相邻同网格实例，双后端索引场景回归通过、压测主画面 Draw 145→86，但短测帧时间未稳定改善，默认 Direct 与阴影 pass 未改变。Vulkan 单组 descriptor 更新合并，双后端指定回归 12/12，validation on 短测改善、off 绑定组有小幅额外开销；继续测量阴影重复工作。真实交互、其他设备及长期运行未验证。证据见 [性能记录](../docs/performance/light-stress-cpu.md#editor-三管线与-vulkan-描述符页2026-年-11-月-12-日)。
 
 - CPU 重复计算优化 IN_PROGRESS（2026 年 11 月 12 日）：Graph 成功路径避免构造未使用的诊断，Release 双后端指定回归 5/5、三管线画面一致且 DX12 短测 CPU 时间下降；详见 [性能记录](../docs/performance/light-stress-cpu.md#graph-热路径首轮优化2026-年-11-月-12-日)。帧内按材质复用不可变迁移快照，双后端材质及热重载回归通过；Graph 字面量检查和绑定校验也移除成功路径诊断分配，双后端指定回归 5/5；继续评估批量绘制及阴影的重复工作。并行点灯整合后 Release 双后端指定回归 9/9、DX12 四管线八灯短测和 Forward Editor 窗口短测完成；更多窗口管线、交互和其他设备未验证。
 

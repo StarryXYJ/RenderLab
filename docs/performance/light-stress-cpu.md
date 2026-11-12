@@ -57,3 +57,9 @@ Vulkan 使用按 BindingLayout 复用多组 set 的有界描述符页后，RTX 5
 IndexedDirect 与 CpuIndirect 合并同批次原顺序中相邻的相同几何，保留实例顺序、每实例材质和变换；未全局排序，避免改变重合几何的深度次序。固定压测中 IndexedDirect 的主画面索引 Draw 145→86，另一 64 对象夹具可见 43 个，Draw 43→1；两后端各自前后 BMP 哈希一致。DX12/Vulkan 索引场景 GPU 回归均通过，覆盖 64 同网格夹具的直接/间接实例合并、比较与 GPU 剔除图像。
 
 两种夹具各一次 20 帧预热/90 帧无验证短测：压测 DX12 帧 7.10→7.23 ms、Vulkan 4.92→4.87 ms；同网格夹具 DX12 0.50→0.53 ms、Vulkan 0.44→0.45 ms。Draw 数减少但没有测得稳定的总帧时间收益；仍默认 Direct，阴影 pass 与 GpuCulled 路径没有合批，不能据此声称默认 Editor 提速。日志 `out/instancing/`，索引回归日志 `D:/Personal/RenderLab/out/four-step-instanced-final-{dx12,vulkan}`。透明、特殊重叠/动态情况、其他设备和长时运行未完整验收。
+
+## Vulkan 绑定组批量写入（2026 年 11 月 12 日）
+
+在有界描述符页上，将同一个 BindingGroup 内的 descriptor 更新合并为一次 Vulkan 调用；保留逐项校验、独立描述符组以及加速结构扩展数据的生命周期。Release 双后端 RHI、描述符数组、材质、面灯光栅、路径和反射回归 12/12，八点灯 Forward 前后 BMP 哈希相同。
+
+RTX 5060 Vulkan Release、960×540、CPU profiling on、30 帧预热/200 帧测量，按前后后前顺序各两次：validation on 的串行帧均值 27.69/26.68 → 25.07/25.29 ms，绑定组创建 10.93/10.56 → 8.82/8.87 ms；validation off 的帧均值 7.06/7.39 → 7.40/7.33 ms，绑定组创建 0.41/0.43 → 0.48/0.47 ms。关闭 validation 时小幅额外 CPU 开销没有稳定的总帧收益，开启时此设备的短测有收益；不能推断其他设备或 Editor 帧率。日志 `out/descriptor-batch/`。
