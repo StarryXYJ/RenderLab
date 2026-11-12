@@ -1894,9 +1894,33 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
         }
         return binding;
     };
+    struct ShadowTemplate
+    {
+        DrawPacket draw;
+        std::optional<size_t> shadowBinding;
+    };
+    std::map<std::string, ShadowTemplate> shadowTemplates;
     const auto prepareDraw = [&](const scene::Instance& instance, shader::PassRole requestedRole,
                                  int areaShadowIndex = -1)
     {
+        if (requestedRole == shader::PassRole::ShadowCaster && areaShadowIndex >= 0)
+        {
+            const auto found = shadowTemplates.find(instance.id);
+            if (found != shadowTemplates.end())
+            {
+                auto draw = found->second.draw;
+                if (found->second.shadowBinding)
+                {
+                    const auto& slice = areaShadowConstants[areaShadowIndex];
+                    auto& binding = draw.buffers.at(*found->second.shadowBinding);
+                    binding.buffer =
+                        importBuffer(slice.buffer, "AreaShadow.Constants", rhi::State::HostWrite);
+                    binding.range = {slice.offset, slice.size};
+                }
+                frame.areaShadowCasters[areaShadowIndex].push_back(std::move(draw));
+                return;
+            }
+        }
         const auto& model = self.models.at(instance.model);
         const auto mesh = std::ranges::find(model.meshes, instance.mesh, &assets::Mesh::id);
         if (mesh == model.meshes.end())
@@ -2137,6 +2161,20 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
         {
             const auto& resource = material.package->GetResource(*bindings.areaShadow1);
             draw.textures.push_back({resource.slot, "AreaLight.Shadow1", uint32_t(resource.scope)});
+        }
+        if (role == shader::PassRole::ShadowCaster && frame.areaShadowCount > 0)
+        {
+            std::optional<size_t> shadowBinding;
+            if (bindings.shadow)
+            {
+                const auto& block = material.package->GetBlock(*bindings.shadow);
+                const auto found = std::ranges::find_if(draw.buffers, [&](const auto& binding)
+                { return binding.slot == block.slot && binding.space == uint32_t(block.scope); });
+                if (found == draw.buffers.end())
+                    throw std::logic_error("Shadow parameter binding missing from draw");
+                shadowBinding = static_cast<size_t>(found - draw.buffers.begin());
+            }
+            shadowTemplates.emplace(instance.id, ShadowTemplate{draw, shadowBinding});
         }
         if (role == shader::PassRole::ShadowCaster && areaShadowIndex >= 0)
             frame.areaShadowCasters[areaShadowIndex].push_back(std::move(draw));

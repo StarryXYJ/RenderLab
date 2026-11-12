@@ -4,6 +4,8 @@
 
 ## 当前状态
 
+- 多物体场景 CPU 卡顿排查 IN_PROGRESS（2026 年 11 月 12 日）：同一实例的多灯阴影绘制在单帧内复用准备结果；RTX 5060 Release DX12 小样本 Forward 场景准备均值约 20.25 → 16.22 ms，画面逐字节一致；DX12/Vulkan 面灯阴影及反射回归 4/4。当前总帧时间仍约 25 ms，其他场景准备、命令录制、窗口实测及与并行点光源修改的整合仍待处理；见 [性能记录](../docs/performance/light-stress-cpu.md)。
+
 - 点光源 IN_PROGRESS（2026 年 11 月 12 日）：场景组件、序列化、层级提取及 Release CPU 契约测试已完成；线性色彩、坎德拉强度、世界空间范围，缩放不改变范围。渲染尚未接入；后续实现直接照明及遮挡、路径追踪和多灯场景并逐管线验证。
 
 - 多物体光照压测场景 DONE（2026 年 11 月 12 日）：145 个可见网格、两盏矩形面灯和一盏主方向光，RTX 5060 Release 短测 DX12 四管线及 Vulkan Path Tracing 完成且 validation errors 为零；Vulkan Forward、Deferred、混合光追因描述符块预算耗尽不能加载，DX12 有 clear value 警告。验证入口和限制见 [手册](../manual/build.md#多物体光照压测)。当前无点光源，不能作为多点光源压测；更多光源及 Vulkan 资源预算仍待处理。
