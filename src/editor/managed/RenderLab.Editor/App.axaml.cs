@@ -28,13 +28,17 @@ public partial class App : Application
         {
             desktop.ShutdownMode = Avalonia.Controls.ShutdownMode.OnMainWindowClose;
             services = new ServiceCollection()
-                .AddSingleton(Program.Options)
+                .AddSingleton(new StartupOptions(Program.Options))
+                .AddScoped<ProjectContext>()
+                .AddScoped(provider => provider.GetRequiredService<ProjectContext>().Options)
+                .AddSingleton<ProjectSessionFactory>()
+                .AddSingleton<RecentProjects>()
                 .AddSingleton(Program.Logging!.Buffer)
                 .AddLogging(builder => builder.ClearProviders().AddSerilog(Program.Logging.Logger, dispose: false))
                 .AddSingleton<LogViewModel>()
-                .AddSingleton<RenderSettingsViewModel>()
-                .AddSingleton<NativeViewportService>()
-                .AddSingleton<MainWindowViewModel>()
+                .AddScoped<RenderSettingsViewModel>()
+                .AddScoped<NativeViewportService>()
+                .AddScoped<MainWindowViewModel>()
                 .AddSingleton<MainWindow>()
                 .BuildServiceProvider(new ServiceProviderOptions
                 {

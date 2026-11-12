@@ -16,6 +16,7 @@ public sealed class NativeViewportService : IDisposable
 {
     private readonly EditorOptions options;
     private int logSequence;
+    private readonly string logOwner = Guid.NewGuid().ToString("N");
     private float[]? savedCamera;
     private long lastLogPoll;
     private ulong lastNativeSequence;
@@ -71,7 +72,7 @@ public sealed class NativeViewportService : IDisposable
             Close(Session);
         }
         AbiVersion = NativeMethods.AbiVersion();
-        if (AbiVersion != 10 || Marshal.SizeOf<ViewportStats>() != 256 || Marshal.SizeOf<CloseReport>() != 24 ||
+        if (AbiVersion != 11 || Marshal.SizeOf<ViewportStats>() != 256 || Marshal.SizeOf<CloseReport>() != 24 ||
             Marshal.SizeOf<ViewportConfig>() != 112 || Marshal.SizeOf<ViewportConfigState>() != 272)
         {
             throw new InvalidOperationException("Managed/native bridge ABI mismatch.");
@@ -79,7 +80,7 @@ public sealed class NativeViewportService : IDisposable
         NativeMethods.Check(NativeMethods.Create(parent, creatingDevice.Backend == "dx12" ? 0u : 1u,
             creatingDevice.Validation ? 1u : 0u, options.Profiling ? 1u : 0u,
             options.TargetFps, options.BenchmarkSeconds > 0 ? 1u : 0u,
-            options.Project, options.Shaders, Path.Combine(options.Output, $"native-{++logSequence}.log"),
+            options.Project, options.Shaders, Path.Combine(options.Output, $"native-{logOwner}-{++logSequence}.log"),
             out var session, out var child));
         Session = session;
         observationConfigured = false;
@@ -113,6 +114,12 @@ public sealed class NativeViewportService : IDisposable
             {
                 var config = EditableConfig;
                 config.Pipeline = pipeline; config.Exposure = exposure;
+                if (pipeline == 4)
+                {
+                    config.Submission = 0;
+                    if (config.View > 1) { config.View = 0; }
+                    config.Flags &= ~32u;
+                }
                 Submit(config);
             }
             else

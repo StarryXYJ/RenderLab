@@ -1,4 +1,6 @@
 using Avalonia.Controls;
+using Avalonia.Platform.Storage;
+using System.Text.Json;
 using Avalonia;
 using Avalonia.Interactivity;
 using Avalonia.Data;
@@ -17,14 +19,21 @@ namespace RenderLab.Editor.Views;
 
 public partial class MainWindow : Window
 {
-    private readonly NativeViewportService? viewportService;
+    private NativeViewportService? viewportService;
+    private ProjectSession? projectSession;
+    private readonly ProjectSessionFactory? sessions;
+    private readonly RecentProjects? recent;
+    private readonly LogViewModel? logModel;
+    private CancellationTokenSource? projectSwitch;
+    private TaskCompletionSource? firstFrame;
+    private bool initialRecorded, projectReady;
     private readonly SmokeTest? smoke;
     private readonly ViewportBenchmark? benchmark;
     private readonly WorkbenchSoak? soak;
     private RenderSettingsView settings = null!;
     private ContentControl? viewportContainer;
-    private readonly string layoutPath = "";
-    private readonly EditorOptions? options;
+    private string layoutPath = "";
+    private EditorOptions? options;
     private readonly ILogger? logger;
     private bool closingWindow;
     private IDisposable? dragWatch;
@@ -55,23 +64,49 @@ public partial class MainWindow : Window
     // The previewer loads XAML without creating native rendering resources.
     public MainWindow() => InitializeComponent();
 
-    public MainWindow(MainWindowViewModel viewModel, NativeViewportService viewportService, EditorOptions options,
-        LogViewModel logModel, ILogger<MainWindow> logger)
-        : this()
+    public MainWindow(ProjectSessionFactory sessions, StartupOptions startup, RecentProjects recent,
+        LogViewModel logModel, ILogger<MainWindow> logger) : this()
     {
-        DataContext = viewModel;
-        this.viewportService = viewportService;
-        this.options = options;
+        this.sessions = sessions;
+        this.recent = recent;
+        this.logModel = logModel;
         this.logger = logger;
-        GraphModel = new RenderGraphViewModel(viewportService);
-        ProfilerModel = new ProfilerViewModel(viewportService, GraphModel);
         logStatusTimer.Tick += (_, _) => UpdateLogStatus();
         Opened += (_, _) => logStatusTimer.Start();
-        if (options.Observation is "graph" or "readback")
+        observationTimer.Tick += (_, _) => { if (options?.Observation == "graph") { GraphModel.Refresh(); } else { ProfilerModel.Refresh(); } };
+        Opened += (_, _) => { if (options?.Observation is "graph" or "readback") { observationTimer.Start(); } };
+        Closing += (_, _) =>
         {
-            observationTimer.Tick += (_, _) => { if (options.Observation == "graph") { GraphModel.Refresh(); } else { ProfilerModel.Refresh(); } };
-            Opened += (_, _) => observationTimer.Start();
-        }
+            closingWindow = true;
+            projectSwitch?.Cancel();
+            DetachProject();
+        };
+        Closed += (_, _) =>
+        {
+            dragWatch?.Dispose();
+            logStatusTimer.Stop();
+            observationTimer.Stop();
+        };
+        dragWatch = Dock.Avalonia.Controls.DockControl.IsDraggingDockProperty.Changed.AddClassHandler<Dock.Avalonia.Controls.DockControl>((control, args) => SetDragging(control.IsDraggingDock));
+        AttachProject(startup.Value.Project);
+        RefreshRecent();
+        if (options!.Smoke) { smoke = new SmokeTest(this, options); }
+        else if (options.BenchmarkSeconds > 0) { benchmark = new ViewportBenchmark(this, viewportService!, options); }
+        else if (options.SoakSeconds > 0) { soak = new WorkbenchSoak(this, viewportService!, options); }
+    }
+
+    private void AttachProject(string project, DeviceSelection? device = null)
+    {
+        projectSession = sessions!.Create(project, device);
+        options = projectSession.Options;
+        var viewModel = projectSession.ViewModel;
+        var viewportService = projectSession.Viewport;
+        this.viewportService = viewportService;
+        DataContext = viewModel;
+        initialRecorded = false;
+        projectReady = false;
+        GraphModel = new RenderGraphViewModel(viewportService);
+        ProfilerModel = new ProfilerViewModel(viewportService, GraphModel);
         Docks = new WorkbenchDockFactory(new()
         {
             ["Scene"] = CreateSceneView,
@@ -79,7 +114,7 @@ public partial class MainWindow : Window
             ["Render Graph"] = () => new RenderGraphView { DataContext = GraphModel },
             ["Profiler"] = () => new ProfilerView { DataContext = ProfilerModel },
             ["Log"] = () => new LogView { DataContext = logModel }
-        }, logger);
+        }, logger!);
         Workbench.Factory = Docks;
         ProfilerModel.GraphRequested += () => Docks.Show("Render Graph");
         Workbench.InitializeFactory = false;
@@ -89,10 +124,6 @@ public partial class MainWindow : Window
         Docks.UseLayout(Docks.CreateLayout());
         if (!options.Smoke && !options.Isolated && options.BenchmarkSeconds == 0 && options.SoakSeconds == 0) { LoadLayout(); }
         Workbench.Layout = Docks.Root;
-        dragWatch = Dock.Avalonia.Controls.DockControl.IsDraggingDockProperty.Changed.AddClassHandler<Dock.Avalonia.Controls.DockControl>((control, args) =>
-        {
-            SetDragging(control.IsDraggingDock);
-        });
         Docks.WindowMoveDragBegin += (_, _) => SetDragging(true);
         Docks.WindowMoveDragEnd += (_, _) => SetDragging(false);
         Docks.DockableClosed += (_, _) => RefreshMenus();
@@ -100,44 +131,172 @@ public partial class MainWindow : Window
         viewportService.RecreateRequested += RecreateViewport;
         viewportService.StatsUpdated += ForwardStats;
         viewportService.Failed += OnViewportFailure;
-        Closing += (_, _) =>
+        RefreshMenus();
+    }
+
+    private void DetachProject()
+    {
+        if (projectSession is null) { return; }
+        viewportService?.CancelSwitch();
+        if (Docks is not null)
         {
-            closingWindow = true;
-            viewportService.CancelSwitch();
-            try { Directory.CreateDirectory(Path.GetDirectoryName(layoutPath)!); File.WriteAllText(layoutPath, Docks.Serialize()); }
-            catch (Exception error) { logger.LogWarning(error, "Saving layout failed"); }
+            if (projectReady)
+            {
+                try { Directory.CreateDirectory(Path.GetDirectoryName(layoutPath)!); File.WriteAllText(layoutPath, Docks.Serialize()); }
+                catch (Exception error) { logger?.LogWarning(error, "Saving layout failed"); }
+            }
             Viewport?.CloseViewport();
             Docks.CloseFloatingWindows();
-        };
-        Closed += (_, _) =>
+            Workbench.Layout = null;
+        }
+        if (viewportService is not null)
         {
-            dragWatch?.Dispose();
-            logStatusTimer.Stop();
-            observationTimer.Stop();
             viewportService.RecreateRequested -= RecreateViewport;
             viewportService.StatsUpdated -= ForwardStats;
             viewportService.Failed -= OnViewportFailure;
-        };
-        RefreshMenus();
-        if (options.Smoke)
-        {
-            smoke = new SmokeTest(this, options);
         }
-        else if (options.BenchmarkSeconds > 0)
-        {
-            benchmark = new ViewportBenchmark(this, viewportService, options);
-        }
-        else if (options.SoakSeconds > 0) { soak = new WorkbenchSoak(this, viewportService, options); }
+        DataContext = null;
+        viewportContainer = null;
+        Viewport = null!;
+        projectSession.Dispose();
+        projectSession = null;
+        viewportService = null;
+        Docks = null!;
     }
 
-    private void OnViewportFailure(Exception error) => smoke?.Fail(error);
+    private async void OpenProject(object? sender, RoutedEventArgs args)
+    {
+        var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = "Open RenderLab project", AllowMultiple = false,
+            FileTypeFilter = [new FilePickerFileType("RenderLab project") { Patterns = ["*.rlproject"] }]
+        });
+        if (files.Count == 0) { return; }
+        var path = files[0].TryGetLocalPath();
+        if (path is not null) { await SwitchProject(path); }
+    }
+
+    private void ClearRecentProjects(object? sender, RoutedEventArgs args) { recent!.Clear(); RefreshRecent(); }
+
+    private void RefreshRecent()
+    {
+        if (recent is null) { return; }
+        var entries = new List<MenuItem>();
+        foreach (var path in recent.Items)
+        {
+            var item = new MenuItem { Header = Path.GetFileNameWithoutExtension(path) };
+            ToolTip.SetTip(item, path);
+            item.Click += async (_, _) => await SwitchProject(path);
+            entries.Add(item);
+        }
+        if (entries.Count == 0) { entries.Add(new MenuItem { Header = "No recent projects", IsEnabled = false }); }
+        RecentMenu.ItemsSource = entries;
+    }
+
+    private static string ValidateProject(string project)
+    {
+        var path = Path.GetFullPath(project);
+        if (!string.Equals(Path.GetExtension(path), ".rlproject", StringComparison.OrdinalIgnoreCase))
+        { throw new ArgumentException("Select a .rlproject file."); }
+        using var json = JsonDocument.Parse(File.ReadAllText(path));
+        if (json.RootElement.ValueKind != JsonValueKind.Object ||
+            !json.RootElement.TryGetProperty("startScene", out var scene) || scene.ValueKind != JsonValueKind.String ||
+            string.IsNullOrWhiteSpace(scene.GetString()))
+        { throw new ArgumentException("The project does not contain a valid startScene."); }
+        return path;
+    }
+
+    private async Task SwitchProject(string project)
+    {
+        if (projectSwitch is not null || closingWindow) { return; }
+        string target;
+        try { target = ValidateProject(project); }
+        catch (Exception error)
+        {
+            if (!File.Exists(project)) { recent!.Remove(project); RefreshRecent(); }
+            await ShowProjectError("Cannot open project", error.Message);
+            return;
+        }
+        if (options is not null && projectSession is not null && string.Equals(target, options.Project, StringComparison.OrdinalIgnoreCase)) { return; }
+        if (viewportService?.DeviceSwitch.Busy == true)
+        { await ShowProjectError("Cannot open project", "Wait for the graphics device switch to finish."); return; }
+        var previous = projectSession?.Options.Project;
+        var device = viewportService?.DeviceSwitch.Current;
+        projectSwitch = new CancellationTokenSource();
+        var token = projectSwitch.Token;
+        FileMenu.IsEnabled = false;
+        SetProjectControlsEnabled(false);
+        try
+        {
+            var result = await ProjectSwitchTransaction.RunAsync(target, previous,
+                (path, cancellation) => OpenProjectSession(path, device, cancellation), token);
+            if (result.TargetError is not null)
+            {
+                var message = result.TargetError.Message;
+                if (result.Restored) { message += "\n\nPrevious project reopened."; }
+                else
+                {
+                    DetachProject();
+                    if (result.RollbackError is not null) { message += "\n\nCould not reopen previous project: " + result.RollbackError.Message; }
+                }
+                if (!closingWindow) { await ShowProjectError("Cannot open project", message); }
+            }
+        }
+        catch (OperationCanceledException) when (token.IsCancellationRequested) { }
+        finally
+        {
+            firstFrame = null;
+            projectSwitch.Dispose(); projectSwitch = null;
+            if (!closingWindow) { FileMenu.IsEnabled = true; SetProjectControlsEnabled(projectSession is not null); }
+        }
+    }
+
+    private async Task OpenProjectSession(string path, DeviceSelection? device, CancellationToken token)
+    {
+        DetachProject();
+        token.ThrowIfCancellationRequested();
+        firstFrame = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        AttachProject(path, device);
+        Docks.Show("Scene");
+        await firstFrame.Task.WaitAsync(TimeSpan.FromSeconds(120), token);
+    }
+
+    private void SetProjectControlsEnabled(bool enabled)
+    {
+        WindowMenu.IsEnabled = enabled;
+        LayoutMenu.IsEnabled = enabled;
+        SceneActionsMenu.IsEnabled = enabled;
+        Workbench.IsEnabled = enabled;
+    }
+
+    private async Task ShowProjectError(string title, string message)
+    {
+        var dialog = new Window { Title = title, Width = 520, SizeToContent = SizeToContent.Height,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner, CanResize = false };
+        var panel = new StackPanel { Margin = new Thickness(20), Spacing = 16 };
+        panel.Children.Add(new TextBlock { Text = message, TextWrapping = Avalonia.Media.TextWrapping.Wrap });
+        var button = new Button { Content = "OK", HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Right };
+        button.Click += (_, _) => dialog.Close();
+        panel.Children.Add(button); dialog.Content = panel;
+        await dialog.ShowDialog(this);
+    }
+
+    private void OnViewportFailure(Exception error) { firstFrame?.TrySetException(error); smoke?.Fail(error); }
 
     private void ForwardStats(ViewportStats stats)
     {
+        if (stats.Ready != 0 && stats.Frames > 0)
+        {
+            projectReady = true;
+            firstFrame?.TrySetResult();
+            if (!initialRecorded && options is { Smoke: false, Isolated: false, BenchmarkSeconds: 0, SoakSeconds: 0 })
+            { initialRecorded = true; recent!.Add(options.Project); RefreshRecent(); }
+        }
         StatsUpdated?.Invoke(stats);
     }
     private void UpdateLogStatus()
     {
+        if (viewportService is null) { return; }
         var counts = Program.Logging!.Buffer.Counts;
         LogStatus.Content = $"Log · W {counts.Warnings} / E {counts.Errors} · dropped {viewportService!.NativeLogDropped + (ulong)counts.Dropped}";
         if (viewportService.NativeLogFileFailed || Program.Logging.SinkError.Length > 0) { LogStatus.Content += " · log file failed"; }

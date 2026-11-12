@@ -14,11 +14,19 @@ Profiler 将真实完成帧投影为 CPU Tick/GPU Pass sum/Draw/Indirect/Batch/N
 
 在给定项目与固定场景上，提供 Unity 风格的可停靠渲染实验工作台：观察画面、调整运行配置、查看真实 Render Graph、定位 CPU/GPU 成本。沿用现有 Avalonia、CommunityToolkit.Mvvm、DI 与进程内 C++ Renderer。
 
-- 启动时确定项目/场景；显示场景名称、来源与只读状态。允许导航相机与临时光照覆盖，不增删对象、不修改 Transform/材质/资源引用、不切换或编辑场景文件。
+- 启动时或通过 File 菜单选择项目；显示项目名称。允许导航相机与临时光照覆盖，不增删对象、不修改 Transform/材质/资源引用，不直接切换或编辑场景文件。
 - 配置属于本次运行的覆盖层。Reset 恢复载入值；可保存本机工作台预设，不写回 Scene、Material 或 ProjectSettings。Library/Shader 缓存仍可正常生成，不把缓存写入误判为资产修改。
 - Dock 包括 Scene、Render Settings、Render Graph、Profiler、Log；默认只显示 Scene 与 Render Settings，其余从顶部 Window 菜单按需打开。没有占位 Hierarchy、Project 或材质 Inspector。
 - 单个活动原生视口与一套 Runtime；普通面板可浮动。Scene 浮动通过销毁/重建宿主实现，不承诺活跃 Swapchain 原地跨父窗口迁移。
 - 每个子阶段完成验证后独立提交。设计文件更新不计作实现完成。
+
+## 项目会话与切换
+
+File / Open Project 选择 `.rlproject`，Recent Projects 列出最多十个成功显示首帧的项目，按最近使用排序，悬停显示完整路径；Clear Recent Projects 清空应用级列表。列表保存在 `%LOCALAPPDATA%/RenderLab/Editor/recent-projects.json`，丢失的路径在尝试打开时移除；保存失败记录日志。自检和隔离运行不写最近列表。
+
+应用级窗口、日志与最近项目独立于项目 scope；每个项目 scope 拥有其项目选项、视口服务及相关 ViewModel。切换先检查文件扩展名和基本 JSON，再保存旧布局、停止视口并释放旧 scope，创建新 scope 并等待首帧。新项目加载失败时尝试重开旧项目；重开也失败时保留 File 菜单以便选择其他项目。关闭窗口会取消等待；现有同步原生关闭仍可能等待 GPU。切换保留当前 API/Validation，场景相机及临时配置重新从新项目初始化。Scene 面板会显示以确认首帧。项目布局和预设仍保存在各项目旁的 UserSettings，不写源场景。新 scope 不保留旧项目 Graph/Profiler 快照；各原生会话日志文件名隔离。
+
+当前未实现项目或场景编辑及未保存状态；未来加入编辑事务时，切换前须先处理保存、放弃和取消。切换只能打开项目的启动场景，不提供独立的场景文件浏览。
 
 ## 参考与依赖选择
 

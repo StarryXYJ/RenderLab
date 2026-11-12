@@ -15,6 +15,7 @@ float4 PSMain(float4 position : SV_Position) : SV_Target
     if (any(sourcePosition < 0) || any(sourcePosition >= sourceSize))
         return float4(0.02, 0.02, 0.02, 1);
     float3 hdr = HdrColor.Load(int3(int2(sourcePosition), 0)).rgb;
+    if (DisplayParameters.RawView == 2) hdr = hdr.xxx;
     // The sRGB attachment performs the only display encoding, including raw linear previews.
     return float4(DisplayParameters.RawView != 0 ? saturate(hdr)
         : ToneMapACES(hdr, DisplayParameters.Exposure), 1);

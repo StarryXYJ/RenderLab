@@ -20,7 +20,7 @@ public sealed partial class RenderSettingsViewModel : ObservableObject, IDisposa
         nameof(LightB), nameof(LightIntensity), nameof(ShadowBias), nameof(ShadowNormalBias), nameof(EnvironmentIntensity), nameof(EnvironmentRotation)];
     public IReadOnlyList<string> Views { get; } = ["Final", "HDR", "Shadow", "Environment", "BRDF", "Reflection raw", "Reflection history", "Reflection denoised"];
     public IReadOnlyList<int> ShadowResolutions { get; } = [128, 256, 512, 1024, 2048];
-    [ObservableProperty] private IReadOnlyList<CapabilityChoice> pipelines = [new("Forward"), new("Deferred"), new("RayTracing")];
+    [ObservableProperty] private IReadOnlyList<CapabilityChoice> pipelines = [new("Forward"), new("Deferred"), new("RayTracing"), new("PathTracing")];
     [ObservableProperty] private IReadOnlyList<CapabilityChoice> submissions = [new("Direct"), new("Indexed Direct"), new("CPU Indirect"), new("GPU Culled")];
     [ObservableProperty] private bool ready;
     [ObservableProperty] private string status = "Initializing configuration…";
@@ -111,7 +111,7 @@ public sealed partial class RenderSettingsViewModel : ObservableObject, IDisposa
                 AsyncSupported = root.GetProperty("asyncCompute").GetBoolean();
                 CapabilityChoice[] Choices(string key, string[] names) => root.GetProperty(key).EnumerateArray().Select((entry, index) =>
                     new CapabilityChoice(names[index], entry.GetProperty("available").GetBoolean(), entry.GetProperty("reason").GetString() ?? "")).ToArray();
-                Pipelines = Choices("pipelines", ["Forward", "Deferred", "RayTracing"]);
+                Pipelines = Choices("pipelines", ["Forward", "Deferred", "RayTracing", "PathTracing"]);
                 Submissions = Choices("submissions", ["Direct", "Indexed Direct", "CPU Indirect", "GPU Culled"]);
                 CapabilityText = $"{root.GetProperty("adapter").GetString()}\nDriver {root.GetProperty("driver").GetString()}\n" +
                     $"Indexed: {root.GetProperty("instanceCapacity").GetInt32()} instances / {root.GetProperty("textureCapacity").GetInt32()} textures\n" +

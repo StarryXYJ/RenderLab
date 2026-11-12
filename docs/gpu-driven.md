@@ -31,7 +31,7 @@ DX12 使用两个无 Root Signature 的固定 CommandSignature，分别调用 Ex
 
 ## 场景索引基线
 
-`SceneRenderOptions::submission` 独立于 Forward/Deferred/RayTracing 管线。Direct 保留原有材质与每对象提交；IndexedDirect 以公共表和同一绑定快照逐条直接绘制，CpuIndirect 以 CPU 已知可见列表生成索引参数后执行多条间接绘制。CLI 分别为 `--submission direct|indexed-direct|cpu-indirect`，默认 Direct。
+`SceneRenderOptions::submission` 独立于 Forward/Deferred/RayTracing 管线。Direct 保留原有材质与每对象提交；IndexedDirect 和 CpuIndirect 使用公共对象/材质表，把同一批次内原顺序中相邻且几何范围相同的实例合并为一次实例化绘制或一条间接参数；材质与变换仍逐实例索引。保留原顺序以维持重合几何的深度顺序，不跨批次合并；GpuCulled 与阴影 pass 仍逐实例生成绘制。CLI 分别为 `--submission direct|indexed-direct|cpu-indirect`，默认 Direct。
 
 GpuCulled（CLI `--submission gpu-culled`）在 Compute 中生成可见列表、索引参数与 Count，要求已启用 Count Buffer。正常帧不把本帧数量同步读回 CPU。
 

@@ -1,4 +1,6 @@
 use "View.params";
 use "Object.params";
 use "Lighting.params";
+use "AreaLighting.params";
+use "AreaShadow.params";
 use "Shadow.params";

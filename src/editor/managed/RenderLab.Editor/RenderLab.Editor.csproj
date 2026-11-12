@@ -29,7 +29,11 @@
     <None Include="$(NativeBuildDir)/renderlab_editor_bridge.dll;$(NativeBuildDir)/dxcompiler.dll;$(NativeBuildDir)/WinPixEventRuntime.dll" Link="%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
     <None Include="$(NativeBuildDir)/shaders/RenderLab/**/*" Link="shaders/RenderLab/%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
-  <Target Name="CheckNativeBridge" BeforeTargets="Build">
+  <ItemGroup>
+    <RequiredNativeShader Include="$(RenderLabRoot)shaders/RenderLab/**/*" />
+  </ItemGroup>
+  <Target Name="CheckNativeBridge" BeforeTargets="PrepareForBuild">
     <Error Condition="!Exists('$(NativeBuildDir)/renderlab_editor_bridge.dll')" Text="Build the renderlab_editor_bridge CMake target first, or set NativeBuildDir." />
+    <Error Condition="!Exists('$(NativeBuildDir)/shaders/RenderLab/%(RequiredNativeShader.RecursiveDir)%(RequiredNativeShader.Filename)%(RequiredNativeShader.Extension)')" Text="Native shader %(RequiredNativeShader.Identity) is missing from $(NativeBuildDir). Rebuild the renderlab_editor_bridge CMake target for this configuration, then build the editor again." />
   </Target>
 </Project>

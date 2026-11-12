@@ -12,6 +12,7 @@ namespace renderlab::rhi::vulkan
 {
 struct Allocation;
 struct VkDescriptorBlock;
+struct VkDescriptorPage;
 struct VkTexture;
 
 /** @brief Backend device services; owns queue completion and native command contexts. */
@@ -96,7 +97,7 @@ private:
     std::shared_ptr<VkTexture> CreateImage(const TextureDesc& desc, bool alias);
     VkMemoryRequirements AliasRequirements(const std::vector<std::shared_ptr<VkTexture>>& images);
     std::shared_ptr<VkDescriptorBlock> AcquireDescriptors(std::shared_ptr<BindingLayout> layout);
-    std::vector<std::shared_ptr<VkDescriptorBlock>> descriptorBlocks_;
+    std::vector<std::shared_ptr<VkDescriptorPage>> descriptorPages_;
     void Allocate(Allocation& allocation, const VkMemoryRequirements& requirements, Memory kind,
                   bool deviceAddress = false);
     void Name(VkObjectType type, uint64_t handle, const std::string& name);

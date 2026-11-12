@@ -24,6 +24,7 @@ internal sealed class SmokeTest
     private Task? switchTask;
     private int deviceSwitches;
     private int stage, ticks, resizeBurstTicks;
+    private readonly List<double> resizeBurstTimes = [];
     private int acknowledgedPauseStage = -1;
     private ulong oldHandle, savedFrames, savedResizes, savedPaused, savedInput;
     private bool completed;
@@ -76,6 +77,7 @@ internal sealed class SmokeTest
             if (stage == 17 && resizeBurstTicks < 6)
             {
                 ++resizeBurstTicks;
+                resizeBurstTimes.Add(elapsed.Elapsed.TotalMilliseconds);
                 window.Width += 10;
                 return;
             }
@@ -275,7 +277,8 @@ internal sealed class SmokeTest
                 case 17:
                     CheckPixels(stats);
                     Require(stats.Resizes > savedResizes && stats.Resizes <= savedResizes + 2,
-                        "Consecutive resize updates were not coalesced.");
+                        $"Consecutive resize updates were not coalesced: before={savedResizes}, after={stats.Resizes}, " +
+                        $"update times ms=[{string.Join(", ", resizeBurstTimes.Select(t => t.ToString("F1", System.Globalization.CultureInfo.InvariantCulture)))}].");
                     checks.Add("six consecutive UI resize updates coalesced into at most two swapchain rebuilds");
                     NativeMethods.Check(NativeMethods.Camera(host.Session, savedPose, 0));
                     oldHandle = host.Session;
@@ -312,9 +315,16 @@ internal sealed class SmokeTest
                     {
                         Require(configState.AppliedId == configurationRequest, "Submission configuration was not confirmed by a successful frame.");
                     }
-                    if (configurationCase >= 12)
+                    if (configurationCase >= 13)
                     {
-                        checks.Add("all supported pipeline/submission modes, threaded/async/alias options and frame configuration identity");
+                        using var finalCapabilities = JsonDocument.Parse(service.Capabilities);
+                        if (finalCapabilities.RootElement.GetProperty("pipelines")[3].GetProperty("available").GetBoolean())
+                        {
+                            if (stats.Pipeline != 4 || stats.ReflectionSamples < 2) { --stage; break; }
+                            Require(configState.Applied.Pipeline == 4 && stats.Pipeline == 4 && stats.ReflectionSamples >= 2,
+                                "Path tracing configuration did not present and accumulate.");
+                        }
+                        checks.Add("supported pipeline/submission modes including path tracing, threaded/async/alias options and frame configuration identity");
                         var invalid = service.EditableConfig; invalid.ShadowResolution = 192; invalid.RequestId = configState.RequestedId + 1;
                         Require(NativeMethods.ConfigureV2(host.Session, in invalid) == 1, "Non-power-of-two shadow resolution accepted.");
                         invalid = service.EditableConfig; invalid.LightX = float.NaN; invalid.RequestId = configState.RequestedId + 1;
@@ -366,7 +376,7 @@ internal sealed class SmokeTest
                     if (stats.Activity != 3 || stats.Frames == savedFrames) { --stage; break; }
                     Require(stats.Frames == savedFrames + 1 && window.ViewportService.Configuration.AppliedId == configurationRequest,
                         "Single step did not apply exactly one paused frame.");
-                    Require(stats.ReflectionSamples == savedReflectionSamples + 1,
+                    Require(stats.ReflectionSamples == savedReflectionSamples + (stats.Pipeline == 4 ? 8u : 1u),
                         "Exposure-only edit incorrectly discarded progressive HDR history.");
                     checks.Add("invalid ABI/scalars rejected; rapid requests superseded; paused settings wait for exactly one single step");
                     var preset = window.ViewportService.EditableConfig;
@@ -388,7 +398,7 @@ internal sealed class SmokeTest
                     Require(Math.Abs(applied.Exposure - expectedConfig.Exposure) < .001 && Math.Abs(applied.LightR - .7) < .001 &&
                         applied.ShadowResolution == 256 && Math.Abs(applied.EnvironmentRotation - 15) < .001,
                         "Render preset did not restore lighting/shadow/display overrides.");
-                    Require(stats.ReflectionSamples == 1, "Lighting changes failed to invalidate progressive history.");
+                    Require(stats.ReflectionSamples == (stats.Pipeline == 4 ? 8u : 1u), "Lighting changes failed to invalidate progressive history.");
                     checks.Add("runtime lighting/environment/shadow overrides and preset restoration");
                     window.ViewModel.IsPaused = false;
                     oldHandle = host.Session;

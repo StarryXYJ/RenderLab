@@ -1,5 +1,6 @@
 #include "RaySurface.hlsli"
 #include "RaySampling.hlsli"
+#include "RectAreaLight.hlsli"
 #include "ImageBasedLighting.hlsli"
 RaytracingAccelerationStructure Scene : register(t0);
 #ifdef SPIRV
@@ -13,6 +14,10 @@ cbuffer ReflectionParameters : register(b4)
     row_major float4x4 InverseViewProjection;
     float4 CameraPosition, DirectionToLight, LightColor, Environment;
     float4 Options;
+    float4 RectLightHeader;
+    float4 RectLightData[6];
+    float4 PointLightHeader;
+    float4 PointLightData[16];
 };
 Texture2D<float4> AlbedoMetallic : register(t12);
 Texture2D<float4> EnvironmentAtlas : register(t13);
@@ -68,6 +73,30 @@ void RayGeneration()
     ray.TMax = 10000;
     Payload payload = {0.xxx, 0};
     TraceRay(Scene, RAY_FLAG_NONE, 0x02, 0, 1, 0, ray, payload);
+    // Analytic lamps are not in the triangle acceleration structure. Compare their finite
+    // intersections to the closest geometry hit, including dark, opaque back faces.
+    float nearest = payload.distance > 0 ? payload.distance : ray.TMax;
+    [loop] for (uint i = 0; i < min((uint)RectLightHeader.x, 2u); ++i)
+    {
+        float4 center = RectLightData[3 * i];
+        float4 u = RectLightData[3 * i + 1];
+        float4 v = RectLightData[3 * i + 2];
+        RectEmitter light;
+        light.center = center.xyz;
+        light.edgeU = u.xyz;
+        light.edgeV = v.xyz;
+        float3 areaNormal = cross(u.xyz, v.xyz);
+        light.area = length(areaNormal);
+        light.normal = light.area > 0 ? -areaNormal / light.area : 0;
+        float distance;
+        if (IntersectRectEmitter(light, ray.Origin, ray.Direction, ray.TMin, nearest, distance))
+        {
+            nearest = distance;
+            payload.distance = distance;
+            payload.radiance = dot(light.normal, -ray.Direction) > 0
+                ? float3(center.w, u.w, v.w) : 0;
+        }
+    }
     // Positive distance: hit, -1: environment miss, 0: rejected/invalid sample.
 #if RENDERLAB_REFLECTION_GUIDE
     HitGuide[pixel] = payload.distance;
@@ -111,4 +140,93 @@ void ClosestHit(inout Payload payload, BuiltInTriangleIntersectionAttributes att
         surface.perceptualRoughness, surface.normalWS, -WorldRayDirection(), SafeNormalize(DirectionToLight.xyz)) *
         LightColor.rgb * LightColor.w * visibility +
         EvaluateImageBasedLighting(surface, -WorldRayDirection(), Environment, EnvironmentAtlas, BrdfLut);
+    [loop] for (uint pointIndex = 0; pointIndex < min((uint)PointLightHeader.x, 8u); ++pointIndex)
+    {
+        float4 pr = PointLightData[2 * pointIndex];
+        float4 ci = PointLightData[2 * pointIndex + 1];
+        float3 delta = pr.xyz - position;
+        float distance2 = dot(delta, delta);
+        float q = distance2 / (pr.w * pr.w);
+        float falloff = saturate(1 - q * q);
+        float3 direction = delta * rsqrt(max(distance2, 1e-8));
+        if (falloff <= 0 || dot(surface.normalWS, direction) <= 0) continue;
+        RayDesc shadow;
+        shadow.Origin = position + surface.normalWS * .002;
+        float3 shadowDelta = pr.xyz - shadow.Origin;
+        float shadowDistance = length(shadowDelta);
+        if (shadowDistance <= .002) continue;
+        shadow.Direction = shadowDelta / shadowDistance;
+        shadow.TMin = .001;
+        shadow.TMax = shadowDistance - .001;
+        RayQuery<RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH> query;
+        query.TraceRayInline(Scene, RAY_FLAG_NONE, 0x01, shadow);
+        while (query.Proceed()) {}
+        bool blocked = query.CommittedStatus() == COMMITTED_TRIANGLE_HIT;
+        [loop] for (uint j = 0; j < min((uint)RectLightHeader.x, 2u) && !blocked; ++j)
+        {
+            RectEmitter other;
+            other.center = RectLightData[3 * j].xyz;
+            other.edgeU = RectLightData[3 * j + 1].xyz;
+            other.edgeV = RectLightData[3 * j + 2].xyz;
+            float3 crossUV = cross(other.edgeU, other.edgeV);
+            other.area = length(crossUV);
+            other.normal = other.area > 0 ? -crossUV / other.area : 0;
+            float hitDistance;
+            blocked = IntersectRectEmitter(other, shadow.Origin, shadow.Direction,
+                                            shadow.TMin, shadow.TMax, hitDistance);
+        }
+        if (!blocked)
+            payload.radiance += EvaluateBRDF(surface.baseColor, surface.metallic,
+                surface.perceptualRoughness, surface.normalWS, -WorldRayDirection(), direction) *
+                ci.rgb * ci.a * (falloff * falloff / max(distance2, 1e-4));
+    }
+    uint2 pixel = DispatchRaysIndex().xy;
+    uint2 dimensions = DispatchRaysDimensions().xy;
+    uint pixelIndex = pixel.x + pixel.y * dimensions.x;
+    [loop] for (uint i = 0; i < min((uint)RectLightHeader.x, 2u); ++i)
+    {
+        float4 center = RectLightData[3 * i];
+        float4 u = RectLightData[3 * i + 1];
+        float4 v = RectLightData[3 * i + 2];
+        RectEmitter light;
+        light.center = center.xyz;
+        light.edgeU = u.xyz;
+        light.edgeV = v.xyz;
+        float3 areaNormal = cross(u.xyz, v.xyz);
+        light.area = length(areaNormal);
+        light.normal = light.area > 0 ? -areaNormal / light.area : 0;
+        float2 xi = PathSample(uint(Options.x), pixelIndex, 32 + i);
+        RectEmitterSample sample = SampleRectEmitter(light, position, xi, 1);
+        if (!(sample.pdfOmega > 0) || dot(surface.normalWS, sample.direction) <= 0) continue;
+        RayDesc shadow;
+        shadow.Origin = position + surface.normalWS * .002;
+        float3 delta = sample.position - shadow.Origin;
+        float distance = length(delta);
+        if (distance <= .002) continue;
+        shadow.Direction = delta / distance;
+        shadow.TMin = .001;
+        shadow.TMax = distance - .001;
+        RayQuery<RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH> query;
+        query.TraceRayInline(Scene, RAY_FLAG_NONE, 0x01, shadow);
+        while (query.Proceed()) {}
+        bool blocked = query.CommittedStatus() == COMMITTED_TRIANGLE_HIT;
+        [loop] for (uint j = 0; j < min((uint)RectLightHeader.x, 2u); ++j)
+        {
+            if (j == i) continue;
+            RectEmitter other;
+            other.center = RectLightData[3 * j].xyz;
+            other.edgeU = RectLightData[3 * j + 1].xyz;
+            other.edgeV = RectLightData[3 * j + 2].xyz;
+            float3 crossUV = cross(other.edgeU, other.edgeV);
+            other.area = length(crossUV);
+            other.normal = other.area > 0 ? -crossUV / other.area : 0;
+            float hitDistance;
+            blocked = blocked || IntersectRectEmitter(other, shadow.Origin, shadow.Direction,
+                                                       shadow.TMin, shadow.TMax, hitDistance);
+        }
+        if (!blocked)
+            payload.radiance += EvaluateBRDF(surface.baseColor, surface.metallic,
+                surface.perceptualRoughness, surface.normalWS, -WorldRayDirection(), sample.direction)
+                * float3(center.w, u.w, v.w) / sample.pdfOmega;
+    }
 }

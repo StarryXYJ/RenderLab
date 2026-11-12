@@ -42,10 +42,10 @@ void Graph::Impl::AddAccess(uint32_t pass, detail::Access access)
     auto found = std::ranges::find(accesses, access.resource, &detail::Access::resource);
     if (found != accesses.end())
     {
-        Require(!access.write && !found->write && found->input == access.input &&
-                    found->use == access.use,
-                "Conflicting access in pass " + passes[pass].name +
-                    "; declare one range/use or preserving write for ReadWrite");
+        if (access.write || found->write || found->input != access.input ||
+            found->use != access.use)
+            Require(false, "Conflicting access in pass " + passes[pass].name +
+                               "; declare one range/use or preserving write for ReadWrite");
         if (!resources[access.resource].isTexture)
         {
             const auto end = std::max(found->bufferRange.offset + found->bufferRange.size,

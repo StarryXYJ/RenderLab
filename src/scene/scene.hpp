@@ -46,6 +46,23 @@ struct DirectionalLight
     float shadowBias = .001f, shadowNormalBias = .01f;
     bool operator==(const DirectionalLight&) const = default;
 };
+/// @brief One-sided rectangular emitter in local XY, emitting along local -Z.
+/// Radiance is linear RGB; width and height are local-space full extents.
+struct RectAreaLight
+{
+    math::Vec3 radiance{1, 1, 1};
+    float width = 1, height = 1;
+    bool enabled = true;
+    bool operator==(const RectAreaLight&) const = default;
+};
+/// @brief Isotropic point emitter; intensity is in candela and range is in world units.
+struct PointLight
+{
+    math::Vec3 color{1, 1, 1};
+    float intensity = 1, range = 10;
+    bool enabled = true;
+    bool operator==(const PointLight&) const = default;
+};
 /// @brief Stable scene identity with optional components and inherited parent enable state.
 struct Object
 {
@@ -55,6 +72,8 @@ struct Object
     std::optional<Camera> camera;
     std::optional<MeshRenderer> mesh;
     std::optional<DirectionalLight> light;
+    std::optional<RectAreaLight> areaLight;
+    std::optional<PointLight> pointLight;
     bool operator==(const Object&) const = default;
 };
 /// @brief Resolved hierarchy pose; rotation excludes scale for camera and light orientation.
@@ -103,6 +122,21 @@ struct MainLight
     uint32_t shadowResolution = 512;
     float shadowBias = .001f, shadowNormalBias = .01f;
 };
+/// @brief World-space parallelogram emitter. Edges are full extents and preserve hierarchy shear.
+/// The oriented front normal is -normalize(cross(edgeU, edgeV)); area is world-space.
+struct AreaLight
+{
+    std::string object;
+    math::Vec3 center, edgeU, edgeV, normal, radiance;
+    float area = 0;
+};
+/// @brief Extracted isotropic emitter; scale does not change its range or intensity.
+struct PointEmitter
+{
+    std::string object;
+    math::Vec3 position, color;
+    float intensity = 1, range = 10;
+};
 /// @brief Self-contained frame values; recording consumes these without reading the Scene document.
 struct Snapshot
 {
@@ -111,6 +145,9 @@ struct Snapshot
     std::string environment;
     float environmentIntensity = 1, environmentRotation = 0, exposure = 0;
     MainLight light;
+    /// Enabled emitters in stable UUID order; renderer support is separate.
+    std::vector<AreaLight> areaLights;
+    std::vector<PointEmitter> pointLights;
     std::vector<Instance> instances;
     /// Stable enabled scene instances, independent of camera culling and light/shadow settings.
     std::vector<Instance> allInstances;

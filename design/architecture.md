@@ -8,6 +8,14 @@ RenderLab 是面向引擎岗和渲染岗求职的渲染引擎项目。核心采�
 
 开发先完成原生渲染运行时和调试工具，再建设 C# 编辑器与完整项目工作流。Project、资源身份和模块边界提前预留；项目面板、文件管理、自动 Inspector 等界面后期实现。
 
+路径追踪的运动预览使用独立的有偏显示历史，主射线几何和材质引导时域复用；
+未滤波渐进 HDR 总量、主射线直接贡献及间接漫反射贡献分别累积；间接镜面由差值
+计算，显示滤波独立处理两个间接分量并分别保存时域历史后加回直接贡献。每帧首个
+次级命中引导用于保守调整镜面时域置信度；历史及其活动视图槽的实例变换只在成功提交后发布。契约与局限见
+[路径追踪](../docs/path-tracing.md)。可选主射线身份诊断通过独立 Ray Query 与读回提供首样本可见性依据，不参与路径积分或时域重建。
+
+光栅直接照明使用独立的场景面光源参数契约，与路径追踪共用提取结果及两灯上限；内置 Forward、Deferred 和 Indexed Forward 使用同一组 LTC 拟合数据。灯面、阴影和混合反射各自独立实现；普通光栅使用逐灯中心阴影图与 PCSS 式滤波，混合管线对不透明主表面另用逐灯 Ray Query 可见性。当前能力及限制见 [面光源](../docs/area-lights.md)。
+
 ## 目标与范围
 
 核心成果包括双后端一致的资源和命令语义、可检查的 Render Graph 编译结果、可靠的 Shader 与材质热重载，以及有画面和测量数据支撑的渲染专题。
@@ -42,7 +50,7 @@ RenderLab 是面向引擎岗和渲染岗求职的渲染引擎项目。核心采�
 ```mermaid
 flowchart TD
     Editor["C# Editor：项目界面和面板"] --> Bridge["Editor Bridge：C ABI"]
-    Bridge --> Services["C++ Editor Services"]
+    Bridge --> Services["C++ 应用服务：编辑与运行会话"]
     Services --> Assets["Project 和 Asset Services"]
     Services --> Scene["Scene Document"]
     Host["C++ Sandbox 和 Player"] --> Assets
@@ -61,6 +69,8 @@ flowchart TD
 ```
 
 RHI 定义 GPU 对象与命令语义。Render Graph 编译一帧工作的资源访问和调度。Renderer 决定采用哪些渲染算法。Shader 和 Material 提供 GPU 程序、参数接口与数据。Scene 向渲染系统提取快照，不直接录制 GPU 命令。
+
+C++ 引擎核心提供场景、资源、材质、渲染与底层能力；原生应用服务组织项目会话、视口、编辑事务和保存等用例，调用核心而不依赖 Avalonia。运行时服务可供 Player、Sandbox 与编辑器复用，Undo 和未保存文档等编辑专用服务不成为 Player 的强制依赖。C# 负责窗口、交互和界面投影，按用例通过桥接调用原生服务；运行时不反向依赖编辑器。服务边界随实际工作项逐步抽取，不为分层一次性迁移全部模块或建立全局注册/插件框架。现有桥接主要提供视口会话，完整项目、材质与场景编辑服务尚未实现。
 
 依赖保持单向：RHI 不依赖 Render Graph，Render Graph 不依赖具体 Renderer，运行时不依赖 C# 编辑器。调试数据通过快照和事件向上暴露。
 
@@ -83,7 +93,7 @@ RHI 定义 GPU 对象与命令语义。Render Graph 编译一帧工作的资源�
 
 Windows 编辑器使用 Avalonia 管理整个窗口和普通面板，NativeControlHost 托管由 C++ 创建的渲染子 HWND；C++ 使用该窗口创建 Surface，复用 SceneRenderer 与双后端 Swapchain。[提前集成原型](../docs/editor-host.md) 已验证双后端 Present，采用代际 Handle、UTF-8 和显式关闭协议。UI STA 拥有 HWND/输入，专用 MTA 渲染线程创建、使用并销毁 Device/Runtime/SceneRenderer/Swapchain；最新值邮箱传递配置与输入，完成帧快照用有界队列发布，RHI 线程所有权检查保留。关闭先停止线程、释放 GPU/展示，再在 UI 销毁 HWND；等待期间处理 Win32 同步消息以防 DXGI 死锁。目标帧率调度支持 0 表示无 CPU 限速且关闭强制 VSync；RHI Swapchain 创建参数显式选择展示同步，默认保持 VSync。Resize 合并与静态按需重绘的契约和实际验收见宿主说明及阶段计划。跨屏 DPI、Docking、浮动窗口重挂接和真实交互仍需完整编辑器阶段验证。
 
-托管宿主按官方 Avalonia MVVM 模板组织 App、Views 与 ViewModels；XAML 使用编译绑定，CommunityToolkit.Mvvm 生成属性通知和命令，App 通过 Microsoft.Extensions.DependencyInjection 装配具体依赖。ViewModel 保存 UI 状态和服务投影，不调用 P/Invoke 或持有 HWND；NativeViewportService 管理原生 Session、已接受的视口配置与错误，NativeControlHost 适配窗口生命周期和 Timer。当前服务与视口一一对应，不建设通用模块框架；后续编辑面板沿同一结构增量加入，场景、材质和资源的权威状态继续归 C++ 服务。
+托管宿主按官方 Avalonia MVVM 模板组织 App、Views 与 ViewModels；XAML 使用编译绑定，CommunityToolkit.Mvvm 生成属性通知和命令，App 通过 Microsoft.Extensions.DependencyInjection 装配具体依赖。ViewModel 保存 UI 状态和服务投影，不调用 P/Invoke 或持有 HWND；NativeViewportService 管理原生 Session、已接受的视口配置与错误，NativeControlHost 适配窗口生命周期和 Timer。项目切换以应用级窗口和项目级 DI scope 划分生命周期；项目 scope 的视口由现有原生 owner 协议退休后再释放，失败可重开旧项目。当前服务与视口一一对应，不建设通用模块框架；后续编辑面板沿同一结构增量加入，场景、材质和资源的权威状态继续归 C++ 服务。
 
 Editor 采用 [固定场景渲染工作台](../docs/editor-workbench.md)：Dock.Avalonia 12.0.0.2 管理固定面板和版本化布局，Scene 复用原生宿主，Ursa 按实际控件需要选用。固定源场景与资源保持只读，运行覆盖、预设与布局保存于 UserSettings。v10 桥接以定宽配置和单调 request_id 传递请求，owner 校验后在成功提交首帧时确认 Applied；暂停改动保持 Pending，单帧/恢复后确认。照明/环境/曝光在 SceneRenderer 提取后的 Snapshot 上覆盖，原文档保持权威；能力与拒绝原因来自原生 Runtime/Renderer。后续图查看器消费真实 Plan 的值快照，性能面板消费带 Session/源帧/配置版本的计数与完成结果，不持有 GPU 资源或构造第二套依赖图；Graph 已消费有界实际 Plan 快照并支持矩阵/依赖/生命周期与 Freeze/导出，Profiler 消费成功提交且完成点已确认的计数/时间/内存值，并可选显式可见性读回；图与性能冻结帧共享来源身份，实施状态只见阶段计划。
 
@@ -233,7 +243,7 @@ Hi-Z 使用跨帧历史时，规定首帧、相机跳变和分辨率变化下的
 
 当前视锥 Compute 以每批次全部候选数预留容量，64 线程分块稳定压缩，再直接消费 GPU Count；清零、Storage 写后读及 Indirect 读取显式进入图。GPU 模式跳过 CPU 相机剔除，并标记 CPU 可见集不可用；Count/索引诊断是独立的可选读回，不影响本帧提交。每帧冻结和复用同材质准备，实例表仍由场景快照投影。
 
-M4 的首个场景闭环见 [项目、场景](../docs/m4-scene.md)，Forward PBR/HDR 见 [M4.3](../docs/m4-forward-pbr.md)。Scene 使用值类型组件和层级 Transform，不引入 ECS 管理器。DirectionalLight 可有多个，按稳定 UUID 选择一个启用对象，其世界旋转、颜色和强度提取到显式 Lighting 数据；View/Object/Shadow 分块，入口把数据传给 HLSL 库。点光源和面光源后置。
+M4 的首个场景闭环见 [项目、场景](../docs/m4-scene.md)，Forward PBR/HDR 见 [M4.3](../docs/m4-forward-pbr.md)。Scene 使用值类型组件和层级 Transform，不引入 ECS 管理器。DirectionalLight 可有多个，按稳定 UUID 选择一个启用对象，其世界旋转、颜色和强度提取到显式 Lighting 数据；View/Object/Shadow 分块，入口把数据传给 HLSL 库。点光源正在实现，场景组件提取到世界空间，Forward、Deferred 和混合主表面提供最多八盏点光源直接照明；混合主表面与路径追踪以有限距离射线查询遮挡，其他能力及验证以阶段计划为准。矩形面光源的光栅、混合和路径追踪支持及限制见 [面光源契约](../docs/area-lights.md)。
 
 ## Shader 与材质
 

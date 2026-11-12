@@ -10,7 +10,13 @@
             <Grid ColumnDefinitions="Auto,*,Auto" Margin="12,0">
                 <TextBlock Text="RenderLab" FontWeight="SemiBold" Margin="0,0,16,0" />
                 <Menu Grid.Column="1" Background="Transparent">
-                    <MenuItem Header="Window">
+                    <MenuItem x:Name="FileMenu" Header="File">
+                        <MenuItem Header="Open Project…" Click="OpenProject" />
+                        <MenuItem x:Name="RecentMenu" Header="Recent Projects" />
+                        <Separator />
+                        <MenuItem Header="Clear Recent Projects" Click="ClearRecentProjects" />
+                    </MenuItem>
+                    <MenuItem x:Name="WindowMenu" Header="Window">
                         <MenuItem x:Name="SceneMenu" Header="Scene" Click="ShowPanel" Tag="Scene" />
                         <MenuItem x:Name="SettingsMenu" Header="Render Settings" Click="ShowPanel" Tag="Settings" />
                         <Separator />
@@ -18,12 +24,12 @@
                         <MenuItem x:Name="ProfilerMenu" Header="Profiler" Click="ShowPanel" Tag="Profiler" />
                         <MenuItem x:Name="LogMenu" Header="Log" Click="ShowPanel" Tag="Log" />
                     </MenuItem>
-                    <MenuItem Header="Layout">
+                    <MenuItem x:Name="LayoutMenu" Header="Layout">
                         <MenuItem Header="Default" Click="DefaultLayout" />
                         <MenuItem Header="Diagnostics" Click="DiagnosticLayout" />
                         <MenuItem x:Name="RestoreLayoutMenu" Header="Restore saved layout" Click="RestoreLayout" />
                     </MenuItem>
-                    <MenuItem Header="Scene">
+                    <MenuItem x:Name="SceneActionsMenu" Header="Scene">
                         <MenuItem Header="Pause / Resume" Command="{Binding TogglePauseCommand}" />
                         <MenuItem Header="Reset camera" Command="{Binding ResetCameraCommand}" />
                     </MenuItem>

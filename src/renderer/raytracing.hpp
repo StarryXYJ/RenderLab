@@ -9,16 +9,19 @@
 namespace renderlab::renderer
 {
 inline constexpr uint32_t MaxReflectionSamples = 1u << 24;
+inline constexpr uint32_t PathSamplesPerFrame = 8;
 /// Raw engine-program ABI: row-major matrix followed by two float4 values in a 256-byte slice.
 struct RayQueryParameters
 {
     std::array<float, 16> inverseViewProjection{};
     std::array<float, 4> directionToLight{}, shadowOptions{};
     std::array<float, 40> reserved{};
+    std::array<float, 128> pointLights{};
 };
-static_assert(sizeof(RayQueryParameters) == 256 &&
+static_assert(sizeof(RayQueryParameters) == 768 &&
               offsetof(RayQueryParameters, directionToLight) == 64 &&
-              offsetof(RayQueryParameters, shadowOptions) == 80);
+              offsetof(RayQueryParameters, shadowOptions) == 80 &&
+              offsetof(RayQueryParameters, pointLights) == 256);
 struct ReflectionParameters
 {
     std::array<float, 16> inverseViewProjection{};
@@ -26,15 +29,19 @@ struct ReflectionParameters
     // Sample index, history sample count, directional shadow enabled, sample count limit.
     std::array<float, 4> options{};
     std::array<float, 28> reserved{};
+    // Point-light header and eight pairs of position/range and color/intensity float4s.
+    std::array<float, 128> pointLights{};
 };
-static_assert(sizeof(ReflectionParameters) == 256 &&
-              offsetof(ReflectionParameters, options) == 128);
+static_assert(sizeof(ReflectionParameters) == 768 &&
+              offsetof(ReflectionParameters, options) == 128 &&
+              offsetof(ReflectionParameters, pointLights) == 256);
 struct ReflectionTemporalParameters
 {
     std::array<float, 16> inverseViewProjection{}, previousViewProjection{};
     std::array<float, 4> cameraPosition{}, previousCameraPosition{};
-    // Previous source valid, stationary spp, diagnostics enabled, maximum pixel history length.
-    // Temporal moments always consume independent per-frame (not progressive mean) signals.
+    // Reflection: valid, stationary spp, diagnostics, maximum pixel history length.
+    // Path: valid, stationary spp, first sample index, path seed.
+    // Reflection temporal moments consume per-frame (not progressive mean) signals.
     std::array<float, 4> options{};
     std::array<float, 20> reserved{};
 };
@@ -52,6 +59,13 @@ class RayReflectionFeature final : public RenderFeature
 {
 public:
     RayReflectionFeature() : RenderFeature("RayTracing.Reflections", {"Deferred.Lighting"}) {}
+    void Build(rendergraph::Graph&, const RenderFrame&) override;
+};
+/** @brief Independent primary-ray tracing and progressive HDR accumulation. */
+class PathTracingFeature final : public RenderFeature
+{
+public:
+    PathTracingFeature() : RenderFeature("PathTracing") {}
     void Build(rendergraph::Graph&, const RenderFrame&) override;
 };
 } // namespace renderlab::renderer

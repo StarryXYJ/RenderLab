@@ -85,7 +85,7 @@ target_link_libraries(renderlab_rendergraph PRIVATE renderlab_options renderlab_
 add_library(renderlab_renderer STATIC src/renderer/forward.cpp src/renderer/deferred.cpp
     src/renderer/raytracing.cpp src/renderer/acceleration_scene.cpp
     src/renderer/pipeline.cpp src/renderer/indexed_scene.cpp
-    src/renderer/scene_renderer.cpp src/renderer/environment.cpp src/renderer/shadow.cpp)
+    src/renderer/scene_renderer.cpp src/renderer/environment.cpp src/renderer/ltc_table.cpp src/renderer/shadow.cpp)
 target_include_directories(renderlab_renderer PUBLIC src)
 target_link_libraries(renderlab_renderer PRIVATE renderlab_options renderlab_rendergraph renderlab_rhi
     renderlab_content renderlab_material nlohmann_json::nlohmann_json)
@@ -236,7 +236,9 @@ if(RENDERLAB_DX12_MEMORY_ALLOCATOR)
     install(FILES "${d3d12ma_SOURCE_DIR}/NOTICES.txt" DESTINATION licenses RENAME D3D12MA-NOTICES.txt)
 endif()
 install(DIRECTORY sample/m4/Assets DESTINATION project)
-install(FILES sample/m4/RenderLab.rlproject sample/m4/Pbr.rlproject sample/m4/Shadow.rlproject DESTINATION project)
+install(FILES sample/m4/RenderLab.rlproject sample/m4/Pbr.rlproject sample/m4/Shadow.rlproject
+    sample/m4/RayTracing.rlproject sample/m4/PathTracingGallery.rlproject DESTINATION project)
+install(FILES sample/m4/PathTracing-README.txt DESTINATION .)
 
 if(BUILD_TESTING)
     add_executable(renderlab_gpu_memory_tests tests/gpu_memory_tests.cpp)
@@ -263,6 +265,70 @@ if(BUILD_TESTING)
     add_executable(renderlab_math_tests tests/math_tests.cpp)
     target_link_libraries(renderlab_math_tests PRIVATE renderlab_options renderlab_content)
     add_test(NAME math.contracts COMMAND renderlab_math_tests)
+    add_executable(renderlab_ltc_data_tests tests/ltc_data_tests.cpp src/renderer/ltc_table.cpp)
+    target_include_directories(renderlab_ltc_data_tests PRIVATE src)
+    target_link_libraries(renderlab_ltc_data_tests PRIVATE renderlab_options)
+    add_test(NAME ltc.data COMMAND renderlab_ltc_data_tests ${CMAKE_SOURCE_DIR}/shaders)
+    add_executable(renderlab_area_light_packing_tests tests/area_light_packing_tests.cpp)
+    target_include_directories(renderlab_area_light_packing_tests PRIVATE src)
+    target_link_libraries(renderlab_area_light_packing_tests PRIVATE renderlab_options)
+    add_test(NAME area_light.packing COMMAND renderlab_area_light_packing_tests)
+    add_executable(renderlab_raster_area_light_tests tests/raster_area_light_tests.cpp)
+    target_link_libraries(renderlab_raster_area_light_tests PRIVATE renderlab_options renderlab_renderer
+        renderlab_rhi renderlab_content renderlab_core renderlab_platform)
+    add_custom_command(TARGET renderlab_raster_area_light_tests POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_FILE:renderlab_dxc>
+            $<TARGET_FILE_DIR:renderlab_raster_area_light_tests>
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_FILE:renderlab_pix>
+            $<TARGET_FILE_DIR:renderlab_raster_area_light_tests> VERBATIM)
+    add_executable(renderlab_area_light_render_tests tests/area_light_render_tests.cpp)
+    target_link_libraries(renderlab_area_light_render_tests PRIVATE renderlab_options renderlab_renderer
+        renderlab_rhi renderlab_content renderlab_core renderlab_platform)
+    add_custom_command(TARGET renderlab_area_light_render_tests POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_FILE:renderlab_dxc>
+            $<TARGET_FILE_DIR:renderlab_area_light_render_tests>
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_FILE:renderlab_pix>
+            $<TARGET_FILE_DIR:renderlab_area_light_render_tests> VERBATIM)
+    add_executable(renderlab_area_light_reflection_tests tests/area_light_reflection_tests.cpp)
+    target_link_libraries(renderlab_area_light_reflection_tests PRIVATE renderlab_options renderlab_renderer
+        renderlab_rhi renderlab_content renderlab_core renderlab_platform)
+    add_custom_command(TARGET renderlab_area_light_reflection_tests POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_FILE:renderlab_dxc>
+            $<TARGET_FILE_DIR:renderlab_area_light_reflection_tests>
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_FILE:renderlab_pix>
+            $<TARGET_FILE_DIR:renderlab_area_light_reflection_tests> VERBATIM)
+    add_executable(renderlab_area_light_history_tests tests/area_light_history_tests.cpp)
+    target_link_libraries(renderlab_area_light_history_tests PRIVATE renderlab_options renderlab_renderer
+        renderlab_rhi renderlab_content renderlab_core renderlab_platform)
+    add_custom_command(TARGET renderlab_area_light_history_tests POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_FILE:renderlab_dxc>
+            $<TARGET_FILE_DIR:renderlab_area_light_history_tests>
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_FILE:renderlab_pix>
+            $<TARGET_FILE_DIR:renderlab_area_light_history_tests> VERBATIM)
+    add_executable(renderlab_area_shadow_filter_tests tests/area_shadow_filter_tests.cpp)
+    target_link_libraries(renderlab_area_shadow_filter_tests PRIVATE renderlab_options renderlab_rhi
+        renderlab_shader renderlab_core renderlab_platform)
+    add_custom_command(TARGET renderlab_area_shadow_filter_tests POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_FILE:renderlab_dxc>
+            $<TARGET_FILE_DIR:renderlab_area_shadow_filter_tests>
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_FILE:renderlab_pix>
+            $<TARGET_FILE_DIR:renderlab_area_shadow_filter_tests> VERBATIM)
+    add_executable(renderlab_ltc_eval_tests tests/ltc_eval_tests.cpp)
+    target_link_libraries(renderlab_ltc_eval_tests PRIVATE renderlab_options renderlab_renderer
+        renderlab_rhi renderlab_shader renderlab_content renderlab_core renderlab_platform)
+    add_custom_command(TARGET renderlab_ltc_eval_tests POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_FILE:renderlab_dxc>
+            $<TARGET_FILE_DIR:renderlab_ltc_eval_tests>
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_FILE:renderlab_pix>
+            $<TARGET_FILE_DIR:renderlab_ltc_eval_tests> VERBATIM)
+    add_executable(renderlab_rect_area_light_tests tests/rect_area_light_tests.cpp)
+    target_link_libraries(renderlab_rect_area_light_tests PRIVATE renderlab_options renderlab_rhi
+        renderlab_shader renderlab_core renderlab_platform)
+    add_custom_command(TARGET renderlab_rect_area_light_tests POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_FILE:renderlab_dxc>
+            $<TARGET_FILE_DIR:renderlab_rect_area_light_tests>
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_FILE:renderlab_pix>
+            $<TARGET_FILE_DIR:renderlab_rect_area_light_tests> VERBATIM)
     add_executable(renderlab_scene_tests tests/scene_tests.cpp)
     target_link_libraries(renderlab_scene_tests PRIVATE renderlab_options renderlab_content)
     add_test(NAME scene.contracts COMMAND renderlab_scene_tests)
@@ -398,6 +464,34 @@ if(BUILD_TESTING)
             add_test(NAME gpu.${backend}.alias COMMAND renderlab_alias_tests ${backend}
                 ${CMAKE_BINARY_DIR}/alias/${backend})
             set_tests_properties(gpu.${backend}.alias PROPERTIES LABELS gpu RUN_SERIAL TRUE TIMEOUT 90)
+            add_test(NAME gpu.${backend}.raster_area_light COMMAND renderlab_raster_area_light_tests
+                ${backend} ${CMAKE_SOURCE_DIR}/sample/m4/CornellBox.rlproject
+                ${CMAKE_SOURCE_DIR}/shaders ${CMAKE_BINARY_DIR}/raster-area-light/${backend})
+            set_tests_properties(gpu.${backend}.raster_area_light PROPERTIES LABELS gpu RUN_SERIAL TRUE TIMEOUT 120)
+            add_test(NAME gpu.${backend}.area_light_render COMMAND renderlab_area_light_render_tests
+                ${backend} ${CMAKE_SOURCE_DIR}/sample/m4/CornellBox.rlproject
+                ${CMAKE_SOURCE_DIR}/shaders ${CMAKE_BINARY_DIR}/area-light-render/${backend})
+            set_tests_properties(gpu.${backend}.area_light_render PROPERTIES LABELS gpu RUN_SERIAL TRUE TIMEOUT 240)
+            add_test(NAME gpu.${backend}.area_light_reflection COMMAND renderlab_area_light_reflection_tests
+                ${backend} ${CMAKE_SOURCE_DIR}/sample/m4/CornellBox.rlproject
+                ${CMAKE_SOURCE_DIR}/shaders ${CMAKE_BINARY_DIR}/area-light-reflection/${backend})
+            set_tests_properties(gpu.${backend}.area_light_reflection PROPERTIES LABELS gpu RUN_SERIAL TRUE TIMEOUT 120)
+            add_test(NAME gpu.${backend}.area_light_history COMMAND renderlab_area_light_history_tests
+                ${backend} ${CMAKE_SOURCE_DIR}/sample/m4/RayTracing.rlproject
+                ${CMAKE_SOURCE_DIR}/shaders ${CMAKE_BINARY_DIR}/area-light-history/${backend})
+            set_tests_properties(gpu.${backend}.area_light_history PROPERTIES LABELS gpu RUN_SERIAL TRUE TIMEOUT 120)
+            add_test(NAME gpu.${backend}.area_shadow_filter COMMAND renderlab_area_shadow_filter_tests
+                ${backend} ${CMAKE_SOURCE_DIR}/shaders/m5/area_shadow_acceptance.hlsl
+                ${CMAKE_BINARY_DIR}/area-shadow-filter/${backend})
+            set_tests_properties(gpu.${backend}.area_shadow_filter PROPERTIES LABELS gpu RUN_SERIAL TRUE TIMEOUT 90)
+            add_test(NAME gpu.${backend}.ltc_eval COMMAND renderlab_ltc_eval_tests
+                ${backend} ${CMAKE_SOURCE_DIR}/shaders/m5/ltc_eval_acceptance.hlsl
+                ${CMAKE_BINARY_DIR}/ltc-eval/${backend})
+            set_tests_properties(gpu.${backend}.ltc_eval PROPERTIES LABELS gpu RUN_SERIAL TRUE TIMEOUT 90)
+            add_test(NAME gpu.${backend}.rect_area_light COMMAND renderlab_rect_area_light_tests
+                ${backend} ${CMAKE_SOURCE_DIR}/shaders/m5/rect_area_acceptance.hlsl
+                ${CMAKE_BINARY_DIR}/rect-area/${backend})
+            set_tests_properties(gpu.${backend}.rect_area_light PROPERTIES LABELS gpu RUN_SERIAL TRUE TIMEOUT 90)
             add_test(NAME gpu.${backend}.indexed_scene COMMAND renderlab_indexed_scene_tests ${backend}
                 ${CMAKE_SOURCE_DIR}/sample/m4/Pbr.rlproject ${CMAKE_SOURCE_DIR}/sample/m4/Shadow.rlproject
                 ${CMAKE_SOURCE_DIR}/shaders ${CMAKE_BINARY_DIR}/indexed-scene/${backend})

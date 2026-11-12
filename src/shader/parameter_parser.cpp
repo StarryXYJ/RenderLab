@@ -63,6 +63,14 @@ Property DeclarationParser::Attributes(Lexer& lexer)
                         property.binding = Property::BindingSemantic::EnvironmentAtlas;
                     else if (value == "BrdfLut")
                         property.binding = Property::BindingSemantic::BrdfLut;
+                    else if (value == "AreaShadow0")
+                        property.binding = Property::BindingSemantic::AreaShadow0;
+                    else if (value == "AreaShadow1")
+                        property.binding = Property::BindingSemantic::AreaShadow1;
+                    else if (value == "LtcMatrix")
+                        property.binding = Property::BindingSemantic::LtcMatrix;
+                    else if (value == "LtcAmplitude")
+                        property.binding = Property::BindingSemantic::LtcAmplitude;
                     else if (value == "MainLightShadow")
                         property.binding = Property::BindingSemantic::MainLightShadow;
                     else

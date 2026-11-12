@@ -109,7 +109,11 @@ struct Property
         None,
         EnvironmentAtlas,
         BrdfLut,
-        MainLightShadow
+        MainLightShadow,
+        LtcMatrix,
+        LtcAmplitude,
+        AreaShadow0,
+        AreaShadow1
     };
     BindingSemantic binding = BindingSemantic::None;
     MaterialSemantic semantic = MaterialSemantic::None;

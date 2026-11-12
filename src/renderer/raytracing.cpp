@@ -7,6 +7,277 @@
 
 namespace renderlab::renderer
 {
+void PathTracingFeature::Build(rendergraph::Graph& graph, const RenderFrame& frame)
+{
+    using namespace rendergraph;
+    const auto& input = frame.rayTracing;
+    if (!input.scene || !input.reflectionTable || !input.historyPipeline ||
+        !input.pathStatisticsPipeline || input.historyRadiance.empty() ||
+        input.historyDirectRadiance.empty() || input.historyDiffuseRadiance.empty())
+        throw std::invalid_argument("Path tracing requires a scene, shader table and history");
+    const auto camera = graph.GetTextureDesc(graph.GetTexture("CameraColor"));
+    graph.CreateTexture("PathTracing.RawRadiance",
+                        {camera.width, camera.height, rhi::Format::Rgba32Float, true, false});
+    graph.CreateTexture("PathTracing.RawDirectRadiance",
+                        {camera.width, camera.height, rhi::Format::Rgba32Float, true, false});
+    graph.CreateTexture("PathTracing.RawDiffuseRadiance",
+                        {camera.width, camera.height, rhi::Format::Rgba32Float, true, false});
+    graph.CreateTexture("PathTracing.SecondaryGuide",
+                        {camera.width, camera.height, rhi::Format::Rgba32Float, true, false});
+    graph.CreateTexture("PathTracing.SurfaceGuide",
+                        {camera.width, camera.height, rhi::Format::Rgba32Float, true, false});
+    graph.CreateTexture("PathTracing.MaterialGuide",
+                        {camera.width, camera.height, rhi::Format::Rgba32Float, true, false});
+    const uint64_t momentBytes = uint64_t(camera.width) * camera.height * 8;
+    graph.CreateBuffer("PathTracing.BatchMoments", {momentBytes, rhi::Memory::Device, "", true});
+    const auto records = graph.ImportBuffer(
+        "PathTracing.ShaderTable", input.reflectionTable->buffer, {rhi::State::HostWrite, true});
+    auto trace = graph.AddRayTracingPass("PathTracing.Trace");
+    const auto scene = trace.ReadBuffer(input.storage, Use::AccelerationStructureRead);
+    const auto table = trace.ReadBuffer(records, Use::ShaderTableRead);
+    const auto parameters = input.reflectionParameters;
+    const auto constants = trace.ReadBuffer(parameters.buffer, Use::Uniform, parameters.range);
+    std::vector<BufferHandle> surfaces;
+    for (const auto& binding : input.surfaces)
+        surfaces.push_back(trace.ReadBuffer(binding.buffer, binding.use, binding.range));
+    std::vector<TextureHandle> textures;
+    for (const auto& binding : input.reflectionTextures)
+        textures.push_back(trace.ReadTexture(binding.texture));
+    const auto raw = trace.WriteTexture("PathTracing.RawRadiance");
+    const auto rawDirect = trace.WriteTexture("PathTracing.RawDirectRadiance");
+    const auto rawDiffuse = trace.WriteTexture("PathTracing.RawDiffuseRadiance");
+    const auto secondaryGuide = trace.WriteTexture("PathTracing.SecondaryGuide");
+    const auto surfaceGuide = trace.WriteTexture("PathTracing.SurfaceGuide");
+    const auto materialGuide = trace.WriteTexture("PathTracing.MaterialGuide");
+    const auto batchMoments = trace.WriteBuffer("PathTracing.BatchMoments");
+    trace.Execute(
+        [=](RayTracingContext& context)
+        {
+            context.Bind(input.reflectionTable->pipeline);
+            context.BindAccelerationStructure(0, input.scene, scene);
+            context.BindTexture(1, raw);
+            context.BindTexture(2, surfaceGuide);
+            context.BindTexture(3, materialGuide);
+            context.BindBuffer(17, batchMoments, 0, momentBytes, 8);
+            context.BindTexture(18, rawDirect);
+            context.BindTexture(19, rawDiffuse);
+            context.BindTexture(20, secondaryGuide);
+            context.BindBuffer(4, constants, parameters.range.offset, parameters.range.size);
+            for (size_t i = 0; i < surfaces.size(); ++i)
+            {
+                const auto& binding = input.surfaces[i];
+                context.BindBuffer(binding.slot, surfaces[i], binding.range.offset,
+                                   binding.range.size, binding.stride);
+            }
+            for (size_t i = 0; i < textures.size(); ++i)
+                context.BindTexture(input.reflectionTextures[i].slot, textures[i]);
+            context.BindSampler(11, input.sampler);
+            context.TraceRays(input.reflectionTable, table, camera.width, camera.height);
+        });
+    if (input.pathIdentityPipeline)
+    {
+        graph.CreateTexture("PathTracing.PrimaryIdentity",
+                            {camera.width, camera.height, rhi::Format::Rgba32Float, true, false});
+        graph.CreateTexture("PathTracing.PreviousPosition",
+                            {camera.width, camera.height, rhi::Format::Rgba32Float, true, false});
+        auto identity = graph.AddComputePass("PathTracing.PrimaryIdentity");
+        const auto identityScene =
+            identity.ReadBuffer(input.storage, Use::AccelerationStructureRead);
+        const auto identityConstants =
+            identity.ReadBuffer(parameters.buffer, Use::Uniform, parameters.range);
+        const auto identityOutput = identity.WriteTexture("PathTracing.PrimaryIdentity");
+        const auto previousPosition = identity.WriteTexture("PathTracing.PreviousPosition");
+        const auto transformBinding = input.pathIdentityTransforms;
+        const auto transforms =
+            identity.ReadBuffer(transformBinding.buffer, Use::ShaderRead, transformBinding.range);
+        identity.Execute(
+            [=](ComputeContext& context)
+            {
+                context.Bind(input.pathIdentityPipeline);
+                context.BindAccelerationStructure(0, input.scene, identityScene);
+                context.BindTexture(1, identityOutput);
+                context.BindTexture(2, previousPosition);
+                context.BindBuffer(3, transforms, transformBinding.range.offset,
+                                   transformBinding.range.size, transformBinding.stride);
+                context.BindBuffer(4, identityConstants, parameters.range.offset,
+                                   parameters.range.size);
+                context.Dispatch((camera.width + 7) / 8, (camera.height + 7) / 8);
+            });
+    }
+    auto history = graph.AddComputePass("PathTracing.Accumulate");
+    const auto current = history.ReadTexture(raw);
+    const auto previous =
+        input.previousRadiance.empty() ? current : history.ReadTexture(input.previousRadiance);
+    const auto historyConstants =
+        history.ReadBuffer(parameters.buffer, Use::Uniform, parameters.range);
+    const auto accumulated = history.WriteTexture(input.historyRadiance);
+    history.Execute(
+        [=](ComputeContext& context)
+        {
+            context.Bind(input.historyPipeline);
+            context.BindTexture(0, current);
+            context.BindTexture(1, previous);
+            context.BindTexture(2, accumulated);
+            context.BindBuffer(3, historyConstants, parameters.range.offset, parameters.range.size);
+            context.Dispatch((camera.width + 7) / 8, (camera.height + 7) / 8);
+        });
+    auto directHistory = graph.AddComputePass("PathTracing.AccumulateDirect");
+    const auto directCurrent = directHistory.ReadTexture(rawDirect);
+    const auto directPrevious = input.previousDirectRadiance.empty()
+                                    ? directCurrent
+                                    : directHistory.ReadTexture(input.previousDirectRadiance);
+    const auto directConstants =
+        directHistory.ReadBuffer(parameters.buffer, Use::Uniform, parameters.range);
+    const auto directAccumulated = directHistory.WriteTexture(input.historyDirectRadiance);
+    directHistory.Execute(
+        [=](ComputeContext& context)
+        {
+            context.Bind(input.historyPipeline);
+            context.BindTexture(0, directCurrent);
+            context.BindTexture(1, directPrevious);
+            context.BindTexture(2, directAccumulated);
+            context.BindBuffer(3, directConstants, parameters.range.offset, parameters.range.size);
+            context.Dispatch((camera.width + 7) / 8, (camera.height + 7) / 8);
+        });
+    auto diffuseHistory = graph.AddComputePass("PathTracing.AccumulateDiffuse");
+    const auto diffuseCurrent = diffuseHistory.ReadTexture(rawDiffuse);
+    const auto diffusePrevious = input.previousDiffuseRadiance.empty()
+                                     ? diffuseCurrent
+                                     : diffuseHistory.ReadTexture(input.previousDiffuseRadiance);
+    const auto diffuseConstants =
+        diffuseHistory.ReadBuffer(parameters.buffer, Use::Uniform, parameters.range);
+    const auto diffuseAccumulated = diffuseHistory.WriteTexture(input.historyDiffuseRadiance);
+    diffuseHistory.Execute(
+        [=](ComputeContext& context)
+        {
+            context.Bind(input.historyPipeline);
+            context.BindTexture(0, diffuseCurrent);
+            context.BindTexture(1, diffusePrevious);
+            context.BindTexture(2, diffuseAccumulated);
+            context.BindBuffer(3, diffuseConstants, parameters.range.offset, parameters.range.size);
+            context.Dispatch((camera.width + 7) / 8, (camera.height + 7) / 8);
+        });
+    auto statistics = graph.AddComputePass("PathTracing.Statistics");
+    const auto statisticsCurrent = statistics.ReadTexture(raw);
+    const auto batch = statistics.ReadBuffer(batchMoments);
+    const auto previousMoments = statistics.ReadBuffer(input.previousStatistics);
+    const auto outputMoments = statistics.WriteBuffer(input.historyStatistics);
+    const auto statisticsConstants =
+        statistics.ReadBuffer(parameters.buffer, Use::Uniform, parameters.range);
+    statistics.Execute(
+        [=](ComputeContext& context)
+        {
+            context.Bind(input.pathStatisticsPipeline);
+            context.BindTexture(0, statisticsCurrent);
+            context.BindBuffer(3, statisticsConstants, parameters.range.offset,
+                               parameters.range.size);
+            context.BindBuffer(4, batch, 0, momentBytes, 8);
+            context.BindBuffer(5, previousMoments, 0,
+                               input.previousRadiance.empty() ? 8 : momentBytes, 8);
+            context.BindBuffer(6, outputMoments, 0, momentBytes, 8);
+            context.Dispatch((camera.width + 7) / 8, (camera.height + 7) / 8);
+        });
+    if (!input.pathDenoisePipeline)
+    {
+        graph.SetTexture("PathTracing.DisplayRadiance", accumulated);
+        return;
+    }
+    graph.CreateTexture("PathTracing.FilteredRadiance",
+                        {camera.width, camera.height, rhi::Format::Rgba32Float, true, false});
+    if (input.pathFilteredComponents)
+    {
+        graph.CreateTexture("PathTracing.FilteredDiffuse",
+                            {camera.width, camera.height, rhi::Format::Rgba32Float, true, false});
+        graph.CreateTexture("PathTracing.FilteredSpecular",
+                            {camera.width, camera.height, rhi::Format::Rgba32Float, true, false});
+    }
+    auto denoise = graph.AddComputePass("PathTracing.Denoise");
+    const auto source = denoise.ReadTexture(accumulated);
+    const auto direct = denoise.ReadTexture(directAccumulated);
+    const auto diffuse = denoise.ReadTexture(diffuseAccumulated);
+    const auto surface = denoise.ReadTexture(surfaceGuide);
+    const auto material = denoise.ReadTexture(materialGuide);
+    const auto moments = denoise.ReadBuffer(outputMoments);
+    const auto filterConstants =
+        denoise.ReadBuffer(parameters.buffer, Use::Uniform, parameters.range);
+    const auto filtered = denoise.WriteTexture("PathTracing.FilteredRadiance");
+    std::vector<TextureHandle> components;
+    if (input.pathFilteredComponents)
+    {
+        components.push_back(denoise.WriteTexture("PathTracing.FilteredDiffuse"));
+        components.push_back(denoise.WriteTexture("PathTracing.FilteredSpecular"));
+    }
+    denoise.Execute(
+        [=](ComputeContext& context)
+        {
+            context.Bind(input.pathDenoisePipeline);
+            context.BindTexture(0, source);
+            context.BindTexture(1, surface);
+            context.BindTexture(2, filtered);
+            context.BindBuffer(3, filterConstants, parameters.range.offset, parameters.range.size);
+            context.BindTexture(4, material);
+            context.BindBuffer(5, moments, 0, momentBytes, 8);
+            context.BindTexture(6, direct);
+            context.BindTexture(7, diffuse);
+            for (uint32_t i = 0; i < components.size(); ++i)
+                context.BindTexture(8 + i, components[i]);
+            context.Dispatch((camera.width + 7) / 8, (camera.height + 7) / 8);
+        });
+    if (!input.temporalPipeline)
+    {
+        graph.SetTexture("PathTracing.DisplayRadiance", filtered);
+        return;
+    }
+    graph.CreateTexture("PathTracing.TemporalDisplay",
+                        {camera.width, camera.height, rhi::Format::Rgba32Float, true, false});
+    auto temporal = graph.AddComputePass("PathTracing.Temporal");
+    const auto temporalCurrent = temporal.ReadTexture(filtered);
+    const auto temporalSurface = temporal.ReadTexture(surfaceGuide);
+    const auto temporalMaterial = temporal.ReadTexture(materialGuide);
+    const auto temporalSecondary = temporal.ReadTexture(secondaryGuide);
+    const auto temporalFiltered = temporal.ReadTexture(filtered);
+    const auto temporalDiffuse = temporal.ReadTexture(components[0]);
+    const auto temporalSpecular = temporal.ReadTexture(components[1]);
+    const auto previousSpecular = input.previousPathSpecular.empty()
+                                      ? temporalCurrent
+                                      : temporal.ReadTexture(input.previousPathSpecular);
+    const auto outputSpecular = temporal.WriteTexture(input.pathSpecularOutput);
+    const auto temporalConstants = temporal.ReadBuffer(
+        input.temporalParameters.buffer, Use::Uniform, input.temporalParameters.range);
+    std::array<TextureHandle, 4> old, output;
+    for (size_t i = 0; i < old.size(); ++i)
+    {
+        old[i] = input.previousTemporal[i].empty()
+                     ? temporalCurrent
+                     : temporal.ReadTexture(input.previousTemporal[i]);
+        output[i] = temporal.WriteTexture(input.temporalOutputs[i]);
+    }
+    const auto display = temporal.WriteTexture("PathTracing.TemporalDisplay");
+    temporal.Execute(
+        [=](ComputeContext& context)
+        {
+            context.Bind(input.temporalPipeline);
+            context.BindTexture(0, temporalCurrent);
+            context.BindTexture(1, temporalSurface);
+            context.BindTexture(2, temporalMaterial);
+            context.BindBuffer(3, temporalConstants, input.temporalParameters.range.offset,
+                               input.temporalParameters.range.size);
+            for (uint32_t i = 0; i < old.size(); ++i)
+            {
+                context.BindTexture(4 + i, old[i]);
+                context.BindTexture(8 + i, output[i]);
+            }
+            context.BindTexture(12, temporalFiltered);
+            context.BindTexture(13, display);
+            context.BindTexture(14, temporalSecondary);
+            context.BindTexture(15, temporalDiffuse);
+            context.BindTexture(16, temporalSpecular);
+            context.BindTexture(17, previousSpecular);
+            context.BindTexture(18, outputSpecular);
+            context.Dispatch((camera.width + 7) / 8, (camera.height + 7) / 8);
+        });
+    graph.SetTexture("PathTracing.DisplayRadiance", display);
+}
 void RayQueryShadowFeature::Build(rendergraph::Graph& graph, const RenderFrame& frame)
 {
     using namespace rendergraph;

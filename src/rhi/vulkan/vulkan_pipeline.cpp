@@ -3,7 +3,9 @@
 
 #include <algorithm>
 #include <array>
+#include <bit>
 #include <cstring>
+#include <span>
 #include <stdexcept>
 
 namespace renderlab::rhi::vulkan
@@ -110,21 +112,49 @@ std::shared_ptr<BindingLayout> VulkanRuntime::CreateLayout(std::vector<BindingDe
 std::shared_ptr<VkDescriptorBlock>
 VulkanRuntime::AcquireDescriptors(std::shared_ptr<BindingLayout> layout)
 {
-    for (const auto& allocation : descriptorBlocks_)
-        if (allocation.use_count() == 1 && allocation->layout == layout)
-            return allocation;
-    if (descriptorBlocks_.size() == 256)
+    const auto acquire =
+        [](const std::shared_ptr<VkDescriptorPage>& page) -> std::shared_ptr<VkDescriptorBlock>
     {
-        const auto idle = std::ranges::find_if(descriptorBlocks_, [](const auto& item)
-                                               { return item.use_count() == 1; });
-        if (idle == descriptorBlocks_.end())
+        auto available = page->available.load(std::memory_order_acquire);
+        if (!available)
+            return {};
+        auto block = std::make_shared<VkDescriptorBlock>();
+        while (available)
+        {
+            const auto slot = static_cast<uint32_t>(std::countr_zero(available));
+            const auto next = available & ~(uint32_t{1} << slot);
+            if (page->available.compare_exchange_weak(available, next, std::memory_order_acq_rel))
+            {
+                block->page = page;
+                block->slot = slot;
+                block->native = page->sets[slot];
+                return block;
+            }
+        }
+        return {};
+    };
+    for (const auto& page : descriptorPages_)
+        if (page->layout == layout)
+            if (auto block = acquire(page))
+                return block;
+    constexpr size_t MaxPages = 64;
+    if (descriptorPages_.size() == MaxPages)
+    {
+        const auto idle = std::ranges::find_if(descriptorPages_, [](const auto& page)
+                                               { return page.use_count() == 1; });
+        if (idle == descriptorPages_.end())
             throw std::runtime_error(
-                "Vulkan descriptor block budget exhausted; release groups or retire work");
-        descriptorBlocks_.erase(idle);
+                "Vulkan descriptor page budget exhausted; release groups or retire work");
+        descriptorPages_.erase(idle);
     }
-    auto allocation = std::make_shared<VkDescriptorBlock>();
-    allocation->device = device_;
-    allocation->layout = layout;
+    auto page = std::make_shared<VkDescriptorPage>();
+    page->device = device_;
+    page->layout = layout;
+    // Bound each page's descriptor count for large bindless tables as well as page count.
+    constexpr uint32_t MaxGroupsPerPage = 32, MaxDescriptorsPerPage = 8192;
+    const auto descriptorCount = layout->DescriptorCount();
+    const uint32_t groupCount = std::min(
+        MaxGroupsPerPage, std::max(1u, MaxDescriptorsPerPage / std::max(1u, descriptorCount)));
     std::vector<VkDescriptorPoolSize> sizes;
     for (auto type :
          {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
@@ -136,29 +166,40 @@ VulkanRuntime::AcquireDescriptors(std::shared_ptr<BindingLayout> layout)
             if (DescriptorType(entry.kind) == type)
                 count += entry.count;
         if (count)
-            sizes.push_back({type, count});
+            sizes.push_back({type, count * groupCount});
     }
     VkDescriptorPoolCreateInfo pool{};
     pool.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
-    pool.maxSets = 4;
+    pool.maxSets = 4 * groupCount;
     pool.poolSizeCount = static_cast<uint32_t>(sizes.size());
     pool.pPoolSizes = sizes.data();
     {
         auto cpuTimer = ProfileCpu(CpuOperation::DescriptorPageCreate);
-        Check(vkCreateDescriptorPool(device_, &pool, nullptr, &allocation->pool), "DescriptorPool");
+        Check(vkCreateDescriptorPool(device_, &pool, nullptr, &page->pool), "DescriptorPool");
     }
+    std::vector<VkDescriptorSetLayout> layouts;
+    layouts.reserve(4 * groupCount);
+    for (uint32_t i = 0; i < groupCount; ++i)
+        layouts.insert(layouts.end(), As<VkLayout>(layout).sets.begin(),
+                       As<VkLayout>(layout).sets.end());
+    std::vector<VkDescriptorSet> sets(layouts.size());
     VkDescriptorSetAllocateInfo allocate{};
     allocate.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
-    allocate.descriptorPool = allocation->pool;
-    allocate.descriptorSetCount = 4;
-    allocate.pSetLayouts = As<VkLayout>(layout).sets.data();
-    Check(vkAllocateDescriptorSets(device_, &allocate, allocation->native.data()), "DescriptorSet");
-    allocation->stats = descriptorStats_;
+    allocate.descriptorPool = page->pool;
+    allocate.descriptorSetCount = static_cast<uint32_t>(layouts.size());
+    allocate.pSetLayouts = layouts.data();
+    Check(vkAllocateDescriptorSets(device_, &allocate, sets.data()), "DescriptorSet");
+    page->sets.resize(groupCount);
+    for (uint32_t i = 0; i < groupCount; ++i)
+        std::copy_n(sets.begin() + 4 * i, 4, page->sets[i].begin());
+    page->available.store(groupCount == 32 ? UINT32_MAX : (uint32_t{1} << groupCount) - 1,
+                          std::memory_order_release);
+    page->stats = descriptorStats_;
     ++descriptorStats_->pages;
     ++descriptorStats_->creations;
-    descriptorStats_->capacity += layout->DescriptorCount();
-    descriptorBlocks_.push_back(allocation);
-    return allocation;
+    descriptorStats_->capacity += descriptorCount * groupCount;
+    descriptorPages_.push_back(page);
+    return acquire(page);
 }
 
 std::shared_ptr<BindingGroup> VulkanRuntime::CreateGroup(std::shared_ptr<BindingLayout> layout,
@@ -171,6 +212,29 @@ std::shared_ptr<BindingGroup> VulkanRuntime::CreateGroup(std::shared_ptr<Binding
     descriptorStats_->inUse += layout->DescriptorCount();
     descriptorStats_->highWater = std::max(descriptorStats_->highWater, descriptorStats_->inUse);
     group->native = group->allocation->native;
+    struct DescriptorWriteData
+    {
+        VkDescriptorImageInfo image{};
+        VkDescriptorBufferInfo buffer{};
+        VkWriteDescriptorSetAccelerationStructureKHR acceleration{};
+        VkAccelerationStructureKHR nativeAcceleration = VK_NULL_HANDLE;
+    };
+    constexpr uint32_t InlineWrites = 32;
+    std::array<DescriptorWriteData, InlineWrites> inlineData{};
+    std::array<VkWriteDescriptorSet, InlineWrites> inlineWrites{};
+    std::vector<DescriptorWriteData> largeData;
+    std::vector<VkWriteDescriptorSet> largeWrites;
+    const auto count = layout->DescriptorCount();
+    if (count > InlineWrites)
+    {
+        largeData.resize(count);
+        largeWrites.resize(count);
+    }
+    std::span<DescriptorWriteData> data =
+        count > InlineWrites ? std::span{largeData} : std::span{inlineData}.first(count);
+    std::span<VkWriteDescriptorSet> writes =
+        count > InlineWrites ? std::span{largeWrites} : std::span{inlineWrites}.first(count);
+    uint32_t index = 0;
     for (auto entry : layout->entries)
     {
         for (uint32_t element = 0; element < entry.count; ++element)
@@ -182,23 +246,23 @@ std::shared_ptr<BindingGroup> VulkanRuntime::CreateGroup(std::shared_ptr<Binding
                                                                    b.space == entry.space &&
                                                                    b.arrayElement == element;
                                                         });
-            VkDescriptorImageInfo image{};
-            VkDescriptorBufferInfo buffer{};
+            auto& item = data[index];
             const bool isBuffer = entry.kind == BindingKind::ConstantBuffer ||
                                   entry.kind == BindingKind::ReadOnlyBuffer ||
                                   entry.kind == BindingKind::StorageBuffer;
             if (isBuffer)
             {
-                buffer = {As<VkBufferObject>(binding.buffer).native, binding.offset, binding.size};
+                item.buffer = {As<VkBufferObject>(binding.buffer).native, binding.offset,
+                               binding.size};
             }
             else if (entry.kind == BindingKind::Sampler)
-                image.sampler = As<VkSamplerObject>(binding.sampler).native;
+                item.image.sampler = As<VkSamplerObject>(binding.sampler).native;
             else if (entry.kind != BindingKind::AccelerationStructure)
             {
-                image.imageView = As<VkView>(binding.view).native;
-                image.imageLayout = entry.kind == BindingKind::StorageTexture
-                                        ? VK_IMAGE_LAYOUT_GENERAL
-                                        : VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+                item.image.imageView = As<VkView>(binding.view).native;
+                item.image.imageLayout = entry.kind == BindingKind::StorageTexture
+                                             ? VK_IMAGE_LAYOUT_GENERAL
+                                             : VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
             }
             VkWriteDescriptorSet write{};
             write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
@@ -207,24 +271,26 @@ std::shared_ptr<BindingGroup> VulkanRuntime::CreateGroup(std::shared_ptr<Binding
             write.dstArrayElement = element;
             write.descriptorCount = 1;
             write.descriptorType = DescriptorType(entry.kind);
-            VkWriteDescriptorSetAccelerationStructureKHR acceleration{};
-            VkAccelerationStructureKHR nativeAcceleration = VK_NULL_HANDLE;
             if (entry.kind == BindingKind::AccelerationStructure)
             {
-                acceleration.sType =
+                item.acceleration.sType =
                     VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET_ACCELERATION_STRUCTURE_KHR;
-                nativeAcceleration =
+                item.nativeAcceleration =
                     As<VkAccelerationStructure>(binding.accelerationStructure).native;
-                acceleration.accelerationStructureCount = 1;
-                acceleration.pAccelerationStructures = &nativeAcceleration;
-                write.pNext = &acceleration;
+                item.acceleration.accelerationStructureCount = 1;
+                item.acceleration.pAccelerationStructures = &item.nativeAcceleration;
+                write.pNext = &item.acceleration;
             }
-            write.pImageInfo =
-                isBuffer || entry.kind == BindingKind::AccelerationStructure ? nullptr : &image;
-            write.pBufferInfo = isBuffer ? &buffer : nullptr;
-            vkUpdateDescriptorSets(device_, 1, &write, 0, nullptr);
+            write.pImageInfo = isBuffer || entry.kind == BindingKind::AccelerationStructure
+                                   ? nullptr
+                                   : &item.image;
+            write.pBufferInfo = isBuffer ? &item.buffer : nullptr;
+            writes[index++] = write;
         }
     }
+    if (!writes.empty())
+        vkUpdateDescriptorSets(device_, static_cast<uint32_t>(writes.size()), writes.data(), 0,
+                               nullptr);
     return group;
 }
 

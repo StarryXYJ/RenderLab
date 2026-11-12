@@ -54,7 +54,8 @@ public sealed record EditorOptions(string Backend, string Project, string Shader
                         "forward" => 1,
                         "deferred" => 2,
                         "raytracing" => 3,
-                        _ => throw new ArgumentException("Pipeline must be forward/deferred/raytracing.")
+                        "pathtracing" => 4,
+                        _ => throw new ArgumentException("Pipeline must be forward/deferred/raytracing/pathtracing.")
                     }; break;
                 case "--benchmark-seconds": benchmarkSeconds = double.Parse(args[i], System.Globalization.CultureInfo.InvariantCulture); break;
                 case "--warmup-seconds": warmupSeconds = double.Parse(args[i], System.Globalization.CultureInfo.InvariantCulture); break;

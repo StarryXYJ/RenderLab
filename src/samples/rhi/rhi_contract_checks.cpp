@@ -217,6 +217,27 @@ void CheckUploadPool(Runtime& runtime)
 void CheckDescriptorBudget(Runtime& runtime)
 {
     const auto originalUse = runtime.GetDescriptorStats().inUse;
+    {
+        const auto sampler = runtime.CreateSampler();
+        const auto layout = runtime.CreateLayout({{0, BindingKind::Sampler, 0}});
+        Binding binding{0};
+        binding.sampler = sampler;
+        std::vector<std::shared_ptr<BindingGroup>> groups;
+        for (uint32_t i = 0; i < 300; ++i)
+            groups.push_back(runtime.CreateGroup(layout, {binding}));
+        Require(runtime.GetDescriptorStats().inUse == originalUse + groups.size(),
+                "descriptor leases must support more than 256 live groups");
+        const auto creations = runtime.GetDescriptorStats().creations;
+        groups.clear();
+        Require(runtime.GetDescriptorStats().inUse == originalUse,
+                "descriptor leases leaked after multiple pages");
+        for (uint32_t i = 0; i < 300; ++i)
+            groups.push_back(runtime.CreateGroup(layout, {binding}));
+        Require(runtime.GetDescriptorStats().creations == creations,
+                "descriptor pages must reuse released slots");
+    }
+    Require(runtime.GetDescriptorStats().inUse == originalUse,
+            "descriptor page reuse leaked leases");
     std::vector<BindingDesc> entries;
     std::vector<Binding> bindings;
     const auto sampler = runtime.CreateSampler();
@@ -230,7 +251,7 @@ void CheckDescriptorBudget(Runtime& runtime)
     auto layout = runtime.CreateLayout(entries);
     std::vector<std::shared_ptr<BindingGroup>> retained;
     bool exhausted = false;
-    for (uint32_t i = 0; i < 257; ++i)
+    for (uint32_t i = 0; i < 2049; ++i)
         try
         {
             retained.push_back(runtime.CreateGroup(layout, bindings));

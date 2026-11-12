@@ -113,8 +113,10 @@ TextureHandle Graph::GetTexture(std::string_view name) const
 {
     impl_->Building();
     const auto found = impl_->names.find(std::string(name));
-    Require(found != impl_->names.end(), "Unknown resource name: " + std::string(name));
-    Require(found->second.texture, "Resource type mismatch: " + std::string(name));
+    if (found == impl_->names.end())
+        Require(false, "Unknown resource name: " + std::string(name));
+    if (!found->second.texture)
+        Require(false, "Resource type mismatch: " + std::string(name));
     const auto id = found->second.resource;
     return {impl_->id, id, static_cast<uint32_t>(impl_->resources[id].versions.size() - 1)};
 }
@@ -122,8 +124,10 @@ BufferHandle Graph::GetBuffer(std::string_view name) const
 {
     impl_->Building();
     const auto found = impl_->names.find(std::string(name));
-    Require(found != impl_->names.end(), "Unknown resource name: " + std::string(name));
-    Require(!found->second.texture, "Resource type mismatch: " + std::string(name));
+    if (found == impl_->names.end())
+        Require(false, "Unknown resource name: " + std::string(name));
+    if (found->second.texture)
+        Require(false, "Resource type mismatch: " + std::string(name));
     const auto id = found->second.resource;
     return {impl_->id, id, static_cast<uint32_t>(impl_->resources[id].versions.size() - 1)};
 }

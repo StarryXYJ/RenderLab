@@ -360,9 +360,33 @@ void Scene(rhi::Runtime& runtime, shader::Target target, const std::filesystem::
             options = {};
             options.pipeline = PipelineType::Deferred;
             options.submission = GeometrySubmission::IndexedDirect;
+            options.captureGraph = true;
             const auto cpu = renderer.Render(color, initial, nullptr, true, {}, options);
+            if (count == 64)
+            {
+                const auto& passes = cpu.graphSnapshot->passes;
+                const auto pass = std::ranges::find_if(passes, [](const auto& item)
+                                                       { return item.name == "Deferred.GBuffer"; });
+                Require(pass != passes.end() &&
+                            pass->commands.directInstances > pass->commands.indexed &&
+                            pass->commands.indexed > 0,
+                        "Consecutive repeated meshes were not submitted as instanced draws");
+            }
             initial = rhi::State::CopySource;
             const auto reference = Pixels(runtime, cpu, 127, 95);
+            if (count == 64)
+            {
+                options.submission = GeometrySubmission::CpuIndirect;
+                const auto indirect = renderer.Render(color, initial, nullptr, true, {}, options);
+                Require(Pixels(runtime, indirect, 127, 95) == reference,
+                        "Instanced CPU indirect output differs from indexed direct");
+                const auto& passes = indirect.graphSnapshot->passes;
+                const auto pass = std::ranges::find_if(passes, [](const auto& item)
+                                                       { return item.name == "Deferred.GBuffer"; });
+                Require(pass != passes.end() && pass->commands.indirect > 0 &&
+                            pass->commands.indirectCapacity < indirect.indexedScene.visible,
+                        "CPU indirect arguments did not group consecutive repeated meshes");
+            }
             options.submission = GeometrySubmission::GpuCulled;
             options.cullingDiagnostics = true;
             const auto gpu =

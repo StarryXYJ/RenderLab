@@ -1,5 +1,6 @@
 <UserControl xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:RenderLab.Editor.ViewModels"
+             xmlns:controls="using:RenderLab.Editor.Controls"
              x:Class="RenderLab.Editor.Views.RenderSettingsView" x:DataType="vm:MainWindowViewModel">
     <Grid RowDefinitions="Auto,*,Auto">
         <Border Classes="toolbar">
@@ -32,7 +33,7 @@
                         <TextBlock Classes="label" Text="Exposure" />
                         <Grid Grid.Column="1" ColumnDefinitions="*,64" ColumnSpacing="6">
                             <Slider x:Name="ExposureControl" Minimum="-10" Maximum="10" Value="{Binding Exposure, Mode=TwoWay}" />
-                            <NumericUpDown Grid.Column="1" Minimum="-10" Maximum="10" Increment="0.1" FormatString="F1"
+                            <controls:AccessibleNumericUpDown Grid.Column="1" Minimum="-10" Maximum="10" Increment="0.1" FormatString="F1"
                                            Value="{Binding Exposure, Mode=TwoWay}" ShowButtonSpinner="False" ToolTip.Tip="Exposure (EV)" />
                         </Grid>
                     </Grid>
@@ -53,7 +54,7 @@
                                 </Style></ComboBox.Styles>
                             </ComboBox>
                         </Grid>
-                        <Grid Classes="property" ColumnDefinitions="112,*"><TextBlock Classes="label" Text="Record threads" /><NumericUpDown Grid.Column="1" Minimum="1" Maximum="16" Value="{Binding Settings.RecordingThreads}" /></Grid>
+                        <Grid Classes="property" ColumnDefinitions="112,*"><TextBlock Classes="label" Text="Record threads" /><controls:AccessibleNumericUpDown Grid.Column="1" Minimum="1" Maximum="16" Value="{Binding Settings.RecordingThreads}" /></Grid>
                         <Grid Classes="property" ColumnDefinitions="112,*">
                             <TextBlock Classes="label" Text="Async compute" />
                             <CheckBox Grid.Column="1" IsChecked="{Binding Settings.AsyncCompute}" IsEnabled="{Binding Settings.AsyncSupported}"
@@ -66,41 +67,41 @@
                     <StackPanel Margin="12,0,12,12" Spacing="8">
                         <TextBlock Classes="muted" Text="Direction" />
                         <Grid ColumnDefinitions="*,*,*" ColumnSpacing="6">
-                            <NumericUpDown Minimum="-1" Maximum="1" Increment="0.1" FormatString="F2" Value="{Binding Settings.LightX}" ToolTip.Tip="Direction X" />
-                            <NumericUpDown Grid.Column="1" Minimum="-1" Maximum="1" Increment="0.1" FormatString="F2" Value="{Binding Settings.LightY}" ToolTip.Tip="Direction Y" />
-                            <NumericUpDown Grid.Column="2" Minimum="-1" Maximum="1" Increment="0.1" FormatString="F2" Value="{Binding Settings.LightZ}" ToolTip.Tip="Direction Z" />
+                            <controls:AccessibleNumericUpDown Minimum="-1" Maximum="1" Increment="0.1" FormatString="F2" Value="{Binding Settings.LightX}" ToolTip.Tip="Direction X" />
+                            <controls:AccessibleNumericUpDown Grid.Column="1" Minimum="-1" Maximum="1" Increment="0.1" FormatString="F2" Value="{Binding Settings.LightY}" ToolTip.Tip="Direction Y" />
+                            <controls:AccessibleNumericUpDown Grid.Column="2" Minimum="-1" Maximum="1" Increment="0.1" FormatString="F2" Value="{Binding Settings.LightZ}" ToolTip.Tip="Direction Z" />
                         </Grid>
                         <TextBlock Classes="muted" Text="Linear RGB" />
                         <Grid ColumnDefinitions="*,*,*" ColumnSpacing="6">
-                            <NumericUpDown Minimum="0" Maximum="64" Increment="0.1" FormatString="F2" Value="{Binding Settings.LightR}" ToolTip.Tip="Red" />
-                            <NumericUpDown Grid.Column="1" Minimum="0" Maximum="64" Increment="0.1" FormatString="F2" Value="{Binding Settings.LightG}" ToolTip.Tip="Green" />
-                            <NumericUpDown Grid.Column="2" Minimum="0" Maximum="64" Increment="0.1" FormatString="F2" Value="{Binding Settings.LightB}" ToolTip.Tip="Blue" />
+                            <controls:AccessibleNumericUpDown Minimum="0" Maximum="64" Increment="0.1" FormatString="F2" Value="{Binding Settings.LightR}" ToolTip.Tip="Red" />
+                            <controls:AccessibleNumericUpDown Grid.Column="1" Minimum="0" Maximum="64" Increment="0.1" FormatString="F2" Value="{Binding Settings.LightG}" ToolTip.Tip="Green" />
+                            <controls:AccessibleNumericUpDown Grid.Column="2" Minimum="0" Maximum="64" Increment="0.1" FormatString="F2" Value="{Binding Settings.LightB}" ToolTip.Tip="Blue" />
                         </Grid>
-                        <Grid Classes="property" ColumnDefinitions="112,*"><TextBlock Classes="label" Text="Intensity" /><NumericUpDown Grid.Column="1" Minimum="0" Maximum="10000" Increment="0.1" Value="{Binding Settings.LightIntensity}" /></Grid>
-                        <Grid Classes="property" ColumnDefinitions="112,*"><TextBlock Classes="label" Text="Environment" /><NumericUpDown Grid.Column="1" Minimum="0" Maximum="1000" Increment="0.1" Value="{Binding Settings.EnvironmentIntensity}" /></Grid>
-                        <Grid Classes="property" ColumnDefinitions="112,*"><TextBlock Classes="label" Text="Rotation" /><NumericUpDown Grid.Column="1" Minimum="-360" Maximum="360" Value="{Binding Settings.EnvironmentRotation}" ToolTip.Tip="Environment rotation in degrees" /></Grid>
+                        <Grid Classes="property" ColumnDefinitions="112,*"><TextBlock Classes="label" Text="Intensity" /><controls:AccessibleNumericUpDown Grid.Column="1" Minimum="0" Maximum="10000" Increment="0.1" Value="{Binding Settings.LightIntensity}" /></Grid>
+                        <Grid Classes="property" ColumnDefinitions="112,*"><TextBlock Classes="label" Text="Environment" /><controls:AccessibleNumericUpDown Grid.Column="1" Minimum="0" Maximum="1000" Increment="0.1" Value="{Binding Settings.EnvironmentIntensity}" /></Grid>
+                        <Grid Classes="property" ColumnDefinitions="112,*"><TextBlock Classes="label" Text="Rotation" /><controls:AccessibleNumericUpDown Grid.Column="1" Minimum="-360" Maximum="360" Value="{Binding Settings.EnvironmentRotation}" ToolTip.Tip="Environment rotation in degrees" /></Grid>
                     </StackPanel>
                 </Expander>
                 <Expander Classes="inspector" Header="Shadows" IsEnabled="{Binding Settings.Ready}">
                     <StackPanel Margin="12,0,12,12" Spacing="8">
                         <Grid Classes="property" ColumnDefinitions="112,*"><TextBlock Classes="label" Text="Directional" /><CheckBox Grid.Column="1" IsChecked="{Binding Settings.Shadows}" AutomationProperties.Name="Directional shadows" /></Grid>
                         <Grid Classes="property" ColumnDefinitions="112,*"><TextBlock Classes="label" Text="Resolution" /><ComboBox Grid.Column="1" ItemsSource="{Binding Settings.ShadowResolutions}" SelectedItem="{Binding Settings.ShadowResolution}" /></Grid>
-                        <Grid Classes="property" ColumnDefinitions="112,*"><TextBlock Classes="label" Text="Depth bias" /><NumericUpDown Grid.Column="1" Minimum="0" Maximum="1" Increment="0.0001" FormatString="F4" Value="{Binding Settings.ShadowBias}" /></Grid>
-                        <Grid Classes="property" ColumnDefinitions="112,*"><TextBlock Classes="label" Text="Normal bias" /><NumericUpDown Grid.Column="1" Minimum="0" Maximum="10" Increment="0.001" FormatString="F3" Value="{Binding Settings.ShadowNormalBias}" /></Grid>
+                        <Grid Classes="property" ColumnDefinitions="112,*"><TextBlock Classes="label" Text="Depth bias" /><controls:AccessibleNumericUpDown Grid.Column="1" Minimum="0" Maximum="1" Increment="0.0001" FormatString="F4" Value="{Binding Settings.ShadowBias}" /></Grid>
+                        <Grid Classes="property" ColumnDefinitions="112,*"><TextBlock Classes="label" Text="Normal bias" /><controls:AccessibleNumericUpDown Grid.Column="1" Minimum="0" Maximum="10" Increment="0.001" FormatString="F3" Value="{Binding Settings.ShadowNormalBias}" /></Grid>
                     </StackPanel>
                 </Expander>
-                <Expander Classes="inspector" Header="Reflections" IsEnabled="{Binding Settings.Ready}">
+                <Expander Classes="inspector" Header="Ray tracing" IsEnabled="{Binding Settings.Ready}">
                     <StackPanel Margin="12,0,12,12" Spacing="6">
-                        <Grid Classes="property" ColumnDefinitions="112,*"><TextBlock Classes="label" Text="Enabled" /><CheckBox Grid.Column="1" IsChecked="{Binding Settings.Reflections}" AutomationProperties.Name="Reflections" /></Grid>
-                        <Grid Classes="property" ColumnDefinitions="112,*"><TextBlock Classes="label" Text="Accumulate" /><CheckBox Grid.Column="1" IsChecked="{Binding Settings.History}" AutomationProperties.Name="Progressive accumulation" /></Grid>
-                        <Grid Classes="property" ColumnDefinitions="112,*"><TextBlock Classes="label" Text="Spatial denoise" /><CheckBox Grid.Column="1" IsChecked="{Binding Settings.Denoise}" AutomationProperties.Name="Spatial denoising" /></Grid>
-                        <Grid Classes="property" ColumnDefinitions="112,*"><TextBlock Classes="label" Text="Reprojection" /><CheckBox Grid.Column="1" IsChecked="{Binding Settings.Temporal}" AutomationProperties.Name="Temporal reprojection" /></Grid>
+                        <Grid Classes="property" ColumnDefinitions="112,*"><TextBlock Classes="label" Text="Reflections" /><CheckBox Grid.Column="1" IsChecked="{Binding Settings.Reflections}" AutomationProperties.Name="Reflections" ToolTip.Tip="Applies to the hybrid Ray Tracing pipeline" /></Grid>
+                        <Grid Classes="property" ColumnDefinitions="112,*"><TextBlock Classes="label" Text="Reflect history" /><CheckBox Grid.Column="1" IsChecked="{Binding Settings.History}" AutomationProperties.Name="Progressive accumulation" ToolTip.Tip="Hybrid reflection history; Path Tracing always accumulates" /></Grid>
+                        <Grid Classes="property" ColumnDefinitions="112,*"><TextBlock Classes="label" Text="Spatial denoise" /><CheckBox Grid.Column="1" IsChecked="{Binding Settings.Denoise}" AutomationProperties.Name="Spatial denoising" ToolTip.Tip="Filters the display; Path Tracing raw history is preserved" /></Grid>
+                        <Grid Classes="property" ColumnDefinitions="112,*"><TextBlock Classes="label" Text="Reprojection" /><CheckBox Grid.Column="1" IsChecked="{Binding Settings.Temporal}" AutomationProperties.Name="Temporal reprojection" ToolTip.Tip="Temporal reconstruction for reflections and path tracing" /></Grid>
                     </StackPanel>
                 </Expander>
                 <Expander Classes="inspector" Header="Camera &amp; scheduling" IsEnabled="{Binding Settings.Ready}">
                     <StackPanel Margin="12,0,12,12" Spacing="8">
-                        <Grid Classes="property" ColumnDefinitions="112,*"><TextBlock Classes="label" Text="Move speed" /><NumericUpDown Grid.Column="1" Minimum="0.01" Maximum="1000" Increment="0.5" Value="{Binding Settings.CameraSpeed}" /></Grid>
-                        <Grid Classes="property" ColumnDefinitions="112,*"><TextBlock Classes="label" Text="Frame limit" /><NumericUpDown Grid.Column="1" Minimum="0" Maximum="240" Value="{Binding Settings.TargetFps}" ToolTip.Tip="0 = uncapped with VSync off; 1-240 = FPS cap" /></Grid>
+                        <Grid Classes="property" ColumnDefinitions="112,*"><TextBlock Classes="label" Text="Move speed" /><controls:AccessibleNumericUpDown Grid.Column="1" Minimum="0.01" Maximum="1000" Increment="0.5" Value="{Binding Settings.CameraSpeed}" /></Grid>
+                        <Grid Classes="property" ColumnDefinitions="112,*"><TextBlock Classes="label" Text="Frame limit" /><controls:AccessibleNumericUpDown Grid.Column="1" Minimum="0" Maximum="240" Value="{Binding Settings.TargetFps}" ToolTip.Tip="0 = uncapped with VSync off; 1-240 = FPS cap" /></Grid>
                         <Grid Classes="property" ColumnDefinitions="112,*"><TextBlock Classes="label" Text="Continuous" /><CheckBox Grid.Column="1" IsChecked="{Binding Settings.Continuous}" AutomationProperties.Name="Continuous redraw" /></Grid>
                         <Grid Classes="property" ColumnDefinitions="112,*"><TextBlock Classes="label" Text="GPU timing" /><CheckBox Grid.Column="1" IsChecked="{Binding Settings.Profiling}" AutomationProperties.Name="GPU profiling" /></Grid>
                     </StackPanel>

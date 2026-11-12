@@ -53,4 +53,29 @@ math::Mat4 FitDirectionalShadow(const scene::Snapshot& snapshot)
     }
     return projection * basis;
 }
+math::Mat4 FitAreaShadow(const scene::AreaLight& light, const scene::Snapshot& snapshot,
+                         float* farPlaneOutput)
+{
+    const auto x = math::Normalize(light.edgeU);
+    const auto z = light.normal * -1.f;
+    const auto y = math::Normalize(math::Cross(z, x));
+    auto view = math::Mat4::Identity();
+    const std::array axes{x, y, z};
+    for (size_t row = 0; row < 3; ++row)
+    {
+        view.At(row, 0) = axes[row].x;
+        view.At(row, 1) = axes[row].y;
+        view.At(row, 2) = axes[row].z;
+        view.At(row, 3) = -math::Dot(axes[row], light.center);
+    }
+    float farPlane = 1.f;
+    for (const auto& instance : snapshot.allInstances)
+    {
+        const auto bounds = math::TransformBounds(view, instance.bounds);
+        farPlane = std::max(farPlane, -bounds.minimum.z * 1.05f + .1f);
+    }
+    if (farPlaneOutput)
+        *farPlaneOutput = farPlane;
+    return math::Perspective(AreaShadowFov, 1, AreaShadowNear, farPlane) * view;
+}
 } // namespace renderlab::renderer

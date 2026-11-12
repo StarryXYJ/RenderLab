@@ -22,7 +22,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     public bool DeviceControlsEnabled => !viewport.DeviceSwitch.Busy;
     public string DeviceStatus => viewport.DeviceSwitch.Status;
     public string DeviceError => viewport.DeviceSwitch.Error;
-    public IReadOnlyList<string> Pipelines { get; } = ["Forward", "Deferred", "Ray Tracing"];
+    public IReadOnlyList<string> Pipelines { get; } = ["Forward", "Deferred", "Ray Tracing", "Path Tracing"];
     public RenderSettingsViewModel Settings { get; }
     public string PauseLabel => IsPaused ? "Resume viewport" : "Pause viewport";
     public string PauseGlyph => IsPaused ? "\uE768" : "\uE769";

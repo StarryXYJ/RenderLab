@@ -75,7 +75,8 @@ void VerifyMaterial(rhi::Runtime& runtime, shader::Target target, Logger& logger
         }
         return binding;
     };
-    auto first = materials.Prepare(package, asset, raster, resolve);
+    const auto frozen = materials.Validate(package, asset);
+    auto first = materials.Prepare(frozen, raster, resolve);
     const auto same = materials.Prepare(package, asset, raster, resolve);
     const auto materialBuffer = [](const material::Prepared& prepared)
     {
@@ -91,6 +92,9 @@ void VerifyMaterial(rhi::Runtime& runtime, shader::Target target, Logger& logger
     detail::CheckMaterialColor(firstRead.pixels, {.25f, .5f, .75f, 1});
     detail::SaveMaterialImage(output / "material-default.bmp", firstRead.pixels);
     material::Set(asset, materialTemplate, "base_color", std::array<double, 4>{.5, .25, .125, 1});
+    const auto frozenAfterEdit = materials.Prepare(frozen, raster, resolve);
+    Require(materialBuffer(frozenAfterEdit) == materialBuffer(first),
+            "Validated snapshot must not change when its source asset is edited");
     material::Save(asset, output / "sample.material");
     asset = material::Load(output / "sample.material", materialTemplate);
     auto edited = materials.Prepare(package, asset, raster, resolve);

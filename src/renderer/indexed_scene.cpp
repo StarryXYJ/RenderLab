@@ -65,6 +65,8 @@ struct IndexedScene::Impl
             runtime.CreateLayout({{0, rhi::BindingKind::ConstantBuffer},
                                   {1, rhi::BindingKind::ConstantBuffer},
                                   {2, rhi::BindingKind::ConstantBuffer},
+                                  {3, rhi::BindingKind::ConstantBuffer},
+                                  {4, rhi::BindingKind::ConstantBuffer},
                                   {0, rhi::BindingKind::ReadOnlyBuffer, 2},
                                   {1, rhi::BindingKind::ReadOnlyBuffer, 2},
                                   {2, rhi::BindingKind::ReadOnlyBuffer, 2},
@@ -72,7 +74,11 @@ struct IndexedScene::Impl
                                   {0, rhi::BindingKind::Sampler, 1},
                                   {8, rhi::BindingKind::SampledTexture},
                                   {9, rhi::BindingKind::SampledTexture},
-                                  {10, rhi::BindingKind::SampledTexture}});
+                                  {10, rhi::BindingKind::SampledTexture},
+                                  {11, rhi::BindingKind::SampledTexture},
+                                  {12, rhi::BindingKind::SampledTexture},
+                                  {13, rhi::BindingKind::SampledTexture},
+                                  {14, rhi::BindingKind::SampledTexture}});
         shader::DxcCompiler compiler;
         const auto module = [&](rhi::ShaderStage stage, const char* entry)
         {
@@ -289,7 +295,7 @@ void IndexedScene::Build(rendergraph::Graph& graph, const std::vector<IndexedDra
     self.stats.batches = static_cast<uint32_t>(batches.size());
     std::vector<uint32_t> visible;
     std::vector<rhi::DrawIndexedArguments> arguments;
-    std::vector<uint32_t> offsets;
+    std::vector<uint32_t> offsets, argumentCounts;
     std::vector<uint32_t> candidates;
     std::vector<std::array<uint32_t, 4>> batchRanges;
     for (const auto& batch : batches)
@@ -303,15 +309,26 @@ void IndexedScene::Build(rendergraph::Graph& graph, const std::vector<IndexedDra
             candidates.insert(candidates.end(), batch.candidates.begin(), batch.candidates.end());
             continue;
         }
-        offsets.push_back(static_cast<uint32_t>(visible.size()));
-        for (const auto instance : batch.instances)
+        offsets.push_back(static_cast<uint32_t>(arguments.size()));
+        const auto& instances = batch.instances;
+        const auto meshKey = [&](uint32_t instance)
         {
-            const auto& object = objects[instance];
-            arguments.push_back({object.indices[2], 1, object.indices[0],
-                                 static_cast<int32_t>(object.indices[3]),
+            const auto& indices = objects[instance].indices;
+            return std::tuple{indices[0], indices[2], indices[3]};
+        };
+        for (size_t first = 0; first < instances.size();)
+        {
+            auto end = first + 1;
+            while (end < instances.size() && meshKey(instances[end]) == meshKey(instances[first]))
+                ++end;
+            const auto& object = objects[instances[first]];
+            arguments.push_back({object.indices[2], static_cast<uint32_t>(end - first),
+                                 object.indices[0], static_cast<int32_t>(object.indices[3]),
                                  static_cast<uint32_t>(visible.size())});
-            visible.push_back(instance);
+            visible.insert(visible.end(), instances.begin() + first, instances.begin() + end);
+            first = end;
         }
+        argumentCounts.push_back(static_cast<uint32_t>(arguments.size()) - offsets.back());
     }
     self.stats.visible = static_cast<uint32_t>(visible.size());
     if (!gpuCulling && visible.empty())
@@ -454,13 +471,17 @@ void IndexedScene::Build(rendergraph::Graph& graph, const std::vector<IndexedDra
         draw.indices = "Indexed.Indices";
         draw.stencilReference = batch.stencil;
         draw.queue = batch.queue;
-        draw.buffers = {frame.view,    frame.lighting,  frame.shadow,
-                        objectBinding, materialBinding, visibleBinding};
+        draw.buffers = {frame.view,       frame.lighting, frame.shadow,    frame.area,
+                        frame.areaShadow, objectBinding,  materialBinding, visibleBinding};
         for (uint32_t i = 0; i < IndexedTextureCapacity; ++i)
             draw.textures.push_back({16, textureNames[i < textureNames.size() ? i : 0], 1, i});
         draw.textures.push_back({8, frame.environment});
         draw.textures.push_back({9, frame.brdf});
         draw.textures.push_back({10, "MainLightShadow"});
+        draw.textures.push_back({11, frame.ltcMatrix});
+        draw.textures.push_back({12, frame.ltcAmplitude});
+        draw.textures.push_back({13, frame.areaShadow0});
+        draw.textures.push_back({14, frame.areaShadow1});
         draw.samplers = {{0, self.sampler, 1}};
         auto& destination = batch.gbuffer ? gbuffer : opaque;
         if (indirect)
@@ -468,8 +489,8 @@ void IndexedScene::Build(rendergraph::Graph& graph, const std::vector<IndexedDra
             draw.kind = DrawKind::IndexedIndirect;
             draw.indirect = "Indexed.Arguments";
             draw.indirectOffset = uint64_t(offsets[b]) * sizeof(rhi::DrawIndexedArguments);
-            draw.indirectMaxCount = static_cast<uint32_t>(gpuCulling ? batch.candidates.size()
-                                                                     : batch.instances.size());
+            draw.indirectMaxCount =
+                gpuCulling ? static_cast<uint32_t>(batch.candidates.size()) : argumentCounts[b];
             if (gpuCulling)
             {
                 draw.indirectCount = "Indexed.Count";
@@ -481,7 +502,7 @@ void IndexedScene::Build(rendergraph::Graph& graph, const std::vector<IndexedDra
         {
             draw.kind = DrawKind::IndexedSequence;
             draw.indexedDraws.assign(arguments.begin() + offsets[b],
-                                     arguments.begin() + offsets[b] + batch.instances.size());
+                                     arguments.begin() + offsets[b] + argumentCounts[b]);
             destination.push_back(std::move(draw));
         }
     }

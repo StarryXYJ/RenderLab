@@ -3,6 +3,7 @@
 #include "rhi/vulkan/vulkan_common.hpp"
 
 #include <array>
+#include <atomic>
 
 #include <cstddef>
 #include <cstdint>
@@ -100,22 +101,34 @@ struct VkLayout : BindingLayout
                 vkDestroyDescriptorSetLayout(device, set, nullptr);
     }
 };
-struct VkDescriptorBlock
+struct VkDescriptorPage
 {
     VkDevice device = VK_NULL_HANDLE;
     VkDescriptorPool pool = VK_NULL_HANDLE;
     std::shared_ptr<BindingLayout> layout;
     std::shared_ptr<DescriptorStats> stats;
-    std::array<VkDescriptorSet, 4> native{};
-    ~VkDescriptorBlock()
+    std::vector<std::array<VkDescriptorSet, 4>> sets;
+    std::atomic<uint32_t> available{0};
+    ~VkDescriptorPage()
     {
         if (pool)
             vkDestroyDescriptorPool(device, pool, nullptr);
         if (stats)
         {
             --stats->pages;
-            stats->capacity -= layout->DescriptorCount();
+            stats->capacity -= layout->DescriptorCount() * sets.size();
         }
+    }
+};
+struct VkDescriptorBlock
+{
+    std::shared_ptr<VkDescriptorPage> page;
+    uint32_t slot = UINT32_MAX;
+    std::array<VkDescriptorSet, 4> native{};
+    ~VkDescriptorBlock()
+    {
+        if (page && slot != UINT32_MAX)
+            page->available.fetch_or(uint32_t{1} << slot, std::memory_order_release);
     }
 };
 struct VkGroup : BindingGroup
@@ -126,7 +139,7 @@ struct VkGroup : BindingGroup
     ~VkGroup() override
     {
         if (allocation)
-            allocation->stats->inUse -= layout->DescriptorCount();
+            allocation->page->stats->inUse -= layout->DescriptorCount();
     }
 };
 struct VkPipelineObject : Pipeline

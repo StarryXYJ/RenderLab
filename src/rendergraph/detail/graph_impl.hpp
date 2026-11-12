@@ -79,6 +79,11 @@ inline void Require(bool condition, const std::string& message)
     if (!condition)
         throw std::invalid_argument("RenderGraph: " + message);
 }
+inline void Require(bool condition, const char* message)
+{
+    if (!condition)
+        throw std::invalid_argument(std::string("RenderGraph: ") + message);
+}
 uint64_t EstimatedBytes(const Resource& resource);
 } // namespace detail
 struct Graph::Impl

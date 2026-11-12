@@ -21,6 +21,29 @@ float2 ReflectionSample(uint index, uint pixel)
     second ^= RaySampleHash(pixel ^ 0x63d83595);
     return float2(first >> 8, second >> 8) * (1.0 / 16777216.0);
 }
+// Cosine-weighted local hemisphere; Lambertian BRDF * cosine / PDF is albedo.
+float3 SampleCosineHemisphere(float2 xi)
+{
+    float radius = sqrt(xi.x);
+    float phi = 2 * RenderLabPi * xi.y;
+    return float3(radius * cos(phi), radius * sin(phi), sqrt(max(0, 1 - xi.x)));
+}
+// A zero seed preserves the original stream; nonzero seeds select a deterministic pixel stream.
+uint PathSamplePixel(uint pixel, uint seed)
+{
+    return seed == 0 ? pixel : pixel ^ RaySampleHash(seed);
+}
+
+// Separate dimensions for camera and path bounces; all arithmetic is deterministic uint32.
+float2 PathSample(uint sampleIndex, uint pixel, uint dimension)
+{
+    uint seed = RaySampleHash(pixel ^ 0xa511e9b3u);
+    seed = RaySampleHash(seed ^ sampleIndex ^ 0x63d83595u);
+    seed = RaySampleHash(seed ^ dimension ^ 0x9e3779b9u);
+    uint x = RaySampleHash(seed ^ 0x68bc21ebu);
+    uint y = RaySampleHash(seed ^ 0x02e5be93u);
+    return float2(x >> 8, y >> 8) * (1.0 / 16777216.0);
+}
 float3 SampleVisibleGGX(float3 view, float alpha, float2 xi)
 {
     // Heitz 2018: sample the GGX distribution of normals visible from the view direction.

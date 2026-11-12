@@ -1,0 +1,4610 @@
+{
+  "version": 1,
+  "activeCamera": "2b135b7dbfd9523591f6a5fe36793c12",
+  "ambient": [
+    0.025,
+    0.025,
+    0.025
+  ],
+  "exposure": 0,
+  "objects": [
+    {
+      "id": "2b135b7dbfd9523591f6a5fe36793c12",
+      "name": "camera",
+      "enabled": true,
+      "transform": {
+        "position": [
+          0,
+          9,
+          19
+        ],
+        "rotation": [
+          -0.1993679344171972,
+          0,
+          0,
+          0.9799247046208296
+        ],
+        "scale": [
+          1,
+          1,
+          1
+        ]
+      },
+      "camera": {
+        "fov": 50,
+        "near": 0.1,
+        "far": 100
+      }
+    },
+    {
+      "id": "af7a53f47f19548cbfc217fcd78a7928",
+      "name": "sun",
+      "enabled": true,
+      "transform": {
+        "position": [
+          0,
+          0,
+          0
+        ],
+        "rotation": [
+          -0.3696438106143861,
+          -0.23911761839433449,
+          -0.09904576054128762,
+          0.8923991008325228
+        ],
+        "scale": [
+          1,
+          1,
+          1
+        ]
+      },
+      "directionalLight": {
+        "color": [
+          1,
+          0.96,
+          0.88
+        ],
+        "intensity": 0.35,
+        "shadows": true,
+        "shadowResolution": 1024,
+        "shadowBias": 0.001,
+        "shadowNormalBias": 0.01
+      }
+    },
+    {
+      "id": "851301cd957f5f409bd6eb8fa0f59263",
+      "name": "area-warm",
+      "enabled": true,
+      "transform": {
+        "position": [
+          -4,
+          7.5,
+          0
+        ],
+        "rotation": [
+          -0.7071067811865476,
+          0,
+          0,
+          0.7071067811865476
+        ],
+        "scale": [
+          1,
+          1,
+          1
+        ]
+      },
+      "rectAreaLight": {
+        "radiance": [
+          28,
+          14,
+          7
+        ],
+        "width": 4,
+        "height": 4,
+        "enabled": true
+      }
+    },
+    {
+      "id": "c9fd8344188653c89e248906fa5ba637",
+      "name": "area-cool",
+      "enabled": true,
+      "transform": {
+        "position": [
+          4,
+          7.5,
+          0
+        ],
+        "rotation": [
+          -0.7071067811865476,
+          0,
+          0,
+          0.7071067811865476
+        ],
+        "scale": [
+          1,
+          1,
+          1
+        ]
+      },
+      "rectAreaLight": {
+        "radiance": [
+          7,
+          14,
+          28
+        ],
+        "width": 4,
+        "height": 4,
+        "enabled": true
+      }
+    },
+    {
+      "id": "ef66cbedfb93568eb2da4ec7afafdc03",
+      "name": "ground",
+      "enabled": true,
+      "transform": {
+        "position": [
+          0,
+          -0.15,
+          0
+        ],
+        "rotation": [
+          0,
+          0,
+          0,
+          1
+        ],
+        "scale": [
+          8,
+          0.15,
+          8
+        ]
+      },
+      "meshRenderer": {
+        "model": "b4748e75e72a5dba8d4439fa86854c92",
+        "materials": {
+          "724bed1a90285b9d933f9a5abbe5e9af": "74b1b0d36ad35df5b00be40ad53e4337"
+        }
+      }
+    },
+    {
+      "id": "b6277737ae925440bb036f3639fad556",
+      "name": "object-00-00",
+      "enabled": true,
+      "transform": {
+        "position": [
+          -6.325,
+          0.34,
+          -6.325
+        ],
+        "rotation": [
+          0,
+          0.0,
+          0,
+          1.0
+        ],
+        "scale": [
+          0.34,
+          0.34,
+          0.34
+        ]
+      },
+      "meshRenderer": {
+        "model": "8cb75671f1c7525abe1c98eeede99855",
+        "materials": {
+          "18609d7bc4b25b3094ca40a95c490f5a": "984be79c5226529a90078b6f1d97cdfe"
+        }
+      }
+    },
+    {
+      "id": "1835b7f10e715a97bc952ea87a79f450",
+      "name": "object-00-01",
+      "enabled": true,
+      "transform": {
+        "position": [
+          -5.175,
+          0.38,
+          -6.325
+        ],
+        "rotation": [
+          0,
+          0.3007057995042731,
+          0,
+          0.9537169507482269
+        ],
+        "scale": [
+          0.38,
+          0.5319999999999999,
+          0.38
+        ]
+      },
+      "meshRenderer": {
+        "model": "b4748e75e72a5dba8d4439fa86854c92",
+        "materials": {
+          "724bed1a90285b9d933f9a5abbe5e9af": "984be79c5226529a90078b6f1d97cdfe"
+        }
+      }
+    },
+    {
+      "id": "af655a34c14e55098fe8ea3395fe573f",
+      "name": "object-00-02",
+      "enabled": true,
+      "transform": {
+        "position": [
+          -4.025,
+          0.42,
+          -6.325
+        ],
+        "rotation": [
+          0,
+          0.18223552549214747,
+          0,
+          0.9832549075639546
+        ],
+        "scale": [
+          0.42000000000000004,
+          0.42000000000000004,
+          0.42000000000000004
+        ]
+      },
+      "meshRenderer": {
+        "model": "8cb75671f1c7525abe1c98eeede99855",
+        "materials": {
+          "18609d7bc4b25b3094ca40a95c490f5a": "c518c5fb2a87520a9d9422913c79b314"
+        }
+      }
+    },
+    {
+      "id": "af770c9061f15b66829854fb82b33e33",
+      "name": "object-00-03",
+      "enabled": true,
+      "transform": {
+        "position": [
+          -2.875,
+          0.34,
+          -6.325
+        ],
+        "rotation": [
+          0,
+          0.06104853953485687,
+          0,
+          0.9981347984218669
+        ],
+        "scale": [
+          0.34,
+          0.34,
+          0.34
+        ]
+      },
+      "meshRenderer": {
+        "model": "b4748e75e72a5dba8d4439fa86854c92",
+        "materials": {
+          "724bed1a90285b9d933f9a5abbe5e9af": "c518c5fb2a87520a9d9422913c79b314"
+        }
+      }
+    },
+    {
+      "id": "f23820129cbe5458be474a30520beaff",
+      "name": "object-00-04",
+      "enabled": true,
+      "transform": {
+        "position": [
+          -1.725,
+          0.38,
+          -6.325
+        ],
+        "rotation": [
+          0,
+          0.35836794954530027,
+          0,
+          0.9335804264972017
+        ],
+        "scale": [
+          0.38,
+          0.38,
+          0.38
+        ]
+      },
+      "meshRenderer": {
+        "model": "8cb75671f1c7525abe1c98eeede99855",
+        "materials": {
+          "18609d7bc4b25b3094ca40a95c490f5a": "c59ed1d5b19f578fb91963961945de50"
+        }
+      }
+    },
+    {
+      "id": "949a764ebae6512ea4e1fcf6342b523d",
+      "name": "object-00-05",
+      "enabled": true,
+      "transform": {
+        "position": [
+          -0.575,
+          0.42,
+          -6.325
+        ],
+        "rotation": [
+          0,
+          0.24192189559966773,
+          0,
+          0.9702957262759965
+        ],
+        "scale": [
+          0.42000000000000004,
+          0.588,
+          0.42000000000000004
+        ]
+      },
+      "meshRenderer": {
+        "model": "b4748e75e72a5dba8d4439fa86854c92",
+        "materials": {
+          "724bed1a90285b9d933f9a5abbe5e9af": "c59ed1d5b19f578fb91963961945de50"
+        }
+      }
+    },
+    {
+      "id": "1c59359504e1527294f477922d937e81",
+      "name": "object-00-06",
+      "enabled": true,
+      "transform": {
+        "position": [
+          0.575,
+          0.34,
+          -6.325
+        ],
+        "rotation": [
+          0,
+          0.12186934340514748,
+          0,
+          0.992546151641322
+        ],
+        "scale": [
+          0.34,
+          0.34,
+          0.34
+        ]
+      },
+      "meshRenderer": {
+        "model": "8cb75671f1c7525abe1c98eeede99855",
+        "materials": {
+          "18609d7bc4b25b3094ca40a95c490f5a": "b3e52f1d55ee5147b47d7c28d6cd8d42"
+        }
+      }
+    },
+    {
+      "id": "dcc8d883a0dd5aea93ef23b93dffc1cd",
+      "name": "object-00-07",
+      "enabled": true,
+      "transform": {
+        "position": [
+          1.725,
+          0.38,
+          -6.325
+        ],
+        "rotation": [
+          0,
+          0.0,
+          0,
+          1.0
+        ],
+        "scale": [
+          0.38,
+          0.38,
+          0.38
+        ]
+      },
+      "meshRenderer": {
+        "model": "b4748e75e72a5dba8d4439fa86854c92",
+        "materials": {
+          "724bed1a90285b9d933f9a5abbe5e9af": "b3e52f1d55ee5147b47d7c28d6cd8d42"
+        }
+      }
+    },
+    {
+      "id": "87f70008e1ff5848a7765783af40c2cc",
+      "name": "object-00-08",
+      "enabled": true,
+      "transform": {
+        "position": [
+          2.875,
+          0.42,
+          -6.325
+        ],
+        "rotation": [
+          0,
+          0.3007057995042731,
+          0,
+          0.9537169507482269
+        ],
+        "scale": [
+          0.42000000000000004,
+          0.42000000000000004,
+          0.42000000000000004
+        ]
+      },
+      "meshRenderer": {
+        "model": "8cb75671f1c7525abe1c98eeede99855",
+        "materials": {
+          "18609d7bc4b25b3094ca40a95c490f5a": "03db855801a2540b99742bfa1f4f8362"
+        }
+      }
+    },
+    {
+      "id": "d841b9f075e05deea7c0991d7f887add",
+      "name": "object-00-09",
+      "enabled": true,
+      "transform": {
+        "position": [
+          4.025,
+          0.34,
+          -6.325
+        ],
+        "rotation": [
+          0,
+          0.18223552549214747,
+          0,
+          0.9832549075639546
+        ],
+        "scale": [
+          0.34,
+          0.476,
+          0.34
+        ]
+      },
+      "meshRenderer": {
+        "model": "b4748e75e72a5dba8d4439fa86854c92",
+        "materials": {
+          "724bed1a90285b9d933f9a5abbe5e9af": "03db855801a2540b99742bfa1f4f8362"
+        }
+      }
+    },
+    {
+      "id": "7c2faef7c1395e82b11cfcd888d72128",
+      "name": "object-00-10",
+      "enabled": true,
+      "transform": {
+        "position": [
+          5.175,
+          0.38,
+          -6.325
+        ],
+        "rotation": [
+          0,
+          0.06104853953485687,
+          0,
+          0.9981347984218669
+        ],
+        "scale": [
+          0.38,
+          0.38,
+          0.38
+        ]
+      },
+      "meshRenderer": {
+        "model": "8cb75671f1c7525abe1c98eeede99855",
+        "materials": {
+          "18609d7bc4b25b3094ca40a95c490f5a": "9d05a848c41e5b3d8f772e40dbf650db"
+        }
+      }
+    },
+    {
+      "id": "76e8d723af375576b42da9c7b8db38cb",
+      "name": "object-00-11",
+      "enabled": true,
+      "transform": {
+        "position": [
+          6.325,
+          0.42,
+          -6.325
+        ],
+        "rotation": [
+          0,
+          0.35836794954530027,
+          0,
+          0.9335804264972017
+        ],
+        "scale": [
+          0.42000000000000004,
+          0.42000000000000004,
+          0.42000000000000004
+        ]
+      },
+      "meshRenderer": {
+        "model": "b4748e75e72a5dba8d4439fa86854c92",
+        "materials": {
+          "724bed1a90285b9d933f9a5abbe5e9af": "9d05a848c41e5b3d8f772e40dbf650db"
+        }
+      }
+    },
+    {
+      "id": "556fa36b333e5831b67e21fde34366fa",
+      "name": "object-01-00",
+      "enabled": true,
+      "transform": {
+        "position": [
+          -6.325,
+          0.34,
+          -5.175
+        ],
+        "rotation": [
+          0,
+          0.35836794954530027,
+          0,
+          0.9335804264972017
+        ],
+        "scale": [
+          0.34,
+          0.476,
+          0.34
+        ]
+      },
+      "meshRenderer": {
+        "model": "b4748e75e72a5dba8d4439fa86854c92",
+        "materials": {
+          "724bed1a90285b9d933f9a5abbe5e9af": "c518c5fb2a87520a9d9422913c79b314"
+        }
+      }
+    },
+    {
+      "id": "db6e1a05f6de57b5b1f1bf899b561a43",
+      "name": "object-01-01",
+      "enabled": true,
+      "transform": {
+        "position": [
+          -5.175,
+          0.38,
+          -5.175
+        ],
+        "rotation": [
+          0,
+          0.24192189559966773,
+          0,
+          0.9702957262759965
+        ],
+        "scale": [
+          0.38,
+          0.38,
+          0.38
+        ]
+      },
+      "meshRenderer": {
+        "model": "8cb75671f1c7525abe1c98eeede99855",
+        "materials": {
+          "18609d7bc4b25b3094ca40a95c490f5a": "c518c5fb2a87520a9d9422913c79b314"
+        }
+      }
+    },
+    {
+      "id": "b2c9de16819757f7a707cdb0d6b5255a",
+      "name": "object-01-02",
+      "enabled": true,
+      "transform": {
+        "position": [
+          -4.025,
+          0.42,
+          -5.175
+        ],
+        "rotation": [
+          0,
+          0.12186934340514748,
+          0,
+          0.992546151641322
+        ],
+        "scale": [
+          0.42000000000000004,
+          0.42000000000000004,
+          0.42000000000000004
+        ]
+      },
+      "meshRenderer": {
+        "model": "b4748e75e72a5dba8d4439fa86854c92",
+        "materials": {
+          "724bed1a90285b9d933f9a5abbe5e9af": "c59ed1d5b19f578fb91963961945de50"
+        }
+      }
+    },
+    {
+      "id": "48030e0b7b0952e5b8794dda8caca85b",
+      "name": "object-01-03",
+      "enabled": true,
+      "transform": {
+        "position": [
+          -2.875,
+          0.34,
+          -5.175
+        ],
+        "rotation": [
+          0,
+          0.0,
+          0,
+          1.0
+        ],
+        "scale": [
+          0.34,
+          0.34,
+          0.34
+        ]
+      },
+      "meshRenderer": {
+        "model": "8cb75671f1c7525abe1c98eeede99855",
+        "materials": {
+          "18609d7bc4b25b3094ca40a95c490f5a": "c59ed1d5b19f578fb91963961945de50"
+        }
+      }
+    },
+    {
+      "id": "6bfd30cc2dde533c9909ab3bbe184565",
+      "name": "object-01-04",
+      "enabled": true,
+      "transform": {
+        "position": [
+          -1.725,
+          0.38,
+          -5.175
+        ],
+        "rotation": [
+          0,
+          0.3007057995042731,
+          0,
+          0.9537169507482269
+        ],
+        "scale": [
+          0.38,
+          0.5319999999999999,
+          0.38
+        ]
+      },
+      "meshRenderer": {
+        "model": "b4748e75e72a5dba8d4439fa86854c92",
+        "materials": {
+          "724bed1a90285b9d933f9a5abbe5e9af": "b3e52f1d55ee5147b47d7c28d6cd8d42"
+        }
+      }
+    },
+    {
+      "id": "6f2f35224d615c9893d30a02e86ab2e2",
+      "name": "object-01-05",
+      "enabled": true,
+      "transform": {
+        "position": [
+          -0.575,
+          0.42,
+          -5.175
+        ],
+        "rotation": [
+          0,
+          0.18223552549214747,
+          0,
+          0.9832549075639546
+        ],
+        "scale": [
+          0.42000000000000004,
+          0.42000000000000004,
+          0.42000000000000004
+        ]
+      },
+      "meshRenderer": {
+        "model": "8cb75671f1c7525abe1c98eeede99855",
+        "materials": {
+          "18609d7bc4b25b3094ca40a95c490f5a": "b3e52f1d55ee5147b47d7c28d6cd8d42"
+        }
+      }
+    },
+    {
+      "id": "062b7f20d4365d6f84a5f4e4fcc112a3",
+      "name": "object-01-06",
+      "enabled": true,
+      "transform": {
+        "position": [
+          0.575,
+          0.34,
+          -5.175
+        ],
+        "rotation": [
+          0,
+          0.06104853953485687,
+          0,
+          0.9981347984218669
+        ],
+        "scale": [
+          0.34,
+          0.34,
+          0.34
+        ]
+      },
+      "meshRenderer": {
+        "model": "b4748e75e72a5dba8d4439fa86854c92",
+        "materials": {
+          "724bed1a90285b9d933f9a5abbe5e9af": "03db855801a2540b99742bfa1f4f8362"
+        }
+      }
+    },
+    {
+      "id": "d87a8eb7523f50e4ad3ef8939d265f3a",
+      "name": "object-01-07",
+      "enabled": true,
+      "transform": {
+        "position": [
+          1.725,
+          0.38,
+          -5.175
+        ],
+        "rotation": [
+          0,
+          0.35836794954530027,
+          0,
+          0.9335804264972017
+        ],
+        "scale": [
+          0.38,
+          0.38,
+          0.38
+        ]
+      },
+      "meshRenderer": {
+        "model": "8cb75671f1c7525abe1c98eeede99855",
+        "materials": {
+          "18609d7bc4b25b3094ca40a95c490f5a": "03db855801a2540b99742bfa1f4f8362"
+        }
+      }
+    },
+    {
+      "id": "9d931e8f3b065ed995a10273c0c25cae",
+      "name": "object-01-08",
+      "enabled": true,
+      "transform": {
+        "position": [
+          2.875,
+          0.42,
+          -5.175
+        ],
+        "rotation": [
+          0,
+          0.24192189559966773,
+          0,
+          0.9702957262759965
+        ],
+        "scale": [
+          0.42000000000000004,
+          0.588,
+          0.42000000000000004
+        ]
+      },
+      "meshRenderer": {
+        "model": "b4748e75e72a5dba8d4439fa86854c92",
+        "materials": {
+          "724bed1a90285b9d933f9a5abbe5e9af": "9d05a848c41e5b3d8f772e40dbf650db"
+        }
+      }
+    },
+    {
+      "id": "9e36b605a9cf51d4b0412df53194e834",
+      "name": "object-01-09",
+      "enabled": true,
+      "transform": {
+        "position": [
+          4.025,
+          0.34,
+          -5.175
+        ],
+        "rotation": [
+          0,
+          0.12186934340514748,
+          0,
+          0.992546151641322
+        ],
+        "scale": [
+          0.34,
+          0.34,
+          0.34
+        ]
+      },
+      "meshRenderer": {
+        "model": "8cb75671f1c7525abe1c98eeede99855",
+        "materials": {
+          "18609d7bc4b25b3094ca40a95c490f5a": "9d05a848c41e5b3d8f772e40dbf650db"
+        }
+      }
+    },
+    {
+      "id": "40bb03cd609e5ec5bbc49f1a6ca5ccdd",
+      "name": "object-01-10",
+      "enabled": true,
+      "transform": {
+        "position": [
+          5.175,
+          0.38,
+          -5.175
+        ],
+        "rotation": [
+          0,
+          0.0,
+          0,
+          1.0
+        ],
+        "scale": [
+          0.38,
+          0.38,
+          0.38
+        ]
+      },
+      "meshRenderer": {
+        "model": "b4748e75e72a5dba8d4439fa86854c92",
+        "materials": {
+          "724bed1a90285b9d933f9a5abbe5e9af": "95444e6e7f1e55b5b242fa3071b3493c"
+        }
+      }
+    },
+    {
+      "id": "d0174483ac8d5d67acea310e513018a5",
+      "name": "object-01-11",
+      "enabled": true,
+      "transform": {
+        "position": [
+          6.325,
+          0.42,
+          -5.175
+        ],
+        "rotation": [
+          0,
+          0.3007057995042731,
+          0,
+          0.9537169507482269
+        ],
+        "scale": [
+          0.42000000000000004,
+          0.42000000000000004,
+          0.42000000000000004
+        ]
+      },
+      "meshRenderer": {
+        "model": "8cb75671f1c7525abe1c98eeede99855",
+        "materials": {
+          "18609d7bc4b25b3094ca40a95c490f5a": "95444e6e7f1e55b5b242fa3071b3493c"
+        }
+      }
+    },
+    {
+      "id": "d8565b1115915756b31303dc2ee8ebd1",
+      "name": "object-02-00",
+      "enabled": true,
+      "transform": {
+        "position": [
+          -6.325,
+          0.34,
+          -4.025
+        ],
+        "rotation": [
+          0,
+          0.3007057995042731,
+          0,
+          0.9537169507482269
+        ],
+        "scale": [
+          0.34,
+          0.34,
+          0.34
+        ]
+      },
+      "meshRenderer": {
+        "model": "8cb75671f1c7525abe1c98eeede99855",
+        "materials": {
+          "18609d7bc4b25b3094ca40a95c490f5a": "c59ed1d5b19f578fb91963961945de50"
+        }
+      }
+    },
+    {
+      "id": "bb4d01378dee56ffbefc95f320cda45e",
+      "name": "object-02-01",
+      "enabled": true,
+      "transform": {
+        "position": [
+          -5.175,
+          0.38,
+          -4.025
+        ],
+        "rotation": [
+          0,
+          0.18223552549214747,
+          0,
+          0.9832549075639546
+        ],
+        "scale": [
+          0.38,
+          0.38,
+          0.38
+        ]
+      },
+      "meshRenderer": {
+        "model": "b4748e75e72a5dba8d4439fa86854c92",
+        "materials": {
+          "724bed1a90285b9d933f9a5abbe5e9af": "c59ed1d5b19f578fb91963961945de50"
+        }
+      }
+    },
+    {
+      "id": "754717e2731f571e8befc241a1082044",
+      "name": "object-02-02",
+      "enabled": true,
+      "transform": {
+        "position": [
+          -4.025,
+          0.42,
+          -4.025
+        ],
+        "rotation": [
+          0,
+          0.06104853953485687,
+          0,
+          0.9981347984218669
+        ],
+        "scale": [
+          0.42000000000000004,
+          0.42000000000000004,
+          0.42000000000000004
+        ]
+      },
+      "meshRenderer": {
+        "model": "8cb75671f1c7525abe1c98eeede99855",
+        "materials": {
+          "18609d7bc4b25b3094ca40a95c490f5a": "b3e52f1d55ee5147b47d7c28d6cd8d42"
+        }
+      }
+    },
+    {
+      "id": "a95f1dbae0bd5c1fa251d34a71197b73",
+      "name": "object-02-03",
+      "enabled": true,
+      "transform": {
+        "position": [
+          -2.875,
+          0.34,
+          -4.025
+        ],
+        "rotation": [
+          0,
+          0.35836794954530027,
+          0,
+          0.9335804264972017
+        ],
+        "scale": [
+          0.34,
+          0.476,
+          0.34
+        ]
+      },
+      "meshRenderer": {
+        "model": "b4748e75e72a5dba8d4439fa86854c92",
+        "materials": {
+          "724bed1a90285b9d933f9a5abbe5e9af": "b3e52f1d55ee5147b47d7c28d6cd8d42"
+        }
+      }
+    },
+    {
+      "id": "3efedba07ebe5fcca76ab4f71fa5ce36",
+      "name": "object-02-04",
+      "enabled": true,
+      "transform": {
+        "position": [
+          -1.725,
+          0.38,
+          -4.025
+        ],
+        "rotation": [
+          0,
+          0.24192189559966773,
+          0,
+          0.9702957262759965
+        ],
+        "scale": [
+          0.38,
+          0.38,
+          0.38
+        ]
+      },
+      "meshRenderer": {
+        "model": "8cb75671f1c7525abe1c98eeede99855",
+        "materials": {
+          "18609d7bc4b25b3094ca40a95c490f5a": "03db855801a2540b99742bfa1f4f8362"
+        }
+      }
+    },
+    {
+      "id": "ea74734b0f455e4db3b87777d5e2cf50",
+      "name": "object-02-05",
+      "enabled": true,
+      "transform": {
+        "position": [
+          -0.575,
+          0.42,
+          -4.025
+        ],
+        "rotation": [
+          0,
+          0.12186934340514748,
+          0,
+          0.992546151641322
+        ],
+        "scale": [
+          0.42000000000000004,
+          0.42000000000000004,
+          0.42000000000000004
+        ]
+      },
+      "meshRenderer": {
+        "model": "b4748e75e72a5dba8d4439fa86854c92",
+        "materials": {
+          "724bed1a90285b9d933f9a5abbe5e9af": "03db855801a2540b99742bfa1f4f8362"
+        }
+      }
+    },
+    {
+      "id": "95905377c39b52eb95edf26ab4fc2564",
+      "name": "object-02-06",
+      "enabled": true,
+      "transform": {
+        "position": [
+          0.575,
+          0.34,
+          -4.025
+        ],
+        "rotation": [
+          0,
+          0.0,
+          0,
+          1.0
+        ],
+        "scale": [
+          0.34,
+          0.34,
+          0.34
+        ]
+      },
+      "meshRenderer": {
+        "model": "8cb75671f1c7525abe1c98eeede99855",
+        "materials": {
+          "18609d7bc4b25b3094ca40a95c490f5a": "9d05a848c41e5b3d8f772e40dbf650db"
+        }
+      }
+    },
+    {
+      "id": "fb1ed5b194ef5d238633a82b055ef03c",
+      "name": "object-02-07",
+      "enabled": true,
+      "transform": {
+        "position": [
+          1.725,
+          0.38,
+          -4.025
+        ],
+        "rotation": [
+          0,
+          0.3007057995042731,
+          0,
+          0.9537169507482269
+        ],
+        "scale": [
+          0.38,
+          0.5319999999999999,
+          0.38
+        ]
+      },
+      "meshRenderer": {
+        "model": "b4748e75e72a5dba8d4439fa86854c92",
+        "materials": {
+          "724bed1a90285b9d933f9a5abbe5e9af": "9d05a848c41e5b3d8f772e40dbf650db"
+        }
+      }
+    },
+    {
+      "id": "c7d830a4e01751fcb43f2720c0f59157",
+      "name": "object-02-08",
+      "enabled": true,
+      "transform": {
+        "position": [
+          2.875,
+          0.42,
+          -4.025
+        ],
+        "rotation": [
+          0,
+          0.18223552549214747,
+          0,
+          0.9832549075639546
+        ],
+        "scale": [
+          0.42000000000000004,
+          0.42000000000000004,
+          0.42000000000000004
+        ]
+      },
+      "meshRenderer": {
+        "model": "8cb75671f1c7525abe1c98eeede99855",
+        "materials": {
+          "18609d7bc4b25b3094ca40a95c490f5a": "95444e6e7f1e55b5b242fa3071b3493c"
+        }
+      }
+    },
+    {
+      "id": "b64494323a705439b34526adcea28d35",
+      "name": "object-02-09",
+      "enabled": true,
+      "transform": {
+        "position": [
+          4.025,
+          0.34,
+          -4.025
+        ],
+        "rotation": [
+          0,
+          0.06104853953485687,
+          0,
+          0.9981347984218669
+        ],
+        "scale": [
+          0.34,
+          0.34,
+          0.34
+        ]
+      },
+      "meshRenderer": {
+        "model": "b4748e75e72a5dba8d4439fa86854c92",
+        "materials": {
+          "724bed1a90285b9d933f9a5abbe5e9af": "95444e6e7f1e55b5b242fa3071b3493c"
+        }
+      }
+    },
+    {
+      "id": "c1b51fd08c015602a302d740243ad4aa",
+      "name": "object-02-10",
+      "enabled": true,
+      "transform": {
+        "position": [
+          5.175,
+          0.38,
+          -4.025
+        ],
+        "rotation": [
+          0,
+          0.35836794954530027,
+          0,
+          0.9335804264972017
+        ],
+        "scale": [
+          0.38,
+          0.38,
+          0.38
+        ]
+      },
+      "meshRenderer": {
+        "model": "8cb75671f1c7525abe1c98eeede99855",
+        "materials": {
+          "18609d7bc4b25b3094ca40a95c490f5a": "3cf6e20c1816590da28e009c9ca87084"
+        }
+      }
+    },
+    {
+      "id": "14770fe4b69d56579ecff58082334eaa",
+      "name": "object-02-11",
+      "enabled": true,
+      "transform": {
+        "position": [
+          6.325,
+          0.42,
+          -4.025
+        ],
+        "rotation": [
+          0,
+          0.24192189559966773,
+          0,
+          0.9702957262759965
+        ],
+        "scale": [
+          0.42000000000000004,
+          0.588,
+          0.42000000000000004
+        ]
+      },
+      "meshRenderer": {
+        "model": "b4748e75e72a5dba8d4439fa86854c92",
+        "materials": {
+          "724bed1a90285b9d933f9a5abbe5e9af": "3cf6e20c1816590da28e009c9ca87084"
+        }
+      }
+    },
+    {
+      "id": "1334afd41bfd506e82b1b98beb1c1bd7",
+      "name": "object-03-00",
+      "enabled": true,
+      "transform": {
+        "position": [
+          -6.325,
+          0.34,
+          -2.875
+        ],
+        "rotation": [
+          0,
+          0.24192189559966773,
+          0,
+          0.9702957262759965
+        ],
+        "scale": [
+          0.34,
+          0.34,
+          0.34
+        ]
+      },
+      "meshRenderer": {
+        "model": "b4748e75e72a5dba8d4439fa86854c92",
+        "materials": {
+          "724bed1a90285b9d933f9a5abbe5e9af": "b3e52f1d55ee5147b47d7c28d6cd8d42"
+        }
+      }
+    },
+    {
+      "id": "2ec8516eddc758d7a3129a91c9b6943c",
+      "name": "object-03-01",
+      "enabled": true,
+      "transform": {
+        "position": [
+          -5.175,
+          0.38,
+          -2.875
+        ],
+        "rotation": [
+          0,
+          0.12186934340514748,
+          0,
+          0.992546151641322
+        ],
+        "scale": [
+          0.38,
+          0.38,
+          0.38
+        ]
+      },
+      "meshRenderer": {
+        "model": "8cb75671f1c7525abe1c98eeede99855",
+        "materials": {
+          "18609d7bc4b25b3094ca40a95c490f5a": "b3e52f1d55ee5147b47d7c28d6cd8d42"
+        }
+      }
+    },
+    {
+      "id": "9ada6a8caf8c5da9a8945134eaa52fef",
+      "name": "object-03-02",
+      "enabled": true,
+      "transform": {
+        "position": [
+          -4.025,
+          0.42,
+          -2.875
+        ],
+        "rotation": [
+          0,
+          0.0,
+          0,
+          1.0
+        ],
+        "scale": [
+          0.42000000000000004,
+          0.588,
+          0.42000000000000004
+        ]
+      },
+      "meshRenderer": {
+        "model": "b4748e75e72a5dba8d4439fa86854c92",
+        "materials": {
+          "724bed1a90285b9d933f9a5abbe5e9af": "03db855801a2540b99742bfa1f4f8362"
+        }
+      }
+    },
+    {
+      "id": "a77afecdf6415c5aa7f4684276b8eedc",
+      "name": "object-03-03",
+      "enabled": true,
+      "transform": {
+        "position": [
+          -2.875,
+          0.34,
+          -2.875
+        ],
+        "rotation": [
+          0,
+          0.3007057995042731,
+          0,
+          0.9537169507482269
+        ],
+        "scale": [
+          0.34,
+          0.34,
+          0.34
+        ]
+      },
+      "meshRenderer": {
+        "model": "8cb75671f1c7525abe1c98eeede99855",
+        "materials": {
+          "18609d7bc4b25b3094ca40a95c490f5a": "03db855801a2540b99742bfa1f4f8362"
+        }
+      }
+    },
+    {
+      "id": "fb75755e81e7587494ee21bc4bdc7058",
+      "name": "object-03-04",
+      "enabled": true,
+      "transform": {
+        "position": [
+          -1.725,
+          0.38,
+          -2.875
+        ],
+        "rotation": [
+          0,
+          0.18223552549214747,
+          0,
+          0.9832549075639546
+        ],
+        "scale": [
+          0.38,
+          0.38,
+          0.38
+        ]
+      },
+      "meshRenderer": {
+        "model": "b4748e75e72a5dba8d4439fa86854c92",
+        "materials": {
+          "724bed1a90285b9d933f9a5abbe5e9af": "9d05a848c41e5b3d8f772e40dbf650db"
+        }
+      }
+    },
+    {
+      "id": "74ead99c48b5515fbefaa6366cc62f9f",
+      "name": "object-03-05",
+      "enabled": true,
+      "transform": {
+        "position": [
+          -0.575,
+          0.42,
+          -2.875
+        ],
+        "rotation": [
+          0,
+          0.06104853953485687,
+          0,
+          0.9981347984218669
+        ],
+        "scale": [
+          0.42000000000000004,
+          0.42000000000000004,
+          0.42000000000000004
+        ]
+      },
+      "meshRenderer": {
+        "model": "8cb75671f1c7525abe1c98eeede99855",
+        "materials": {
+          "18609d7bc4b25b3094ca40a95c490f5a": "9d05a848c41e5b3d8f772e40dbf650db"
+        }
+      }
+    },
+    {
+      "id": "0fb57d1bcd91500db4dedb0831185b8d",
+      "name": "object-03-06",
+      "enabled": true,
+      "transform": {
+        "position": [
+          0.575,
+          0.34,
+          -2.875
+        ],
+        "rotation": [
+          0,
+          0.35836794954530027,
+          0,
+          0.9335804264972017
+        ],
+        "scale": [
+          0.34,
+          0.476,
+          0.34
+        ]
+      },
+      "meshRenderer": {
+        "model": "b4748e75e72a5dba8d4439fa86854c92",
+        "materials": {
+          "724bed1a90285b9d933f9a5abbe5e9af": "95444e6e7f1e55b5b242fa3071b3493c"
+        }
+      }
+    },
+    {
+      "id": "b572deffda9d5cbca2e91b7bb15d2756",
+      "name": "object-03-07",
+      "enabled": true,
+      "transform": {
+        "position": [
+          1.725,
+          0.38,
+          -2.875
+        ],
+        "rotation": [
+          0,
+          0.24192189559966773,
+          0,
+          0.9702957262759965
+        ],
+        "scale": [
+          0.38,
+          0.38,
+          0.38
+        ]
+      },
+      "meshRenderer": {
+        "model": "8cb75671f1c7525abe1c98eeede99855",
+        "materials": {
+          "18609d7bc4b25b3094ca40a95c490f5a": "95444e6e7f1e55b5b242fa3071b3493c"
+        }
+      }
+    },
+    {
+      "id": "ac669155eed6521385d61a6f9996c984",
+      "name": "object-03-08",
+      "enabled": true,
+      "transform": {
+        "position": [
+          2.875,
+          0.42,
+          -2.875
+        ],
+        "rotation": [
+          0,
+          0.12186934340514748,
+          0,
+          0.992546151641322
+        ],
+        "scale": [
+          0.42000000000000004,
+          0.42000000000000004,
+          0.42000000000000004
+        ]
+      },
+      "meshRenderer": {
+        "model": "b4748e75e72a5dba8d4439fa86854c92",
+        "materials": {
+          "724bed1a90285b9d933f9a5abbe5e9af": "3cf6e20c1816590da28e009c9ca87084"
+        }
+      }
+    },
+    {
+      "id": "e43c397ba3185a2f8fc64531f138d04b",
+      "name": "object-03-09",
+      "enabled": true,
+      "transform": {
+        "position": [
+          4.025,
+          0.34,
+          -2.875
+        ],
+        "rotation": [
+          0,
+          0.0,
+          0,
+          1.0
+        ],
+        "scale": [
+          0.34,
+          0.34,
+          0.34
+        ]
+      },
+      "meshRenderer": {
+        "model": "8cb75671f1c7525abe1c98eeede99855",
+        "materials": {
+          "18609d7bc4b25b3094ca40a95c490f5a": "3cf6e20c1816590da28e009c9ca87084"
+        }
+      }
+    },
+    {
+      "id": "c1668c770f2659008b754aad6c08abc7",
+      "name": "object-03-10",
+      "enabled": true,
+      "transform": {
+        "position": [
+          5.175,
+          0.38,
+          -2.875
+        ],
+        "rotation": [
+          0,
+          0.3007057995042731,
+          0,
+          0.9537169507482269
+        ],
+        "scale": [
+          0.38,
+          0.5319999999999999,
+          0.38
+        ]
+      },
+      "meshRenderer": {
+        "model": "b4748e75e72a5dba8d4439fa86854c92",
+        "materials": {
+          "724bed1a90285b9d933f9a5abbe5e9af": "984be79c5226529a90078b6f1d97cdfe"
+        }
+      }
+    },
+    {
+      "id": "81c1041222f3522dbe63a6bb3dd767ea",
+      "name": "object-03-11",
+      "enabled": true,
+      "transform": {
+        "position": [
+          6.325,
+          0.42,
+          -2.875
+        ],
+        "rotation": [
+          0,
+          0.18223552549214747,
+          0,
+          0.9832549075639546
+        ],
+        "scale": [
+          0.42000000000000004,
+          0.42000000000000004,
+          0.42000000000000004
+        ]
+      },
+      "meshRenderer": {
+        "model": "8cb75671f1c7525abe1c98eeede99855",
+        "materials": {
+          "18609d7bc4b25b3094ca40a95c490f5a": "984be79c5226529a90078b6f1d97cdfe"
+        }
+      }
+    },
+    {
+      "id": "4255e3c6ec5651b284ebb24c2964c1de",
+      "name": "object-04-00",
+      "enabled": true,
+      "transform": {
+        "position": [
+          -6.325,
+          0.34,
+          -1.725
+        ],
+        "rotation": [
+          0,
+          0.18223552549214747,
+          0,
+          0.9832549075639546
+        ],
+        "scale": [
+          0.34,
+          0.34,
+          0.34
+        ]
+      },
+      "meshRenderer": {
+        "model": "8cb75671f1c7525abe1c98eeede99855",
+        "materials": {
+          "18609d7bc4b25b3094ca40a95c490f5a": "03db855801a2540b99742bfa1f4f8362"
+        }
+      }
+    },
+    {
+      "id": "cfbb06090ac2507a85b30c5cdca980b8",
+      "name": "object-04-01",
+      "enabled": true,
+      "transform": {
+        "position": [
+          -5.175,
+          0.38,
+          -1.725
+        ],
+        "rotation": [
+          0,
+          0.06104853953485687,
+          0,
+          0.9981347984218669
+        ],
+        "scale": [
+          0.38,
+          0.5319999999999999,
+          0.38
+        ]
+      },
+      "meshRenderer": {
+        "model": "b4748e75e72a5dba8d4439fa86854c92",
+        "materials": {
+          "724bed1a90285b9d933f9a5abbe5e9af": "03db855801a2540b99742bfa1f4f8362"
+        }
+      }
+    },
+    {
+      "id": "5cf5f167546654feb85351fedf6a99a3",
+      "name": "object-04-02",
+      "enabled": true,
+      "transform": {
+        "position": [
+          -4.025,
+          0.42,
+          -1.725
+        ],
+        "rotation": [
+          0,
+          0.35836794954530027,
+          0,
+          0.9335804264972017
+        ],
+        "scale": [
+          0.42000000000000004,
+          0.42000000000000004,
+          0.42000000000000004
+        ]
+      },
+      "meshRenderer": {
+        "model": "8cb75671f1c7525abe1c98eeede99855",
+        "materials": {
+          "18609d7bc4b25b3094ca40a95c490f5a": "9d05a848c41e5b3d8f772e40dbf650db"
+        }
+      }
+    },
+    {
+      "id": "4720a069c3e455d1b0efdc768d4c26bc",
+      "name": "object-04-03",
+      "enabled": true,
+      "transform": {
+        "position": [
+          -2.875,
+          0.34,
+          -1.725
+        ],
+        "rotation": [
+          0,
+          0.24192189559966773,
+          0,
+          0.9702957262759965
+        ],
+        "scale": [
+          0.34,
+          0.34,
+          0.34
+        ]
+      },
+      "meshRenderer": {
+        "model": "b4748e75e72a5dba8d4439fa86854c92",
+        "materials": {
+          "724bed1a90285b9d933f9a5abbe5e9af": "9d05a848c41e5b3d8f772e40dbf650db"
+        }
+      }
+    },
+    {
+      "id": "3786412e351b55b5994ae03af59ccc75",
+      "name": "object-04-04",
+      "enabled": true,
+      "transform": {
+        "position": [
+          -1.725,
+          0.38,
+          -1.725
+        ],
+        "rotation": [
+          0,
+          0.12186934340514748,
+          0,
+          0.992546151641322
+        ],
+        "scale": [
+          0.38,
+          0.38,
+          0.38
+        ]
+      },
+      "meshRenderer": {
+        "model": "8cb75671f1c7525abe1c98eeede99855",
+        "materials": {
+          "18609d7bc4b25b3094ca40a95c490f5a": "95444e6e7f1e55b5b242fa3071b3493c"
+        }
+      }
+    },
+    {
+      "id": "1fd469aa20f35acea9b38806fe0c75bf",
+      "name": "object-04-05",
+      "enabled": true,
+      "transform": {
+        "position": [
+          -0.575,
+          0.42,
+          -1.725
+        ],
+        "rotation": [
+          0,
+          0.0,
+          0,
+          1.0
+        ],
+        "scale": [
+          0.42000000000000004,
+          0.588,
+          0.42000000000000004
+        ]
+      },
+      "meshRenderer": {
+        "model": "b4748e75e72a5dba8d4439fa86854c92",
+        "materials": {
+          "724bed1a90285b9d933f9a5abbe5e9af": "95444e6e7f1e55b5b242fa3071b3493c"
+        }
+      }
+    },
+    {
+      "id": "fc6a626303595e6385dd8531ce7a8a30",
+      "name": "object-04-06",
+      "enabled": true,
+      "transform": {
+        "position": [
+          0.575,
+          0.34,
+          -1.725
+        ],
+        "rotation": [
+          0,
+          0.3007057995042731,
+          0,
+          0.9537169507482269
+        ],
+        "scale": [
+          0.34,
+          0.34,
+          0.34
+        ]
+      },
+      "meshRenderer": {
+        "model": "8cb75671f1c7525abe1c98eeede99855",
+        "materials": {
+          "18609d7bc4b25b3094ca40a95c490f5a": "3cf6e20c1816590da28e009c9ca87084"
+        }
+      }
+    },
+    {
+      "id": "ed1650b36f9f567eb8e645900c9f9509",
+      "name": "object-04-07",
+      "enabled": true,
+      "transform": {
+        "position": [
+          1.725,
+          0.38,
+          -1.725
+        ],
+        "rotation": [
+          0,
+          0.18223552549214747,
+          0,
+          0.9832549075639546
+        ],
+        "scale": [
+          0.38,
+          0.38,
+          0.38
+        ]
+      },
+      "meshRenderer": {
+        "model": "b4748e75e72a5dba8d4439fa86854c92",
+        "materials": {
+          "724bed1a90285b9d933f9a5abbe5e9af": "3cf6e20c1816590da28e009c9ca87084"
+        }
+      }
+    },
+    {
+      "id": "0bc1666d66c95ce491afda657c2c54a1",
+      "name": "object-04-08",
+      "enabled": true,
+      "transform": {
+        "position": [
+          2.875,
+          0.42,
+          -1.725
+        ],
+        "rotation": [
+          0,
+          0.06104853953485687,
+          0,
+          0.9981347984218669
+        ],
+        "scale": [
+          0.42000000000000004,
+          0.42000000000000004,
+          0.42000000000000004
+        ]
+      },
+      "meshRenderer": {
+        "model": "8cb75671f1c7525abe1c98eeede99855",
+        "materials": {
+          "18609d7bc4b25b3094ca40a95c490f5a": "984be79c5226529a90078b6f1d97cdfe"
+        }
+      }
+    },
+    {
+      "id": "fb0b6e9d2569539ca48d9ff05ffaeaa8",
+      "name": "object-04-09",
+      "enabled": true,
+      "transform": {
+        "position": [
+          4.025,
+          0.34,
+          -1.725
+        ],
+        "rotation": [
+          0,
+          0.35836794954530027,
+          0,
+          0.9335804264972017
+        ],
+        "scale": [
+          0.34,
+          0.476,
+          0.34
+        ]
+      },
+      "meshRenderer": {
+        "model": "b4748e75e72a5dba8d4439fa86854c92",
+        "materials": {
+          "724bed1a90285b9d933f9a5abbe5e9af": "984be79c5226529a90078b6f1d97cdfe"
+        }
+      }
+    },
+    {
+      "id": "ea3e708153ba5f9b962d6fc885e6f904",
+      "name": "object-04-10",
+      "enabled": true,
+      "transform": {
+        "position": [
+          5.175,
+          0.38,
+          -1.725
+        ],
+        "rotation": [
+          0,
+          0.24192189559966773,
+          0,
+          0.9702957262759965
+        ],
+        "scale": [
+          0.38,
+          0.38,
+          0.38
+        ]
+      },
+      "meshRenderer": {
+        "model": "8cb75671f1c7525abe1c98eeede99855",
+        "materials": {
+          "18609d7bc4b25b3094ca40a95c490f5a": "c518c5fb2a87520a9d9422913c79b314"
+        }
+      }
+    },
+    {
+      "id": "ada1539fb660594baddde5d738e68672",
+      "name": "object-04-11",
+      "enabled": true,
+      "transform": {
+        "position": [
+          6.325,
+          0.42,
+          -1.725
+        ],
+        "rotation": [
+          0,
+          0.12186934340514748,
+          0,
+          0.992546151641322
+        ],
+        "scale": [
+          0.42000000000000004,
+          0.42000000000000004,
+          0.42000000000000004
+        ]
+      },
+      "meshRenderer": {
+        "model": "b4748e75e72a5dba8d4439fa86854c92",
+        "materials": {
+          "724bed1a90285b9d933f9a5abbe5e9af": "c518c5fb2a87520a9d9422913c79b314"
+        }
+      }
+    },
+    {
+      "id": "b6d5bb38439255acbe03ae4422102c89",
+      "name": "object-05-00",
+      "enabled": true,
+      "transform": {
+        "position": [
+          -6.325,
+          0.34,
+          -0.575
+        ],
+        "rotation": [
+          0,
+          0.12186934340514748,
+          0,
+          0.992546151641322
+        ],
+        "scale": [
+          0.34,
+          0.476,
+          0.34
+        ]
+      },
+      "meshRenderer": {
+        "model": "b4748e75e72a5dba8d4439fa86854c92",
+        "materials": {
+          "724bed1a90285b9d933f9a5abbe5e9af": "9d05a848c41e5b3d8f772e40dbf650db"
+        }
+      }
+    },
+    {
+      "id": "df5411e29322518ca7638ab61ee5bd05",
+      "name": "object-05-01",
+      "enabled": true,
+      "transform": {
+        "position": [
+          -5.175,
+          0.38,
+          -0.575
+        ],
+        "rotation": [
+          0,
+          0.0,
+          0,
+          1.0
+        ],
+        "scale": [
+          0.38,
+          0.38,
+          0.38
+        ]
+      },
+      "meshRenderer": {
+        "model": "8cb75671f1c7525abe1c98eeede99855",
+        "materials": {
+          "18609d7bc4b25b3094ca40a95c490f5a": "9d05a848c41e5b3d8f772e40dbf650db"
+        }
+      }
+    },
+    {
+      "id": "0577565eb3d55335bf3926a7327b1bca",
+      "name": "object-05-02",
+      "enabled": true,
+      "transform": {
+        "position": [
+          -4.025,
+          0.42,
+          -0.575
+        ],
+        "rotation": [
+          0,
+          0.3007057995042731,
+          0,
+          0.9537169507482269
+        ],
+        "scale": [
+          0.42000000000000004,
+          0.42000000000000004,
+          0.42000000000000004
+        ]
+      },
+      "meshRenderer": {
+        "model": "b4748e75e72a5dba8d4439fa86854c92",
+        "materials": {
+          "724bed1a90285b9d933f9a5abbe5e9af": "95444e6e7f1e55b5b242fa3071b3493c"
+        }
+      }
+    },
+    {
+      "id": "0a30d52e754e5a19abded4d9ec705935",
+      "name": "object-05-03",
+      "enabled": true,
+      "transform": {
+        "position": [
+          -2.875,
+          0.34,
+          -0.575
+        ],
+        "rotation": [
+          0,
+          0.18223552549214747,
+          0,
+          0.9832549075639546
+        ],
+        "scale": [
+          0.34,
+          0.34,
+          0.34
+        ]
+      },
+      "meshRenderer": {
+        "model": "8cb75671f1c7525abe1c98eeede99855",
+        "materials": {
+          "18609d7bc4b25b3094ca40a95c490f5a": "95444e6e7f1e55b5b242fa3071b3493c"
+        }
+      }
+    },
+    {
+      "id": "0c13f035f24d52568b571d9bb565fe4f",
+      "name": "object-05-04",
+      "enabled": true,
+      "transform": {
+        "position": [
+          -1.725,
+          0.38,
+          -0.575
+        ],
+        "rotation": [
+          0,
+          0.06104853953485687,
+          0,
+          0.9981347984218669
+        ],
+        "scale": [
+          0.38,
+          0.5319999999999999,
+          0.38
+        ]
+      },
+      "meshRenderer": {
+        "model": "b4748e75e72a5dba8d4439fa86854c92",
+        "materials": {
+          "724bed1a90285b9d933f9a5abbe5e9af": "3cf6e20c1816590da28e009c9ca87084"
+        }
+      }
+    },
+    {
+      "id": "33e56851de09569aa16ce37b07bf886f",
+      "name": "object-05-05",
+      "enabled": true,
+      "transform": {
+        "position": [
+          -0.575,
+          0.42,
+          -0.575
+        ],
+        "rotation": [
+          0,
+          0.35836794954530027,
+          0,
+          0.9335804264972017
+        ],
+        "scale": [
+          0.42000000000000004,
+          0.42000000000000004,
+          0.42000000000000004
+        ]
+      },
+      "meshRenderer": {
+        "model": "8cb75671f1c7525abe1c98eeede99855",
+        "materials": {
+          "18609d7bc4b25b3094ca40a95c490f5a": "3cf6e20c1816590da28e009c9ca87084"
+        }
+      }
+    },
+    {
+      "id": "fdab8ef298df5ca9beac50de7bc0fdf6",
+      "name": "object-05-06",
+      "enabled": true,
+      "transform": {
+        "position": [
+          0.575,
+          0.34,
+          -0.575
+        ],
+        "rotation": [
+          0,
+          0.24192189559966773,
+          0,
+          0.9702957262759965
+        ],
+        "scale": [
+          0.34,
+          0.34,
+          0.34
+        ]
+      },
+      "meshRenderer": {
+        "model": "b4748e75e72a5dba8d4439fa86854c92",
+        "materials": {
+          "724bed1a90285b9d933f9a5abbe5e9af": "984be79c5226529a90078b6f1d97cdfe"
+        }
+      }
+    },
+    {
+      "id": "b176b8a7e6d1512ba4a7ce3d3239d5d9",
+      "name": "object-05-07",
+      "enabled": true,
+      "transform": {
+        "position": [
+          1.725,
+          0.38,
+          -0.575
+        ],
+        "rotation": [
+          0,
+          0.12186934340514748,
+          0,
+          0.992546151641322
+        ],
+        "scale": [
+          0.38,
+          0.38,
+          0.38
+        ]
+      },
+      "meshRenderer": {
+        "model": "8cb75671f1c7525abe1c98eeede99855",
+        "materials": {
+          "18609d7bc4b25b3094ca40a95c490f5a": "984be79c5226529a90078b6f1d97cdfe"
+        }
+      }
+    },
+    {
+      "id": "768d9dc1c2385581bc67aa6539ca709f",
+      "name": "object-05-08",
+      "enabled": true,
+      "transform": {
+        "position": [
+          2.875,
+          0.42,
+          -0.575
+        ],
+        "rotation": [
+          0,
+          0.0,
+          0,
+          1.0
+        ],
+        "scale": [
+          0.42000000000000004,
+          0.588,
+          0.42000000000000004
+        ]
+      },
+      "meshRenderer": {
+        "model": "b4748e75e72a5dba8d4439fa86854c92",
+        "materials": {
+          "724bed1a90285b9d933f9a5abbe5e9af": "c518c5fb2a87520a9d9422913c79b314"
+        }
+      }
+    },
+    {
+      "id": "15d4cb4448935928a779926e6b88deb4",
+      "name": "object-05-09",
+      "enabled": true,
+      "transform": {
+        "position": [
+          4.025,
+          0.34,
+          -0.575
+        ],
+        "rotation": [
+          0,
+          0.3007057995042731,
+          0,
+          0.9537169507482269
+        ],
+        "scale": [
+          0.34,
+          0.34,
+          0.34
+        ]
+      },
+      "meshRenderer": {
+        "model": "8cb75671f1c7525abe1c98eeede99855",
+        "materials": {
+          "18609d7bc4b25b3094ca40a95c490f5a": "c518c5fb2a87520a9d9422913c79b314"
+        }
+      }
+    },
+    {
+      "id": "45a915f6e03753d9b2c6cb419ccb7a68",
+      "name": "object-05-10",
+      "enabled": true,
+      "transform": {
+        "position": [
+          5.175,
+          0.38,
+          -0.575
+        ],
+        "rotation": [
+          0,
+          0.18223552549214747,
+          0,
+          0.9832549075639546
+        ],
+        "scale": [
+          0.38,
+          0.38,
+          0.38
+        ]
+      },
+      "meshRenderer": {
+        "model": "b4748e75e72a5dba8d4439fa86854c92",
+        "materials": {
+          "724bed1a90285b9d933f9a5abbe5e9af": "c59ed1d5b19f578fb91963961945de50"
+        }
+      }
+    },
+    {
+      "id": "6df8aabc24cc53d388c608321120df96",
+      "name": "object-05-11",
+      "enabled": true,
+      "transform": {
+        "position": [
+          6.325,
+          0.42,
+          -0.575
+        ],
+        "rotation": [
+          0,
+          0.06104853953485687,
+          0,
+          0.9981347984218669
+        ],
+        "scale": [
+          0.42000000000000004,
+          0.42000000000000004,
+          0.42000000000000004
+        ]
+      },
+      "meshRenderer": {
+        "model": "8cb75671f1c7525abe1c98eeede99855",
+        "materials": {
+          "18609d7bc4b25b3094ca40a95c490f5a": "c59ed1d5b19f578fb91963961945de50"
+        }
+      }
+    },
+    {
+      "id": "9be2120701405da0935d84653908f66b",
+      "name": "object-06-00",
+      "enabled": true,
+      "transform": {
+        "position": [
+          -6.325,
+          0.34,
+          0.575
+        ],
+        "rotation": [
+          0,
+          0.06104853953485687,
+          0,
+          0.9981347984218669
+        ],
+        "scale": [
+          0.34,
+          0.34,
+          0.34
+        ]
+      },
+      "meshRenderer": {
+        "model": "8cb75671f1c7525abe1c98eeede99855",
+        "materials": {
+          "18609d7bc4b25b3094ca40a95c490f5a": "95444e6e7f1e55b5b242fa3071b3493c"
+        }
+      }
+    },
+    {
+      "id": "ae525d1b562f5929995aff90da228051",
+      "name": "object-06-01",
+      "enabled": true,
+      "transform": {
+        "position": [
+          -5.175,
+          0.38,
+          0.575
+        ],
+        "rotation": [
+          0,
+          0.35836794954530027,
+          0,
+          0.9335804264972017
+        ],
+        "scale": [
+          0.38,
+          0.38,
+          0.38
+        ]
+      },
+      "meshRenderer": {
+        "model": "b4748e75e72a5dba8d4439fa86854c92",
+        "materials": {
+          "724bed1a90285b9d933f9a5abbe5e9af": "95444e6e7f1e55b5b242fa3071b3493c"
+        }
+      }
+    },
+    {
+      "id": "b89fcddcb53e5511b8958f8a5616925d",
+      "name": "object-06-02",
+      "enabled": true,
+      "transform": {
+        "position": [
+          -4.025,
+          0.42,
+          0.575
+        ],
+        "rotation": [
+          0,
+          0.24192189559966773,
+          0,
+          0.9702957262759965
+        ],
+        "scale": [
+          0.42000000000000004,
+          0.42000000000000004,
+          0.42000000000000004
+        ]
+      },
+      "meshRenderer": {
+        "model": "8cb75671f1c7525abe1c98eeede99855",
+        "materials": {
+          "18609d7bc4b25b3094ca40a95c490f5a": "3cf6e20c1816590da28e009c9ca87084"
+        }
+      }
+    },
+    {
+      "id": "2f277a86b5775bae84b35276b60e3960",
+      "name": "object-06-03",
+      "enabled": true,
+      "transform": {
+        "position": [
+          -2.875,
+          0.34,
+          0.575
+        ],
+        "rotation": [
+          0,
+          0.12186934340514748,
+          0,
+          0.992546151641322
+        ],
+        "scale": [
+          0.34,
+          0.476,
+          0.34
+        ]
+      },
+      "meshRenderer": {
+        "model": "b4748e75e72a5dba8d4439fa86854c92",
+        "materials": {
+          "724bed1a90285b9d933f9a5abbe5e9af": "3cf6e20c1816590da28e009c9ca87084"
+        }
+      }
+    },
+    {
+      "id": "0a0f6af9e34a56d3aa2b40c14bbf62e0",
+      "name": "object-06-04",
+      "enabled": true,
+      "transform": {
+        "position": [
+          -1.725,
+          0.38,
+          0.575
+        ],
+        "rotation": [
+          0,
+          0.0,
+          0,
+          1.0
+        ],
+        "scale": [
+          0.38,
+          0.38,
+          0.38
+        ]
+      },
+      "meshRenderer": {
+        "model": "8cb75671f1c7525abe1c98eeede99855",
+        "materials": {
+          "18609d7bc4b25b3094ca40a95c490f5a": "984be79c5226529a90078b6f1d97cdfe"
+        }
+      }
+    },
+    {
+      "id": "55fd3db851a55eaab0995e00637d5ac8",
+      "name": "object-06-05",
+      "enabled": true,
+      "transform": {
+        "position": [
+          -0.575,
+          0.42,
+          0.575
+        ],
+        "rotation": [
+          0,
+          0.3007057995042731,
+          0,
+          0.9537169507482269
+        ],
+        "scale": [
+          0.42000000000000004,
+          0.42000000000000004,
+          0.42000000000000004
+        ]
+      },
+      "meshRenderer": {
+        "model": "b4748e75e72a5dba8d4439fa86854c92",
+        "materials": {
+          "724bed1a90285b9d933f9a5abbe5e9af": "984be79c5226529a90078b6f1d97cdfe"
+        }
+      }
+    },
+    {
+      "id": "b05dd56458775e3785be2836d897bc4e",
+      "name": "object-06-06",
+      "enabled": true,
+      "transform": {
+        "position": [
+          0.575,
+          0.34,
+          0.575
+        ],
+        "rotation": [
+          0,
+          0.18223552549214747,
+          0,
+          0.9832549075639546
+        ],
+        "scale": [
+          0.34,
+          0.34,
+          0.34
+        ]
+      },
+      "meshRenderer": {
+        "model": "8cb75671f1c7525abe1c98eeede99855",
+        "materials": {
+          "18609d7bc4b25b3094ca40a95c490f5a": "c518c5fb2a87520a9d9422913c79b314"
+        }
+      }
+    },
+    {
+      "id": "101e7d7d9cc95468b1e24fd2a107c8bf",
+      "name": "object-06-07",
+      "enabled": true,
+      "transform": {
+        "position": [
+          1.725,
+          0.38,
+          0.575
+        ],
+        "rotation": [
+          0,
+          0.06104853953485687,
+          0,
+          0.9981347984218669
+        ],
+        "scale": [
+          0.38,
+          0.5319999999999999,
+          0.38
+        ]
+      },
+      "meshRenderer": {
+        "model": "b4748e75e72a5dba8d4439fa86854c92",
+        "materials": {
+          "724bed1a90285b9d933f9a5abbe5e9af": "c518c5fb2a87520a9d9422913c79b314"
+        }
+      }
+    },
+    {
+      "id": "65910ca0128352a79689a568d7a201ad",
+      "name": "object-06-08",
+      "enabled": true,
+      "transform": {
+        "position": [
+          2.875,
+          0.42,
+          0.575
+        ],
+        "rotation": [
+          0,
+          0.35836794954530027,
+          0,
+          0.9335804264972017
+        ],
+        "scale": [
+          0.42000000000000004,
+          0.42000000000000004,
+          0.42000000000000004
+        ]
+      },
+      "meshRenderer": {
+        "model": "8cb75671f1c7525abe1c98eeede99855",
+        "materials": {
+          "18609d7bc4b25b3094ca40a95c490f5a": "c59ed1d5b19f578fb91963961945de50"
+        }
+      }
+    },
+    {
+      "id": "579b68cf057050bc83218e2f30f5c1c9",
+      "name": "object-06-09",
+      "enabled": true,
+      "transform": {
+        "position": [
+          4.025,
+          0.34,
+          0.575
+        ],
+        "rotation": [
+          0,
+          0.24192189559966773,
+          0,
+          0.9702957262759965
+        ],
+        "scale": [
+          0.34,
+          0.34,
+          0.34
+        ]
+      },
+      "meshRenderer": {
+        "model": "b4748e75e72a5dba8d4439fa86854c92",
+        "materials": {
+          "724bed1a90285b9d933f9a5abbe5e9af": "c59ed1d5b19f578fb91963961945de50"
+        }
+      }
+    },
+    {
+      "id": "46729f8245225d96b5e2b60e1b33d230",
+      "name": "object-06-10",
+      "enabled": true,
+      "transform": {
+        "position": [
+          5.175,
+          0.38,
+          0.575
+        ],
+        "rotation": [
+          0,
+          0.12186934340514748,
+          0,
+          0.992546151641322
+        ],
+        "scale": [
+          0.38,
+          0.38,
+          0.38
+        ]
+      },
+      "meshRenderer": {
+        "model": "8cb75671f1c7525abe1c98eeede99855",
+        "materials": {
+          "18609d7bc4b25b3094ca40a95c490f5a": "b3e52f1d55ee5147b47d7c28d6cd8d42"
+        }
+      }
+    },
+    {
+      "id": "fc789c5f40035bc69295e5ddfa2f4ee3",
+      "name": "object-06-11",
+      "enabled": true,
+      "transform": {
+        "position": [
+          6.325,
+          0.42,
+          0.575
+        ],
+        "rotation": [
+          0,
+          0.0,
+          0,
+          1.0
+        ],
+        "scale": [
+          0.42000000000000004,
+          0.588,
+          0.42000000000000004
+        ]
+      },
+      "meshRenderer": {
+        "model": "b4748e75e72a5dba8d4439fa86854c92",
+        "materials": {
+          "724bed1a90285b9d933f9a5abbe5e9af": "b3e52f1d55ee5147b47d7c28d6cd8d42"
+        }
+      }
+    },
+    {
+      "id": "c3f648c63f7f558c9b5e3b358eab2282",
+      "name": "object-07-00",
+      "enabled": true,
+      "transform": {
+        "position": [
+          -6.325,
+          0.34,
+          1.725
+        ],
+        "rotation": [
+          0,
+          0.0,
+          0,
+          1.0
+        ],
+        "scale": [
+          0.34,
+          0.34,
+          0.34
+        ]
+      },
+      "meshRenderer": {
+        "model": "b4748e75e72a5dba8d4439fa86854c92",
+        "materials": {
+          "724bed1a90285b9d933f9a5abbe5e9af": "3cf6e20c1816590da28e009c9ca87084"
+        }
+      }
+    },
+    {
+      "id": "3974c82c129d56bbb4e0a548e37ee4c0",
+      "name": "object-07-01",
+      "enabled": true,
+      "transform": {
+        "position": [
+          -5.175,
+          0.38,
+          1.725
+        ],
+        "rotation": [
+          0,
+          0.3007057995042731,
+          0,
+          0.9537169507482269
+        ],
+        "scale": [
+          0.38,
+          0.38,
+          0.38
+        ]
+      },
+      "meshRenderer": {
+        "model": "8cb75671f1c7525abe1c98eeede99855",
+        "materials": {
+          "18609d7bc4b25b3094ca40a95c490f5a": "3cf6e20c1816590da28e009c9ca87084"
+        }
+      }
+    },
+    {
+      "id": "a056d5a0619f5aaa9b8104b9bf9a59e1",
+      "name": "object-07-02",
+      "enabled": true,
+      "transform": {
+        "position": [
+          -4.025,
+          0.42,
+          1.725
+        ],
+        "rotation": [
+          0,
+          0.18223552549214747,
+          0,
+          0.9832549075639546
+        ],
+        "scale": [
+          0.42000000000000004,
+          0.588,
+          0.42000000000000004
+        ]
+      },
+      "meshRenderer": {
+        "model": "b4748e75e72a5dba8d4439fa86854c92",
+        "materials": {
+          "724bed1a90285b9d933f9a5abbe5e9af": "984be79c5226529a90078b6f1d97cdfe"
+        }
+      }
+    },
+    {
+      "id": "ad8b2944b930552e9bbe65cedfa66d6b",
+      "name": "object-07-03",
+      "enabled": true,
+      "transform": {
+        "position": [
+          -2.875,
+          0.34,
+          1.725
+        ],
+        "rotation": [
+          0,
+          0.06104853953485687,
+          0,
+          0.9981347984218669
+        ],
+        "scale": [
+          0.34,
+          0.34,
+          0.34
+        ]
+      },
+      "meshRenderer": {
+        "model": "8cb75671f1c7525abe1c98eeede99855",
+        "materials": {
+          "18609d7bc4b25b3094ca40a95c490f5a": "984be79c5226529a90078b6f1d97cdfe"
+        }
+      }
+    },
+    {
+      "id": "d5ca00a0e189540eb2d92fa5f66648e5",
+      "name": "object-07-04",
+      "enabled": true,
+      "transform": {
+        "position": [
+          -1.725,
+          0.38,
+          1.725
+        ],
+        "rotation": [
+          0,
+          0.35836794954530027,
+          0,
+          0.9335804264972017
+        ],
+        "scale": [
+          0.38,
+          0.38,
+          0.38
+        ]
+      },
+      "meshRenderer": {
+        "model": "b4748e75e72a5dba8d4439fa86854c92",
+        "materials": {
+          "724bed1a90285b9d933f9a5abbe5e9af": "c518c5fb2a87520a9d9422913c79b314"
+        }
+      }
+    },
+    {
+      "id": "113544e1440e5568bdab6f6105af1967",
+      "name": "object-07-05",
+      "enabled": true,
+      "transform": {
+        "position": [
+          -0.575,
+          0.42,
+          1.725
+        ],
+        "rotation": [
+          0,
+          0.24192189559966773,
+          0,
+          0.9702957262759965
+        ],
+        "scale": [
+          0.42000000000000004,
+          0.42000000000000004,
+          0.42000000000000004
+        ]
+      },
+      "meshRenderer": {
+        "model": "8cb75671f1c7525abe1c98eeede99855",
+        "materials": {
+          "18609d7bc4b25b3094ca40a95c490f5a": "c518c5fb2a87520a9d9422913c79b314"
+        }
+      }
+    },
+    {
+      "id": "d8c8dfc8eca85bbe94ef4dc9b99e38a3",
+      "name": "object-07-06",
+      "enabled": true,
+      "transform": {
+        "position": [
+          0.575,
+          0.34,
+          1.725
+        ],
+        "rotation": [
+          0,
+          0.12186934340514748,
+          0,
+          0.992546151641322
+        ],
+        "scale": [
+          0.34,
+          0.476,
+          0.34
+        ]
+      },
+      "meshRenderer": {
+        "model": "b4748e75e72a5dba8d4439fa86854c92",
+        "materials": {
+          "724bed1a90285b9d933f9a5abbe5e9af": "c59ed1d5b19f578fb91963961945de50"
+        }
+      }
+    },
+    {
+      "id": "fec774819cd05c03915d5c84fdb67221",
+      "name": "object-07-07",
+      "enabled": true,
+      "transform": {
+        "position": [
+          1.725,
+          0.38,
+          1.725
+        ],
+        "rotation": [
+          0,
+          0.0,
+          0,
+          1.0
+        ],
+        "scale": [
+          0.38,
+          0.38,
+          0.38
+        ]
+      },
+      "meshRenderer": {
+        "model": "8cb75671f1c7525abe1c98eeede99855",
+        "materials": {
+          "18609d7bc4b25b3094ca40a95c490f5a": "c59ed1d5b19f578fb91963961945de50"
+        }
+      }
+    },
+    {
+      "id": "0884770355805733a415b071d95284d1",
+      "name": "object-07-08",
+      "enabled": true,
+      "transform": {
+        "position": [
+          2.875,
+          0.42,
+          1.725
+        ],
+        "rotation": [
+          0,
+          0.3007057995042731,
+          0,
+          0.9537169507482269
+        ],
+        "scale": [
+          0.42000000000000004,
+          0.42000000000000004,
+          0.42000000000000004
+        ]
+      },
+      "meshRenderer": {
+        "model": "b4748e75e72a5dba8d4439fa86854c92",
+        "materials": {
+          "724bed1a90285b9d933f9a5abbe5e9af": "b3e52f1d55ee5147b47d7c28d6cd8d42"
+        }
+      }
+    },
+    {
+      "id": "de20936d5f325e7fac65dbefb9d695fd",
+      "name": "object-07-09",
+      "enabled": true,
+      "transform": {
+        "position": [
+          4.025,
+          0.34,
+          1.725
+        ],
+        "rotation": [
+          0,
+          0.18223552549214747,
+          0,
+          0.9832549075639546
+        ],
+        "scale": [
+          0.34,
+          0.34,
+          0.34
+        ]
+      },
+      "meshRenderer": {
+        "model": "8cb75671f1c7525abe1c98eeede99855",
+        "materials": {
+          "18609d7bc4b25b3094ca40a95c490f5a": "b3e52f1d55ee5147b47d7c28d6cd8d42"
+        }
+      }
+    },
+    {
+      "id": "fe52bb055d365f3c8e038060dba8a082",
+      "name": "object-07-10",
+      "enabled": true,
+      "transform": {
+        "position": [
+          5.175,
+          0.38,
+          1.725
+        ],
+        "rotation": [
+          0,
+          0.06104853953485687,
+          0,
+          0.9981347984218669
+        ],
+        "scale": [
+          0.38,
+          0.5319999999999999,
+          0.38
+        ]
+      },
+      "meshRenderer": {
+        "model": "b4748e75e72a5dba8d4439fa86854c92",
+        "materials": {
+          "724bed1a90285b9d933f9a5abbe5e9af": "03db855801a2540b99742bfa1f4f8362"
+        }
+      }
+    },
+    {
+      "id": "06f887de83d6527cbc7ee0d615159b62",
+      "name": "object-07-11",
+      "enabled": true,
+      "transform": {
+        "position": [
+          6.325,
+          0.42,
+          1.725
+        ],
+        "rotation": [
+          0,
+          0.35836794954530027,
+          0,
+          0.9335804264972017
+        ],
+        "scale": [
+          0.42000000000000004,
+          0.42000000000000004,
+          0.42000000000000004
+        ]
+      },
+      "meshRenderer": {
+        "model": "8cb75671f1c7525abe1c98eeede99855",
+        "materials": {
+          "18609d7bc4b25b3094ca40a95c490f5a": "03db855801a2540b99742bfa1f4f8362"
+        }
+      }
+    },
+    {
+      "id": "19d0fe0d12a45b4c9abed66334da020c",
+      "name": "object-08-00",
+      "enabled": true,
+      "transform": {
+        "position": [
+          -6.325,
+          0.34,
+          2.875
+        ],
+        "rotation": [
+          0,
+          0.35836794954530027,
+          0,
+          0.9335804264972017
+        ],
+        "scale": [
+          0.34,
+          0.34,
+          0.34
+        ]
+      },
+      "meshRenderer": {
+        "model": "8cb75671f1c7525abe1c98eeede99855",
+        "materials": {
+          "18609d7bc4b25b3094ca40a95c490f5a": "984be79c5226529a90078b6f1d97cdfe"
+        }
+      }
+    },
+    {
+      "id": "b62de1ab896159f5b6b94f02dcfad58f",
+      "name": "object-08-01",
+      "enabled": true,
+      "transform": {
+        "position": [
+          -5.175,
+          0.38,
+          2.875
+        ],
+        "rotation": [
+          0,
+          0.24192189559966773,
+          0,
+          0.9702957262759965
+        ],
+        "scale": [
+          0.38,
+          0.5319999999999999,
+          0.38
+        ]
+      },
+      "meshRenderer": {
+        "model": "b4748e75e72a5dba8d4439fa86854c92",
+        "materials": {
+          "724bed1a90285b9d933f9a5abbe5e9af": "984be79c5226529a90078b6f1d97cdfe"
+        }
+      }
+    },
+    {
+      "id": "03d52c53ad595dc48848284e6baacec9",
+      "name": "object-08-02",
+      "enabled": true,
+      "transform": {
+        "position": [
+          -4.025,
+          0.42,
+          2.875
+        ],
+        "rotation": [
+          0,
+          0.12186934340514748,
+          0,
+          0.992546151641322
+        ],
+        "scale": [
+          0.42000000000000004,
+          0.42000000000000004,
+          0.42000000000000004
+        ]
+      },
+      "meshRenderer": {
+        "model": "8cb75671f1c7525abe1c98eeede99855",
+        "materials": {
+          "18609d7bc4b25b3094ca40a95c490f5a": "c518c5fb2a87520a9d9422913c79b314"
+        }
+      }
+    },
+    {
+      "id": "d2f2dffbd8585324800bcda2a15235a8",
+      "name": "object-08-03",
+      "enabled": true,
+      "transform": {
+        "position": [
+          -2.875,
+          0.34,
+          2.875
+        ],
+        "rotation": [
+          0,
+          0.0,
+          0,
+          1.0
+        ],
+        "scale": [
+          0.34,
+          0.34,
+          0.34
+        ]
+      },
+      "meshRenderer": {
+        "model": "b4748e75e72a5dba8d4439fa86854c92",
+        "materials": {
+          "724bed1a90285b9d933f9a5abbe5e9af": "c518c5fb2a87520a9d9422913c79b314"
+        }
+      }
+    },
+    {
+      "id": "6ea1181222405cfa8ec4d69d7057a3b3",
+      "name": "object-08-04",
+      "enabled": true,
+      "transform": {
+        "position": [
+          -1.725,
+          0.38,
+          2.875
+        ],
+        "rotation": [
+          0,
+          0.3007057995042731,
+          0,
+          0.9537169507482269
+        ],
+        "scale": [
+          0.38,
+          0.38,
+          0.38
+        ]
+      },
+      "meshRenderer": {
+        "model": "8cb75671f1c7525abe1c98eeede99855",
+        "materials": {
+          "18609d7bc4b25b3094ca40a95c490f5a": "c59ed1d5b19f578fb91963961945de50"
+        }
+      }
+    },
+    {
+      "id": "689321ced4de5289b4502d1fc77d83a6",
+      "name": "object-08-05",
+      "enabled": true,
+      "transform": {
+        "position": [
+          -0.575,
+          0.42,
+          2.875
+        ],
+        "rotation": [
+          0,
+          0.18223552549214747,
+          0,
+          0.9832549075639546
+        ],
+        "scale": [
+          0.42000000000000004,
+          0.588,
+          0.42000000000000004
+        ]
+      },
+      "meshRenderer": {
+        "model": "b4748e75e72a5dba8d4439fa86854c92",
+        "materials": {
+          "724bed1a90285b9d933f9a5abbe5e9af": "c59ed1d5b19f578fb91963961945de50"
+        }
+      }
+    },
+    {
+      "id": "d56cd65482fa57fba85645469168023b",
+      "name": "object-08-06",
+      "enabled": true,
+      "transform": {
+        "position": [
+          0.575,
+          0.34,
+          2.875
+        ],
+        "rotation": [
+          0,
+          0.06104853953485687,
+          0,
+          0.9981347984218669
+        ],
+        "scale": [
+          0.34,
+          0.34,
+          0.34
+        ]
+      },
+      "meshRenderer": {
+        "model": "8cb75671f1c7525abe1c98eeede99855",
+        "materials": {
+          "18609d7bc4b25b3094ca40a95c490f5a": "b3e52f1d55ee5147b47d7c28d6cd8d42"
+        }
+      }
+    },
+    {
+      "id": "2199ba9da0ea5086a0d9553be892577d",
+      "name": "object-08-07",
+      "enabled": true,
+      "transform": {
+        "position": [
+          1.725,
+          0.38,
+          2.875
+        ],
+        "rotation": [
+          0,
+          0.35836794954530027,
+          0,
+          0.9335804264972017
+        ],
+        "scale": [
+          0.38,
+          0.38,
+          0.38
+        ]
+      },
+      "meshRenderer": {
+        "model": "b4748e75e72a5dba8d4439fa86854c92",
+        "materials": {
+          "724bed1a90285b9d933f9a5abbe5e9af": "b3e52f1d55ee5147b47d7c28d6cd8d42"
+        }
+      }
+    },
+    {
+      "id": "a2fe5a1e4bde59188a51329cc8a642d6",
+      "name": "object-08-08",
+      "enabled": true,
+      "transform": {
+        "position": [
+          2.875,
+          0.42,
+          2.875
+        ],
+        "rotation": [
+          0,
+          0.24192189559966773,
+          0,
+          0.9702957262759965
+        ],
+        "scale": [
+          0.42000000000000004,
+          0.42000000000000004,
+          0.42000000000000004
+        ]
+      },
+      "meshRenderer": {
+        "model": "8cb75671f1c7525abe1c98eeede99855",
+        "materials": {
+          "18609d7bc4b25b3094ca40a95c490f5a": "03db855801a2540b99742bfa1f4f8362"
+        }
+      }
+    },
+    {
+      "id": "b6efb733820f5277b283354aa0551d84",
+      "name": "object-08-09",
+      "enabled": true,
+      "transform": {
+        "position": [
+          4.025,
+          0.34,
+          2.875
+        ],
+        "rotation": [
+          0,
+          0.12186934340514748,
+          0,
+          0.992546151641322
+        ],
+        "scale": [
+          0.34,
+          0.476,
+          0.34
+        ]
+      },
+      "meshRenderer": {
+        "model": "b4748e75e72a5dba8d4439fa86854c92",
+        "materials": {
+          "724bed1a90285b9d933f9a5abbe5e9af": "03db855801a2540b99742bfa1f4f8362"
+        }
+      }
+    },
+    {
+      "id": "dca64392abb85100871ce71e58c9e235",
+      "name": "object-08-10",
+      "enabled": true,
+      "transform": {
+        "position": [
+          5.175,
+          0.38,
+          2.875
+        ],
+        "rotation": [
+          0,
+          0.0,
+          0,
+          1.0
+        ],
+        "scale": [
+          0.38,
+          0.38,
+          0.38
+        ]
+      },
+      "meshRenderer": {
+        "model": "8cb75671f1c7525abe1c98eeede99855",
+        "materials": {
+          "18609d7bc4b25b3094ca40a95c490f5a": "9d05a848c41e5b3d8f772e40dbf650db"
+        }
+      }
+    },
+    {
+      "id": "6320f47f071b5001beaf05ab71b2b42c",
+      "name": "object-08-11",
+      "enabled": true,
+      "transform": {
+        "position": [
+          6.325,
+          0.42,
+          2.875
+        ],
+        "rotation": [
+          0,
+          0.3007057995042731,
+          0,
+          0.9537169507482269
+        ],
+        "scale": [
+          0.42000000000000004,
+          0.42000000000000004,
+          0.42000000000000004
+        ]
+      },
+      "meshRenderer": {
+        "model": "b4748e75e72a5dba8d4439fa86854c92",
+        "materials": {
+          "724bed1a90285b9d933f9a5abbe5e9af": "9d05a848c41e5b3d8f772e40dbf650db"
+        }
+      }
+    },
+    {
+      "id": "b36d90d66173502ca1eb471d5d144edc",
+      "name": "object-09-00",
+      "enabled": true,
+      "transform": {
+        "position": [
+          -6.325,
+          0.34,
+          4.025
+        ],
+        "rotation": [
+          0,
+          0.3007057995042731,
+          0,
+          0.9537169507482269
+        ],
+        "scale": [
+          0.34,
+          0.476,
+          0.34
+        ]
+      },
+      "meshRenderer": {
+        "model": "b4748e75e72a5dba8d4439fa86854c92",
+        "materials": {
+          "724bed1a90285b9d933f9a5abbe5e9af": "c518c5fb2a87520a9d9422913c79b314"
+        }
+      }
+    },
+    {
+      "id": "4fe64151307f5845a884987399f15955",
+      "name": "object-09-01",
+      "enabled": true,
+      "transform": {
+        "position": [
+          -5.175,
+          0.38,
+          4.025
+        ],
+        "rotation": [
+          0,
+          0.18223552549214747,
+          0,
+          0.9832549075639546
+        ],
+        "scale": [
+          0.38,
+          0.38,
+          0.38
+        ]
+      },
+      "meshRenderer": {
+        "model": "8cb75671f1c7525abe1c98eeede99855",
+        "materials": {
+          "18609d7bc4b25b3094ca40a95c490f5a": "c518c5fb2a87520a9d9422913c79b314"
+        }
+      }
+    },
+    {
+      "id": "b936ef40f41a5425a4d98047dd68342f",
+      "name": "object-09-02",
+      "enabled": true,
+      "transform": {
+        "position": [
+          -4.025,
+          0.42,
+          4.025
+        ],
+        "rotation": [
+          0,
+          0.06104853953485687,
+          0,
+          0.9981347984218669
+        ],
+        "scale": [
+          0.42000000000000004,
+          0.42000000000000004,
+          0.42000000000000004
+        ]
+      },
+      "meshRenderer": {
+        "model": "b4748e75e72a5dba8d4439fa86854c92",
+        "materials": {
+          "724bed1a90285b9d933f9a5abbe5e9af": "c59ed1d5b19f578fb91963961945de50"
+        }
+      }
+    },
+    {
+      "id": "9666f1767a0e5724a68455c422b16b70",
+      "name": "object-09-03",
+      "enabled": true,
+      "transform": {
+        "position": [
+          -2.875,
+          0.34,
+          4.025
+        ],
+        "rotation": [
+          0,
+          0.35836794954530027,
+          0,
+          0.9335804264972017
+        ],
+        "scale": [
+          0.34,
+          0.34,
+          0.34
+        ]
+      },
+      "meshRenderer": {
+        "model": "8cb75671f1c7525abe1c98eeede99855",
+        "materials": {
+          "18609d7bc4b25b3094ca40a95c490f5a": "c59ed1d5b19f578fb91963961945de50"
+        }
+      }
+    },
+    {
+      "id": "b54d7d3612d7507cb9f0d9340d45c65c",
+      "name": "object-09-04",
+      "enabled": true,
+      "transform": {
+        "position": [
+          -1.725,
+          0.38,
+          4.025
+        ],
+        "rotation": [
+          0,
+          0.24192189559966773,
+          0,
+          0.9702957262759965
+        ],
+        "scale": [
+          0.38,
+          0.5319999999999999,
+          0.38
+        ]
+      },
+      "meshRenderer": {
+        "model": "b4748e75e72a5dba8d4439fa86854c92",
+        "materials": {
+          "724bed1a90285b9d933f9a5abbe5e9af": "b3e52f1d55ee5147b47d7c28d6cd8d42"
+        }
+      }
+    },
+    {
+      "id": "9bbfd285656d503eb8fbfce6310a0589",
+      "name": "object-09-05",
+      "enabled": true,
+      "transform": {
+        "position": [
+          -0.575,
+          0.42,
+          4.025
+        ],
+        "rotation": [
+          0,
+          0.12186934340514748,
+          0,
+          0.992546151641322
+        ],
+        "scale": [
+          0.42000000000000004,
+          0.42000000000000004,
+          0.42000000000000004
+        ]
+      },
+      "meshRenderer": {
+        "model": "8cb75671f1c7525abe1c98eeede99855",
+        "materials": {
+          "18609d7bc4b25b3094ca40a95c490f5a": "b3e52f1d55ee5147b47d7c28d6cd8d42"
+        }
+      }
+    },
+    {
+      "id": "ecf8759b47ea58f6ae4309ff589c7630",
+      "name": "object-09-06",
+      "enabled": true,
+      "transform": {
+        "position": [
+          0.575,
+          0.34,
+          4.025
+        ],
+        "rotation": [
+          0,
+          0.0,
+          0,
+          1.0
+        ],
+        "scale": [
+          0.34,
+          0.34,
+          0.34
+        ]
+      },
+      "meshRenderer": {
+        "model": "b4748e75e72a5dba8d4439fa86854c92",
+        "materials": {
+          "724bed1a90285b9d933f9a5abbe5e9af": "03db855801a2540b99742bfa1f4f8362"
+        }
+      }
+    },
+    {
+      "id": "d632a57251e65bc3ad71de1726493c37",
+      "name": "object-09-07",
+      "enabled": true,
+      "transform": {
+        "position": [
+          1.725,
+          0.38,
+          4.025
+        ],
+        "rotation": [
+          0,
+          0.3007057995042731,
+          0,
+          0.9537169507482269
+        ],
+        "scale": [
+          0.38,
+          0.38,
+          0.38
+        ]
+      },
+      "meshRenderer": {
+        "model": "8cb75671f1c7525abe1c98eeede99855",
+        "materials": {
+          "18609d7bc4b25b3094ca40a95c490f5a": "03db855801a2540b99742bfa1f4f8362"
+        }
+      }
+    },
+    {
+      "id": "82ed0d37f1825bd8907b6d87c3b480a7",
+      "name": "object-09-08",
+      "enabled": true,
+      "transform": {
+        "position": [
+          2.875,
+          0.42,
+          4.025
+        ],
+        "rotation": [
+          0,
+          0.18223552549214747,
+          0,
+          0.9832549075639546
+        ],
+        "scale": [
+          0.42000000000000004,
+          0.588,
+          0.42000000000000004
+        ]
+      },
+      "meshRenderer": {
+        "model": "b4748e75e72a5dba8d4439fa86854c92",
+        "materials": {
+          "724bed1a90285b9d933f9a5abbe5e9af": "9d05a848c41e5b3d8f772e40dbf650db"
+        }
+      }
+    },
+    {
+      "id": "bba4c46cb4805061bf5da927e06f5b35",
+      "name": "object-09-09",
+      "enabled": true,
+      "transform": {
+        "position": [
+          4.025,
+          0.34,
+          4.025
+        ],
+        "rotation": [
+          0,
+          0.06104853953485687,
+          0,
+          0.9981347984218669
+        ],
+        "scale": [
+          0.34,
+          0.34,
+          0.34
+        ]
+      },
+      "meshRenderer": {
+        "model": "8cb75671f1c7525abe1c98eeede99855",
+        "materials": {
+          "18609d7bc4b25b3094ca40a95c490f5a": "9d05a848c41e5b3d8f772e40dbf650db"
+        }
+      }
+    },
+    {
+      "id": "cd99ff08cf575ff18825409bfbedd162",
+      "name": "object-09-10",
+      "enabled": true,
+      "transform": {
+        "position": [
+          5.175,
+          0.38,
+          4.025
+        ],
+        "rotation": [
+          0,
+          0.35836794954530027,
+          0,
+          0.9335804264972017
+        ],
+        "scale": [
+          0.38,
+          0.38,
+          0.38
+        ]
+      },
+      "meshRenderer": {
+        "model": "b4748e75e72a5dba8d4439fa86854c92",
+        "materials": {
+          "724bed1a90285b9d933f9a5abbe5e9af": "95444e6e7f1e55b5b242fa3071b3493c"
+        }
+      }
+    },
+    {
+      "id": "3b96da8a6b43519dbce790a55ccd2ba6",
+      "name": "object-09-11",
+      "enabled": true,
+      "transform": {
+        "position": [
+          6.325,
+          0.42,
+          4.025
+        ],
+        "rotation": [
+          0,
+          0.24192189559966773,
+          0,
+          0.9702957262759965
+        ],
+        "scale": [
+          0.42000000000000004,
+          0.42000000000000004,
+          0.42000000000000004
+        ]
+      },
+      "meshRenderer": {
+        "model": "8cb75671f1c7525abe1c98eeede99855",
+        "materials": {
+          "18609d7bc4b25b3094ca40a95c490f5a": "95444e6e7f1e55b5b242fa3071b3493c"
+        }
+      }
+    },
+    {
+      "id": "10f12119780552449ecbdd0aea5cd647",
+      "name": "object-10-00",
+      "enabled": true,
+      "transform": {
+        "position": [
+          -6.325,
+          0.34,
+          5.175
+        ],
+        "rotation": [
+          0,
+          0.24192189559966773,
+          0,
+          0.9702957262759965
+        ],
+        "scale": [
+          0.34,
+          0.34,
+          0.34
+        ]
+      },
+      "meshRenderer": {
+        "model": "8cb75671f1c7525abe1c98eeede99855",
+        "materials": {
+          "18609d7bc4b25b3094ca40a95c490f5a": "c59ed1d5b19f578fb91963961945de50"
+        }
+      }
+    },
+    {
+      "id": "db7ccb6e151b5d9ebde1c7f538b10485",
+      "name": "object-10-01",
+      "enabled": true,
+      "transform": {
+        "position": [
+          -5.175,
+          0.38,
+          5.175
+        ],
+        "rotation": [
+          0,
+          0.12186934340514748,
+          0,
+          0.992546151641322
+        ],
+        "scale": [
+          0.38,
+          0.38,
+          0.38
+        ]
+      },
+      "meshRenderer": {
+        "model": "b4748e75e72a5dba8d4439fa86854c92",
+        "materials": {
+          "724bed1a90285b9d933f9a5abbe5e9af": "c59ed1d5b19f578fb91963961945de50"
+        }
+      }
+    },
+    {
+      "id": "0cd0a7d62c9653b6a11cd66c3584a20a",
+      "name": "object-10-02",
+      "enabled": true,
+      "transform": {
+        "position": [
+          -4.025,
+          0.42,
+          5.175
+        ],
+        "rotation": [
+          0,
+          0.0,
+          0,
+          1.0
+        ],
+        "scale": [
+          0.42000000000000004,
+          0.42000000000000004,
+          0.42000000000000004
+        ]
+      },
+      "meshRenderer": {
+        "model": "8cb75671f1c7525abe1c98eeede99855",
+        "materials": {
+          "18609d7bc4b25b3094ca40a95c490f5a": "b3e52f1d55ee5147b47d7c28d6cd8d42"
+        }
+      }
+    },
+    {
+      "id": "c9ed47a3d1db52e4b36dba976eca4ab3",
+      "name": "object-10-03",
+      "enabled": true,
+      "transform": {
+        "position": [
+          -2.875,
+          0.34,
+          5.175
+        ],
+        "rotation": [
+          0,
+          0.3007057995042731,
+          0,
+          0.9537169507482269
+        ],
+        "scale": [
+          0.34,
+          0.476,
+          0.34
+        ]
+      },
+      "meshRenderer": {
+        "model": "b4748e75e72a5dba8d4439fa86854c92",
+        "materials": {
+          "724bed1a90285b9d933f9a5abbe5e9af": "b3e52f1d55ee5147b47d7c28d6cd8d42"
+        }
+      }
+    },
+    {
+      "id": "9faf550b922854bd8a2c936dff9c7a76",
+      "name": "object-10-04",
+      "enabled": true,
+      "transform": {
+        "position": [
+          -1.725,
+          0.38,
+          5.175
+        ],
+        "rotation": [
+          0,
+          0.18223552549214747,
+          0,
+          0.9832549075639546
+        ],
+        "scale": [
+          0.38,
+          0.38,
+          0.38
+        ]
+      },
+      "meshRenderer": {
+        "model": "8cb75671f1c7525abe1c98eeede99855",
+        "materials": {
+          "18609d7bc4b25b3094ca40a95c490f5a": "03db855801a2540b99742bfa1f4f8362"
+        }
+      }
+    },
+    {
+      "id": "1e1341b5743059f7ad54023643ef83fa",
+      "name": "object-10-05",
+      "enabled": true,
+      "transform": {
+        "position": [
+          -0.575,
+          0.42,
+          5.175
+        ],
+        "rotation": [
+          0,
+          0.06104853953485687,
+          0,
+          0.9981347984218669
+        ],
+        "scale": [
+          0.42000000000000004,
+          0.42000000000000004,
+          0.42000000000000004
+        ]
+      },
+      "meshRenderer": {
+        "model": "b4748e75e72a5dba8d4439fa86854c92",
+        "materials": {
+          "724bed1a90285b9d933f9a5abbe5e9af": "03db855801a2540b99742bfa1f4f8362"
+        }
+      }
+    },
+    {
+      "id": "a0cf2713ade5500c83aae54d48e93ca9",
+      "name": "object-10-06",
+      "enabled": true,
+      "transform": {
+        "position": [
+          0.575,
+          0.34,
+          5.175
+        ],
+        "rotation": [
+          0,
+          0.35836794954530027,
+          0,
+          0.9335804264972017
+        ],
+        "scale": [
+          0.34,
+          0.34,
+          0.34
+        ]
+      },
+      "meshRenderer": {
+        "model": "8cb75671f1c7525abe1c98eeede99855",
+        "materials": {
+          "18609d7bc4b25b3094ca40a95c490f5a": "9d05a848c41e5b3d8f772e40dbf650db"
+        }
+      }
+    },
+    {
+      "id": "707f3e9fa4a85757b9b705d5ea5fa218",
+      "name": "object-10-07",
+      "enabled": true,
+      "transform": {
+        "position": [
+          1.725,
+          0.38,
+          5.175
+        ],
+        "rotation": [
+          0,
+          0.24192189559966773,
+          0,
+          0.9702957262759965
+        ],
+        "scale": [
+          0.38,
+          0.5319999999999999,
+          0.38
+        ]
+      },
+      "meshRenderer": {
+        "model": "b4748e75e72a5dba8d4439fa86854c92",
+        "materials": {
+          "724bed1a90285b9d933f9a5abbe5e9af": "9d05a848c41e5b3d8f772e40dbf650db"
+        }
+      }
+    },
+    {
+      "id": "85e8f57448895e60bf753244d08e9beb",
+      "name": "object-10-08",
+      "enabled": true,
+      "transform": {
+        "position": [
+          2.875,
+          0.42,
+          5.175
+        ],
+        "rotation": [
+          0,
+          0.12186934340514748,
+          0,
+          0.992546151641322
+        ],
+        "scale": [
+          0.42000000000000004,
+          0.42000000000000004,
+          0.42000000000000004
+        ]
+      },
+      "meshRenderer": {
+        "model": "8cb75671f1c7525abe1c98eeede99855",
+        "materials": {
+          "18609d7bc4b25b3094ca40a95c490f5a": "95444e6e7f1e55b5b242fa3071b3493c"
+        }
+      }
+    },
+    {
+      "id": "594b55e34a285123ae52ccca23555501",
+      "name": "object-10-09",
+      "enabled": true,
+      "transform": {
+        "position": [
+          4.025,
+          0.34,
+          5.175
+        ],
+        "rotation": [
+          0,
+          0.0,
+          0,
+          1.0
+        ],
+        "scale": [
+          0.34,
+          0.34,
+          0.34
+        ]
+      },
+      "meshRenderer": {
+        "model": "b4748e75e72a5dba8d4439fa86854c92",
+        "materials": {
+          "724bed1a90285b9d933f9a5abbe5e9af": "95444e6e7f1e55b5b242fa3071b3493c"
+        }
+      }
+    },
+    {
+      "id": "468e12bbca0555709623b3a7047f0c89",
+      "name": "object-10-10",
+      "enabled": true,
+      "transform": {
+        "position": [
+          5.175,
+          0.38,
+          5.175
+        ],
+        "rotation": [
+          0,
+          0.3007057995042731,
+          0,
+          0.9537169507482269
+        ],
+        "scale": [
+          0.38,
+          0.38,
+          0.38
+        ]
+      },
+      "meshRenderer": {
+        "model": "8cb75671f1c7525abe1c98eeede99855",
+        "materials": {
+          "18609d7bc4b25b3094ca40a95c490f5a": "3cf6e20c1816590da28e009c9ca87084"
+        }
+      }
+    },
+    {
+      "id": "38a06bf2d1295d098fa3c5add8b6f58b",
+      "name": "object-10-11",
+      "enabled": true,
+      "transform": {
+        "position": [
+          6.325,
+          0.42,
+          5.175
+        ],
+        "rotation": [
+          0,
+          0.18223552549214747,
+          0,
+          0.9832549075639546
+        ],
+        "scale": [
+          0.42000000000000004,
+          0.588,
+          0.42000000000000004
+        ]
+      },
+      "meshRenderer": {
+        "model": "b4748e75e72a5dba8d4439fa86854c92",
+        "materials": {
+          "724bed1a90285b9d933f9a5abbe5e9af": "3cf6e20c1816590da28e009c9ca87084"
+        }
+      }
+    },
+    {
+      "id": "1628b4804fcb53e182e90ab91f3fc812",
+      "name": "object-11-00",
+      "enabled": true,
+      "transform": {
+        "position": [
+          -6.325,
+          0.34,
+          6.325
+        ],
+        "rotation": [
+          0,
+          0.18223552549214747,
+          0,
+          0.9832549075639546
+        ],
+        "scale": [
+          0.34,
+          0.34,
+          0.34
+        ]
+      },
+      "meshRenderer": {
+        "model": "b4748e75e72a5dba8d4439fa86854c92",
+        "materials": {
+          "724bed1a90285b9d933f9a5abbe5e9af": "b3e52f1d55ee5147b47d7c28d6cd8d42"
+        }
+      }
+    },
+    {
+      "id": "91a807538f4e554fbf909d40c9abd8c0",
+      "name": "object-11-01",
+      "enabled": true,
+      "transform": {
+        "position": [
+          -5.175,
+          0.38,
+          6.325
+        ],
+        "rotation": [
+          0,
+          0.06104853953485687,
+          0,
+          0.9981347984218669
+        ],
+        "scale": [
+          0.38,
+          0.38,
+          0.38
+        ]
+      },
+      "meshRenderer": {
+        "model": "8cb75671f1c7525abe1c98eeede99855",
+        "materials": {
+          "18609d7bc4b25b3094ca40a95c490f5a": "b3e52f1d55ee5147b47d7c28d6cd8d42"
+        }
+      }
+    },
+    {
+      "id": "06618b3ed3b858fb99ec1dae3b40a347",
+      "name": "object-11-02",
+      "enabled": true,
+      "transform": {
+        "position": [
+          -4.025,
+          0.42,
+          6.325
+        ],
+        "rotation": [
+          0,
+          0.35836794954530027,
+          0,
+          0.9335804264972017
+        ],
+        "scale": [
+          0.42000000000000004,
+          0.588,
+          0.42000000000000004
+        ]
+      },
+      "meshRenderer": {
+        "model": "b4748e75e72a5dba8d4439fa86854c92",
+        "materials": {
+          "724bed1a90285b9d933f9a5abbe5e9af": "03db855801a2540b99742bfa1f4f8362"
+        }
+      }
+    },
+    {
+      "id": "06782fced0025bcba18047138f4f751f",
+      "name": "object-11-03",
+      "enabled": true,
+      "transform": {
+        "position": [
+          -2.875,
+          0.34,
+          6.325
+        ],
+        "rotation": [
+          0,
+          0.24192189559966773,
+          0,
+          0.9702957262759965
+        ],
+        "scale": [
+          0.34,
+          0.34,
+          0.34
+        ]
+      },
+      "meshRenderer": {
+        "model": "8cb75671f1c7525abe1c98eeede99855",
+        "materials": {
+          "18609d7bc4b25b3094ca40a95c490f5a": "03db855801a2540b99742bfa1f4f8362"
+        }
+      }
+    },
+    {
+      "id": "82a3cb8be5a55ce190d51ccf5bad217a",
+      "name": "object-11-04",
+      "enabled": true,
+      "transform": {
+        "position": [
+          -1.725,
+          0.38,
+          6.325
+        ],
+        "rotation": [
+          0,
+          0.12186934340514748,
+          0,
+          0.992546151641322
+        ],
+        "scale": [
+          0.38,
+          0.38,
+          0.38
+        ]
+      },
+      "meshRenderer": {
+        "model": "b4748e75e72a5dba8d4439fa86854c92",
+        "materials": {
+          "724bed1a90285b9d933f9a5abbe5e9af": "9d05a848c41e5b3d8f772e40dbf650db"
+        }
+      }
+    },
+    {
+      "id": "a010539eb1e55e9c8a794336397d60c3",
+      "name": "object-11-05",
+      "enabled": true,
+      "transform": {
+        "position": [
+          -0.575,
+          0.42,
+          6.325
+        ],
+        "rotation": [
+          0,
+          0.0,
+          0,
+          1.0
+        ],
+        "scale": [
+          0.42000000000000004,
+          0.42000000000000004,
+          0.42000000000000004
+        ]
+      },
+      "meshRenderer": {
+        "model": "8cb75671f1c7525abe1c98eeede99855",
+        "materials": {
+          "18609d7bc4b25b3094ca40a95c490f5a": "9d05a848c41e5b3d8f772e40dbf650db"
+        }
+      }
+    },
+    {
+      "id": "ffc8d04864205f56bd5c9cce00fb5c70",
+      "name": "object-11-06",
+      "enabled": true,
+      "transform": {
+        "position": [
+          0.575,
+          0.34,
+          6.325
+        ],
+        "rotation": [
+          0,
+          0.3007057995042731,
+          0,
+          0.9537169507482269
+        ],
+        "scale": [
+          0.34,
+          0.476,
+          0.34
+        ]
+      },
+      "meshRenderer": {
+        "model": "b4748e75e72a5dba8d4439fa86854c92",
+        "materials": {
+          "724bed1a90285b9d933f9a5abbe5e9af": "95444e6e7f1e55b5b242fa3071b3493c"
+        }
+      }
+    },
+    {
+      "id": "e4d4ca521c8c548996176dc0e2653287",
+      "name": "object-11-07",
+      "enabled": true,
+      "transform": {
+        "position": [
+          1.725,
+          0.38,
+          6.325
+        ],
+        "rotation": [
+          0,
+          0.18223552549214747,
+          0,
+          0.9832549075639546
+        ],
+        "scale": [
+          0.38,
+          0.38,
+          0.38
+        ]
+      },
+      "meshRenderer": {
+        "model": "8cb75671f1c7525abe1c98eeede99855",
+        "materials": {
+          "18609d7bc4b25b3094ca40a95c490f5a": "95444e6e7f1e55b5b242fa3071b3493c"
+        }
+      }
+    },
+    {
+      "id": "4466f7474c1350fbbb1890a0c85e4ae3",
+      "name": "object-11-08",
+      "enabled": true,
+      "transform": {
+        "position": [
+          2.875,
+          0.42,
+          6.325
+        ],
+        "rotation": [
+          0,
+          0.06104853953485687,
+          0,
+          0.9981347984218669
+        ],
+        "scale": [
+          0.42000000000000004,
+          0.42000000000000004,
+          0.42000000000000004
+        ]
+      },
+      "meshRenderer": {
+        "model": "b4748e75e72a5dba8d4439fa86854c92",
+        "materials": {
+          "724bed1a90285b9d933f9a5abbe5e9af": "3cf6e20c1816590da28e009c9ca87084"
+        }
+      }
+    },
+    {
+      "id": "57994138867e56d1b1c627181ffc7201",
+      "name": "object-11-09",
+      "enabled": true,
+      "transform": {
+        "position": [
+          4.025,
+          0.34,
+          6.325
+        ],
+        "rotation": [
+          0,
+          0.35836794954530027,
+          0,
+          0.9335804264972017
+        ],
+        "scale": [
+          0.34,
+          0.34,
+          0.34
+        ]
+      },
+      "meshRenderer": {
+        "model": "8cb75671f1c7525abe1c98eeede99855",
+        "materials": {
+          "18609d7bc4b25b3094ca40a95c490f5a": "3cf6e20c1816590da28e009c9ca87084"
+        }
+      }
+    },
+    {
+      "id": "9ea12b19a6b15d2aa708848186d063c2",
+      "name": "object-11-10",
+      "enabled": true,
+      "transform": {
+        "position": [
+          5.175,
+          0.38,
+          6.325
+        ],
+        "rotation": [
+          0,
+          0.24192189559966773,
+          0,
+          0.9702957262759965
+        ],
+        "scale": [
+          0.38,
+          0.5319999999999999,
+          0.38
+        ]
+      },
+      "meshRenderer": {
+        "model": "b4748e75e72a5dba8d4439fa86854c92",
+        "materials": {
+          "724bed1a90285b9d933f9a5abbe5e9af": "984be79c5226529a90078b6f1d97cdfe"
+        }
+      }
+    },
+    {
+      "id": "fbe23104012a57deb1b2bcbff01ae2aa",
+      "name": "object-11-11",
+      "enabled": true,
+      "transform": {
+        "position": [
+          6.325,
+          0.42,
+          6.325
+        ],
+        "rotation": [
+          0,
+          0.12186934340514748,
+          0,
+          0.992546151641322
+        ],
+        "scale": [
+          0.42000000000000004,
+          0.42000000000000004,
+          0.42000000000000004
+        ]
+      },
+      "meshRenderer": {
+        "model": "8cb75671f1c7525abe1c98eeede99855",
+        "materials": {
+          "18609d7bc4b25b3094ca40a95c490f5a": "984be79c5226529a90078b6f1d97cdfe"
+        }
+      }
+    },
+    {
+      "id": "f3f2779806dd5dd1a2f67dfe8d2caa98",
+      "name": "point-light-1",
+      "enabled": true,
+      "transform": {
+        "position": [
+          -6,
+          2.8,
+          -4
+        ],
+        "rotation": [
+          0,
+          0,
+          0,
+          1
+        ],
+        "scale": [
+          1,
+          1,
+          1
+        ]
+      },
+      "pointLight": {
+        "color": [
+          1,
+          0.24,
+          0.12
+        ],
+        "intensity": 25,
+        "range": 7,
+        "enabled": true
+      }
+    },
+    {
+      "id": "9e319894a3e254b8805a3191f8e121e4",
+      "name": "point-light-2",
+      "enabled": true,
+      "transform": {
+        "position": [
+          -2,
+          2.8,
+          -4
+        ],
+        "rotation": [
+          0,
+          0,
+          0,
+          1
+        ],
+        "scale": [
+          1,
+          1,
+          1
+        ]
+      },
+      "pointLight": {
+        "color": [
+          0.2,
+          0.5,
+          1
+        ],
+        "intensity": 25,
+        "range": 7,
+        "enabled": true
+      }
+    },
+    {
+      "id": "e97c714fd2cf5c7d97504c9e58a737d0",
+      "name": "point-light-3",
+      "enabled": true,
+      "transform": {
+        "position": [
+          2,
+          2.8,
+          -4
+        ],
+        "rotation": [
+          0,
+          0,
+          0,
+          1
+        ],
+        "scale": [
+          1,
+          1,
+          1
+        ]
+      },
+      "pointLight": {
+        "color": [
+          0.3,
+          1,
+          0.35
+        ],
+        "intensity": 25,
+        "range": 7,
+        "enabled": true
+      }
+    },
+    {
+      "id": "a31cb21543715160b8c00f02cbf20c74",
+      "name": "point-light-4",
+      "enabled": true,
+      "transform": {
+        "position": [
+          6,
+          2.8,
+          -4
+        ],
+        "rotation": [
+          0,
+          0,
+          0,
+          1
+        ],
+        "scale": [
+          1,
+          1,
+          1
+        ]
+      },
+      "pointLight": {
+        "color": [
+          1,
+          0.7,
+          0.2
+        ],
+        "intensity": 25,
+        "range": 7,
+        "enabled": true
+      }
+    },
+    {
+      "id": "37034bf138e1583a9d7f2cd081560f4c",
+      "name": "point-light-5",
+      "enabled": true,
+      "transform": {
+        "position": [
+          -6,
+          2.8,
+          4
+        ],
+        "rotation": [
+          0,
+          0,
+          0,
+          1
+        ],
+        "scale": [
+          1,
+          1,
+          1
+        ]
+      },
+      "pointLight": {
+        "color": [
+          0.7,
+          0.25,
+          1
+        ],
+        "intensity": 25,
+        "range": 7,
+        "enabled": true
+      }
+    },
+    {
+      "id": "1ca626eba54251119ed2868c07393171",
+      "name": "point-light-6",
+      "enabled": true,
+      "transform": {
+        "position": [
+          -2,
+          2.8,
+          4
+        ],
+        "rotation": [
+          0,
+          0,
+          0,
+          1
+        ],
+        "scale": [
+          1,
+          1,
+          1
+        ]
+      },
+      "pointLight": {
+        "color": [
+          0.2,
+          1,
+          1
+        ],
+        "intensity": 25,
+        "range": 7,
+        "enabled": true
+      }
+    },
+    {
+      "id": "e2b30e8df9de522997785719812a77f0",
+      "name": "point-light-7",
+      "enabled": true,
+      "transform": {
+        "position": [
+          2,
+          2.8,
+          4
+        ],
+        "rotation": [
+          0,
+          0,
+          0,
+          1
+        ],
+        "scale": [
+          1,
+          1,
+          1
+        ]
+      },
+      "pointLight": {
+        "color": [
+          1,
+          0.3,
+          0.6
+        ],
+        "intensity": 25,
+        "range": 7,
+        "enabled": true
+      }
+    },
+    {
+      "id": "1b0ccf8fbf0c506b9b0c7765139ec054",
+      "name": "point-light-8",
+      "enabled": true,
+      "transform": {
+        "position": [
+          6,
+          2.8,
+          4
+        ],
+        "rotation": [
+          0,
+          0,
+          0,
+          1
+        ],
+        "scale": [
+          1,
+          1,
+          1
+        ]
+      },
+      "pointLight": {
+        "color": [
+          0.7,
+          1,
+          0.3
+        ],
+        "intensity": 25,
+        "range": 7,
+        "enabled": true
+      }
+    }
+  ]
+}

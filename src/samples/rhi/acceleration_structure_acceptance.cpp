@@ -11,6 +11,7 @@
 #include "rhi/runtime.hpp"
 #include "shader/dxc_compiler.hpp"
 
+#include <algorithm>
 #include <array>
 #include <cmath>
 #include <cstring>
@@ -298,6 +299,117 @@ void VerifyTraceRays(Runtime& runtime, Pool& pool, shader::Target target,
     }
 }
 
+void VerifyPathDirectDenoise(Runtime& runtime, shader::Target target,
+                             const std::filesystem::path& source, Logger& logger)
+{
+    constexpr uint32_t width = 3, height = 3, pitch = 256;
+    using Pixel = std::array<float, 4>;
+    using Image = std::array<Pixel, width * height>;
+    shader::ProgramRequest request;
+    request.entry = {ShaderStage::Compute, source, "Denoise"};
+    request.target = target;
+    if (target == shader::Target::Spirv)
+        request.defines["SPIRV"] = "1";
+    shader::DxcCompiler compiler;
+    PipelineDesc desc;
+    desc.layout = runtime.CreateLayout({{0, BindingKind::SampledTexture},
+                                        {1, BindingKind::SampledTexture},
+                                        {2, BindingKind::StorageTexture},
+                                        {3, BindingKind::ConstantBuffer},
+                                        {4, BindingKind::SampledTexture},
+                                        {5, BindingKind::ReadOnlyBuffer},
+                                        {6, BindingKind::SampledTexture},
+                                        {7, BindingKind::SampledTexture}});
+    desc.compute = runtime.CreateShader(ShaderStage::Compute, compiler.Compile(request), "Denoise");
+    auto pipeline = runtime.CreatePipeline(desc);
+    const auto run = [&](const Image& radiance, const Image& direct, const Image& diffuse)
+    {
+        auto commands = runtime.CreateCommands();
+        const auto upload = [&](const Image& values)
+        {
+            auto image = runtime.CreateTexture(
+                {width, height, Format::Rgba32Float, false, false, "Path.Denoise.Input"});
+            auto buffer =
+                runtime.CreateBuffer({pitch * height, Memory::Upload, "Path.Denoise.Upload"});
+            for (uint32_t y = 0; y < height; ++y)
+                std::memcpy(buffer->Map().data() + y * pitch, values.data() + y * width,
+                            width * sizeof(Pixel));
+            commands->Barrier(buffer, State::HostWrite, State::CopySource);
+            commands->Barrier(image, State::Undefined, State::CopyDest);
+            commands->CopyTexture(buffer, image, pitch, true);
+            commands->Barrier(image, State::CopyDest, State::Sampled);
+            return runtime.CreateView(image);
+        };
+        Image surface, material;
+        surface.fill({0, 0, 1, 1});
+        material.fill({.5f, .5f, .5f, .5f});
+        auto color = upload(radiance), directView = upload(direct), guide = upload(surface),
+             materialView = upload(material), diffuseView = upload(diffuse);
+        std::array<std::array<float, 2>, width * height> moments;
+        moments.fill({1, 100});
+        auto momentBuffer = runtime.CreateBuffer({sizeof(moments), Memory::Upload, "Path.Moments"});
+        std::memcpy(momentBuffer->Map().data(), moments.data(), sizeof(moments));
+        Binding moment{5};
+        moment.buffer = momentBuffer;
+        moment.size = sizeof(moments);
+        moment.stride = 8;
+        renderer::ReflectionParameters parameters;
+        parameters.environment[2] = 8;
+        parameters.options[3] = float(renderer::MaxReflectionSamples);
+        auto constants =
+            runtime.CreateBuffer({sizeof(parameters), Memory::Upload, "Path.Constants"});
+        std::memcpy(constants->Map().data(), &parameters, sizeof(parameters));
+        Binding uniform{3};
+        uniform.buffer = constants;
+        uniform.size = sizeof(parameters);
+        auto output = runtime.CreateTexture(
+            {width, height, Format::Rgba32Float, true, false, "Path.Denoise.Output"});
+        auto result =
+            runtime.CreateBuffer({pitch * height, Memory::Readback, "Path.Denoise.Readback"});
+        commands->Barrier(constants, State::HostWrite, State::UniformRead);
+        commands->Barrier(momentBuffer, State::HostWrite, State::ShaderRead);
+        commands->Barrier(output, State::Undefined, State::Storage);
+        commands->Bind(pipeline);
+        commands->Bind(runtime.CreateGroup(desc.layout, {{0, color},
+                                                         {1, guide},
+                                                         {2, runtime.CreateView(output)},
+                                                         uniform,
+                                                         {4, materialView},
+                                                         moment,
+                                                         {6, directView},
+                                                         {7, diffuseView}}));
+        commands->Compute(1, 1);
+        commands->Barrier(output, State::Storage, State::CopySource);
+        commands->CopyTexture(result, output, pitch, false);
+        commands->Barrier(result, State::CopyDest, State::HostRead);
+        runtime.Wait(runtime.Submit(std::move(commands)));
+        Image actual;
+        for (uint32_t y = 0; y < height; ++y)
+            std::memcpy(actual.data() + y * width, result->Map().data() + y * pitch,
+                        width * sizeof(Pixel));
+        return actual;
+    };
+    Image direct{}, radiance;
+    radiance.fill({1, 1, 1, 1});
+    direct[4] = {100, 100, 100, 0};
+    radiance[4] = {101, 101, 101, 1};
+    Image diffuse{};
+    const auto directResult = run(radiance, direct, diffuse);
+    if (std::abs(directResult[4][0] - 101) > 1e-4f || std::abs(directResult[3][0] - 1) > 1e-4f)
+        throw std::runtime_error("Path direct highlight was filtered or spread to neighbors");
+    direct.fill({0, 0, 0, 0});
+    const auto indirectResult = run(radiance, direct, diffuse);
+    if (!std::isfinite(indirectResult[4][0]) || indirectResult[4][0] >= 10 ||
+        indirectResult[4][0] < 0)
+        throw std::runtime_error("Path indirect firefly was not filtered");
+    diffuse = radiance;
+    const auto diffuseResult = run(radiance, direct, diffuse);
+    if (!std::isfinite(diffuseResult[4][0]) || diffuseResult[4][0] >= 10 || diffuseResult[4][0] < 0)
+        throw std::runtime_error("Path diffuse firefly was not filtered");
+    logger.Write(LogLevel::Info, "Path separated denoising preserved direct highlight and filtered "
+                                 "both indirect components");
+}
+
 void VerifyReflectionDenoise(Runtime& runtime, shader::Target target,
                              const std::filesystem::path& source, Logger& logger)
 {
@@ -449,7 +561,7 @@ void VerifyRaySampling(Runtime& runtime, shader::Target target, const std::files
     desc.layout = runtime.CreateLayout({{0, BindingKind::StorageBuffer}});
     desc.compute = runtime.CreateShader(ShaderStage::Compute, compiler.Compile(request), "CSMain");
     auto pipeline = runtime.CreatePipeline(desc);
-    constexpr uint32_t bytes = 6 * 4 * sizeof(float);
+    constexpr uint32_t bytes = 24 * 4 * sizeof(float);
     auto result = runtime.CreateBuffer({bytes, Memory::Device, "Sampling.Result", true});
     auto readback = runtime.CreateBuffer({bytes, Memory::Readback, "Sampling.Readback"});
     Binding binding{0};
@@ -465,7 +577,7 @@ void VerifyRaySampling(Runtime& runtime, shader::Target target, const std::files
     commands->Copy(result, readback, bytes);
     commands->Barrier(readback, State::CopyDest, State::HostRead);
     runtime.Wait(runtime.Submit(std::move(commands)));
-    std::array<float, 24> values{};
+    std::array<float, 96> values{};
     std::memcpy(values.data(), readback->Map().data(), bytes);
     for (uint32_t i = 0; i < 6; ++i)
     {
@@ -475,6 +587,104 @@ void VerifyRaySampling(Runtime& runtime, shader::Target target, const std::files
             throw std::runtime_error(
                 "Visible GGX/Sobol sampling failed its bounded-weight/stratification contract");
     }
+    request.entry = {ShaderStage::Compute, source.parent_path() / "path_bsdf_acceptance.hlsl",
+                     "CSMain"};
+    desc.compute = runtime.CreateShader(ShaderStage::Compute, compiler.Compile(request), "CSMain");
+    pipeline = runtime.CreatePipeline(desc);
+    auto bsdfCommands = runtime.CreateCommands();
+    bsdfCommands->Barrier(result, State::CopySource, State::Storage);
+    bsdfCommands->Barrier(readback, State::HostRead, State::CopyDest);
+    bsdfCommands->Bind(pipeline);
+    bsdfCommands->Bind(runtime.CreateGroup(desc.layout, {binding}));
+    bsdfCommands->Compute(6, 1);
+    bsdfCommands->Barrier(result, State::Storage, State::CopySource);
+    bsdfCommands->Copy(result, readback, bytes);
+    bsdfCommands->Barrier(readback, State::CopyDest, State::HostRead);
+    runtime.Wait(runtime.Submit(std::move(bsdfCommands)));
+    std::memcpy(values.data(), readback->Map().data(), bytes);
+    // Independent midpoint quadrature of the BRDF over the incident hemisphere.
+    constexpr double pi = 3.14159265358979323846;
+    constexpr uint32_t steps = 512;
+    constexpr std::array<double, 3> base{.7, .4, .2};
+    for (uint32_t scenario = 0; scenario < 6; ++scenario)
+    {
+        const double nv = scenario / 2 == 0 ? 1.0 : scenario / 2 == 1 ? .5 : .1;
+        const double roughness = scenario % 2 ? .8 : .25;
+        const double metallic = scenario % 3 == 0 ? 1.0 : 0.0;
+        const double vx = std::sqrt(1 - nv * nv);
+        const double alpha = roughness * roughness;
+        const double alpha2 = alpha * alpha;
+        std::array<double, 3> integral{}, diffuseIntegral{}, specularIntegral{};
+        for (uint32_t z = 0; z < steps; ++z)
+        {
+            const double nl = (z + .5) / steps;
+            const double radius = std::sqrt(1 - nl * nl);
+            for (uint32_t p = 0; p < steps; ++p)
+            {
+                const double angle = 2 * pi * (p + .5) / steps;
+                const double lx = radius * std::cos(angle), ly = radius * std::sin(angle);
+                const double hx = vx + lx, hy = ly, hz = nv + nl;
+                const double length = std::sqrt(hx * hx + hy * hy + hz * hz);
+                const double nh = hz / length;
+                const double vh = std::clamp((vx * hx + nv * hz) / length, 0.0, 1.0);
+                const double d = nh * nh * (alpha2 - 1) + 1;
+                const double distribution = alpha2 / std::max(pi * d * d, 1e-8);
+                const double visibility =
+                    .5 / std::max(nl * std::sqrt(nv * nv * (1 - alpha2) + alpha2) +
+                                      nv * std::sqrt(nl * nl * (1 - alpha2) + alpha2),
+                                  1e-6);
+                for (size_t c = 0; c < base.size(); ++c)
+                {
+                    const double f0 = .04 * (1 - metallic) + base[c] * metallic;
+                    const double fresnel = f0 + (1 - f0) * std::pow(1 - vh, 5);
+                    const double diffuse = (1 - fresnel) * (1 - metallic) * base[c] / pi * nl;
+                    const double specular = fresnel * distribution * visibility * nl;
+                    diffuseIntegral[c] += diffuse;
+                    specularIntegral[c] += specular;
+                    integral[c] += diffuse + specular;
+                }
+            }
+        }
+        for (size_t c = 0; c < base.size(); ++c)
+        {
+            const double expected = integral[c] * (2 * pi / (steps * steps));
+            const double actual = values[scenario * 4 + c];
+            if (!std::isfinite(actual) || std::abs(actual - expected) > .025 + expected * .04)
+                throw std::runtime_error("Path BSDF sampling differs from hemisphere quadrature");
+            const double expectedDiffuse = diffuseIntegral[c] * (2 * pi / (steps * steps));
+            const double expectedSpecular = specularIntegral[c] * (2 * pi / (steps * steps));
+            const double actualDiffuse = values[(scenario + 6) * 4 + c];
+            const double actualSpecular = values[(scenario + 12) * 4 + c];
+            if (!std::isfinite(actualDiffuse) || !std::isfinite(actualSpecular) ||
+                std::abs(actualDiffuse - expectedDiffuse) > .025 + expectedDiffuse * .04 ||
+                std::abs(actualSpecular - expectedSpecular) > .025 + expectedSpecular * .04 ||
+                std::abs(actualDiffuse + actualSpecular - actual) > 1e-3)
+                throw std::runtime_error("Path BSDF component sampling differs from quadrature");
+            logger.Write(LogLevel::Info,
+                         std::format("Path BSDF scenario {} channel {}: GPU {:.6f}, CPU {:.6f}",
+                                     scenario, c, actual, expected));
+        }
+        if (values[scenario * 4 + 3] != 0)
+            throw std::runtime_error("Path BSDF sampling produced invalid weights");
+    }
+    const std::array<std::array<float, 4>, 6> expectedHitGuides{
+        {{0, 0, 0, 0},
+         {16.f / 3.f, 0, 2, 0},
+         {0, 3.2f, 0, 2},
+         {2.f / (.2f + .0001f), 10000, 2, 1},
+         {0, 0, 0, 0},
+         {4, 10.f / 3.f, 1, 2}}};
+    for (size_t scenario = 0; scenario < expectedHitGuides.size(); ++scenario)
+        for (size_t channel = 0; channel < 4; ++channel)
+        {
+            const float actual = values[(scenario + 18) * 4 + channel];
+            const float expected = expectedHitGuides[scenario][channel];
+            if (!std::isfinite(actual) ||
+                std::abs(actual - expected) > 1e-5f * std::max(1.f, std::abs(expected)))
+                throw std::runtime_error("Path secondary distance guide averaging mismatch");
+        }
+    logger.Write(LogLevel::Info,
+                 "Path secondary hit guides passed finite, missing and environment cases");
     request.entry = {ShaderStage::Compute,
                      source.parent_path().parent_path() / "RenderLab" / "ReflectionPost.hlsl",
                      "Accumulate"};
@@ -550,8 +760,126 @@ void VerifyRaySampling(Runtime& runtime, shader::Target target, const std::files
     }
     logger.Write(LogLevel::Info, "Progressive reflection mean passed: reset, 1/128 and 1/2048 "
                                  "weights, and sample count limit");
+    request.entry = {ShaderStage::Compute,
+                     source.parent_path().parent_path() / "RenderLab" / "PathPost.hlsl",
+                     "Accumulate"};
+    desc.compute =
+        runtime.CreateShader(ShaderStage::Compute, compiler.Compile(request), "Accumulate");
+    pipeline = runtime.CreatePipeline(desc);
+    for (uint32_t count :
+         {0u, 1u, 127u, renderer::MaxReflectionSamples - 3, renderer::MaxReflectionSamples})
+    {
+        renderer::ReflectionParameters parameters;
+        parameters.environment[2] = float(renderer::PathSamplesPerFrame);
+        parameters.options[1] = float(count);
+        parameters.options[3] = float(renderer::MaxReflectionSamples);
+        auto constants =
+            runtime.CreateBuffer({sizeof(parameters), Memory::Upload, "Path.Mean.Parameters"});
+        std::memcpy(constants->Map().data(), &parameters, sizeof(parameters));
+        Binding uniform{3};
+        uniform.buffer = constants;
+        uniform.size = sizeof(parameters);
+        auto dispatch = runtime.CreateCommands();
+        dispatch->Barrier(image, State::CopySource, State::Storage);
+        dispatch->Barrier(constants, State::HostWrite, State::UniformRead);
+        dispatch->Barrier(pixels, State::HostRead, State::CopyDest);
+        dispatch->Bind(pipeline);
+        dispatch->Bind(runtime.CreateGroup(desc.layout,
+                                           {{0, current}, {1, previous}, {2, imageView}, uniform}));
+        dispatch->Compute(1, 1);
+        dispatch->Barrier(image, State::Storage, State::CopySource);
+        dispatch->CopyTexture(pixels, image, 256, false);
+        dispatch->Barrier(pixels, State::CopyDest, State::HostRead);
+        runtime.Wait(runtime.Submit(std::move(dispatch)));
+        std::array<float, 4> actual{};
+        std::memcpy(actual.data(), pixels->Map().data(), sizeof(actual));
+        const auto batch =
+            std::min(renderer::PathSamplesPerFrame, renderer::MaxReflectionSamples - count);
+        const float blend = count == 0   ? 1.f
+                            : batch == 0 ? 0.f
+                                         : float(batch) / float(count + batch);
+        for (uint32_t channel = 0; channel < 4; ++channel)
+        {
+            const float expected =
+                previousPixel[channel] + (currentPixel[channel] - previousPixel[channel]) * blend;
+            if (!std::isfinite(actual[channel]) ||
+                std::abs(actual[channel] - expected) > 1e-5f * std::max(1.f, std::abs(expected)))
+                throw std::runtime_error("Path batch mean or sample cap mismatch");
+        }
+    }
+    request.entry.function = "Statistics";
+    desc = {};
+    desc.layout = runtime.CreateLayout({{0, BindingKind::SampledTexture},
+                                        {3, BindingKind::ConstantBuffer},
+                                        {4, BindingKind::ReadOnlyBuffer},
+                                        {5, BindingKind::ReadOnlyBuffer},
+                                        {6, BindingKind::StorageBuffer}});
+    desc.compute =
+        runtime.CreateShader(ShaderStage::Compute, compiler.Compile(request), "Statistics");
+    pipeline = runtime.CreatePipeline(desc);
+    constexpr std::array<float, 2> batchValues{3, 8}, previousValues{2, 5};
+    auto batchBuffer = runtime.CreateBuffer({8, Memory::Upload, "Path.Batch.Input"});
+    auto previousBuffer = runtime.CreateBuffer({8, Memory::Upload, "Path.Previous.Input"});
+    std::memcpy(batchBuffer->Map().data(), batchValues.data(), 8);
+    std::memcpy(previousBuffer->Map().data(), previousValues.data(), 8);
+    auto prepareMoments = runtime.CreateCommands();
+    prepareMoments->Barrier(batchBuffer, State::HostWrite, State::ShaderRead);
+    prepareMoments->Barrier(previousBuffer, State::HostWrite, State::ShaderRead);
+    runtime.Wait(runtime.Submit(std::move(prepareMoments)));
+    for (uint32_t count : {0u, 10u, renderer::MaxReflectionSamples})
+    {
+        renderer::ReflectionParameters parameters;
+        parameters.environment[2] = float(renderer::PathSamplesPerFrame);
+        parameters.options[1] = float(count);
+        parameters.options[3] = float(renderer::MaxReflectionSamples);
+        auto constants =
+            runtime.CreateBuffer({sizeof(parameters), Memory::Upload, "Path.Moments.Parameters"});
+        std::memcpy(constants->Map().data(), &parameters, sizeof(parameters));
+        auto output = runtime.CreateBuffer({8, Memory::Device, "Path.Moments.Output", true});
+        auto resultReadback = runtime.CreateBuffer({8, Memory::Readback, "Path.Moments.Readback"});
+        Binding uniform{3};
+        uniform.buffer = constants;
+        uniform.size = sizeof(parameters);
+        Binding batchBinding{4};
+        batchBinding.buffer = batchBuffer;
+        batchBinding.size = 8;
+        batchBinding.stride = 8;
+        Binding previousBinding{5};
+        previousBinding.buffer = previousBuffer;
+        previousBinding.size = 8;
+        previousBinding.stride = 8;
+        Binding outputBinding{6};
+        outputBinding.buffer = output;
+        outputBinding.size = 8;
+        outputBinding.stride = 8;
+        auto momentCommands = runtime.CreateCommands();
+        momentCommands->Barrier(constants, State::HostWrite, State::UniformRead);
+        momentCommands->Barrier(output, State::Undefined, State::Storage);
+        momentCommands->Bind(pipeline);
+        momentCommands->Bind(runtime.CreateGroup(
+            desc.layout, {{0, current}, uniform, batchBinding, previousBinding, outputBinding}));
+        momentCommands->Compute(1, 1);
+        momentCommands->Barrier(output, State::Storage, State::CopySource);
+        momentCommands->Copy(output, resultReadback, 8);
+        momentCommands->Barrier(resultReadback, State::CopyDest, State::HostRead);
+        runtime.Wait(runtime.Submit(std::move(momentCommands)));
+        std::array<float, 2> actual{};
+        std::memcpy(actual.data(), resultReadback->Map().data(), 8);
+        const std::array<float, 2> expected =
+            count == 0 ? batchValues
+            : count == renderer::MaxReflectionSamples
+                ? previousValues
+                : std::array<float, 2>{22.f / 9.f, 13.f + 40.f / 9.f};
+        for (size_t i = 0; i < actual.size(); ++i)
+            if (!std::isfinite(actual[i]) || std::abs(actual[i] - expected[i]) > 1e-5f)
+                throw std::runtime_error("Path batched Welford merge mismatch");
+    }
+    logger.Write(LogLevel::Info, "Path batch mean/cap and Welford merge passed");
     logger.Write(LogLevel::Info, "Visible GGX sampling passed: 6 roughness/view cases, 4096 "
                                  "samples each; finite weights <= 1, stratified quadrants");
+    VerifyPathDirectDenoise(runtime, target,
+                            source.parent_path().parent_path() / "RenderLab" / "PathDenoise.hlsl",
+                            logger);
     VerifyReflectionDenoise(
         runtime, target,
         source.parent_path().parent_path() / "RenderLab" / "ReflectionDenoise.hlsl", logger);

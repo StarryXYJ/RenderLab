@@ -2,6 +2,22 @@
 
 RenderLab 支持 Windows x64，使用 C++20、MSVC、Windows SDK、CMake 和 Ninja。Sandbox 在 DX12/Vulkan 上展示三角形与 Compute 噪声纹理，支持独立的设备报告和 RHI 读回验收。
 
+路径追踪入口（要求支持 TraceRays 和 Ray Query 的设备）：
+
+```powershell
+./out/build/m5-release/renderlab_player.exe --backend dx12 --headless --validation on --project sample/m4/RayTracing.rlproject --pipeline pathtracing --width 640 --height 360 --benchmark 64 --warmup-frames 8 --output out/path-tracing --profile out/path-tracing/report.json
+```
+
+可将 `--backend` 改为 `vulkan`。此版本只支持不透明、非 Masked 的内置 Lit/Unlit 材质，最多四段路径；不支持透明或通用面光源采样。默认启用有偏显示滤波，`--denoise off` 查看未滤波累积；细节和验证范围见 [降噪记录](../docs/performance/m8-path-denoise.md) 与 [阶段计划](../design/phaseplan.md)。
+
+安装包中包含 `project/RayTracing.rlproject` 和 26 实例的
+`project/PathTracingGallery.rlproject`；从安装目录运行以下命令可打开窗口，详细操作和依赖见
+安装目录 `PathTracing-README.txt`。
+
+```powershell
+./renderlab_player.exe --backend dx12 --project project/PathTracingGallery.rlproject --pipeline pathtracing
+```
+
 ## 工具链
 
 固定功能状态与模板附件的独立 GPU 回归可运行 `ctest --preset windows-debug -R 'render_state|rendergraph.contracts' --output-on-failure`，需配置 `RENDERLAB_GPU_TESTS=ON`；状态与逐面访问接口见 [渲染状态](../docs/render-states.md)。
@@ -449,7 +465,7 @@ python -m unittest discover -s tools/benchmark -p "test_*.py"
 
 ## Avalonia 嵌入原型
 
-IDE 打开根目录 `RenderLab.slnx`，应用项目位于 `src/editor/managed/RenderLab.Editor`；它负责托管项目导航和构建，C++ 依赖仍由 CMake 构建。根目录 `global.json` 锁定 SDK，`Directory.Build.props` 统一规则并将各项目产物分别放到 `out/dotnet/<项目名>/{bin,obj}`。首次运行先用下面的构建脚本准备原生 DLL/Shader，再由 IDE 启动 Editor；IDE 构建不会隐式配置或编译 CMake。自定义本机构建树时给 MSBuild 传 `-p:NativeBuildDir=绝对路径`，或将同名环境变量设为该绝对路径。
+IDE 打开根目录 `RenderLab.slnx`，应用项目位于 `src/editor/managed/RenderLab.Editor`；它负责托管项目导航和构建，C++ 依赖仍由 CMake 构建。根目录 `global.json` 锁定 SDK，`Directory.Build.props` 统一规则并将各项目产物分别放到 `out/dotnet/<项目名>/{bin,obj}`。首次运行先用下面的构建脚本准备原生 DLL/Shader，再由 IDE 启动 Editor；IDE 构建不会隐式配置或编译 CMake；如果原生构建树缺少当前源码中的 Shader，托管构建会报错，需先重新构建该目录的 `renderlab_editor_bridge`，避免运行时才发现缺文件。此检查不保证已有文件内容或 DLL 是最新的，修改原生源码或 Shader 后仍需重建原生目标。自定义本机构建树时给 MSBuild 传 `-p:NativeBuildDir=绝对路径`，或将同名环境变量设为该绝对路径。
 
 额外需要 .NET SDK 10.0.401（根目录 global.json 允许同 feature band 的更新补丁）和 PowerShell 7。Avalonia/Fonts.Inter 固定 12.0.5，CommunityToolkit.Mvvm 8.4.1、Microsoft.Extensions.DependencyInjection 10.0.0；Debug 开发工具使用模板的 AvaloniaUI.DiagnosticsSupport 2.2.3。包图由 `src/editor/managed/RenderLab.Editor/packages.lock.json` 锁定。宿主作为后续 Editor 的 MVVM/DI 骨架复用，目前只支持 Windows x64，属于 M7.1 的提前集成试验；模块职责、生命周期和未验证边界见 [宿主契约](../docs/editor-host.md)。
 
@@ -485,7 +501,13 @@ cmake --preset windows-release
 
 有完整 NuGet 缓存的离线机器可以增加 `-OfflinePackageCache C:/你的目录/.nuget/packages`；恢复仍使用 locked mode。直接运行 dotnet 时在仓库根目录使用 `RenderLab.slnx` 作为构建入口；需要自定义原生路径时使用 `-p:NativeBuildDir=绝对路径`。构建脚本跳过本原型没有使用的 Avalonia 商业产品构建遥测，不修改用户全局设置。
 
-默认加载源码仓库的 `sample/m4/RayTracing.rlproject`，初始为 Deferred。`--project` 可以指定其他项目，`--shaders` 可指定引擎 Shader 根目录；默认使用 exe 同目录的 shaders。点击原生视口后使用 WASD/QE、方向键或右键拖动。此宿主未打包示例项目，移出仓库运行时必须显式提供项目路径。
+默认加载源码仓库的 `sample/m4/RayTracing.rlproject`，初始为 Deferred。运行中可通过 File / Open Project 选择 `.rlproject`，或从 File / Recent Projects 切换最近成功打开的项目；项目决定启动场景。切换会重建视口，失败时尝试重开旧项目。`--project` 可以指定其他项目，`--shaders` 可指定引擎 Shader 根目录；默认使用 exe 同目录的 shaders。点击原生视口后使用 WASD/QE、方向键或右键拖动。此宿主未打包示例项目，移出仓库运行时必须显式提供项目路径。
+
+Cornell Box 风格 GI 场景可打开 `sample/m4/CornellBox.rlproject`，并将管线切为 Path Tracing；场景与限制见 [示例说明](../sample/m4/README.md#cornell-box)。
+
+工作台的管线选择支持 Path Tracing，也可通过 `--pipeline pathtracing` 启动；当前场景需要
+受支持的设备以及不透明、非 Masked 的内置材质。切换时提交方式归为 Direct，视图归为
+Final/HDR；不支持的组合会拒绝并保留已生效配置。静止时按目标帧率持续累积。
 
 M7.2a 接入 Dock.Avalonia 12.0.0.2 与 Serilog：首次启动只显示 Scene 与 Render Settings，Window 菜单打开 Log、Profiler 与 Render Graph；Profiler 现提供实际计数与完成帧诊断。Layout 提供 Default、Diagnostics 与恢复保存布局；普通运行将布局写到项目旁的 UserSettings/Editor/layout.json，自检/基准使用各自输出目录，不覆盖日常布局。Scene 浮动/停回会安全重建原生视口并保留相机与管线/曝光。Log 支持筛选、搜索、复制、清空显示和打开日志目录；关闭面板仍写输出目录 logs 下的滚动 JSONL，原生日志保留独立文件。相关包与测试依赖均进入锁文件。
 
@@ -531,3 +553,24 @@ ctest --preset windows-release -R '^editor.input$' --output-on-failure
 M0 的设备初始化历史见 [M0 基础模块](../docs/m0-foundation.md)。M1 的 API、生命周期、分配预算和支持范围见 [最小 RHI](../docs/m1-rhi.md)，各阶段的实际验收配置与结论统一见 [阶段计划](../design/phaseplan.md)。
 
 M1 首期资源为单 mip/layer 的 2D 纹理、显式单流顶点布局和单 Graphics Queue；Vulkan 的 Host 内存要求 coherent，Timestamp 要求 64 位有效计数。资源分配采用显式预算下的 dedicated/committed 分配，尚未采用子分配、Bindless 或 GPU 剔除。验证开启时的 Timestamp 只验证读回链路，不是性能基准。
+
+
+### 面光源短测
+
+构建 `renderlab_sandbox` 后可对 Cornell Box 的单灯场景测量，调整后端和管线分别运行；下面使用隔离 Release 构建，路径按实际配置替换：
+
+```powershell
+./out/build/area-light-release/renderlab_sandbox.exe --backend dx12 --headless --validation off --benchmark 30 --warmup-frames 10 --width 512 --height 512 --pipeline forward --project sample/m4/CornellBox.rlproject --output out/area-light-benchmark/forward --profile out/area-light-benchmark/forward-profile.json
+```
+
+将 `--pipeline` 改为 `raytracing`、`--backend` 改为 `vulkan` 可对照其他路径；为每次运行指定不同输出。GPU pass 名称与数据的解释见 [面光源](../docs/area-lights.md#有限性能测量)。
+
+### 多物体光照压测
+
+`sample/m4/LightStress.rlproject` 可在 Editor 通过 File / Open Project 打开。命令行示例（构建路径按实际配置调整）：
+
+```powershell
+./out/build/area-light-release/renderlab_sandbox.exe --backend dx12 --headless --validation on --benchmark 8 --warmup-frames 2 --width 960 --height 540 --pipeline forward --project sample/m4/LightStress.rlproject --output out/light-stress/forward --profile out/light-stress/forward.json --log out/light-stress/forward.log
+```
+
+可将 `--pipeline` 改为 `deferred`、`raytracing` 或 `pathtracing`，`--backend` 改为 `vulkan`。RTX 5060 Release 的八点灯场景中，Vulkan 四条管线的 headless 短测完成且 validation errors 为零；Release Editor 的 Vulkan Forward、Deferred、Ray Tracing 固定相机短测也完成。旧版本存在描述符块预算耗尽问题；当前仍有有界描述符页预算，更多灯或物体不保证可运行。其他设备、窗口交互和长期性能未验证。更多数据见 [CPU 性能记录](../docs/performance/light-stress-cpu.md) 和 [示例说明](../sample/m4/README.md#多物体光照压测)。

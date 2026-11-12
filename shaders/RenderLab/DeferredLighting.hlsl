@@ -1,6 +1,10 @@
 #include <renderlab/generated/parameters.hlsli>
 #include "Core.hlsli"
 #include "Lighting.hlsli"
+#include "PointLighting.hlsli"
+#include "AreaLighting.hlsli"
+#include "AreaShadow.hlsli"
+#include "AreaVisibilityFilter.hlsli"
 #include "ImageBasedLighting.hlsli"
 #include "Shadows.hlsli"
 
@@ -58,9 +62,24 @@ float4 PSMain(Varyings input) : SV_Target
     const float visibility = DeferredLightingParameters.RayTracedShadows != 0
         ? ShadowVisibility.Load(int3(pixel, 0)).x
         : MainLightVisibility(SceneShadow, MainLightShadow, shadowSampling);
-    const float3 direct = EvaluateBRDF(surface.baseColor, surface.metallic,
+    float3 direct = EvaluateBRDF(surface.baseColor, surface.metallic,
         surface.perceptualRoughness, surface.normalWS, SafeNormalize(viewDirWS), light.direction)
         * light.color * visibility;
+    float2 areaVisibility = 1;
+    if (SceneAreaLighting.Header.x > 0)
+        areaVisibility = DeferredLightingParameters.RayTracedShadows != 0
+            ? FilterAreaVisibility(ShadowVisibility, CameraDepth, GBufferNormalRoughness,
+                                   pixel, int2(width, height), depth, surface.normalWS,
+                                   max(.00005, min(depth * .04,
+                                       2 * max(abs(ddx(depth)), abs(ddy(depth))))))
+            : AreaShadowVisibility(SceneAreaShadow, AreaShadow0, AreaShadow1, positionWS, surface.normalWS);
+    direct += EvaluatePointLights(SceneLighting, positionWS, surface.normalWS,
+                                  SafeNormalize(viewDirWS), surface.baseColor, surface.metallic,
+                                  surface.perceptualRoughness, (DeferredLightingParameters.RayTracedShadows != 0
+                                      ? (uint)round(ShadowVisibility.Load(int3(pixel, 0)).w * 255) : 255u));
+    direct += EvaluateAreaLights(SceneAreaLighting, positionWS, surface.normalWS,
+                                 SafeNormalize(viewDirWS), surface.baseColor, surface.metallic,
+                                 surface.perceptualRoughness, LtcMatrix, LtcAmplitude, areaVisibility);
     const float3 indirect = EvaluateImageBasedLighting(surface, viewDirWS,
         SceneLighting.EnvironmentParameters, EnvironmentAtlas, BrdfLut);
     return float4(direct + indirect + surface.emission, 1);

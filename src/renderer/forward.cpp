@@ -119,6 +119,31 @@ void ShadowFeature::Build(rendergraph::Graph& graph, const RenderFrame& frame)
                 Record(context, draw);
         });
 }
+void AreaShadowFeature::Build(rendergraph::Graph& graph, const RenderFrame& frame)
+{
+    using namespace rendergraph;
+    for (uint32_t i = 0; i < frame.areaShadowCount; ++i)
+    {
+        const auto name = "AreaLight.Shadow" + std::to_string(i);
+        const auto depth = name + ".Depth";
+        const auto size = frame.areaShadowResolution;
+        graph.CreateTexture(name, {size, size, rhi::Format::Rgba32Float, false, true});
+        graph.CreateTexture(depth, {size, size, frame.shadowDepthFormat, false, true});
+        auto pass = graph.AddRasterPass(name);
+        pass.Category(PassCategory::Shadow);
+        pass.ColorTarget(name, rhi::LoadOp::Clear, {0, 0, 0, 0});
+        pass.DepthTarget(depth);
+        std::vector<ResolvedDraw> draws;
+        for (const auto& draw : frame.areaShadowCasters[i])
+            draws.push_back(Declare(pass, draw));
+        pass.Execute(
+            [draws = std::move(draws)](RasterContext& context)
+            {
+                for (const auto& draw : draws)
+                    Record(context, draw);
+            });
+    }
+}
 void OpaqueFeature::Build(rendergraph::Graph& graph, const RenderFrame& frame)
 {
     const auto color = graph.GetTextureDesc(graph.GetTexture("CameraColor"));

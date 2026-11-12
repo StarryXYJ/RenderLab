@@ -9,11 +9,13 @@
 #include "scene/scene.hpp"
 #include "shader/definition.hpp"
 
+#include <array>
 #include <cstdint>
 #include <filesystem>
 #include <map>
 #include <memory>
 #include <optional>
+#include <vector>
 
 namespace renderlab::rhi
 {
@@ -67,6 +69,20 @@ struct SceneRenderOptions
     /// Read back per-pixel history weight, history length, reprojection path and stable hit
     /// distance.
     bool reflectionDiagnostics = false;
+    /// Read back path component means and secondary/temporal guides for validation.
+    bool pathComponentDiagnostics = false;
+    /// Read back the linear path display before tone mapping; never affects accumulation.
+    bool pathHdrDiagnostics = false;
+    /// Trace and read the first primary hit for validation; disabled by default.
+    bool pathIdentityDiagnostics = false;
+    /// Read back the pipeline's linear final color before display tone mapping.
+    bool sceneHdrDiagnostics = false;
+    /// Read back the Ray Query visibility texture for validation.
+    bool shadowDiagnostics = false;
+    /// Reproducible path sampling stream; changing it resets path histories.
+    uint16_t pathSeed = 0;
+    /// Validation baseline: disable explicit rectangular-light sampling and its MIS weighting.
+    bool pathAreaLightSampling = true;
     /// Per-view values applied to extraction results; never written to Scene/Material assets.
     std::optional<scene::MainLight> lightOverride;
     std::optional<float> environmentIntensity, environmentRotation, exposure;
@@ -87,6 +103,33 @@ struct SceneReadback
     /// Optional tightly packed float2 per pixel: centered luminance moment and filter control.
     /// The moment covers the same raw samples as progressive history; wait for completion.
     std::shared_ptr<rhi::Buffer> reflectionStatistics;
+    /// Optional RGBA32F means: total, primary direct, indirect diffuse; wait for completion.
+    std::array<std::shared_ptr<rhi::Buffer>, 3> pathComponents;
+    /// Optional filtered total, diffuse and specular radiance, present only when denoising.
+    std::array<std::shared_ptr<rhi::Buffer>, 3> pathFilteredComponents;
+    /// Optional per-frame first-secondary hit guide (RGBA32F); wait for completion.
+    std::shared_ptr<rhi::Buffer> pathSecondaryGuide;
+    /// Optional temporal normal and parallax confidence (RGBA32F), when enabled.
+    std::shared_ptr<rhi::Buffer> pathTemporalGuide;
+    /// Optional diffuse and specular temporal signals and their separate history lengths.
+    std::array<std::shared_ptr<rhi::Buffer>, 2> pathTemporalComponents;
+    /// Optional linear RGBA32F display branch, pitched by TextureRowPitch; wait before mapping.
+    std::shared_ptr<rhi::Buffer> pathHdrDisplay;
+    /// Optional RGBA32F primary hit kind, snapshot-local instance/light index, reserved, ray
+    /// distance.
+    std::shared_ptr<rhi::Buffer> pathPrimaryIdentity;
+    /// Matching first-sample normal and signed ray distance for identity validation.
+    std::shared_ptr<rhi::Buffer> pathPrimarySurface;
+    /// Previous committed world position for the first primary mesh hit (RGBA32F; W=valid).
+    std::shared_ptr<rhi::Buffer> pathPreviousPosition;
+    /// Previous committed temporal-slot transforms aligned with LastSnapshot().allInstances.
+    /// Present only for identity diagnostics with path temporal enabled; empty entries have no
+    /// match.
+    std::vector<std::optional<math::Mat4>> pathPreviousWorld;
+    /// Optional final linear RGBA32F, pitched by TextureRowPitch; wait before mapping.
+    std::shared_ptr<rhi::Buffer> sceneHdr;
+    /// Optional RGBA8 shadow visibility: directional in R, area lights in G/B.
+    std::shared_ptr<rhi::Buffer> shadowVisibility;
     uint64_t compileNs = 0, prepareNs = 0, recordNs = 0;
     /// CPU scene/material preparation and graph construction, before graph compilation.
     uint64_t scenePrepareNs = 0;

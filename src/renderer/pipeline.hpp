@@ -15,7 +15,8 @@ enum class PipelineType
     Custom,
     Forward,
     Deferred,
-    RayTracing
+    RayTracing,
+    PathTracing
 };
 enum class RenderStage
 {

@@ -509,7 +509,7 @@ struct Session
     rl_viewport_config configuration{}, defaults{};
     rl_viewport_config_state configurationState{sizeof(rl_viewport_config_state), 1};
     std::string configurationError, capabilities;
-    std::array<std::string, 3> pipelineErrors;
+    std::array<std::string, 4> pipelineErrors;
     std::string error;
     std::string pendingLogs;
     scene::Transform camera;
@@ -626,8 +626,8 @@ struct Session
                         std::make_unique<RenderState>(child.value, backend, validation, profiling,
                                                       project, shaders, logger, targetFps != 0);
                     auto& render = *state;
-                    std::array<std::string, 3> failures;
-                    for (uint32_t p = 1; p <= 3; ++p)
+                    std::array<std::string, 4> failures;
+                    for (uint32_t p = 1; p <= 4; ++p)
                     {
                         try
                         {
@@ -655,7 +655,7 @@ struct Session
                         {"textureCapacity", renderer::IndexedTextureCapacity},
                         {"pipelines", nlohmann::json::array()},
                         {"submissions", nlohmann::json::array()}};
-                    for (uint32_t p = 1; p <= 3; ++p)
+                    for (uint32_t p = 1; p <= 4; ++p)
                         capabilityData["pipelines"].push_back(
                             {{"value", p},
                              {"available", failures[p - 1].empty()},
@@ -869,7 +869,7 @@ struct Session
                             (std::ranges::any_of(snapshot.keys, [](bool down) { return down; }) ||
                              pendingYaw != 0 || pendingPitch != 0);
                         const bool accumulating =
-                            selected == 3 && (activeConfig.flags & 3) == 3 &&
+                            ((selected == 3 && (activeConfig.flags & 3) == 3) || selected == 4) &&
                             render.stats.reflection_samples < renderer::MaxReflectionSamples;
                         const bool needsFrame =
                             dirty || moving || accumulating || activeConfig.continuous || stepping;
@@ -1114,6 +1114,13 @@ struct Session
                 configurationState.applied.size == sizeof(rl_viewport_config))
                 configuration = configurationState.applied;
             configuration.pipeline = selected;
+            if (selected == 4)
+            {
+                configuration.submission = 0;
+                if (configuration.view > 1)
+                    configuration.view = 0;
+                configuration.flags &= ~32u;
+            }
             configuration.exposure = value;
             configuration.request_id = revision;
             configurationState.requested = configuration;
@@ -1224,7 +1231,7 @@ template <class F> rl_status Guard(F&& operation)
 
 uint32_t RENDERLAB_EDITOR_CALL rl_editor_abi_version()
 {
-    return 10;
+    return 11;
 }
 rl_status RENDERLAB_EDITOR_CALL rl_viewport_request_snapshot(rl_viewport_handle handle)
 {
@@ -1498,7 +1505,7 @@ rl_status RENDERLAB_EDITOR_CALL rl_viewport_configure(rl_viewport_handle handle,
     return Guard(
         [&]
         {
-            Require(pipeline >= 1 && pipeline <= 3 && std::isfinite(exposure) && exposure >= -10 &&
+            Require(pipeline >= 1 && pipeline <= 4 && std::isfinite(exposure) && exposure >= -10 &&
                         exposure <= 10 && reset <= 1,
                     "Invalid viewport settings");
             auto& session = Find(handle);

@@ -87,6 +87,20 @@ std::map<std::string, WorldTransform> Scene::WorldTransforms() const
                         light.shadowNormalBias >= 0 && light.shadowNormalBias <= 1,
                     "Invalid directional shadow settings");
         }
+        if (object.areaLight)
+        {
+            const auto& light = *object.areaLight;
+            Require(colorValid(light.radiance) && std::isfinite(light.width) && light.width > 0 &&
+                        std::isfinite(light.height) && light.height > 0,
+                    "Invalid rectangular area light");
+        }
+        if (object.pointLight)
+        {
+            const auto& light = *object.pointLight;
+            Require(colorValid(light.color) && std::isfinite(light.intensity) &&
+                        light.intensity >= 0 && std::isfinite(light.range) && light.range > 0,
+                    "Invalid point light");
+        }
         if (object.camera)
             math::Perspective(object.camera->fov, 1, object.camera->nearPlane,
                               object.camera->farPlane);
@@ -184,6 +198,20 @@ Scene Scene::Load(const std::filesystem::path& path)
                         o.light->color.x >= 0 && o.light->color.y >= 0 && o.light->color.z >= 0,
                     "Invalid directional light");
         }
+        if (input.contains("rectAreaLight"))
+        {
+            const auto& light = input.at("rectAreaLight");
+            o.areaLight = RectAreaLight{Vector(light.value("radiance", Json::array({1, 1, 1}))),
+                                        light.value("width", 1.f), light.value("height", 1.f),
+                                        light.value("enabled", true)};
+        }
+        if (input.contains("pointLight"))
+        {
+            const auto& light = input.at("pointLight");
+            o.pointLight = PointLight{Vector(light.value("color", Json::array({1, 1, 1}))),
+                                      light.value("intensity", 1.f), light.value("range", 10.f),
+                                      light.value("enabled", true)};
+        }
         scene.objects.push_back(std::move(o));
     }
     scene.WorldTransforms();
@@ -227,6 +255,16 @@ void Scene::Save(const std::filesystem::path& path) const
                                         {"shadowResolution", o.light->shadowResolution},
                                         {"shadowBias", o.light->shadowBias},
                                         {"shadowNormalBias", o.light->shadowNormalBias}};
+        if (o.areaLight)
+            data["rectAreaLight"] = {{"radiance", Array(o.areaLight->radiance)},
+                                     {"width", o.areaLight->width},
+                                     {"height", o.areaLight->height},
+                                     {"enabled", o.areaLight->enabled}};
+        if (o.pointLight)
+            data["pointLight"] = {{"color", Array(o.pointLight->color)},
+                                  {"intensity", o.pointLight->intensity},
+                                  {"range", o.pointLight->range},
+                                  {"enabled", o.pointLight->enabled}};
         j["objects"].push_back(std::move(data));
     }
     assets::detail::SaveJson(path, j);
@@ -294,6 +332,35 @@ Snapshot Extractor::Extract(const Scene& scene, float aspect,
                               object.light->shadowNormalBias};
             break;
         }
+    }
+    for (const auto& [id, world] : transforms)
+    {
+        const auto& object = scene.objects.at(indices.at(id));
+        if (!world.enabled || !object.areaLight || !object.areaLight->enabled)
+            continue;
+        const auto& light = *object.areaLight;
+        const auto edgeU = math::Direction(world.matrix, {light.width, 0, 0});
+        const auto edgeV = math::Direction(world.matrix, {0, light.height, 0});
+        const auto center = math::Point(world.matrix, {});
+        const auto cross = math::Cross(edgeU, edgeV);
+        const float area = math::Length(cross);
+        const auto finite = [](math::Vec3 v)
+        { return std::isfinite(v.x) && std::isfinite(v.y) && std::isfinite(v.z); };
+        Require(finite(center) && finite(edgeU) && finite(edgeV) && std::isfinite(area) && area > 0,
+                "Invalid transformed rectangular area light");
+        const math::Vec3 normal{-cross.x / area, -cross.y / area, -cross.z / area};
+        snapshot.areaLights.push_back({id, center, edgeU, edgeV, normal, light.radiance, area});
+    }
+    for (const auto& [id, world] : transforms)
+    {
+        const auto& object = scene.objects.at(indices.at(id));
+        if (!world.enabled || !object.pointLight || !object.pointLight->enabled)
+            continue;
+        const auto position = math::Point(world.matrix, {});
+        Require(std::isfinite(position.x) && std::isfinite(position.y) && std::isfinite(position.z),
+                "Invalid transformed point light");
+        const auto& light = *object.pointLight;
+        snapshot.pointLights.push_back({id, position, light.color, light.intensity, light.range});
     }
     std::map<std::string, Geometry> next;
     for (const auto& [id, world] : transforms)

@@ -5,6 +5,8 @@
 #include "assets/io.hpp"
 #include "core/log.hpp"
 #include "material/asset.hpp"
+#include "math/math.hpp"
+#include "renderer/raytracing.hpp"
 #include "renderer/scene_renderer.hpp"
 #include "rhi/runtime.hpp"
 #include "rhi/upload.hpp"
@@ -13,13 +15,815 @@
 #include "shader/compiler.hpp"
 
 #include <algorithm>
+#include <array>
 #include <chrono>
+#include <cmath>
+#include <cstddef>
 #include <cstring>
 #include <format>
+#include <fstream>
 #include <set>
+#include <stdexcept>
+#include <vector>
 
 namespace renderlab::samples
 {
+namespace
+{
+void MeasurePathMotionSequences(rhi::Runtime& runtime, shader::Target target,
+                                const std::filesystem::path& project,
+                                const std::filesystem::path& engine,
+                                const std::filesystem::path& output, Logger& logger)
+{
+    constexpr uint32_t width = 128, height = 72, motionFrames = 8, sequenceFrames = 12;
+#ifdef NDEBUG
+    constexpr uint32_t referenceFrames = 512;
+#else
+    constexpr uint32_t referenceFrames = 32;
+#endif
+    const auto pitch = rhi::TextureRowPitch(width);
+    const auto image = runtime.CreateTexture(
+        {width, height, rhi::Format::Rgba8Srgb, false, true, "PathTracing.Sequence"});
+    renderer::SceneRenderer scene(runtime, target, project, engine);
+    const auto initialDocument = scene.Document();
+    rhi::State state = rhi::State::Undefined;
+    renderer::SceneRenderOptions options;
+    options.pipeline = renderer::PipelineType::PathTracing;
+    const auto render = [&](bool readback)
+    {
+        options.pathHdrDiagnostics = readback;
+        auto result = scene.Render(image, state, nullptr, readback, {}, options);
+        state = rhi::State::CopySource;
+        runtime.Wait(result.completion);
+        return result;
+    };
+    const auto capture =
+        [&](const renderer::SceneReadback& frame, const std::filesystem::path& path)
+    {
+        const auto bytes = frame.pixels->Map();
+        std::filesystem::create_directories(path.parent_path());
+        SaveImage(path, bytes, width, height, pitch);
+        return std::vector<std::byte>(bytes.begin(), bytes.end());
+    };
+    const auto captureHdrBuffer = [&](const std::shared_ptr<rhi::Buffer>& buffer, bool nonnegative)
+    {
+        detail::Require(buffer != nullptr, "Missing path HDR readback");
+        const auto bytes = buffer->Map();
+        const auto hdrPitch = rhi::TextureRowPitch(width, rhi::Format::Rgba32Float);
+        std::vector<float> result(width * height * 3);
+        for (uint32_t y = 0; y < height; ++y)
+            for (uint32_t x = 0; x < width; ++x)
+            {
+                std::array<float, 4> pixel{};
+                std::memcpy(pixel.data(), bytes.data() + y * hdrPitch + x * 16, 16);
+                for (size_t c = 0; c < 3; ++c)
+                {
+                    detail::Require(std::isfinite(pixel[c]) && (!nonnegative || pixel[c] >= 0),
+                                    "Nonfinite or negative path HDR display");
+                    result[(y * width + x) * 3 + c] = pixel[c];
+                }
+            }
+        return result;
+    };
+    const auto captureHdr = [&](const renderer::SceneReadback& frame)
+    { return captureHdrBuffer(frame.pathHdrDisplay, true); };
+    const auto saveHdr = [&](const std::filesystem::path& path, const std::vector<float>& pixels)
+    {
+        std::filesystem::create_directories(path.parent_path());
+        std::ofstream file(path, std::ios::binary);
+        file.exceptions(std::ios::failbit | std::ios::badbit);
+        file << "PF\n" << width << ' ' << height << "\n-1.0\n";
+        for (uint32_t row = height; row-- > 0;)
+            file.write(reinterpret_cast<const char*>(pixels.data() + row * width * 3),
+                       width * 3 * sizeof(float));
+    };
+    const std::array<const char*, 4> names{"gentle", "fast", "reveal", "rotation"};
+    for (size_t trajectory = 0; trajectory < names.size(); ++trajectory)
+    {
+        std::array<std::vector<std::vector<std::byte>>, 6> sequences;
+        std::array<std::vector<std::vector<float>>, 6> hdrSequences;
+        std::array<std::vector<std::vector<float>>, 3> rawSequences;
+        std::array<std::vector<double>, 3> acceptedFractions;
+        std::vector<scene::Scene> poses;
+        const auto base = output / "path-sequence" / names[trajectory];
+        for (size_t mode = 0; mode < sequences.size(); ++mode)
+        {
+            // Change illumination so the sample sequence and temporal history both restart.
+            options.pathSeed = static_cast<uint16_t>(1 + mode / 2);
+            scene.Document() = initialDocument;
+            options.reflectionDenoise = false;
+            options.reflectionTemporal = false;
+            auto light = std::ranges::find_if(scene.Document().objects, [](const auto& object)
+                                              { return object.light.has_value(); });
+            detail::Require(light != scene.Document().objects.end(),
+                            "Sequence fixture needs a light");
+            light->light->intensity *= .5f;
+            render(false);
+            scene.Document() = initialDocument;
+            options.reflectionDenoise = true;
+            options.reflectionTemporal = mode % 2 == 1;
+            for (uint32_t warmup = 0; warmup < 8; ++warmup)
+                render(false);
+            for (uint32_t frame = 0; frame < sequenceFrames; ++frame)
+            {
+                if (frame < motionFrames)
+                    scene.Document().MoveCamera({trajectory == 0   ? .02f
+                                                 : trajectory == 1 ? .08f
+                                                 : trajectory == 2 ? .12f
+                                                                   : 0.f,
+                                                 0, 0},
+                                                {0,
+                                                 trajectory == 0   ? .15f
+                                                 : trajectory == 1 ? .8f
+                                                 : trajectory == 2 ? -.6f
+                                                                   : 1.2f,
+                                                 0});
+                if (mode == 0)
+                    poses.push_back(scene.Document());
+                const bool inspect = trajectory == 0 && options.pathSeed == 3 && frame == 7;
+                options.pathComponentDiagnostics = true;
+                const auto result = render(true);
+                options.pathComponentDiagnostics = false;
+                sequences[mode].push_back(
+                    capture(result, base / std::format("seed-{}", options.pathSeed) /
+                                        (mode % 2 == 0 ? "spatial" : "temporal") /
+                                        std::format("{:02}.bmp", frame)));
+                hdrSequences[mode].push_back(captureHdr(result));
+                if (mode % 2 == 0)
+                {
+                    rawSequences[mode / 2].push_back(
+                        captureHdrBuffer(result.pathComponents[0], true));
+                    saveHdr(base / std::format("seed-{}", options.pathSeed) / "raw" /
+                                std::format("{:02}.pfm", frame),
+                            rawSequences[mode / 2].back());
+                }
+                else
+                {
+                    const auto history = result.pathTemporalComponents[0]->Map();
+                    const auto hdrPitch = rhi::TextureRowPitch(width, rhi::Format::Rgba32Float);
+                    uint32_t eligible = 0, accepted = 0;
+                    for (uint32_t y = 0; y < height; ++y)
+                        for (uint32_t x = 0; x < width; ++x)
+                        {
+                            float count = 0;
+                            std::memcpy(&count, history.data() + y * hdrPitch + x * 16 + 12, 4);
+                            if (count >= 1)
+                            {
+                                ++eligible;
+                                accepted += count > 1.001f;
+                            }
+                        }
+                    acceptedFractions[mode / 2].push_back(eligible ? double(accepted) / eligible
+                                                                   : 0);
+                }
+                saveHdr(base / std::format("seed-{}", options.pathSeed) /
+                            (mode % 2 == 0 ? "spatial" : "temporal") /
+                            std::format("{:02}.pfm", frame),
+                        hdrSequences[mode].back());
+                if (inspect)
+                {
+                    const auto diagnostic =
+                        base / "diagnostics" / (mode % 2 == 0 ? "spatial" : "temporal");
+                    constexpr std::array<const char*, 3> rawNames{"raw-total", "raw-direct",
+                                                                  "raw-diffuse"};
+                    constexpr std::array<const char*, 3> filteredNames{
+                        "filtered-total", "filtered-diffuse", "filtered-specular"};
+                    for (size_t i = 0; i < rawNames.size(); ++i)
+                    {
+                        saveHdr(diagnostic / (std::string(rawNames[i]) + ".pfm"),
+                                captureHdrBuffer(result.pathComponents[i], false));
+                        saveHdr(diagnostic / (std::string(filteredNames[i]) + ".pfm"),
+                                captureHdrBuffer(result.pathFilteredComponents[i], false));
+                    }
+                    const auto rawDiffuse = captureHdrBuffer(result.pathComponents[2], false);
+                    const auto filteredDiffuse =
+                        captureHdrBuffer(result.pathFilteredComponents[1], false);
+                    const auto rawTotal = captureHdrBuffer(result.pathComponents[0], false);
+                    const auto rawDirect = captureHdrBuffer(result.pathComponents[1], false);
+                    const auto filteredSpecular =
+                        captureHdrBuffer(result.pathFilteredComponents[2], false);
+                    const auto hotPixel = (36 * width + 46) * 3;
+                    detail::Require(rawDiffuse[hotPixel] > 1 &&
+                                        filteredDiffuse[hotPixel] < rawDiffuse[hotPixel] * .2f,
+                                    "Two-sample diffuse outlier was not limited");
+                    for (size_t c = 0; c < 3; ++c)
+                        detail::Require(std::abs(filteredSpecular[hotPixel + c] -
+                                                 (rawTotal[hotPixel + c] - rawDirect[hotPixel + c] -
+                                                  rawDiffuse[hotPixel + c])) < 1e-4f,
+                                        "Two-sample diffuse filter changed specular radiance");
+                }
+            }
+        }
+        options.pathSeed = 1000;
+        options.reflectionDenoise = false;
+        options.reflectionTemporal = false;
+        std::vector<std::vector<std::byte>> references;
+        std::vector<std::vector<float>> hdrReferences;
+        for (uint32_t frame = 0; frame < motionFrames; ++frame)
+        {
+            std::vector<float> hdrReference(width * height * 3);
+            for (uint16_t referenceSeed : {uint16_t{1000}, uint16_t{1001}, uint16_t{1002}})
+            {
+                options.pathSeed = referenceSeed;
+                // Reset even if a repeated pose happens to match the last reference frame.
+                scene.Document() = poses[frame];
+                auto light = std::ranges::find_if(scene.Document().objects, [](const auto& object)
+                                                  { return object.light.has_value(); });
+                detail::Require(light != scene.Document().objects.end(),
+                                "Sequence fixture needs a light");
+                light->light->intensity *= .5f;
+                render(false);
+                scene.Document() = poses[frame];
+                renderer::SceneReadback reference;
+                for (uint32_t sample = 0; sample < referenceFrames; ++sample)
+                {
+                    reference = render(sample + 1 == referenceFrames);
+                    detail::Require(reference.reflectionSamples ==
+                                        (sample + 1) * renderer::PathSamplesPerFrame,
+                                    "Path sequence reference failed to accumulate");
+                }
+                if (referenceSeed == 1000)
+                    references.push_back(
+                        capture(reference, base / "reference" / std::format("{:02}.bmp", frame)));
+                const auto hdr = captureHdr(reference);
+                saveHdr(base / "reference-hdr" / std::format("seed-{}", referenceSeed) /
+                            std::format("{:02}.pfm", frame),
+                        hdr);
+                for (size_t i = 0; i < hdr.size(); ++i)
+                    hdrReference[i] += hdr[i] / 3;
+            }
+            hdrReferences.push_back(std::move(hdrReference));
+            saveHdr(base / "reference-hdr" / std::format("{:02}.pfm", frame), hdrReferences.back());
+        }
+        while (references.size() < sequenceFrames)
+            references.push_back(references.back());
+        while (hdrReferences.size() < sequenceFrames)
+            hdrReferences.push_back(hdrReferences.back());
+        std::array<double, 6> mse{}, residualDelta{}, signedError{}, largeError{}, sphereRoiMse{},
+            stoppedMse{}, hdrMse{}, hdrStoppedMse{};
+        std::array<double, 3> rawHdrMse{};
+        constexpr double components = double(width) * height * 3;
+        for (uint32_t frame = 0; frame < sequenceFrames; ++frame)
+            for (uint32_t y = 0; y < height; ++y)
+                for (uint32_t x = 0; x < width; ++x)
+                    for (uint32_t channel = 0; channel < 3; ++channel)
+                    {
+                        const auto pixel = y * pitch + x * 4 + channel;
+                        for (size_t mode = 0; mode < sequences.size(); ++mode)
+                        {
+                            const double error =
+                                int(std::to_integer<uint8_t>(sequences[mode][frame][pixel])) -
+                                int(std::to_integer<uint8_t>(references[frame][pixel]));
+                            const auto hdrPixel = (y * width + x) * 3 + channel;
+                            if (mode % 2 == 0)
+                            {
+                                const double rawError = rawSequences[mode / 2][frame][hdrPixel] -
+                                                        hdrReferences[frame][hdrPixel];
+                                rawHdrMse[mode / 2] +=
+                                    rawError * rawError / components / sequenceFrames;
+                            }
+                            const double hdrError = hdrSequences[mode][frame][hdrPixel] -
+                                                    hdrReferences[frame][hdrPixel];
+                            hdrMse[mode] += hdrError * hdrError / components / sequenceFrames;
+                            if (frame >= motionFrames)
+                                hdrStoppedMse[mode] += hdrError * hdrError / components /
+                                                       (sequenceFrames - motionFrames);
+                            mse[mode] += error * error / components / sequenceFrames;
+                            if (frame >= motionFrames)
+                                stoppedMse[mode] +=
+                                    error * error / components / (sequenceFrames - motionFrames);
+                            // Fixed image crop covers the sphere cluster, plus adjacent floor.
+                            if (x >= 30 && x < 100 && y >= 25 && y < 60)
+                                sphereRoiMse[mode] +=
+                                    error * error / (70. * 35 * 3) / sequenceFrames;
+                            signedError[mode] += error / components / sequenceFrames;
+                            largeError[mode] +=
+                                (std::abs(error) > 16 ? 1. : 0.) / components / sequenceFrames;
+                            if (frame == 0)
+                                continue;
+                            const double previous =
+                                int(std::to_integer<uint8_t>(sequences[mode][frame - 1][pixel])) -
+                                int(std::to_integer<uint8_t>(references[frame - 1][pixel]));
+                            residualDelta[mode] += (error - previous) * (error - previous) /
+                                                   components / (sequenceFrames - 1);
+                        }
+                    }
+        for (size_t seed = 0; seed < 3; ++seed)
+        {
+            const auto spatial = seed * 2, temporal = spatial + 1;
+            const auto report = std::format(
+                "{{\n  \"trajectory\": \"{}\", \"seed\": {}, "
+                "\"referenceSeed\": 1000, \"referenceSpp\": {},\n"
+                "  \"mse\": [{:.6f}, {:.6f}], \"residualDeltaMse\": [{:.6f}, {:.6f}],\n"
+                "  \"signedError\": [{:.6f}, {:.6f}], \"absoluteErrorOver16Fraction\": "
+                "[{:.6f}, {:.6f}],\n  \"sphereCropMse\": [{:.6f}, {:.6f}],\n"
+                "  \"stoppedMse\": [{:.6f}, {:.6f}],\n"
+                "  \"hdrReferenceSeeds\": [1000, 1001, 1002], \"hdrReferenceSppPerSeed\": {},\n"
+                "  \"hdrMse\": [{:.9f}, {:.9f}], \"hdrStoppedMse\": [{:.9f}, {:.9f}]\n}}\n",
+                names[trajectory], seed + 1, referenceFrames * renderer::PathSamplesPerFrame,
+                mse[spatial], mse[temporal], residualDelta[spatial], residualDelta[temporal],
+                signedError[spatial], signedError[temporal], largeError[spatial],
+                largeError[temporal], sphereRoiMse[spatial], sphereRoiMse[temporal],
+                stoppedMse[spatial], stoppedMse[temporal],
+                referenceFrames * renderer::PathSamplesPerFrame, hdrMse[spatial], hdrMse[temporal],
+                hdrStoppedMse[spatial], hdrStoppedMse[temporal]);
+#ifdef NDEBUG
+            detail::Require(
+                mse[temporal] <= mse[spatial] * 1.1 &&
+                    residualDelta[temporal] <= residualDelta[spatial] * 1.1 &&
+                    sphereRoiMse[temporal] <= sphereRoiMse[spatial] * 1.1 &&
+                    stoppedMse[temporal] <= stoppedMse[spatial] * 1.05,
+                "Path temporal sequence significantly worsened against spatial baseline");
+#endif
+            std::ofstream historyFile(base / std::format("seed-{}", seed + 1) / "history.csv",
+                                      std::ios::binary);
+            historyFile
+                << "frame,accepted_fraction,raw_hdr_mse,spatial_hdr_mse,"
+                   "temporal_hdr_mse,temporal_hdr_signed_error,temporal_residual_delta_mse\n";
+            for (uint32_t frame = 0; frame < sequenceFrames; ++frame)
+            {
+                double rawError = 0, spatialError = 0, temporalError = 0, frameSignedError = 0,
+                       frameResidualDelta = 0;
+                for (size_t i = 0; i < hdrReferences[frame].size(); ++i)
+                {
+                    const double raw = rawSequences[seed][frame][i] - hdrReferences[frame][i];
+                    const double frameSpatial =
+                        hdrSequences[seed * 2][frame][i] - hdrReferences[frame][i];
+                    const double frameTemporal =
+                        hdrSequences[seed * 2 + 1][frame][i] - hdrReferences[frame][i];
+                    rawError += raw * raw / components;
+                    spatialError += frameSpatial * frameSpatial / components;
+                    temporalError += frameTemporal * frameTemporal / components;
+                    frameSignedError += frameTemporal / components;
+                    if (frame > 0)
+                    {
+                        const double previous =
+                            hdrSequences[seed * 2 + 1][frame - 1][i] - hdrReferences[frame - 1][i];
+                        frameResidualDelta +=
+                            (frameTemporal - previous) * (frameTemporal - previous) / components;
+                    }
+                }
+                historyFile << std::format("{},{:.9f},{:.9f},{:.9f},{:.9f},{:.9f},{:.9f}\n", frame,
+                                           acceptedFractions[seed][frame], rawError, spatialError,
+                                           temporalError, frameSignedError, frameResidualDelta);
+            }
+            historyFile.close();
+            logger.Write(LogLevel::Info, std::format("Path raw HDR MSE {} seed {}: {:.9f}",
+                                                     names[trajectory], seed + 1, rawHdrMse[seed]));
+            std::ofstream reportFile(base / std::format("seed-{}", seed + 1) / "metrics.json",
+                                     std::ios::binary);
+            reportFile.exceptions(std::ios::failbit | std::ios::badbit);
+            reportFile << report;
+            reportFile.close();
+            logger.Write(LogLevel::Info, "Path motion sequence " + report);
+        }
+    }
+}
+void MeasurePathRawConvergence(rhi::Runtime& runtime, shader::Target target,
+                               const std::filesystem::path& project,
+                               const std::filesystem::path& engine,
+                               const std::filesystem::path& output, Logger& logger)
+{
+    constexpr uint32_t width = 96, height = 54;
+#ifdef NDEBUG
+    constexpr uint32_t referenceFrames = 2048;
+    constexpr std::array<uint32_t, 4> checkpoints{8, 32, 128, 512};
+#else
+    constexpr uint32_t referenceFrames = 64;
+    constexpr std::array<uint32_t, 4> checkpoints{2, 4, 8, 16};
+#endif
+    constexpr size_t channels = width * height * 3;
+    const auto pitch = rhi::TextureRowPitch(width, rhi::Format::Rgba32Float);
+    const auto image = runtime.CreateTexture(
+        {width, height, rhi::Format::Rgba8Srgb, false, true, "PathTracing.RawConvergence"});
+    renderer::SceneRenderer scene(runtime, target, project, engine);
+    renderer::SceneRenderOptions options;
+    options.pipeline = renderer::PipelineType::PathTracing;
+    options.reflectionDenoise = false;
+    options.reflectionTemporal = false;
+    rhi::State state = rhi::State::Undefined;
+    const auto render = [&](bool inspect)
+    {
+        options.pathComponentDiagnostics = inspect;
+        auto frame = scene.Render(image, state, nullptr, false, {}, options);
+        state = rhi::State::CopySource;
+        runtime.Wait(frame.completion);
+        return frame;
+    };
+    const auto extract = [&](const std::shared_ptr<rhi::Buffer>& buffer)
+    {
+        detail::Require(buffer != nullptr, "Missing raw convergence component");
+        const auto bytes = buffer->Map();
+        std::vector<float> values(channels);
+        for (uint32_t y = 0; y < height; ++y)
+            for (uint32_t x = 0; x < width; ++x)
+            {
+                std::array<float, 4> pixel{};
+                std::memcpy(pixel.data(), bytes.data() + y * pitch + x * 16, 16);
+                for (size_t c = 0; c < 3; ++c)
+                {
+                    detail::Require(std::isfinite(pixel[c]), "Nonfinite raw convergence component");
+                    values[(y * width + x) * 3 + c] = pixel[c];
+                }
+            }
+        return values;
+    };
+    const auto base = output / "path-raw-convergence";
+    std::filesystem::create_directories(base);
+    const auto save = [&](const std::filesystem::path& path, const std::vector<float>& values)
+    {
+        std::ofstream file(path, std::ios::binary);
+        file.exceptions(std::ios::failbit | std::ios::badbit);
+        file << "PF\n" << width << ' ' << height << "\n-1.0\n";
+        for (uint32_t row = height; row-- > 0;)
+            file.write(reinterpret_cast<const char*>(values.data() + row * width * 3),
+                       width * 3 * sizeof(float));
+    };
+    std::vector<float> reference(channels);
+    for (uint16_t seed : {uint16_t{1000}, uint16_t{1001}, uint16_t{1002}})
+    {
+        options.pathSeed = seed;
+        for (uint32_t frame = 0; frame < referenceFrames; ++frame)
+        {
+            const auto result = render(frame + 1 == referenceFrames);
+            detail::Require(result.reflectionSamples == (frame + 1) * renderer::PathSamplesPerFrame,
+                            "Raw reference failed to accumulate");
+            if (frame + 1 == referenceFrames)
+            {
+                const auto values = extract(result.pathComponents[0]);
+                save(base / std::format("reference-{}.pfm", seed), values);
+                for (size_t i = 0; i < channels; ++i)
+                    reference[i] += values[i] / 3;
+            }
+        }
+    }
+    save(base / "reference-mean.pfm", reference);
+    std::ofstream report(base / "metrics.csv", std::ios::binary);
+    report.exceptions(std::ios::failbit | std::ios::badbit);
+    report << "seed,spp,mse,mean,reference_mean,outlier_channels,max_excess,x,y,channel,"
+              "raw,direct,diffuse,specular,reference\n";
+    std::ofstream outlierReport(base / "outliers.csv", std::ios::binary);
+    outlierReport.exceptions(std::ios::failbit | std::ios::badbit);
+    outlierReport << "seed,spp,x,y,channel,raw,direct,diffuse,specular,reference\n";
+    std::ofstream batchReport(base / "pixel-43-33-batches.csv", std::ios::binary);
+    batchReport.exceptions(std::ios::failbit | std::ios::badbit);
+    batchReport << "first_sample,last_sample,total,direct,diffuse,specular\n";
+    for (uint16_t seed : {uint16_t{1}, uint16_t{2}, uint16_t{3}})
+    {
+        options.pathSeed = seed;
+        std::array<double, 3> previousSum{};
+        for (uint32_t frame = 1; frame <= checkpoints.back(); ++frame)
+        {
+            const bool checkpoint = std::ranges::find(checkpoints, frame) != checkpoints.end();
+            const bool batchCapture = seed == 3 && frame >= 32 && frame <= 128;
+            const auto result = render(checkpoint || batchCapture);
+            detail::Require(result.reflectionSamples == frame * renderer::PathSamplesPerFrame,
+                            "Raw convergence sequence failed to accumulate");
+            if (!checkpoint && !batchCapture)
+                continue;
+            const auto total = extract(result.pathComponents[0]);
+            const auto direct = extract(result.pathComponents[1]);
+            const auto diffuse = extract(result.pathComponents[2]);
+            if (batchCapture)
+            {
+                constexpr size_t pixel = (33 * width + 43) * 3 + 2;
+                const std::array<double, 3> currentSum{total[pixel] * double(frame),
+                                                       direct[pixel] * double(frame),
+                                                       diffuse[pixel] * double(frame)};
+                if (frame > 32)
+                {
+                    const double batchTotal = currentSum[0] - previousSum[0];
+                    const double batchDirect = currentSum[1] - previousSum[1];
+                    const double batchDiffuse = currentSum[2] - previousSum[2];
+                    batchReport << std::format("{},{},{:.9f},{:.9f},{:.9f},{:.9f}\n",
+                                               (frame - 1) * renderer::PathSamplesPerFrame,
+                                               frame * renderer::PathSamplesPerFrame - 1,
+                                               batchTotal, batchDirect, batchDiffuse,
+                                               batchTotal - batchDirect - batchDiffuse);
+                }
+                previousSum = currentSum;
+            }
+            if (!checkpoint)
+                continue;
+            save(base / std::format("seed-{}-{}spp.pfm", seed, result.reflectionSamples), total);
+            double mse = 0, mean = 0, referenceMean = 0;
+            uint32_t outliers = 0;
+            float maxExcess = 0;
+            size_t hottest = 0;
+            for (size_t i = 0; i < channels; ++i)
+            {
+                detail::Require(total[i] >= 0, "Negative raw path radiance");
+                const double delta = total[i] - reference[i];
+                mse += delta * delta / channels;
+                mean += total[i] / double(channels);
+                referenceMean += reference[i] / double(channels);
+                if (total[i] > reference[i] * 4 + .1f)
+                {
+                    ++outliers;
+                    outlierReport << std::format(
+                        "{},{},{},{},{},{:.9f},{:.9f},{:.9f},{:.9f},{:.9f}\n", seed,
+                        result.reflectionSamples, (i / 3) % width, (i / 3) / width, i % 3, total[i],
+                        direct[i], diffuse[i], total[i] - direct[i] - diffuse[i], reference[i]);
+                }
+                if (delta > maxExcess)
+                {
+                    maxExcess = static_cast<float>(delta);
+                    hottest = i;
+                }
+            }
+            report << std::format("{},{},{:.9f},{:.9f},{:.9f},{},{:.9f},{},{},{},"
+                                  "{:.9f},{:.9f},{:.9f},{:.9f},{:.9f}\n",
+                                  seed, result.reflectionSamples, mse, mean, referenceMean,
+                                  outliers, maxExcess, (hottest / 3) % width, (hottest / 3) / width,
+                                  hottest % 3, total[hottest], direct[hottest], diffuse[hottest],
+                                  total[hottest] - direct[hottest] - diffuse[hottest],
+                                  reference[hottest]);
+            logger.Write(LogLevel::Info,
+                         std::format("Raw path seed {} spp {}: MSE {:.9f}, {} high channels, "
+                                     "maximum excess {:.6f}",
+                                     seed, result.reflectionSamples, mse, outliers, maxExcess));
+        }
+    }
+}
+void VerifyPathMovingObject(rhi::Runtime& runtime, shader::Target target,
+                            const std::filesystem::path& project,
+                            const std::filesystem::path& engine,
+                            const std::filesystem::path& output, Logger& logger)
+{
+    constexpr uint32_t width = 96, height = 54, frames = 4;
+    const auto hdrPitch = rhi::TextureRowPitch(width, rhi::Format::Rgba32Float);
+    const auto colorPitch = rhi::TextureRowPitch(width);
+    std::array<std::vector<std::vector<float>>, 2> images;
+    std::array<std::vector<std::vector<uint32_t>>, 2> identities;
+    std::array<std::vector<std::vector<bool>>, 2> actorMasks;
+    for (size_t mode = 0; mode < images.size(); ++mode)
+    {
+        renderer::SceneRenderer scene(runtime, target, project, engine);
+        const auto actor =
+            std::ranges::find_if(scene.Document().objects, [](const auto& object)
+                                 { return object.name == "gallery-4-4" && object.mesh; });
+        detail::Require(actor != scene.Document().objects.end(), "Moving fixture needs a sphere");
+        const auto actorId = actor->id;
+        const float startX = actor->transform.position.x;
+        auto image = runtime.CreateTexture(
+            {width, height, rhi::Format::Rgba8Srgb, false, true, "PathTracing.MovingObject"});
+        auto state = rhi::State::Undefined;
+        renderer::SceneRenderOptions options;
+        options.pipeline = renderer::PipelineType::PathTracing;
+        options.reflectionTemporal = mode == 1;
+        options.pathHdrDiagnostics = true;
+        options.pathIdentityDiagnostics = true;
+        const auto render = [&]()
+        {
+            auto frame = scene.Render(image, state, nullptr, true, {}, options);
+            state = rhi::State::CopySource;
+            runtime.Wait(frame.completion);
+            return frame;
+        };
+        for (uint32_t i = 0; i < 3; ++i)
+            render();
+        const auto actorInstance = [&]() -> const scene::Instance&
+        {
+            const auto& instances = scene.LastSnapshot().allInstances;
+            const auto found =
+                std::ranges::find_if(instances, [&](const auto& instance)
+                                     { return instance.id.starts_with(actorId + "/"); });
+            detail::Require(found != instances.end(), "Moving sphere instance is missing");
+            return *found;
+        };
+        auto previousWorld = actorInstance().world;
+        for (uint32_t i = 0; i < frames; ++i)
+        {
+            scene.Document().Get(actorId).transform.position.x = startX + .45f * float(i + 1);
+            const auto frame = render();
+            const auto& instance = actorInstance();
+            if (mode == 1)
+            {
+                const auto& instances = scene.LastSnapshot().allInstances;
+                const auto index = static_cast<size_t>(&instance - instances.data());
+                detail::Require(frame.pathPreviousWorld.size() == instances.size() &&
+                                    frame.pathPreviousWorld[index] &&
+                                    frame.pathPreviousWorld[index]->values == previousWorld.values,
+                                "Committed temporal slot lost the moving instance transform");
+            }
+            else
+                detail::Require(frame.pathPreviousWorld.empty(),
+                                "Inactive temporal preview exposed instance history");
+            detail::Require(instance.previousWorld.values == previousWorld.values,
+                            "Moving instance did not retain the preceding extracted transform");
+            const math::Vec3 localPoint{.25f, -.3f, .4f};
+            const auto currentPoint = math::Point(instance.world, localPoint);
+            const auto oldPoint = math::Point(instance.previousWorld, localPoint);
+            const auto mappedPoint = math::Point(
+                instance.previousWorld, math::Point(math::Inverse(instance.world), currentPoint));
+            detail::Require(math::Length(mappedPoint - oldPoint) < 1e-4f &&
+                                math::Length((currentPoint - oldPoint) - math::Vec3{.45f, 0, 0}) <
+                                    1e-4f,
+                            "Moving instance current-to-previous mapping is inconsistent");
+            previousWorld = instance.world;
+            detail::Require(frame.reflectionHistoryReset &&
+                                frame.reflectionSamples == renderer::PathSamplesPerFrame &&
+                                frame.reflectionTemporalFrames == (mode == 1 ? 1u : 0u),
+                            "Moving geometry did not invalidate path histories");
+            detail::Require(frame.pathHdrDisplay != nullptr, "Missing moving-object HDR readback");
+            detail::Require(frame.pathPrimaryIdentity && frame.pathPrimarySurface &&
+                                frame.pathPreviousPosition,
+                            "Missing moving-object primary identity diagnostics");
+            const auto bytes = frame.pathHdrDisplay->Map();
+            const auto identityBytes = frame.pathPrimaryIdentity->Map();
+            const auto surfaceBytes = frame.pathPrimarySurface->Map();
+            const auto positionBytes = frame.pathPreviousPosition->Map();
+            const auto& instances = scene.LastSnapshot().allInstances;
+            std::vector<float> pixels(width * height * 3);
+            std::vector<uint32_t> hitIdentities(width * height);
+            std::vector<bool> hitActor(width * height);
+            for (uint32_t y = 0; y < height; ++y)
+                for (uint32_t x = 0; x < width; ++x)
+                {
+                    std::array<float, 4> pixel{};
+                    std::array<float, 4> identity{}, surface{}, previousPosition{};
+                    std::memcpy(pixel.data(), bytes.data() + y * hdrPitch + x * 16, 16);
+                    std::memcpy(identity.data(), identityBytes.data() + y * hdrPitch + x * 16, 16);
+                    std::memcpy(surface.data(), surfaceBytes.data() + y * hdrPitch + x * 16, 16);
+                    std::memcpy(previousPosition.data(),
+                                positionBytes.data() + y * hdrPitch + x * 16, 16);
+                    detail::Require(
+                        std::isfinite(identity[0]) && std::isfinite(identity[1]) &&
+                            std::isfinite(identity[3]) && identity[0] >= 0 && identity[0] <= 2 &&
+                            identity[0] == std::floor(identity[0]) && identity[1] >= 0 &&
+                            identity[1] == std::floor(identity[1]) && identity[3] >= .001f &&
+                            identity[3] <= 10000,
+                        "Invalid primary hit identity");
+                    const auto kind = static_cast<uint32_t>(identity[0]);
+                    const auto index = static_cast<uint32_t>(identity[1]);
+                    if (kind == 1)
+                    {
+                        detail::Require(index < instances.size(),
+                                        "Primary hit instance is outside snapshot");
+                        detail::Require(std::abs(std::abs(surface[3]) - identity[3]) <=
+                                            2e-4f * std::max(1.f, identity[3]),
+                                        "Ray query does not match path primary hit distance");
+                        hitActor[y * width + x] = instances[index].id.starts_with(actorId + "/");
+                        if (mode == 1)
+                        {
+                            detail::Require(previousPosition[3] == 1 &&
+                                                std::isfinite(previousPosition[0]) &&
+                                                std::isfinite(previousPosition[1]) &&
+                                                std::isfinite(previousPosition[2]),
+                                            "Missing previous world position for mesh hit");
+                            const math::Vec3 current{previousPosition[0] +
+                                                         (hitActor[y * width + x] ? .45f : 0),
+                                                     previousPosition[1], previousPosition[2]};
+                            const auto& m = scene.LastSnapshot().viewProjection;
+                            const auto clip = [&](size_t row)
+                            {
+                                return m.At(row, 0) * current.x + m.At(row, 1) * current.y +
+                                       m.At(row, 2) * current.z + m.At(row, 3);
+                            };
+                            const float w = clip(3);
+                            const float projectedX = (clip(0) / w * .5f + .5f) * width;
+                            const float projectedY = (.5f - clip(1) / w * .5f) * height;
+                            detail::Require(
+                                std::abs(
+                                    math::Length(current - scene.LastSnapshot().cameraPosition) -
+                                    identity[3]) <= 2e-4f * std::max(1.f, identity[3]),
+                                "Previous world position has inconsistent ray distance");
+                            detail::Require(
+                                w > 0 && projectedX >= x - .01f && projectedX <= x + 1.01f &&
+                                    projectedY >= y - .01f && projectedY <= y + 1.01f,
+                                "Previous world position does not map to the primary ray");
+                        }
+                        else
+                            detail::Require(
+                                previousPosition[3] == 0,
+                                "Inactive temporal preview produced previous positions");
+                    }
+                    else
+                    {
+                        detail::Require(surface[3] == 0,
+                                        "Non-mesh hit unexpectedly has a surface guide");
+                        detail::Require(previousPosition[3] == 0,
+                                        "Non-mesh hit unexpectedly has a previous position");
+                        if (kind == 2)
+                            detail::Require(index < scene.LastSnapshot().areaLights.size(),
+                                            "Primary light index is outside snapshot");
+                    }
+                    hitIdentities[y * width + x] = (kind << 24) | index;
+                    for (size_t c = 0; c < 3; ++c)
+                    {
+                        detail::Require(std::isfinite(pixel[c]) && pixel[c] >= 0,
+                                        "Moving-object HDR is invalid");
+                        pixels[(y * width + x) * 3 + c] = pixel[c];
+                    }
+                }
+            images[mode].push_back(std::move(pixels));
+            identities[mode].push_back(std::move(hitIdentities));
+            actorMasks[mode].push_back(std::move(hitActor));
+            const auto name = output / "path-moving-object" / (mode == 0 ? "spatial" : "temporal") /
+                              std::format("{:02}.bmp", i);
+            std::filesystem::create_directories(name.parent_path());
+            SaveImage(name, frame.pixels->Map(), width, height, colorPitch);
+        }
+        if (mode == 1)
+        {
+            const auto oldWorld = actorInstance().world;
+            scene.Document().Get(actorId).transform.rotation =
+                math::Quaternion::EulerDegrees({20, 40, 15});
+            const auto frame = render();
+            const auto& instances = scene.LastSnapshot().allInstances;
+            const auto& rotated = actorInstance();
+            const auto index = static_cast<size_t>(&rotated - instances.data());
+            detail::Require(frame.pathPreviousWorld.at(index) &&
+                                frame.pathPreviousWorld[index]->values == oldWorld.values,
+                            "Rotation lost the previous committed transform");
+            const auto identityData = frame.pathPrimaryIdentity->Map();
+            const auto positions = frame.pathPreviousPosition->Map();
+            const auto oldToCurrent = math::Inverse(oldWorld);
+            uint32_t checked = 0;
+            for (uint32_t y = 0; y < height; ++y)
+                for (uint32_t x = 0; x < width; ++x)
+                {
+                    std::array<float, 4> identity{}, position{};
+                    std::memcpy(identity.data(), identityData.data() + y * hdrPitch + x * 16, 16);
+                    std::memcpy(position.data(), positions.data() + y * hdrPitch + x * 16, 16);
+                    if (identity[0] != 1 || identity[1] != float(index))
+                        continue;
+                    detail::Require(position[3] == 1, "Rotating mesh lost previous position");
+                    const math::Vec3 previous{position[0], position[1], position[2]};
+                    const auto current =
+                        math::Point(rotated.world, math::Point(oldToCurrent, previous));
+                    const auto& m = scene.LastSnapshot().viewProjection;
+                    const auto clip = [&](size_t row)
+                    {
+                        return m.At(row, 0) * current.x + m.At(row, 1) * current.y +
+                               m.At(row, 2) * current.z + m.At(row, 3);
+                    };
+                    const auto w = clip(3);
+                    const auto px = (clip(0) / w * .5f + .5f) * width;
+                    const auto py = (.5f - clip(1) / w * .5f) * height;
+                    detail::Require(
+                        w > 0 && px >= x - .01f && px <= x + 1.01f && py >= y - .01f &&
+                            py <= y + 1.01f &&
+                            std::abs(math::Length(current - scene.LastSnapshot().cameraPosition) -
+                                     identity[3]) <= 2e-4f * std::max(1.f, identity[3]),
+                        "Rotating mesh previous position does not map to primary ray");
+                    ++checked;
+                }
+            detail::Require(checked > 0, "Rotation fixture has no visible actor pixels");
+            logger.Write(LogLevel::Info, std::format("Path rotation checked {} pixels", checked));
+        }
+        for (uint32_t i = 0; i < 2; ++i)
+        {
+            const auto frame = render();
+            detail::Require(!frame.reflectionHistoryReset &&
+                                frame.reflectionSamples ==
+                                    (i + 2) * renderer::PathSamplesPerFrame &&
+                                frame.reflectionTemporalFrames == (mode == 1 ? i + 2 : 0),
+                            "Stationary path histories did not resume after object motion");
+        }
+    }
+    uint32_t changedPixels = 0;
+    uint32_t revealedPixels = 0, coveredPixels = 0;
+    double largestDifference = 0;
+    for (uint32_t frame = 0; frame < frames; ++frame)
+        for (size_t i = 0; i < images[0][frame].size(); ++i)
+        {
+            const auto a = images[0][frame][i], b = images[1][frame][i];
+            largestDifference = std::max(largestDifference, double(std::abs(a - b)));
+            detail::Require(
+                std::abs(a - b) <= 1e-5f * std::max(1.f, std::abs(a)),
+                "Cold temporal output differed from spatial output during object motion");
+        }
+    for (size_t i = 0; i < images[0][0].size(); i += 3)
+    {
+        const auto& first = images[0].front();
+        const auto& last = images[0].back();
+        changedPixels += std::abs(first[i] - last[i]) + std::abs(first[i + 1] - last[i + 1]) +
+                             std::abs(first[i + 2] - last[i + 2]) >
+                         .2f;
+    }
+    for (uint32_t frame = 0; frame < frames; ++frame)
+        detail::Require(identities[0][frame] == identities[1][frame],
+                        "Primary hit identity changed when toggling temporal preview");
+    for (size_t pixel = 0; pixel < actorMasks[0][0].size(); ++pixel)
+    {
+        const bool before = actorMasks[0].front()[pixel];
+        const bool after = actorMasks[0].back()[pixel];
+        revealedPixels += before && !after;
+        coveredPixels += !before && after;
+    }
+    detail::Require(revealedPixels > 0 && coveredPixels > 0,
+                    "Moving sphere produced no primary visibility transitions");
+    detail::Require(changedPixels > 16,
+                    std::format("Moving sphere changed only {} pixels", changedPixels));
+    logger.Write(
+        LogLevel::Info,
+        std::format("Moving-object path preview: {} changed pixels, {} revealed and {} covered; "
+                    "maximum cold HDR difference {:.9g}",
+                    changedPixels, revealedPixels, coveredPixels, largestDifference));
+}
+} // namespace
+
 void VerifyScene(rhi::Runtime& runtime, shader::Target target, const std::filesystem::path& project,
                  const std::filesystem::path& engine, const std::filesystem::path& output,
                  Logger& logger, renderer::PipelineType pipeline, bool validate)
@@ -36,6 +840,541 @@ void VerifyScene(rhi::Runtime& runtime, shader::Target target, const std::filesy
         std::filesystem::copy_file(project, fixture);
     }
     renderer::SceneRenderer renderer(runtime, target, fixture, engine);
+    if (validate && pipeline == renderer::PipelineType::RayTracing &&
+        project.stem() == "RayTracing")
+    {
+        renderer::SceneRenderer pathRenderer(runtime, target, fixture, engine);
+        const auto original = pathRenderer.Document();
+        auto pathTarget = runtime.CreateTexture(
+            {64, 48, rhi::Format::Rgba8Srgb, false, true, "PathTracing.Acceptance"});
+        renderer::SceneRenderOptions pathOptions;
+        pathOptions.pipeline = renderer::PipelineType::PathTracing;
+        pathOptions.captureGraph = true;
+        pathOptions.pathComponentDiagnostics = true;
+        pathOptions.pathHdrDiagnostics = true;
+        pathOptions.pathIdentityDiagnostics = true;
+        auto state = rhi::State::Undefined;
+        const auto pathFrame = [&]()
+        {
+            auto frame = pathRenderer.Render(pathTarget, state, nullptr, true, {}, pathOptions);
+            state = rhi::State::CopySource;
+            runtime.Wait(frame.completion);
+            return frame;
+        };
+        const auto first = pathFrame();
+        const auto second = pathFrame();
+        pathOptions.pathIdentityDiagnostics = false;
+        const auto& pathInstances = pathRenderer.LastSnapshot().allInstances;
+        detail::Require(first.pathPreviousWorld.size() == pathInstances.size() &&
+                            second.pathPreviousWorld.size() == pathInstances.size(),
+                        "Temporal instance diagnostics have the wrong size");
+        for (size_t i = 0; i < pathInstances.size(); ++i)
+            detail::Require(!first.pathPreviousWorld[i] && second.pathPreviousWorld[i] &&
+                                second.pathPreviousWorld[i]->values ==
+                                    pathInstances[i].world.values,
+                            "Temporal instance history did not publish after submission");
+        detail::Require(first.reflectionSamples == renderer::PathSamplesPerFrame &&
+                            first.reflectionHistoryReset &&
+                            second.reflectionSamples == 2 * renderer::PathSamplesPerFrame &&
+                            !second.reflectionHistoryReset,
+                        "Path tracing did not accumulate successive samples");
+        {
+            renderer::SceneRenderer tracked(runtime, target, fixture, engine);
+            auto& document = tracked.Document();
+            const auto originalCamera = document.activeCamera;
+            auto alternate = document.Get(originalCamera);
+            alternate.id = project::NewId();
+            const auto alternateId = alternate.id;
+            document.objects.push_back(alternate);
+            const auto actor =
+                std::ranges::find_if(document.objects, [](const auto& object)
+                                     { return object.enabled && object.mesh.has_value(); });
+            detail::Require(actor != document.objects.end(),
+                            "Transform history fixture needs a mesh");
+            const auto actorId = actor->id;
+            auto trackedTarget = runtime.CreateTexture(
+                {32, 24, rhi::Format::Rgba8Srgb, false, true, "PathTracing.TransformHistory"});
+            auto targetState = rhi::State::Undefined;
+            renderer::SceneRenderOptions options;
+            options.pipeline = renderer::PipelineType::PathTracing;
+            options.pathIdentityDiagnostics = true;
+            const auto render = [&]()
+            {
+                auto frame =
+                    tracked.Render(trackedTarget, targetState, nullptr, false, {}, options);
+                targetState = rhi::State::CopySource;
+                runtime.Wait(frame.completion);
+                return frame;
+            };
+            const auto actorHasHistory = [&](const renderer::SceneReadback& frame)
+            {
+                const auto& instances = tracked.LastSnapshot().allInstances;
+                for (size_t i = 0; i < instances.size(); ++i)
+                    if (instances[i].id.starts_with(actorId + "/"))
+                        return bool(frame.pathPreviousWorld.at(i));
+                throw std::runtime_error("Transform history fixture actor is missing");
+            };
+            const auto cold = render();
+            detail::Require(!actorHasHistory(cold), "Cold view inherited an instance transform");
+            const auto warm = render();
+            detail::Require(actorHasHistory(warm),
+                            "Submitted view did not publish instance transform");
+            const auto findActor = [&]() -> const scene::Instance&
+            {
+                const auto& instances = tracked.LastSnapshot().allInstances;
+                const auto found =
+                    std::ranges::find_if(instances, [&](const auto& instance)
+                                         { return instance.id.starts_with(actorId + "/"); });
+                detail::Require(found != instances.end(), "Committed actor instance missing");
+                return *found;
+            };
+            const auto committed = findActor().world;
+            document.Get(actorId).transform.position.x += .3f;
+            options.shadowResolution = 1;
+            bool rejected = false;
+            try
+            {
+                render();
+            }
+            catch (const std::invalid_argument&)
+            {
+                rejected = true;
+            }
+            detail::Require(rejected, "Invalid post-extraction frame unexpectedly succeeded");
+            document.Get(actorId).transform.position.x += .4f;
+            options.shadowResolution = 0;
+            const auto retried = render();
+            const auto& retryActor = findActor();
+            const auto retryIndex =
+                static_cast<size_t>(&retryActor - tracked.LastSnapshot().allInstances.data());
+            detail::Require(retried.pathPreviousWorld.at(retryIndex) &&
+                                retried.pathPreviousWorld[retryIndex]->values == committed.values &&
+                                retryActor.previousWorld.values != committed.values,
+                            "Rejected frame advanced committed temporal transform history");
+            document.Get(actorId).enabled = false;
+            render();
+            document.Get(actorId).enabled = true;
+            const auto restored = render();
+            detail::Require(!actorHasHistory(restored),
+                            "Re-enabled instance inherited stale transform");
+            document.activeCamera = alternateId;
+            const auto switched = render();
+            detail::Require(!actorHasHistory(switched),
+                            "Another view inherited an instance transform");
+            document.activeCamera = originalCamera;
+            const auto returned = render();
+            detail::Require(!actorHasHistory(returned),
+                            "Returned view inherited the active view's transform");
+        }
+        const auto filteredPitch = rhi::TextureRowPitch(64, rhi::Format::Rgba32Float);
+        uint32_t filteredIndirectPixels = 0;
+        for (uint32_t y = 0; y < 48; ++y)
+            for (uint32_t x = 0; x < 64; ++x)
+            {
+                std::array<std::array<float, 4>, 3> parts{};
+                std::array<float, 4> direct{};
+                std::array<float, 4> display{};
+                for (size_t i = 0; i < parts.size(); ++i)
+                {
+                    detail::Require(first.pathFilteredComponents[i] != nullptr,
+                                    "Missing filtered path component");
+                    std::memcpy(parts[i].data(),
+                                first.pathFilteredComponents[i]->Map().data() + y * filteredPitch +
+                                    x * 16,
+                                16);
+                }
+                std::memcpy(direct.data(),
+                            first.pathComponents[1]->Map().data() + y * filteredPitch + x * 16, 16);
+                detail::Require(first.pathHdrDisplay != nullptr, "Missing linear path display");
+                std::memcpy(display.data(),
+                            first.pathHdrDisplay->Map().data() + y * filteredPitch + x * 16, 16);
+                for (size_t c = 0; c < 3; ++c)
+                {
+                    detail::Require(
+                        std::isfinite(parts[0][c]) && std::isfinite(parts[1][c]) &&
+                            std::isfinite(parts[2][c]) &&
+                            std::abs(parts[0][c] - direct[c] - parts[1][c] - parts[2][c]) <=
+                                1e-5f * std::max(1.f, std::abs(parts[0][c])),
+                        "Filtered path components do not reconstruct the display input");
+                    detail::Require(std::abs(display[c] - parts[0][c]) <=
+                                        1e-5f * std::max(1.f, std::abs(parts[0][c])),
+                                    "Cold temporal HDR display differs from filtered input");
+                }
+                filteredIndirectPixels += parts[1][0] + parts[2][0] > 1e-5f;
+            }
+        detail::Require(filteredIndirectPixels > 0,
+                        "Filtered components did not exercise indirect light");
+        renderer::SceneRenderer standardRenderer(runtime, target, fixture, engine);
+        auto standardTarget = runtime.CreateTexture(
+            {64, 48, rhi::Format::Rgba8Srgb, false, true, "PathTracing.StandardFilter"});
+        auto standardOptions = pathOptions;
+        standardOptions.pathComponentDiagnostics = false;
+        standardOptions.pathHdrDiagnostics = false;
+        const auto standard = standardRenderer.Render(standardTarget, rhi::State::Undefined,
+                                                      nullptr, true, {}, standardOptions);
+        runtime.Wait(standard.completion);
+        const auto standardBytes = standard.pixels->Map();
+        detail::Require(!standard.pathHdrDisplay, "Disabled HDR readback returned a buffer");
+        detail::Require(first.pathPrimaryIdentity && first.pathPrimarySurface &&
+                            !standard.pathPrimaryIdentity && !standard.pathPrimarySurface &&
+                            !standard.pathPreviousPosition,
+                        "Primary identity diagnostics did not honor its enable flag");
+        const auto diagnosticBytes = first.pixels->Map();
+        detail::Require(
+            std::equal(standardBytes.begin(), standardBytes.end(), diagnosticBytes.begin()),
+            "Filtered component diagnostics changed the displayed image");
+        bool trace = false, accumulate = false, accumulateDirect = false, accumulateDiffuse = false,
+             filter = false, temporal = false, raster = false;
+        for (const auto& pass : first.graphSnapshot->passes)
+        {
+            trace |= pass.name == "PathTracing.Trace";
+            accumulate |= pass.name == "PathTracing.Accumulate";
+            accumulateDirect |= pass.name == "PathTracing.AccumulateDirect";
+            accumulateDiffuse |= pass.name == "PathTracing.AccumulateDiffuse";
+            filter |= pass.name == "PathTracing.Denoise";
+            temporal |= pass.name == "PathTracing.Temporal";
+            raster |= pass.name == "Deferred.GBuffer" || pass.name == "Forward.Opaque";
+        }
+        detail::Require(trace && accumulate && accumulateDirect && accumulateDiffuse && filter &&
+                            temporal && !raster,
+                        "Path tracing graph composition mismatch");
+        pathOptions.reflectionDenoise = false;
+        const auto switchedOff = pathFrame();
+        detail::Require(!switchedOff.pathFilteredComponents[0],
+                        "Disabled denoising returned filtered component readback");
+        detail::Require(switchedOff.reflectionSamples == 3 * renderer::PathSamplesPerFrame &&
+                            !switchedOff.reflectionHistoryReset,
+                        "Path filter toggle reset the raw accumulation");
+        for (const auto& pass : switchedOff.graphSnapshot->passes)
+            detail::Require(pass.name != "PathTracing.Denoise" &&
+                                pass.name != "PathTracing.Temporal",
+                            "Disabled path filter still entered the graph");
+        renderer::SceneRenderer rawRenderer(runtime, target, fixture, engine);
+        auto rawTarget = runtime.CreateTexture(
+            {64, 48, rhi::Format::Rgba8Srgb, false, true, "PathTracing.RawReference"});
+        auto rawState = rhi::State::Undefined;
+        renderer::SceneReadback raw;
+        for (int i = 0; i < 3; ++i)
+        {
+            raw = rawRenderer.Render(rawTarget, rawState, nullptr, true, {}, pathOptions);
+            rawState = rhi::State::CopySource;
+            runtime.Wait(raw.completion);
+        }
+        // HDR diagnostics check physically valid per-channel decomposition and toggle consistency.
+        const auto pitch = rhi::TextureRowPitch(64, rhi::Format::Rgba32Float);
+        uint32_t diffusePixels = 0, specularPixels = 0, mixedChannels = 0;
+        uint32_t diffuseGuidePixels = 0, specularGuidePixels = 0;
+        detail::Require(switchedOff.pathSecondaryGuide && raw.pathSecondaryGuide,
+                        "Missing secondary hit guide diagnostic readback");
+        for (uint32_t y = 0; y < 48; ++y)
+            for (uint32_t x = 0; x < 64; ++x)
+            {
+                std::array<std::array<float, 4>, 3> components{}, reference{};
+                for (size_t component = 0; component < components.size(); ++component)
+                {
+                    detail::Require(switchedOff.pathComponents[component] &&
+                                        raw.pathComponents[component],
+                                    "Missing path component diagnostic readback");
+                    std::memcpy(components[component].data(),
+                                switchedOff.pathComponents[component]->Map().data() + y * pitch +
+                                    x * 16,
+                                16);
+                    std::memcpy(reference[component].data(),
+                                raw.pathComponents[component]->Map().data() + y * pitch + x * 16,
+                                16);
+                }
+                std::array<float, 4> hitGuide{}, referenceGuide{};
+                std::memcpy(hitGuide.data(),
+                            switchedOff.pathSecondaryGuide->Map().data() + y * pitch + x * 16, 16);
+                std::memcpy(referenceGuide.data(),
+                            raw.pathSecondaryGuide->Map().data() + y * pitch + x * 16, 16);
+                for (size_t lobe = 0; lobe < 2; ++lobe)
+                {
+                    const float distance = hitGuide[lobe], count = hitGuide[lobe + 2];
+                    detail::Require(
+                        std::isfinite(distance) && std::isfinite(count) && count >= 0 &&
+                            count <= float(renderer::PathSamplesPerFrame) &&
+                            (count == 0 ? distance == 0 : distance > 0 && distance <= 10000.01f),
+                        "Invalid first-secondary guide distance or sample count");
+                    detail::Require(std::abs(distance - referenceGuide[lobe]) <=
+                                            1e-4f * std::max(1.f, distance) &&
+                                        count == referenceGuide[lobe + 2],
+                                    "Secondary guide changed after denoise toggle");
+                }
+                detail::Require(hitGuide[2] + hitGuide[3] <= float(renderer::PathSamplesPerFrame),
+                                "Secondary guide over-counted batch samples");
+                diffuseGuidePixels += hitGuide[2] > 0;
+                specularGuidePixels += hitGuide[3] > 0;
+                for (uint32_t channel = 0; channel < 3; ++channel)
+                {
+                    const float total = components[0][channel], direct = components[1][channel],
+                                diffuse = components[2][channel];
+                    const float tolerance = 1e-4f * std::max(1.f, std::abs(total));
+                    const float specular = total - direct - diffuse;
+                    detail::Require(std::isfinite(total) && std::isfinite(direct) &&
+                                        std::isfinite(diffuse) && direct >= -tolerance &&
+                                        diffuse >= -tolerance && specular >= -tolerance,
+                                    "Path component is non-finite, negative or exceeds total");
+                    for (size_t component = 0; component < components.size(); ++component)
+                        detail::Require(std::abs(components[component][channel] -
+                                                 reference[component][channel]) <= tolerance,
+                                        "Path component history changed after denoise toggle");
+                    diffusePixels += diffuse > .001f;
+                    specularPixels += specular > .001f;
+                    mixedChannels += diffuse > .001f && specular > .001f;
+                }
+            }
+        detail::Require(diffusePixels > 0 && specularPixels > 0 && mixedChannels > 0,
+                        "Path fixture did not exercise overlapping indirect BRDF components");
+        detail::Require(diffuseGuidePixels > 0 && specularGuidePixels > 0,
+                        "Path fixture did not exercise both secondary hit guides");
+        pathOptions.pathComponentDiagnostics = false;
+        SaveImage(output / "path-filter-toggle.bmp", switchedOff.pixels->Map(), 64, 48,
+                  rhi::TextureRowPitch(64));
+        SaveImage(output / "path-raw-reference.bmp", raw.pixels->Map(), 64, 48,
+                  rhi::TextureRowPitch(64));
+        const auto switchedPixels = switchedOff.pixels->Map();
+        const auto rawPixels = raw.pixels->Map();
+        detail::Require(switchedPixels.size() == rawPixels.size(), "Path readback size mismatch");
+        uint32_t differing = 0;
+        for (size_t i = 0; i < rawPixels.size(); ++i)
+        {
+            const auto difference = std::abs(int(std::to_integer<uint8_t>(switchedPixels[i])) -
+                                             int(std::to_integer<uint8_t>(rawPixels[i])));
+            detail::Require(difference <= 1, "Path filter toggle changed raw history");
+            differing += difference != 0;
+        }
+        detail::Require(differing <= 4, "Path filter toggle changed raw history broadly");
+        // Compare the same moving-camera sequence against a stationary endpoint reference.
+        std::array<std::vector<std::byte>, 3> motionImages;
+        for (uint32_t mode = 0; mode < motionImages.size(); ++mode)
+        {
+            renderer::SceneRenderer motionRenderer(
+                runtime, target, project.parent_path() / "PathTracingGallery.rlproject", engine);
+            auto motionTarget = runtime.CreateTexture(
+                {128, 72, rhi::Format::Rgba8Srgb, false, true, "PathTracing.Motion"});
+            renderer::SceneRenderOptions motionOptions;
+            motionOptions.pipeline = renderer::PipelineType::PathTracing;
+            motionOptions.reflectionDenoise = mode != 2;
+            motionOptions.reflectionTemporal = mode == 1;
+            auto motionState = rhi::State::Undefined;
+            renderer::SceneReadback motion;
+            auto step = [&]()
+            {
+                motion = motionRenderer.Render(motionTarget, motionState, nullptr, true, {},
+                                               motionOptions);
+                motionState = rhi::State::CopySource;
+                runtime.Wait(motion.completion);
+            };
+            for (int frame = 0; frame < 8; ++frame)
+                step();
+            for (int frame = 0; frame < 16; ++frame)
+            {
+                motionRenderer.Document().MoveCamera({.02f, 0, 0}, {0, .15f, 0});
+                step();
+            }
+            if (mode == 2)
+            {
+#ifdef NDEBUG
+                constexpr int referenceFrames = 511;
+#else
+                constexpr int referenceFrames = 63;
+#endif
+                for (int frame = 0; frame < referenceFrames; ++frame)
+                    step();
+            }
+            const auto pixels = motion.pixels->Map();
+            motionImages[mode].assign(pixels.begin(), pixels.end());
+            SaveImage(output / (mode == 0   ? "path-motion-spatial.bmp"
+                                : mode == 1 ? "path-motion-temporal.bmp"
+                                            : "path-motion-reference.bmp"),
+                      pixels, 128, 72, rhi::TextureRowPitch(128));
+        }
+        std::array<double, 2> error{};
+        for (size_t mode = 0; mode < error.size(); ++mode)
+        {
+            for (size_t i = 0; i < motionImages[mode].size(); ++i)
+            {
+                if (i % 4 == 3)
+                    continue;
+                const auto delta = int(std::to_integer<uint8_t>(motionImages[mode][i])) -
+                                   int(std::to_integer<uint8_t>(motionImages[2][i]));
+                error[mode] += delta * delta;
+            }
+            error[mode] /= 128 * 72 * 3;
+        }
+        logger.Write(LogLevel::Info, std::format("Path motion MSE: spatial {:.3f}, temporal {:.3f}",
+                                                 error[0], error[1]));
+#ifdef NDEBUG
+        detail::Require(error[1] < error[0], "Path temporal motion increased endpoint MSE");
+#endif
+        VerifyPathMovingObject(runtime, target,
+                               project.parent_path() / "PathTracingGallery.rlproject", engine,
+                               output, logger);
+        MeasurePathMotionSequences(runtime, target,
+                                   project.parent_path() / "PathTracingGallery.rlproject", engine,
+                                   output, logger);
+        MeasurePathRawConvergence(runtime, target,
+                                  project.parent_path() / "PathTracingGallery.rlproject", engine,
+                                  output, logger);
+        pathOptions.reflectionDenoise = true;
+        const auto temporalCold = pathFrame();
+        detail::Require(temporalCold.reflectionTemporalFrames == 1,
+                        "Path temporal history did not restart after filter toggle");
+        pathOptions.reflectionTemporal = false;
+        const auto temporalOff = pathFrame();
+        detail::Require(!temporalOff.reflectionHistoryReset &&
+                            temporalOff.reflectionTemporalFrames == 0,
+                        "Path temporal toggle discarded raw history or retained temporal history");
+        pathOptions.reflectionTemporal = true;
+        const auto temporalRestart = pathFrame();
+        detail::Require(!temporalRestart.reflectionHistoryReset &&
+                            temporalRestart.reflectionTemporalFrames == 1,
+                        "Path temporal re-enable did not restart display history");
+        pathOptions.pathComponentDiagnostics = true;
+        pathRenderer.Document().MoveCamera({.5f, 0, 0}, {0, 5, 0});
+        const auto moved = pathFrame();
+        detail::Require(
+            moved.reflectionSamples == renderer::PathSamplesPerFrame &&
+                moved.reflectionHistoryReset && moved.reflectionTemporalFrames == 2,
+            "Path tracing camera change did not reset raw history and retain temporal history");
+        detail::Require(moved.pathTemporalGuide != nullptr, "Missing path temporal guide readback");
+        uint32_t parallaxPixels = 0;
+        uint32_t distinctHistories = 0;
+        for (uint32_t y = 0; y < 48; ++y)
+            for (uint32_t x = 0; x < 64; ++x)
+            {
+                std::array<float, 4> guide{};
+                std::memcpy(guide.data(),
+                            moved.pathTemporalGuide->Map().data() + y * pitch + x * 16, 16);
+                detail::Require(std::isfinite(guide[3]) && guide[3] >= 0 && guide[3] <= 1,
+                                "Path parallax confidence is outside [0,1]");
+                parallaxPixels += guide[3] > 0 && guide[3] < .9999f;
+                std::array<std::array<float, 4>, 2> components{};
+                for (size_t i = 0; i < components.size(); ++i)
+                {
+                    detail::Require(moved.pathTemporalComponents[i] != nullptr,
+                                    "Missing path temporal component readback");
+                    std::memcpy(components[i].data(),
+                                moved.pathTemporalComponents[i]->Map().data() + y * pitch + x * 16,
+                                16);
+                    for (float value : components[i])
+                        detail::Require(std::isfinite(value), "Nonfinite path temporal component");
+                    detail::Require(components[i][3] >= 0 && components[i][3] <= 16,
+                                    "Path temporal history length is outside [0,16]");
+                }
+                distinctHistories += std::abs(components[0][3] - components[1][3]) > .001f;
+            }
+        detail::Require(parallaxPixels > 0, "Path parallax confidence was never exercised");
+        detail::Require(distinctHistories > 0, "Path component histories did not differ");
+        logger.Write(LogLevel::Info,
+                     std::format("Path parallax confidence adjusted {} pixels", parallaxPixels));
+        pathOptions.pathComponentDiagnostics = false;
+        pathRenderer.Document() = original;
+        const auto restored = pathFrame();
+        detail::Require(restored.reflectionSamples == renderer::PathSamplesPerFrame &&
+                            restored.reflectionHistoryReset,
+                        "Path tracing camera restoration did not reset history");
+        const auto light = pathRenderer.LastSnapshot().light.object;
+        detail::Require(!light.empty(), "Path tracing fixture needs a directional light");
+        pathRenderer.Document().Get(light).light->intensity *= .5f;
+        const auto changedLight = pathFrame();
+        detail::Require(changedLight.reflectionSamples == renderer::PathSamplesPerFrame &&
+                            changedLight.reflectionHistoryReset &&
+                            changedLight.reflectionTemporalFrames == 1,
+                        "Path tracing light change did not reset history");
+        pathTarget = runtime.CreateTexture(
+            {65, 48, rhi::Format::Rgba8Srgb, false, true, "PathTracing.Resized"});
+        state = rhi::State::Undefined;
+        const auto resized = pathFrame();
+        detail::Require(resized.reflectionSamples == renderer::PathSamplesPerFrame &&
+                            resized.reflectionHistoryReset && resized.reflectionTemporalFrames == 1,
+                        "Path tracing resize did not reset history");
+        pathOptions.exposure = 1.5f;
+        const auto exposure = pathFrame();
+        detail::Require(exposure.reflectionSamples == 2 * renderer::PathSamplesPerFrame &&
+                            !exposure.reflectionHistoryReset,
+                        "Path tracing display exposure discarded history");
+        pathOptions.reflectionDiagnostics = true;
+        bool rejectedDiagnostics = false;
+        try
+        {
+            pathFrame();
+        }
+        catch (const std::invalid_argument&)
+        {
+            rejectedDiagnostics = true;
+        }
+        detail::Require(rejectedDiagnostics,
+                        "Path tracing accepted unsupported reflection diagnostics");
+        pathOptions.reflectionDiagnostics = false;
+        auto& pathDocument = pathRenderer.Document();
+        auto changedObject = std::ranges::find_if(pathDocument.objects, [](const auto& object)
+                                                  { return object.mesh.has_value(); });
+        detail::Require(changedObject != pathDocument.objects.end(),
+                        "Path tracing fixture needs a mesh");
+        changedObject->transform.position.x += .3f;
+        const auto changedScene = pathFrame();
+        detail::Require(changedScene.reflectionSamples == renderer::PathSamplesPerFrame &&
+                            changedScene.reflectionHistoryReset,
+                        "Path tracing scene change did not reset history");
+        pathDocument = original;
+        pathFrame();
+        const auto materialSource =
+            std::ranges::find_if(pathDocument.objects, [](const auto& value)
+                                 { return value.mesh && !value.mesh->materials.empty(); });
+        detail::Require(materialSource != pathDocument.objects.end(),
+                        "Path tracing fixture needs a material override");
+        const auto materialId = materialSource->mesh->materials.begin()->second;
+        bool replaced = false;
+        for (auto& entity : pathDocument.objects)
+            if (entity.mesh && entity.id != materialSource->id)
+            {
+                for (const auto& surface : pathRenderer.Models().at(entity.mesh->model).materials)
+                    entity.mesh->materials[surface.id] = materialId;
+                replaced = true;
+                break;
+            }
+        detail::Require(replaced, "Path tracing fixture needs multiple mesh objects");
+        const auto changedMaterial = pathFrame();
+        detail::Require(changedMaterial.reflectionSamples == renderer::PathSamplesPerFrame &&
+                            changedMaterial.reflectionHistoryReset,
+                        "Path tracing material change did not reset history");
+        pathOptions.reflectionDenoise = false;
+        pathOptions.pathSeed = 1;
+        const auto seedOne = pathFrame();
+        const auto seedOneBytes = seedOne.pixels->Map();
+        const std::vector<std::byte> seedOneImage(seedOneBytes.begin(), seedOneBytes.end());
+        const auto samePixels = [&](std::span<const std::byte> image)
+        {
+            const auto rowPitch = rhi::TextureRowPitch(65);
+            for (uint32_t y = 0; y < 48; ++y)
+                if (!std::equal(seedOneImage.begin() + y * rowPitch,
+                                seedOneImage.begin() + y * rowPitch + 65 * 4,
+                                image.begin() + y * rowPitch))
+                    return false;
+            return true;
+        };
+        pathOptions.pathSeed = 2;
+        const auto seedTwo = pathFrame();
+        const auto seedTwoBytes = seedTwo.pixels->Map();
+        detail::Require(seedTwo.reflectionHistoryReset &&
+                            seedTwo.reflectionSamples == renderer::PathSamplesPerFrame &&
+                            !samePixels(seedTwoBytes),
+                        "Path sampling seed did not reset history or change the image");
+        pathOptions.pathSeed = 1;
+        const auto seedAgain = pathFrame();
+        const auto seedAgainBytes = seedAgain.pixels->Map();
+        detail::Require(seedAgain.reflectionHistoryReset && samePixels(seedAgainBytes),
+                        "Path sampling seed did not reproduce the same image");
+        pathOptions.reflectionDenoise = true;
+        pathFrame();
+        pathOptions.pathSeed = 2;
+        const auto seedTemporal = pathFrame();
+        detail::Require(seedTemporal.reflectionHistoryReset &&
+                            seedTemporal.reflectionTemporalFrames == 1,
+                        "Path sampling seed did not reset temporal history");
+    }
     if (pipeline == renderer::PipelineType::RayTracing)
         for (auto& object : renderer.Document().objects)
             if (object.light)

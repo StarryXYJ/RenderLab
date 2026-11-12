@@ -4,8 +4,41 @@
 
 ## 当前状态
 
-- 当前实施阶段：用户于 2026 年 10 月 30 日暂停 B4，先整理计划和提交检查点；当前不自动启动其它阶段。B4.1–B4.4、B4.5a、M6 核心 M6.1–M6.5、M0–M5、R1、B1–B3 DONE；可选 M6.0 仍为 DEFERRED。
-- 当前工作项：B4.5b 保留未验收实现并设为 DEFERRED，`RENDERLAB_DX12_MEMORY_ALLOCATOR` 默认 OFF；普通构建继续使用已验收 committed/dedicated 路径，Vulkan 分配与 Graph Alias 算法未改。B4.5c/B4.6 尚未开始。B4.5a 的一次 Debug 窗口超时仍需跟踪，不能将隔离复验写成首次全绿。
+- 四步压测和 CPU 优化 IN_PROGRESS（2026 年 11 月 12 日）：DX12 Editor Deferred/混合及 Vulkan Editor 三管线固定相机短测已完成；Vulkan 改为有界多组描述符页，八点灯四管线可运行，双后端相关回归通过。新版 profile 已补测；IndexedDirect/CpuIndirect 保序合并相邻同网格实例，双后端索引场景回归通过、压测主画面 Draw 145→86，但短测帧时间未稳定改善，默认 Direct 与阴影 pass 未改变。Vulkan 单组 descriptor 更新合并，双后端指定回归 12/12，validation on 短测改善、off 绑定组有小幅额外开销；继续测量阴影重复工作。真实交互、其他设备及长期运行未验证。证据见 [性能记录](../docs/performance/light-stress-cpu.md#editor-三管线与-vulkan-描述符页2026-年-11-月-12-日)。
+
+- CPU 重复计算优化 IN_PROGRESS（2026 年 11 月 12 日）：Graph 成功路径避免构造未使用的诊断，Release 双后端指定回归 5/5、三管线画面一致且 DX12 短测 CPU 时间下降；详见 [性能记录](../docs/performance/light-stress-cpu.md#graph-热路径首轮优化2026-年-11-月-12-日)。帧内按材质复用不可变迁移快照，双后端材质及热重载回归通过；Graph 字面量检查和绑定校验也移除成功路径诊断分配，双后端指定回归 5/5；继续评估批量绘制及阴影的重复工作。并行点灯整合后 Release 双后端指定回归 9/9、DX12 四管线八灯短测和 Forward Editor 窗口短测完成；更多窗口管线、交互和其他设备未验证。
+
+- 多物体场景 CPU 卡顿排查 IN_PROGRESS（2026 年 11 月 12 日）：同一实例的多灯阴影绘制在单帧内复用准备结果；RTX 5060 Release DX12 小样本 Forward 场景准备均值约 20.25 → 16.22 ms，画面逐字节一致；DX12/Vulkan 面灯阴影及反射回归 4/4。该轮总帧时间约 25 ms，后续优化见上一项；细分探针定位到 Graph 中大量重复资源访问声明与校验、录制时资源解析及材质 Migrate；具体数据和探针影响见 [性能记录](../docs/performance/light-stress-cpu.md)。优化对照、窗口实测及与并行点光源修改的整合仍待处理。
+
+- 点光源 IN_PROGRESS（2026 年 11 月 12 日）：场景组件、序列化、层级提取及 Release CPU 契约测试已完成；线性色彩、坎德拉强度、世界空间范围，缩放不改变范围。Forward、Deferred 和混合主表面支持最多八盏点光源；双后端小场景开关对照和 DX12 八灯场景短测完成，DX12 Indexed Direct、CPU Indirect 与 GPU Culled 的八灯画面和 Direct 哈希一致；Vulkan Indexed 未验证。Path Tracing 显式连接点源并进行三角形及矩形灯有限遮挡：RTX 5060 Release 双后端八灯短测、单灯开关画面对照及灯变化历史测试通过；面灯回归双后端通过。混合主表面及反射命中已增加逐灯遮挡；Release 双后端单灯被遮挡时 Path 直接光均值由 0.383 降至 0.0054，混合由 0.365 降至 0.0051，第八盏灯遮挡位、路径直接光强度翻倍和范围外归零通过对照；Release Editor 原生桥接及托管构建通过。混合反射画质及性能未验收。光栅点光源遮挡尚未实现；接口见 [点光源](../docs/point-lights.md)，继续实现并验收。
+
+- 多物体光照压测场景 DONE（2026 年 11 月 12 日）：145 个可见网格、两盏矩形面灯和一盏主方向光，RTX 5060 Release 短测 DX12 四管线及 Vulkan Path Tracing 完成且 validation errors 为零；早期 Vulkan Forward、Deferred、混合光追因描述符块预算耗尽不能加载，后续有界描述符页修复后已完成短测；DX12 有 clear value 警告。验证入口和限制见 [手册](../manual/build.md#多物体光照压测)。后续已加入八盏点光源，见上述工作项；更大场景仍受有界 Vulkan 描述符页预算约束。
+
+- 面光源非路径追踪阴影平滑修复 DONE（2026 年 11 月 12 日）：光栅阴影的深度比较及遮挡物搜索改为双线性加权，并按接收点灯面投影限制搜索，减少阶梯与空房间错误暗斑；混合管线改为固定 32 点抖动分层采样和深度/法线引导的 3×3 空间滤波。隔离 Debug/Release 的 DX12/Vulkan 光栅、HDR、反射、滤波与材质测试各 10/10；空房间内部显示值对 Ray Query MSE 为 0、旧搜索负对照为 24.92，遮挡边界子纹素最大跳变由 0.25 降至 0.0254；静止帧原始可见性一致。RTX 5060、512²、单灯短测与性能代价见 [面光源](../docs/area-lights.md#有限性能测量)；Windows Release Editor bridge 和托管构建通过。有限范围的单张中心阴影图仍可能漏掉近灯小遮挡物，表面边界仍是近似；混合阴影至多两灯共 64 射线且未做时域滤波，长时运动、复杂场景及更多 GPU 未验收。
+
+- HDRP 参考面光源功能基线 DONE（2026 年 11 月 10 日）：Forward、Deferred、Indexed 和透明接收使用共享矩形灯、LTC、独立阴影图及 PCSS 式近似；可见灯面参与深度；混合光追使用逐灯 Ray Query 遮挡、解析灯面反射及反射命中物面积采样。最多两盏单面恒定辐亮度灯，支持剪切变换；LTC 数据来源与许可随产品分发。隔离 Debug/Release 的 RTX 5060 DX12/Vulkan 数值、场景、材质、反射、阴影及 HDR 对照通过；Release 窗口回归双后端通过，Editor bridge 与托管 Release 构建通过；无灯路径追踪双后端 128 spp 图像与接入前 hash 一致。Intel 核显 DX12 Forward/混合各 8 帧短测无验证错误；Intel Vulkan 在 Runtime 创建前受下述既有限制阻塞，未验证此设备面灯。Cornell 单/双灯 HDR 对照和 RTX 5060 单机短测、验证入口、完整限制见 [面光源](../docs/area-lights.md) 和 [手册](../manual/build.md#面光源短测)。这是所授权功能的近似基线，并非完整 HDRP：中心图有视场、近平面与漏光限制；有限采样有噪声和偏差；阴影缓存、EVSM、质量配置、更多设备/场景、长期运动及性能尚未验收，ReSTIR 与面灯烘焙未实现。M8 并行工作仍按其状态推进。
+
+- M1 Intel Vulkan 时间戳兼容性 TODO（2026 年 11 月 10 日发现）：Intel 核显 Vulkan 队列 `timestampValidBits` 非 64，现有 `VulkanRuntime` 在创建时拒绝设备；Forward/混合面光源均未进入渲染。需设计有限位时间戳回绕与计时契约并验证，不把 DX12 或 RTX Vulkan 的通过等同于此设备通过；日志 `out/area-light-benchmark/intel-vulkan-{forward,raytracing}.log`。
+
+- 矩形面光源子项 DONE（2026 年 11 月 10 日）：Path Tracing 支持最多两盏单面解析矩形/剪切平行四边形灯、有限遮挡、均匀选灯及 NEE/BSDF power MIS；灯变化失效原始/时域历史，Cornell Box 已改用解析顶灯。Debug/Release 双后端面光源 GPU 专项各 3/3，Release 原有双后端光追场景回归各 1/1；两配置场景与常量打包 CPU 契约通过；无面光源旧场景双后端 128 spp BMP hash 与接入前相同；Release Editor 隔离短测双后端 validation errors/资源残留/worker_failed 为零。40² Cornell 无滤波 4096 spp NEE/BSDF 均值 0.221593/0.221921（DX12），四种子 64 spp 相对 NEE 4096 spp 参考 MSE 0.00501/0.03265；该有限场景对照不证明普遍无偏或性能收益。证据 `out/build/area-light-{debug,release}`、`out/area-light-editor-final`、`out/area-no-light-{reference,current}`。限制：两灯上限、非重合单面恒定辐亮度、四段路径与固定偏移；该阶段原始验证不覆盖光栅与混合光追，发光 Mesh/环境不做重要性采样，未做 ReSTIR、跨设备与长期运动验收。接口见 [面光源](../docs/area-lights.md)，操作见 [Cornell Box](../sample/m4/README.md#cornell-box)。M8 整体与并行时域/NRD 工作仍按各自状态推进。
+
+- Cornell Box 示例已由发光网格改为解析矩形顶灯；原始网格灯验证记录见 Git 历史，当前验证与限制见上述面光源结果。
+
+- M7 项目切换子项 DONE（2026 年 11 月 10 日）：项目 scope、File/Open Project、最近项目和失败回退；托管 Debug/Release 各 26/26，回退/取消为模拟测试；Debug/Vulkan 既有 23 项窗口自检通过（30 份关闭账本零泄漏/验证错误/worker_failed），Release/DX12 可见窗口通过文件选择器切换至 PBR 并显示最近列表。Vulkan 的项目切换、真实加载失败回退与混合 DPI 尚未实机验证；M7.2f 原有人工验收限制保留。使用既有原生构建树，未重建并发 M8 工作。操作和契约见 [手册](../manual/build.md#avalonia-嵌入原型) 与 [工作台](../docs/editor-workbench.md#项目会话与切换)。
+
+- 当前实施阶段：M8 路径追踪收敛与白点修订 IN_PROGRESS（2026 年 11 月 9 日用户反馈重新打开）；B4 继续暂停，M7 其它工作仍为 DEFERRED。
+- 当前工作项：研究针对间接路径上方向光窄高光的采样或引导，以多场景和独立 HDR 检验能量与方差，并验证直接高光采样；继续验证相机运动中的遮挡、高光与真实交互，并构造动态物体逐像素运动引导并验证历史拒绝，继续评估运动画质；仅按几何一致性保留静态表面历史的候选在重复与连续采样两次单轨迹试验中均因变化区域退化而撤回；继续验证两点漫反射限幅在真实交互和更多场景中的偏差，改善采样并研究成熟降噪器接入；可见物体运动的全局历史失效与静止恢复已完成有限双后端回归；三种子线性 HDR 参考与有限运动对照已完成；首个时域差值候选因运动端点退化撤回，基于空间滤波分量的预览已通过有限对照；NRD 只完成接入缺口评估；按材质调整 BSDF 混合概率的候选因固定场景误差未改善而撤回。B4.5b 仍为 DEFERRED、默认 OFF；B4.5a 的 Debug 窗口超时仍需跟踪。
+- 分层采样筛选与 HDR 对照工具 DONE（2026 年 11 月 12 日）：新增 `tools/compare_path_hdr.py` 复算独立参考、逐种子 MSE、RGB 通道均值和异常通道；RTX 5060 Release DX12 的 Gallery/Cornell 各 12 种子筛选三种八样本分层方案。主射线分层触发运动端点回归；仅后续维度在 Gallery 4096 spp 平均误差升约 2.7%；仅矩形灯采样在 Cornell 平均误差改善约 1%–3%，单机两次交错 Trace 约增 4%，且方向光白点无关。候选均撤回，未修改默认采样；比较工具验证恒等输入、已知误差与截断 PFM 拒绝。数据与局限见 [验证记录](../docs/performance/m8-path-tracing.md#八样本分层候选筛选2026-年-11-月-12-日)。这是有限场景的筛选，不证明通用退化或收敛问题已解决。
+- 异常镜面路径逐批定位 DONE（2026 年 11 月 12 日）：Gallery 固定相机 seed 3 的 (43,33) 新增八样本批次读回；DX12 的 304–311 批平均镜面蓝色 46.0569，其余批最大约 0.0506。临时 Shader 逐条重放确定样本 309，双后端逐反弹重放确认第三个命中点方向光高光为尖峰主要来源，吞吐没有异常放大。次级余弦采样 80% 候选降低目标白点，但三个种子 4096 spp 的全图 HDR MSE 均略升，已撤回；未修改默认积分器。RTX 5060 Release DX12/Vulkan 场景回归 validation errors=0；重放、候选与局限见 [验证记录](../docs/performance/m8-path-tracing.md#异常路径的逐批和逐反弹重放2026-年-11-月-12-日)，数据 `out/path-whitepoint-batch`、`out/path-whitepoint-batch-final`。单路径不能证明所有白点同源，采样与完整验收仍未完成。
+- 未滤波白点定位基线 DONE（2026 年 11 月 12 日）：RTX 5060 Release DX12/Vulkan、Gallery 96×54 固定相机，三个种子在 64–4096 spp 的总量与分量对照三个独立种子各 16384 spp 未滤波参考，输出逐点异常与 PFM；双后端场景回归及 validation errors=0。DX12 seed 3 的 (43,33) 蓝通道 256/1024/4096 spp 为 0.0562/0.4161/0.1512，参考均值 0.0631，1024 spp 异常主要为间接镜面；另一个低样本异常主要为间接漫反射。日志和数据 `out/path-raw-whitepoint-final/<backend>.log` 与 `out/path-raw-whitepoint-final/<backend>/<backend>/path-raw-convergence`；运行入口见 [验证记录](../docs/performance/m8-path-tracing.md#未滤波高亮与收敛诊断2026-年-11-月-12-日)。单场景、单设备与有限参考，未追踪具体路径、未修改采样或证明收敛，白点问题仍为 IN_PROGRESS。
+- 相机运动基线及历史权重子项 DONE（2026 年 11 月 12 日）：128×72 四轨迹、三种子、逐姿态三种子 4096 spp 未滤波 HDR 参考；新增逐帧原始/空间/时域 HDR、历史保留率、纯旋转和时序误差记录。RTX 5060 Release DX12 对照中，12 组全序列 HDR MSE 降低 0.0047%–0.464%，sRGB 残差变化 MSE 降低 1.49%–7.61%；停止帧及亮区存在局部退化。Release DX12/Vulkan 场景回归通过，验证错误为零；日志与数据 `out/path-camera-round/{baseline-dx12,weight-dx12,weight-vulkan}`。运行入口为 `renderlab_sandbox --backend <dx12|vulkan> --headless --validation on --scene-test --pipeline raytracing --project sample/m4/RayTracing.rlproject --output <目录> --log <日志>`。单场景、单设备、有限参考；没有完整遮挡掩码、交互、高光运动或性能验收，不能视为噪点或原始收敛已解决。详细口径与限制见 [降噪评估](../docs/performance/m8-denoiser-evaluation.md#相机运动基线与历史权重2026-年-11-月-12-日)。
+- 刚体旋转位置诊断验证 DONE（2026 年 11 月 12 日）：RTX 5060 Release DX12/Vulkan 路径场景回归在固定相机下旋转球体，分别检查 68 个首样本命中像素的上一提交位置、当前射线投影和距离；该检查不证明上一帧可见或辐射历史有效。日志 `out/path-rotation-round/{dx12,vulkan}-path.log`；变形、多设备、运动矢量及画质仍待验证。
+- 首样本上一帧位置诊断 DONE（2026 年 11 月 12 日）：按需 Ray Query 计算首个网格命中点的上一提交槽世界位置；RTX 5060 Release DX12/Vulkan 场景及面光源专项通过，球体平移和静态表面的投影、射线距离及未命中规则通过，验证错误为零；各后端八张移动图与接入前一致。仅单轨迹平移和固定相机，位置有效不代表上一帧可见或历史可复用；尚未验证变形、多设备及性能，见 [路径追踪](../docs/path-tracing.md)。日志 `D:/Personal/RenderLab/out/path-previous-position-final/<backend>.log`。
+- 活动时域槽实例变换子项 DONE（2026 年 11 月 12 日）：路径时域的实例矩阵随活动视图槽成功提交后发布，可按需诊断；RTX 5060 Release DX12/Vulkan 场景回归验证连续帧、提取后拒绝的重试、实例重新启用和视图来回切换，验证错误为零。仅单槽、不代表可安全复用辐射；未模拟 GPU 提交失败，未测 CPU 成本，未生成运动矢量。日志 `D:/Personal/RenderLab/out/path-committed-transform-final/<backend>.log`，契约见 [路径追踪](../docs/path-tracing.md#运动预览)。
+- 动态实例变换基线 DONE（2026 年 11 月 12 日）：RTX 5060 Release DX12/Vulkan 路径场景回归验证连续成功帧中球体的前后矩阵及物体空间点映射；`scene.contracts` 通过，覆盖提取失败与实例重新出现。日志 `D:/Personal/RenderLab/out/path-transform-validation/<backend>.log`。这是 CPU 变换与有限平移检查，不是逐像素运动矢量；提取历史不等于按视图成功提交的历史，失败提交、多视图交错及动态光照仍待处理，见 [路径追踪](../docs/path-tracing.md#运动预览)。
+- 动态历史候选的身份区域对照 DONE（2026 年 11 月 12 日）：RTX 5060 Release DX12/Vulkan 单球单轨迹固定首样本测试中，露出区域线性 HDR MSE 略增，覆盖及其余区域变化很小；证据不足以启用候选，实验已撤回。单种子、有限参考和仅主可见性等限制及日志见 [降噪候选评估](../docs/performance/m8-denoiser-evaluation.md#按首样本身份划分的候选对照)。
+- 路径主射线身份诊断子项 DONE（2026 年 11 月 12 日）：默认关闭，按需读回首样本网格、解析灯或环境身份及表面引导；RTX 5060 Release DX12/Vulkan 完整场景回归与面灯专项通过，验证错误为零，移动球体识别 53 个露出和 68 个遮挡像素，诊断开关不改变首帧显示。身份仅限首样本与同帧快照，不代表阴影、间接可见性或持久对象 ID；动态物体历史复用仍未解决。契约和验证入口见 [路径追踪](../docs/path-tracing.md) 与 [降噪候选评估](../docs/performance/m8-denoiser-evaluation.md)。
+- 编辑器 Decimal 自动化修复 DONE（2026 年 11 月 10 日）：保留 RangeValue 接口并以 Double 发送数值事件，Debug/Release 托管测试各 27/27；真实 Windows UI Automation 客户端对 DX12 线程数控件写值并收到 Double 事件，30 秒短测正常退出；Debug 双后端完整 smoke 通过，见 `out/m8-uia-client-third`、`out/m8-uia-diagnostic`。此前重试存在焦点/鼠标捕获和尺寸合并断言间歇失败（`out/m8-uia-fix*`）；已增加尺寸失败诊断，原因尚未确定，不能将本次通过视为稳定性证明。30 秒短测不替代 M7.2f 长时验收。
 - 用户约定：每个子阶段验收后精简计划、标注 DONE 并提交；暂停检查点不冒充子阶段完成。恢复或切换阶段时先更新本入口，不因整个计划存在就自动执行全部阶段，也不以引入依赖本身作为性能成果。
 
 | 阶段 | 目标 | 前置依赖 | 状态 |
@@ -23,7 +56,7 @@
 | M5 | Deferred 与光追基础 | M4 | DONE |
 | M6 | GPU Driven 与执行优化 | M4；光追调度测试另需 M5 | DONE（M6.1–M6.5；可选 M6.0 延期） |
 | M7 | C# 编辑器与完整项目工作流 | M4；默认在 M5、M6 的核心目标后开展 | DEFERRED（已有实现保留，M7.2f 人工复验未关闭；可另行选定子阶段，不依赖 B4 实验完成） |
-| M8 | 一个深入的渲染专题与作品交付 | 所选专题依赖已满足 | NOT_STARTED |
+| M8 | 一个深入的渲染专题与作品交付 | 所选专题依赖已满足 | IN_PROGRESS（用户反馈收敛慢与白点严重） |
 
 默认顺序为 M0 到 M8。M5 和 M6 在 M4 后可以独立推进；单阶段内按下列子阶段顺序执行，不同时建设多个高级系统。完整编辑器后置，M4 只实现运行内容所需的最小项目与资源能力。
 
@@ -32,7 +65,7 @@ R1 契约修订、B1 样例整理/Benchmark、B2 调查和 B3 资源复用已完
 ### 暂停后的工作入口
 
 - 继续 B4：直接从 B4.5b 检查点恢复，不重做已完成 a，不先改 Vulkan；恢复顺序见下方。
-- 切换 M7：当前桥接 ABI 为 v10，默认场景/原生宿主/工作台可复用；原生构建用默认 OFF。
+- 切换 M7：当前桥接 ABI 为 v11，默认场景/原生宿主/工作台可复用；原生构建用默认 OFF。
   `M7.2f` 继续真实输入、画质与混合 DPI 验收；如选择 `M7.3`，从原生材质事务/Undo 边界和 Schema Inspector 开始，不自动扩展成场景或资源编辑。
 - 切换 M8：M4–M6 核心前置已满足，可独立于分配器实验开始；仍须先选一个主专题，不能将四个候选同时启动。
 - 其它工作共用当前 checkout 时，不依赖忽略目录 `out` 中的草稿或旧 DLL。原生/托管使用同配置；
@@ -250,6 +283,7 @@ Alias/RHI 共 4 项）通过；两棵日常构建树均已恢复 OFF，格式、
 
 状态：DEFERRED（本轮范围外，原 M7.2）。
 
+- [ ] 按 [分层设计](architecture.md#总体分层) 从实际材质用例抽取原生应用服务及桥接；核心保持可独立使用，编辑专用服务不强加给 Player。
 - [ ] Schema 自动 Inspector、未保存材质预览、参数验证。
 - [ ] Begin/Update/Commit/Cancel 编辑事务，连续拖动形成一条 Undo。
 - [ ] UI 快照和命令队列不直接暴露 GPU 对象，编译事件显示错误位置。
@@ -258,6 +292,7 @@ Alias/RHI 共 4 项）通过；两棵日常构建树均已恢复 OFF，格式、
 
 状态：DEFERRED（本轮范围外，原 M7.3）。
 
+- [ ] 项目会话与资源操作由原生应用服务维护权威规则，C# 负责界面和状态投影；按实际用例扩展桥接。
 - [ ] 创建/打开/关闭项目、资源树、搜索、导入进度。
 - [ ] Move/Rename/Copy/Delete 调用统一资源服务，处理引用与冲突。
 - [ ] Library 重建、损坏缓存恢复、编辑资源与外部变更冲突提示。
@@ -282,14 +317,151 @@ M7.2 出口：给定固定场景下，两面板默认布局与菜单按需打开
 
 ## M8 专题深化与作品交付
 
-先选择一个主专题并写清目标、参考基线和必要输入，其他专题保持 DEFERRED，不默认全部实施。
+状态：IN_PROGRESS。基础路径追踪、编辑器接入和显示降噪曾完成；用户反馈高样本仍有严重
+噪点与白点，重新打开以改进采样和收敛，其余候选未实施。不得把低样本显示滤波的改善当作
+积分器收敛已解决。
 
-候选为 TAA 与运动矢量、进阶光追反射与降噪、基础路径追踪、Hi-Z/LOD GPU Driven。Path Tracing 使用独立组合：场景/AS → Trace/采样 → History 累积 → 可选降噪 → ToneMapping；替代普通光栅主体，共用资源图和基础材质，不插在 Transparent 阶段。路径追踪先验证采样、BSDF/PDF、累积和收敛，再据测量决定是否建设 Wavefront 队列；降噪前保留原始结果作为正确性入口。
+- [x] 建立约 19948 spp 未滤波基线；受控拆分表明间接路径上的方向光贡献是主要方差来源。
+- [ ] 改进采样，保留可对照的原始结果；验证能量、收敛、图像偏差与双后端。按材质调整 BSDF 混合比例候选已撤回，原因见 [对照记录](../docs/performance/m8-path-denoise.md#bsdf-采样比例候选已撤回)。
+- [ ] 完整验证快速运动、遮挡及球体高光序列和真实窗口等待时间；研究分离漫反射/镜面信号和间接光采样后再关闭阶段。
 
-- [ ] 明确选择、支持范围与对照条件，拆成可验收的小步。
-- [ ] 建立正确性参考，固定随机序列与相机并处理历史失效。
-- [ ] 提供不同场景/规模的 CPU、GPU、内存数据与 Capture。
-- [ ] 记录局限、误差和退化情况，避免只展示一个有利场景。
-- [ ] 发布可运行演示、构建说明、操作说明、录屏和技术文章。
+多种子运动基线（2026 年 11 月 10 日）：增加可复现采样种子并在种子变化时重置
+渐进和时域历史；默认种子保持既有流。RTX 5060 上 Debug/Release 的 DX12/Vulkan
+`gpu.*.reflections` 均通过，覆盖种子变化、复现和历史重置。Release 三条轨迹各三个
+候选种子对照另一种子 4096 spp 参考，时域全序列 MSE 略低而停帧 MSE 略高；参考、
+8 位度量和场景限制见 [评估](../docs/performance/m8-denoiser-evaluation.md#多种子运动基线)。
 
-退出条件：所选专题完成且可复现，作品能由他人运行，讲解能从画面追踪到程序、资源和 GPU 执行。
+三种子线性 HDR 运动参考（2026 年 11 月 10 日）：新增可选显示分支 HDR 读回，
+三种子各 4096 spp 在线性空间平均并输出 PFM；RTX 5060 Release DX12/Vulkan 的
+`gpu.*.reflections` 各通过 1/1，九组全序列及停帧线性 MSE 时域均略低于空间结果，
+多数差距很小。独立脚本复算一组指标并核对参考均值；Debug、动态物体与主观画质未
+验证，方法、数据和有限参考限制见 [评估](../docs/performance/m8-denoiser-evaluation.md#三种子线性-hdr-参考)。
+
+路径诊断与面光源阴影合并复验（2026 年 11 月 12 日）：RTX 5060、Release 下
+DX12/Vulkan 的路径场景、面光源渲染、光栅面光源和阴影滤波 GPU 专项共 8/8 通过；
+构建和测试入口为 `out/build/area-light-release`。本次未重跑 Debug、编辑器窗口或
+人工画质验收，原有设备和动态画质限制保留。
+
+移动几何历史回归（2026 年 11 月 12 日）：RTX 5060、Release 下 DX12/Vulkan 的
+光追场景回归通过；四帧可见球体移动均重置全局渐进与时域历史，时域开关的冷启动
+HDR 相同，停下后重新累积；两后端首末画面各有 207 像素超过指定变化阈值。首次选择
+的球体可见变化不足，已改用前排球体；该结果不构成遮挡真值、动态区域复用或主观
+画质验收，详见 [评估](../docs/performance/m8-denoiser-evaluation.md#移动物体历史失效)。
+
+移动几何历史保留候选（2026 年 11 月 12 日）：仅用几何匹配保留显示历史的候选在
+Release/DX12 单轨迹、单种子对照中全图改善极小，参考变化通道误差增加，已撤回；
+回滚后 Release/DX12 场景回归通过，八张移动帧截图与候选前逐字节一致；未验证候选
+的 Vulkan、其他轨迹或性能，方法和证据见
+[评估](../docs/performance/m8-denoiser-evaluation.md#物体运动时保留历史候选已撤回)。
+
+连续采样的移动历史候选（2026 年 11 月 12 日）：试验中令空间基线与候选共同推进
+相同的逐帧采样序列，避免反复使用相同随机起点；Release/DX12 单轨迹对照整体收益不足 1%，变化区域
+误差升高，再次撤回。恢复基线并重建；候选未做 Vulkan、多种子或性能验证，方法见
+[评估](../docs/performance/m8-denoiser-evaluation.md#物体运动时保留历史候选已撤回)。
+
+两点漫反射亮点限幅（2026 年 11 月 10 日）：定位到球体亮点因只有两个匹配样本而
+绕过滤波，对明显超限的漫反射增加保守限幅并保留两点镜面；RTX 5060 Release 的
+DX12/Vulkan 场景专项通过，固定 HDR 热点及镜面检查通过，三轨迹三种子线性 HDR
+对照整体改善但部分受影响通道变差；固定静止 504/8184 spp 截图与旧版一致。
+Release 编辑器双后端三秒 Gallery 短测正常关闭且零验证错误/剩余分配/worker_failed，
+见 `D:/Personal/RenderLab/out/hdr-guarded-editor-{dx12,vulkan}`。叠加 LTC 光栅面光源后，
+Release 的 DX12/Vulkan 光栅面光源、路径面光源和路径场景专项均通过，编辑器双后端
+Gallery 三秒短测零验证错误/剩余分配/worker_failed；证据 `D:/Personal/RenderLab/out/hdr-ltc-*`。
+Debug、真实交互及更多设备未验证，局部偏差与成本见
+[评估](../docs/performance/m8-denoiser-evaluation.md#两点漫反射亮点限幅)。
+
+合并复验（2026 年 11 月 12 日）：面光源基线与两点限幅合并后，RTX 5060、Release
+下 DX12/Vulkan 的路径追踪、光栅面光源及路径面光源 GPU 专项共 6/6 通过；构建树与
+结果为 `out/build/m5-release`。本次未重跑 Debug、编辑器窗口或人工画质验收，既有
+限制继续保留。
+
+分量时域差值候选（2026 年 11 月 10 日）在 Release/DX12 首项运动端点测试退化并已
+撤回；重建后 Release/DX12 专项通过，312 张序列图片与候选前逐字节一致；未运行
+Vulkan 或多种子候选画质测试。方法、结果和后续方向见
+[评估](../docs/performance/m8-denoiser-evaluation.md#分量时域修正候选已撤回)。
+
+空间滤波分量诊断（2026 年 11 月 10 日）：按需输出漫反射/镜面与滤波总量，验证与
+直接分量重组；RTX 5060、隔离 Release 的 DX12/Vulkan 场景专项通过，诊断开关的首帧
+显示图相同；日志 `D:/Personal/RenderLab/out/pc{2,3}`。只覆盖当前场景，未做独立 GPU
+合成边界或性能测试；后续已用于分量时域候选并通过组合后的 Debug/Release 回归，见
+[契约](../docs/path-tracing.md)。
+
+分量时域预览（2026 年 11 月 10 日）：分别累积空间滤波后的间接漫反射与镜面，
+镜面使用保守视差置信度；RTX 5060、隔离 Release 的 DX12/Vulkan 场景专项通过，
+独立历史读回覆盖长度和有效数值，三轨迹各三种子对照及短时成本见
+[评估](../docs/performance/m8-denoiser-evaluation.md#分量空间结果的独立时域预览)。
+Release 托管编辑器配隔离 Release Bridge，双后端 Gallery 3 秒短测正常关闭，零验证
+错误/剩余分配/worker_failed，`D:/Personal/RenderLab/out/pc-editor-{dx12,vulkan}`；
+叠加矩形面光源接线后，隔离 Debug/Release 的 DX12/Vulkan 场景专项和 Release 面光源
+HDR 专项均通过；Release 托管编辑器与隔离 Bridge 双后端 Cornell Box 三秒短测，零
+验证错误/剩余分配/worker_failed（`D:/Personal/RenderLab/out/pc-{debug,area-combined,area}`、
+`D:/Personal/RenderLab/out/pc-combined-editor-{dx12,vulkan}`）。尚未做完整 smoke、
+动态物体、用户交互画质或多种子 HDR 参考验收。
+
+首个次级距离与镜面视差引导（2026 年 11 月 10 日）：按主表面匹配和采样分布汇总
+首条次级距离，低粗糙度时以近似视差保守调整混合历史置信度；不改变原始累积，也不
+等同完整镜面重投影或 NRD 输入。RTX 5060 Debug/Release 双后端 GPU 回归各 4/4，
+Debug Vulkan 编辑器完整 smoke 与双后端 Path Tracing 窗口短测通过；DX12 完整 smoke
+两次因 Avalonia `UnsupportedType (Decimal)` 失败，后续修复并重新通过，见当前状态。固定轨迹的指标
+变化很小，不能宣称明显画质改善；方法、成本和失败堆栈入口见
+[降噪验证](../docs/performance/m8-path-denoise.md#首个次级命中引导与镜面置信度)。
+
+主散射间接分量（2026 年 11 月 10 日）：相同路径按主散射的 BRDF 两项逐通道分配
+间接贡献，独立累积漫反射，以总量减直接和漫反射得到镜面；各分量分别空间限幅，
+保持原始总历史与现有开关。RTX 5060 Debug/Release 双后端 GPU 数值及场景回归
+各 4/4、Debug 双后端编辑器 smoke 通过；半球积分覆盖金属/非金属、两粗糙度与多个视角，
+场景 HDR 读回检查非负与切换一致。固定场景画质改善有限并仍有偏暗，额外成本与
+镜面半强度候选退化见 [降噪验证](../docs/performance/m8-path-denoise.md)。尚无每分量
+时域、次级 hit-distance、NRD 接入或跨多种子验收，不将此项当作降噪终点。
+
+降噪候选评估（2026 年 11 月 10 日）：额外间接光宽尺度在高样本静止图改善，
+但低样本与运动球体区域 MSE 退化，已撤回并确认回滚图与原结果一致。NRD 只读
+评估了输入、资源与许可入口，尚未接入、构建或运行；见
+[候选评估](../docs/performance/m8-denoiser-evaluation.md)。
+
+主表面直接光分离（2026 年 11 月 10 日）：直接贡献单独累积，显示滤波只处理剩余
+间接分量并加回直接量；原始总累积与开关不受影响，亮度统计仍为总信号。RTX 5060
+Debug/Release 双后端 GPU 场景及合成测试通过，Debug 编辑器双后端 smoke 通过。
+固定场景与运动轨迹指标、偏差和成本见 [降噪验证](../docs/performance/m8-path-denoise.md)。
+间接漫反射/镜面尚未分离，多尺度 SVGF、NRD 对照和遮挡的真实窗口验收仍未完成。
+
+路径追踪运动预览与序列复核（2026 年 11 月 10 日）：独立显示历史按主表面与材质重投影，
+按屏幕位移降低权重、拒绝低支持度历史并加快停止后的交接，保留原始累积和开关。
+RTX 5060 的 Debug/Release 双后端 GPU 场景回归及 Debug 双后端编辑器 smoke 通过；
+慢速、快速和横移轨迹逐帧对照在固定场景有小幅改善，停止后仍有少量误差增加。
+图像、成本与限制见 [降噪验证](../docs/performance/m8-path-denoise.md)。当前未分离
+镜面信号，未确认遮挡真值、真实窗口与用户主观画质，不能认为球体噪声和拖影问题已解决。
+
+编辑器缺失 Shader 修复（2026 年 11 月 10 日）：托管构建检查原生构建树是否包含当前
+全部内置 Shader，缺失时提示重建 Bridge；检查不判断现有文件或 DLL 内容是否过旧。实测
+旧构建树正确报错，重建 Debug Bridge 和托管程序后 RTX 5060 上 DX12/Vulkan 编辑器
+自检均通过（`out/m8-debug-shader-fix`）；默认 Release 构建树和托管构建已更新。
+
+批量采样与显示滤波修订：每帧最多 8 条独立路径、按真实样本数合并 HDR 历史，
+显示滤波按亮度统计和样本数渐弱；不改变积分器分布，未声称消除原始高方差。RTX 5060
+Debug/Release 双后端 GPU 回归各 4/4、Release 编辑器双后端 smoke 通过；
+新版独立包解压后双后端 validation 启动通过（`out/RenderLab-PathTracing-batch.zip`）；对照与短测见
+[降噪验证](../docs/performance/m8-path-denoise.md)。
+
+结果：独立 PathTracing Graph，内置不透明 Lit/Unlit、四段路径、金属粗糙度漫反射与
+visible-GGX、方向光/环境/发光及未滤波 HDR 累积；ABI v11 的编辑器支持管线选择、能力
+校验和持续累积。默认引导空间滤波仅处理显示、保留原始历史，可关闭，并随统计不确定度和样本数渐弱。
+滤波有偏，会软化细节/真实高光。接口与操作见 [路径追踪](../docs/path-tracing.md)、
+[编辑器宿主](../docs/editor-host.md) 和 [手册](../manual/build.md)。两套场景、运行包、录像、
+RenderDoc Capture 和技术记录见 [初版验证](../docs/performance/m8-path-tracing.md)；新的包为
+`out/RenderLab-PathTracing-demo.zip`，旧录像与 Capture 对应未滤波初版。
+
+验证：MSVC Debug/Release 全目标构建，最终初始化修正后重建 Sandbox/Player/Bridge；RTX 5060 上两配置的 DX12/Vulkan Graph、BSDF/AS 与
+场景回归各 5/5，验证滤波开关不重置或污染原始历史。两配置托管测试各 22/22、双后端
+工作台自检各 23 项、各 30 次关闭账本和 validation errors/worker_failed 均为零。
+旧版本 Release 双后端高样本开/关图 hash 各自一致（当前滤波策略不再保证 2048 spp 精确旁路）；两个固定场景的低样本对照、异常亮点指标、
+内存、成本与局限见 [降噪验证](../docs/performance/m8-path-denoise.md)，记录在
+`out/m8-denoise`、`out/m8-denoise-editor{,-debug}`；最终初始化修正后的 Release 双后端工作台
+自检另见 `out/m8-denoise-final-editor`。初版 CPU 独立 BSDF 积分、双场景多尺寸、
+窗口、独立解压包与 Capture 的结果见初版验证；旧版更新包已解压后双后端启动验证；本轮独立包另见上述 batch 包。
+
+限制：只在本机 RTX 5060 实测，未在第二台机器运行；不支持透明、Masked、动态几何或通用
+发光体重要性采样。四段上限、固定偏移、单 mip、有限采样仍有误差与噪声；引导空间滤波有偏，
+可能模糊高光，抖动引导在边缘可能闪烁。未验证其他 GPU、4K、长期压力、Vulkan Capture、
+用户主观画质或 M7.2f 的真实输入/混合 DPI。演示未托管公共站点；`out` 交付物不纳入 Git，
+需另行保存。
