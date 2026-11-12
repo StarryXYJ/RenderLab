@@ -192,6 +192,12 @@ struct SceneRenderer::Impl
     }
     struct TemporalHistory
     {
+        struct InstanceTransform
+        {
+            std::string model, mesh;
+            math::Mat4 world;
+        };
+        std::map<std::string, InstanceTransform> pathInstances;
         std::string signature, viewId;
         std::array<std::array<std::shared_ptr<rhi::Texture>, 4>, 2> textures;
         std::array<std::shared_ptr<rhi::Texture>, 2> pathSpecular;
@@ -2638,6 +2644,30 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
         result.sceneExtractNs = ns(extractEnd - extractStart);
         result.environmentUpdateNs = ns(environmentEnd - environmentStart);
     }
+    std::map<std::string, Impl::TemporalHistory::InstanceTransform> nextPathInstances;
+    if (pathTracing && frame.rayTracing.temporalPipeline)
+    {
+        const auto& temporal = self.temporalHistory;
+        const bool sameView =
+            temporal.active && temporal.viewId == "path/" + self.document.activeCamera;
+        if (options.pathIdentityDiagnostics)
+            result.pathPreviousWorld.reserve(self.snapshot.allInstances.size());
+        for (const auto& instance : self.snapshot.allInstances)
+        {
+            if (options.pathIdentityDiagnostics)
+            {
+                const auto old = temporal.pathInstances.find(instance.id);
+                if (sameView && old != temporal.pathInstances.end() &&
+                    old->second.model == instance.model && old->second.mesh == instance.mesh)
+                    result.pathPreviousWorld.emplace_back(old->second.world);
+                else
+                    result.pathPreviousWorld.emplace_back(std::nullopt);
+            }
+            nextPathInstances.emplace(
+                instance.id, Impl::TemporalHistory::InstanceTransform{instance.model, instance.mesh,
+                                                                      instance.world});
+        }
+    }
     graph.Compile({.profile = options.profile,
                    .recordingThreads = options.recordingThreads,
                    .asyncCompute = options.asyncCompute,
@@ -2671,6 +2701,7 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
     }
     auto& temporal = self.temporalHistory;
     temporal.active = bool(frame.rayTracing.temporalPipeline);
+    temporal.pathInstances = std::move(nextPathInstances);
     if (temporal.active)
     {
         temporal.signature = std::move(temporalSignature);

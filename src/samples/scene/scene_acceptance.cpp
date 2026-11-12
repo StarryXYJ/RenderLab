@@ -357,6 +357,18 @@ void VerifyPathMovingObject(rhi::Runtime& runtime, shader::Target target,
             scene.Document().Get(actorId).transform.position.x = startX + .45f * float(i + 1);
             const auto frame = render();
             const auto& instance = actorInstance();
+            if (mode == 1)
+            {
+                const auto& instances = scene.LastSnapshot().allInstances;
+                const auto index = static_cast<size_t>(&instance - instances.data());
+                detail::Require(frame.pathPreviousWorld.size() == instances.size() &&
+                                    frame.pathPreviousWorld[index] &&
+                                    frame.pathPreviousWorld[index]->values == previousWorld.values,
+                                "Committed temporal slot lost the moving instance transform");
+            }
+            else
+                detail::Require(frame.pathPreviousWorld.empty(),
+                                "Inactive temporal preview exposed instance history");
             detail::Require(instance.previousWorld.values == previousWorld.values,
                             "Moving instance did not retain the preceding extracted transform");
             const math::Vec3 localPoint{.25f, -.3f, .4f};
@@ -525,11 +537,108 @@ void VerifyScene(rhi::Runtime& runtime, shader::Target target, const std::filesy
         const auto first = pathFrame();
         const auto second = pathFrame();
         pathOptions.pathIdentityDiagnostics = false;
+        const auto& pathInstances = pathRenderer.LastSnapshot().allInstances;
+        detail::Require(first.pathPreviousWorld.size() == pathInstances.size() &&
+                            second.pathPreviousWorld.size() == pathInstances.size(),
+                        "Temporal instance diagnostics have the wrong size");
+        for (size_t i = 0; i < pathInstances.size(); ++i)
+            detail::Require(!first.pathPreviousWorld[i] && second.pathPreviousWorld[i] &&
+                                second.pathPreviousWorld[i]->values ==
+                                    pathInstances[i].world.values,
+                            "Temporal instance history did not publish after submission");
         detail::Require(first.reflectionSamples == renderer::PathSamplesPerFrame &&
                             first.reflectionHistoryReset &&
                             second.reflectionSamples == 2 * renderer::PathSamplesPerFrame &&
                             !second.reflectionHistoryReset,
                         "Path tracing did not accumulate successive samples");
+        {
+            renderer::SceneRenderer tracked(runtime, target, fixture, engine);
+            auto& document = tracked.Document();
+            const auto originalCamera = document.activeCamera;
+            auto alternate = document.Get(originalCamera);
+            alternate.id = project::NewId();
+            const auto alternateId = alternate.id;
+            document.objects.push_back(alternate);
+            const auto actor =
+                std::ranges::find_if(document.objects, [](const auto& object)
+                                     { return object.enabled && object.mesh.has_value(); });
+            detail::Require(actor != document.objects.end(),
+                            "Transform history fixture needs a mesh");
+            const auto actorId = actor->id;
+            auto trackedTarget = runtime.CreateTexture(
+                {32, 24, rhi::Format::Rgba8Srgb, false, true, "PathTracing.TransformHistory"});
+            auto targetState = rhi::State::Undefined;
+            renderer::SceneRenderOptions options;
+            options.pipeline = renderer::PipelineType::PathTracing;
+            options.pathIdentityDiagnostics = true;
+            const auto render = [&]()
+            {
+                auto frame =
+                    tracked.Render(trackedTarget, targetState, nullptr, false, {}, options);
+                targetState = rhi::State::CopySource;
+                runtime.Wait(frame.completion);
+                return frame;
+            };
+            const auto actorHasHistory = [&](const renderer::SceneReadback& frame)
+            {
+                const auto& instances = tracked.LastSnapshot().allInstances;
+                for (size_t i = 0; i < instances.size(); ++i)
+                    if (instances[i].id.starts_with(actorId + "/"))
+                        return bool(frame.pathPreviousWorld.at(i));
+                throw std::runtime_error("Transform history fixture actor is missing");
+            };
+            const auto cold = render();
+            detail::Require(!actorHasHistory(cold), "Cold view inherited an instance transform");
+            const auto warm = render();
+            detail::Require(actorHasHistory(warm),
+                            "Submitted view did not publish instance transform");
+            const auto findActor = [&]() -> const scene::Instance&
+            {
+                const auto& instances = tracked.LastSnapshot().allInstances;
+                const auto found =
+                    std::ranges::find_if(instances, [&](const auto& instance)
+                                         { return instance.id.starts_with(actorId + "/"); });
+                detail::Require(found != instances.end(), "Committed actor instance missing");
+                return *found;
+            };
+            const auto committed = findActor().world;
+            document.Get(actorId).transform.position.x += .3f;
+            options.shadowResolution = 1;
+            bool rejected = false;
+            try
+            {
+                render();
+            }
+            catch (const std::invalid_argument&)
+            {
+                rejected = true;
+            }
+            detail::Require(rejected, "Invalid post-extraction frame unexpectedly succeeded");
+            document.Get(actorId).transform.position.x += .4f;
+            options.shadowResolution = 0;
+            const auto retried = render();
+            const auto& retryActor = findActor();
+            const auto retryIndex =
+                static_cast<size_t>(&retryActor - tracked.LastSnapshot().allInstances.data());
+            detail::Require(retried.pathPreviousWorld.at(retryIndex) &&
+                                retried.pathPreviousWorld[retryIndex]->values == committed.values &&
+                                retryActor.previousWorld.values != committed.values,
+                            "Rejected frame advanced committed temporal transform history");
+            document.Get(actorId).enabled = false;
+            render();
+            document.Get(actorId).enabled = true;
+            const auto restored = render();
+            detail::Require(!actorHasHistory(restored),
+                            "Re-enabled instance inherited stale transform");
+            document.activeCamera = alternateId;
+            const auto switched = render();
+            detail::Require(!actorHasHistory(switched),
+                            "Another view inherited an instance transform");
+            document.activeCamera = originalCamera;
+            const auto returned = render();
+            detail::Require(!actorHasHistory(returned),
+                            "Returned view inherited the active view's transform");
+        }
         const auto filteredPitch = rhi::TextureRowPitch(64, rhi::Format::Rgba32Float);
         uint32_t filteredIndirectPixels = 0;
         for (uint32_t y = 0; y < 48; ++y)

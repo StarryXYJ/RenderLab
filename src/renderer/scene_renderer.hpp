@@ -15,6 +15,7 @@
 #include <map>
 #include <memory>
 #include <optional>
+#include <vector>
 
 namespace renderlab::rhi
 {
@@ -119,6 +120,10 @@ struct SceneReadback
     std::shared_ptr<rhi::Buffer> pathPrimaryIdentity;
     /// Matching first-sample normal and signed ray distance for identity validation.
     std::shared_ptr<rhi::Buffer> pathPrimarySurface;
+    /// Previous committed temporal-slot transforms aligned with LastSnapshot().allInstances.
+    /// Present only for identity diagnostics with path temporal enabled; empty entries have no
+    /// match.
+    std::vector<std::optional<math::Mat4>> pathPreviousWorld;
     /// Optional final linear RGBA32F, pitched by TextureRowPitch; wait before mapping.
     std::shared_ptr<rhi::Buffer> sceneHdr;
     /// Optional RGBA8 shadow visibility: directional in R, area lights in G/B.
