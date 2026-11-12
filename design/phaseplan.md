@@ -4,7 +4,7 @@
 
 ## 当前状态
 
-- 点光源 IN_PROGRESS（2026 年 11 月 12 日）：场景组件、序列化、层级提取及 Release CPU 契约测试已完成；线性色彩、坎德拉强度、世界空间范围，缩放不改变范围。Forward、Deferred 和混合主表面支持最多八盏点光源；双后端小场景开关对照和 DX12 八灯场景短测完成，DX12 Indexed Direct、CPU Indirect 与 GPU Culled 的八灯画面和 Direct 哈希一致；Vulkan Indexed 未验证。Path Tracing 显式连接点源并进行三角形及矩形灯有限遮挡：RTX 5060 Release 双后端八灯短测、单灯开关画面对照及灯变化历史测试通过；面灯回归双后端通过。混合主表面及反射命中已增加逐灯遮挡；Release 双后端单灯被遮挡时 Path 直接光均值由 0.383 降至 0.0054，混合由 0.365 降至 0.0051，第八盏灯遮挡位通过相同对照；混合反射画质及性能未验收。光栅点光源遮挡尚未实现；接口见 [点光源](../docs/point-lights.md)，继续实现并验收。
+- 点光源 IN_PROGRESS（2026 年 11 月 12 日）：场景组件、序列化、层级提取及 Release CPU 契约测试已完成；线性色彩、坎德拉强度、世界空间范围，缩放不改变范围。Forward、Deferred 和混合主表面支持最多八盏点光源；双后端小场景开关对照和 DX12 八灯场景短测完成，DX12 Indexed Direct、CPU Indirect 与 GPU Culled 的八灯画面和 Direct 哈希一致；Vulkan Indexed 未验证。Path Tracing 显式连接点源并进行三角形及矩形灯有限遮挡：RTX 5060 Release 双后端八灯短测、单灯开关画面对照及灯变化历史测试通过；面灯回归双后端通过。混合主表面及反射命中已增加逐灯遮挡；Release 双后端单灯被遮挡时 Path 直接光均值由 0.383 降至 0.0054，混合由 0.365 降至 0.0051，第八盏灯遮挡位、路径直接光强度翻倍和范围外归零通过对照；Release Editor 原生桥接及托管构建通过。混合反射画质及性能未验收。光栅点光源遮挡尚未实现；接口见 [点光源](../docs/point-lights.md)，继续实现并验收。
 
 - 多物体光照压测场景 DONE（2026 年 11 月 12 日）：145 个可见网格、两盏矩形面灯和一盏主方向光，RTX 5060 Release 短测 DX12 四管线及 Vulkan Path Tracing 完成且 validation errors 为零；Vulkan Forward、Deferred、混合光追因描述符块预算耗尽不能加载，DX12 有 clear value 警告。验证入口和限制见 [手册](../manual/build.md#多物体光照压测)。后续已加入八盏点光源，见上述工作项；Vulkan 资源预算仍待处理。
 

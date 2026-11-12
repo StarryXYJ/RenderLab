@@ -358,6 +358,18 @@ void Check(rhi::Runtime& runtime, shader::Target target, const std::filesystem::
     options.sceneHdrDiagnostics = false;
     options.reflections = true;
     const auto pointOpen = capture(701, true, 64);
+    doc.Get(point.id).pointLight->intensity = 40;
+    const auto pointDouble = capture(701, true, 64);
+    const auto pointMean = mean(pointOpen.direct, reference.total);
+    const auto doubleMean = mean(pointDouble.direct, reference.total);
+    Require(pointMean > .01 && std::abs(doubleMean / pointMean - 2) < .001,
+            "Point-light direct energy did not scale with intensity");
+    doc.Get(point.id).pointLight->intensity = 20;
+    doc.Get(point.id).pointLight->range = .01f;
+    const auto pointOutOfRange = capture(701, true, 16);
+    Require(mean(pointOutOfRange.direct, reference.total) < 1e-6,
+            "Point light emitted outside its range");
+    doc.Get(point.id).pointLight->range = 10;
     const auto pointHybridOpen = rasterCapture(renderer::PipelineType::RayTracing);
     doc.objects.push_back(blocker);
     options.pipeline = renderer::PipelineType::PathTracing;
