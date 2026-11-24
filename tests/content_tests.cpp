@@ -106,6 +106,42 @@ void ContentContracts(const std::filesystem::path& manifest, const std::filesyst
                           std::filesystem::copy_options::recursive);
     std::filesystem::copy_file(manifest, root / "RenderLab.rlproject");
     const auto project = project::Project::Open(root / "RenderLab.rlproject", engine);
+    Require(!project.rendering, "Legacy projects must not acquire a rendering descriptor");
+    {
+        const auto path = root / "RenderLab.rlproject";
+        auto data = assets::detail::LoadJson(path);
+        data["rendering"] = {{"version", 1},
+                             {"modules", {"Library/Modules/example.dll"}},
+                             {"defaultPipeline", "experiment.forward"}};
+        assets::detail::SaveJson(path, data);
+        const auto described = project::Project::Open(path, engine);
+        Require(described.rendering &&
+                    described.rendering->defaultPipeline == "experiment.forward" &&
+                    described.rendering->modules.size() == 1 &&
+                    described.rendering->modules[0] ==
+                        project::Inside(root, "Library/Modules/example.dll"),
+                "Project rendering descriptor was not resolved inside its project");
+        data["rendering"]["modules"] = {"../outside.dll"};
+        assets::detail::SaveJson(path, data);
+        Fails([&] { project::Project::Open(path, engine); }, "escapes");
+        data["rendering"]["modules"] = {"C:/outside.dll"};
+        assets::detail::SaveJson(path, data);
+        Fails([&] { project::Project::Open(path, engine); }, "relative");
+        data["rendering"]["modules"] = {"Library/Modules/example.dll",
+                                        "Library/Modules/example.dll"};
+        assets::detail::SaveJson(path, data);
+        Fails([&] { project::Project::Open(path, engine); }, "Duplicate project module");
+        data["rendering"]["modules"] = Json::array();
+        data["rendering"]["defaultPipeline"] = "Bad Pipeline";
+        assets::detail::SaveJson(path, data);
+        Fails([&] { project::Project::Open(path, engine); }, "Invalid default pipeline");
+        data["rendering"]["defaultPipeline"] = "renderlab.forward";
+        data["rendering"]["version"] = 2;
+        assets::detail::SaveJson(path, data);
+        Fails([&] { project::Project::Open(path, engine); }, "Invalid project rendering");
+        data.erase("rendering");
+        assets::detail::SaveJson(path, data);
+    }
     assets::Database db(project);
     const auto scenes = db.Scenes();
     Require(!scenes.empty() && std::ranges::any_of(scenes, [&](const auto& entry)

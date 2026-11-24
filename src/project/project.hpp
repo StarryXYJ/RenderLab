@@ -1,19 +1,29 @@
 #pragma once
 
 #include <filesystem>
+#include <optional>
 #include <string>
 #include <string_view>
+#include <vector>
 
 namespace renderlab::project
 {
 /// @brief Generates a UUID v4 encoded as 32 lowercase hexadecimal characters.
 std::string NewId();
 bool ValidId(std::string_view id);
+/// Stable rendering IDs use lowercase ASCII and are independent of transient UI indices.
+bool ValidRenderingId(std::string_view id);
+struct Rendering
+{
+    std::vector<std::filesystem::path> modules;
+    std::string defaultPipeline;
+};
 /** @brief Manifest paths stay inside the project; built-in engine resources are mounted by host. */
 struct Project
 {
     std::filesystem::path manifest, root, assets, library, engine;
     std::string id, startScene;
+    std::optional<Rendering> rendering;
     /// @brief Loads version 1 and validates mount containment; engineRoot is supplied by the host.
     static Project Open(const std::filesystem::path& manifest,
                         const std::filesystem::path& engineRoot);

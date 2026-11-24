@@ -34,11 +34,11 @@ int wmain(int argc, wchar_t** argv)
 {
     try
     {
-        Require(argc == 12 || argc == 13,
-                "Expected eleven project module fixtures and optional incompatible fixture");
+        Require(argc == 13 || argc == 14,
+                "Expected twelve project module fixtures and optional incompatible fixture");
         using renderlab::renderer::ProjectModules;
-        std::filesystem::path paths[11];
-        for (int i = 0; i < 11; ++i)
+        std::filesystem::path paths[12];
+        for (int i = 0; i < 12; ++i)
             paths[i] = std::filesystem::absolute(argv[i + 1]);
         {
             ProjectModules registry({paths[0], paths[8]});
@@ -69,9 +69,10 @@ int wmain(int argc, wchar_t** argv)
               "Cannot load project module");
         Fails([&] { ProjectModules invalid({paths[9]}); }, "ABI");
         Fails([&] { ProjectModules invalid({paths[10]}); }, "ABI");
-        if (argc == 13)
+        Fails([&] { ProjectModules invalid({paths[11]}); }, "reserved renderlab namespace");
+        if (argc == 14)
         {
-            const auto incompatible = std::filesystem::absolute(argv[12]);
+            const auto incompatible = std::filesystem::absolute(argv[13]);
             Fails([&] { ProjectModules invalid({incompatible}); }, "ABI");
         }
         std::cout << "Project module contracts passed\n";

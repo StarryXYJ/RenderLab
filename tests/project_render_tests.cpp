@@ -1,3 +1,4 @@
+#include "assets/json_io.hpp"
 #include "core/log.hpp"
 #include "project/project.hpp"
 #include "renderer/project_module.hpp"
@@ -148,6 +149,46 @@ int main(int argc, char** argv)
                     Require(!retained.expired(), "In-flight submission lost its module");
                 runtime->Wait(frame.completion);
                 Require(retained.expired(), "Retired submission retained its module");
+            }
+            {
+                const auto manifest = root / "project.rlproject";
+                auto data = assets::detail::LoadJson(manifest);
+                data["rendering"] = {{"version", 1},
+                                     {"modules", {"Modules/fixture.dll"}},
+                                     {"defaultPipeline", "test.blue"}};
+                assets::detail::SaveJson(manifest, data);
+                const auto target = deviceOptions.backend == rhi::Backend::Dx12
+                                        ? shader::Target::Dxil
+                                        : shader::Target::Spirv;
+                Fails([&] { renderer::SceneRenderer missing(*runtime, target, manifest, argv[4]); },
+                      "Cannot load project module");
+                std::filesystem::create_directories(root / "Modules");
+                std::filesystem::copy_file(modulePath, root / "Modules/fixture.dll");
+                data["rendering"]["defaultPipeline"] = "test.missing";
+                assets::detail::SaveJson(manifest, data);
+                Fails([&] { renderer::SceneRenderer missing(*runtime, target, manifest, argv[4]); },
+                      "Unknown project pipeline");
+                data["rendering"]["defaultPipeline"] = "test.blue";
+                assets::detail::SaveJson(manifest, data);
+                {
+                    renderer::SceneRenderer described(*runtime, target, manifest, argv[4]);
+                    Require(described.ProjectDefaultPipeline() == "test.blue" &&
+                                described.ProjectPipelines() ==
+                                    std::vector<std::string>{"test.blue", "test.failure"},
+                            "Renderer did not load the project rendering descriptor");
+                    auto color =
+                        runtime->CreateTexture({40, 40, rhi::Format::Rgba8Srgb, false, true});
+                    renderer::SceneRenderOptions settings;
+                    settings.projectPipeline = std::string(described.ProjectDefaultPipeline());
+                    settings.sceneHdrDiagnostics = true;
+                    const auto frame = described.Render(color, rhi::State::Undefined, nullptr,
+                                                        false, {}, settings);
+                    runtime->Wait(frame.completion);
+                    std::array<float, 4> pixel{};
+                    std::memcpy(pixel.data(), frame.sceneHdr->Map().data(), sizeof(pixel));
+                    Require(std::abs(pixel[2] - .75f) < 1e-5f,
+                            "Project-described module did not change HDR output");
+                }
             }
             runtime->WaitIdle();
             runtime->TrimMemory();

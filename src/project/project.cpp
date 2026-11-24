@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <array>
 #include <stdexcept>
+#include <utility>
 
 namespace renderlab::project
 {
@@ -32,6 +33,16 @@ bool ValidId(std::string_view id)
     return id.size() == 32 &&
            std::ranges::all_of(id, [](char c)
                                { return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f'); });
+}
+bool ValidRenderingId(std::string_view id)
+{
+    return !id.empty() && id.size() <= 128 &&
+           std::ranges::all_of(id,
+                               [](char c)
+                               {
+                                   return (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') ||
+                                          c == '.' || c == '-' || c == '_';
+                               });
 }
 std::filesystem::path Inside(const std::filesystem::path& root,
                              const std::filesystem::path& relative)
@@ -61,6 +72,28 @@ Project Project::Open(const std::filesystem::path& path, const std::filesystem::
     result.assets = Inside(result.root, assets::detail::Path(data.value("assets", "Assets")));
     result.library = Inside(result.root, assets::detail::Path(data.value("library", "Library")));
     result.engine = std::filesystem::canonical(engineRoot);
+    if (data.contains("rendering"))
+    {
+        const auto& source = data.at("rendering");
+        if (!source.is_object() || source.at("version") != 1 || !source.at("modules").is_array() ||
+            source.at("modules").size() > 64)
+            throw std::invalid_argument("Invalid project rendering descriptor");
+        Rendering rendering;
+        rendering.defaultPipeline = source.at("defaultPipeline").get<std::string>();
+        if (!ValidRenderingId(rendering.defaultPipeline))
+            throw std::invalid_argument("Invalid default pipeline ID");
+        for (const auto& entry : source.at("modules"))
+        {
+            const auto relative = assets::detail::Path(entry.get<std::string>());
+            if (relative.has_root_name() || relative.has_root_directory())
+                throw std::invalid_argument("Project module path must be relative");
+            const auto resolved = Inside(result.root, relative);
+            if (std::ranges::find(rendering.modules, resolved) != rendering.modules.end())
+                throw std::invalid_argument("Duplicate project module path");
+            rendering.modules.push_back(resolved);
+        }
+        result.rendering = std::move(rendering);
+    }
     if (!std::filesystem::is_directory(result.assets) || result.assets == result.library ||
         result.library == result.root || result.assets == result.root)
         throw std::invalid_argument("Invalid project asset/library roots");

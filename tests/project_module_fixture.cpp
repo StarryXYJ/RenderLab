@@ -17,8 +17,9 @@ int32_t Build(void*, void* graph, const void*, void*, char*, uint32_t)
 constexpr const char* moduleId = PROJECT_TEST_VARIANT >= 5 ? "test.other" : "test.demo";
 constexpr const char* nodeId =
     PROJECT_TEST_VARIANT == 7 || PROJECT_TEST_VARIANT == 8 ? "test.other.node" : "test.demo.node";
-constexpr const char* pipelineId =
-    PROJECT_TEST_VARIANT == 8 ? "test.other.pipeline" : "test.demo.pipeline";
+constexpr const char* pipelineId = PROJECT_TEST_VARIANT == 8    ? "test.other.pipeline"
+                                   : PROJECT_TEST_VARIANT == 11 ? "renderlab.forward"
+                                                                : "test.demo.pipeline";
 const rl_project_node_v1 nodes[] = {
     {sizeof(rl_project_node_v1), nodeId, PROJECT_TEST_VARIANT == 4 ? nullptr : Build, nullptr},
     {sizeof(rl_project_node_v1), nodeId, Build, nullptr}};

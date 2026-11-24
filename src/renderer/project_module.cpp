@@ -106,6 +106,9 @@ struct ProjectModules::Impl
                     source.node_count > 256 || (source.node_count && !source.nodes))
                     throw std::invalid_argument("Invalid project pipeline descriptor");
                 ProjectPipeline pipeline{Id(source.id), source.base, {}};
+                if (pipeline.id.starts_with("renderlab."))
+                    throw std::invalid_argument(
+                        "Project pipeline ID uses reserved renderlab namespace");
                 std::set<std::string> used;
                 for (uint32_t n = 0; n < source.node_count; ++n)
                 {

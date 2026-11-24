@@ -249,6 +249,19 @@ struct SceneRenderer::Impl
           // The host owns the native limit. Leave room for assets, AS, histories and uploads.
           pool(r, 64, r.GetMemoryStats().budget * 3 / 4), uploadPool(r), accelerationScene(r, pool)
     {
+        if (project.rendering)
+        {
+            if (!projectModules && !project.rendering->modules.empty())
+                projectModules = std::make_shared<ProjectModules>(project.rendering->modules);
+            const auto& id = project.rendering->defaultPipeline;
+            if (id != "renderlab.forward" && id != "renderlab.deferred" &&
+                id != "renderlab.raytracing" && id != "renderlab.pathtracing")
+            {
+                if (!projectModules)
+                    throw std::invalid_argument("Unknown project default pipeline: " + id);
+                (void)projectModules->Pipeline(id);
+            }
+        }
         for (const auto& file : std::filesystem::recursive_directory_iterator(project.engine))
         {
             if (!file.is_regular_file() || file.path().extension() != ".shader")
@@ -1174,6 +1187,23 @@ SceneRenderer::SceneRenderer(rhi::Runtime& runtime, shader::Target target,
 {
 }
 SceneRenderer::~SceneRenderer() = default;
+std::vector<std::string> SceneRenderer::ProjectPipelines() const
+{
+    std::vector<std::string> ids;
+    if (impl_->projectModules)
+        for (const auto& [id, pipeline] : impl_->projectModules->Pipelines())
+        {
+            (void)pipeline;
+            ids.push_back(id);
+        }
+    return ids;
+}
+std::string_view SceneRenderer::ProjectDefaultPipeline() const
+{
+    if (impl_->project.rendering)
+        return impl_->project.rendering->defaultPipeline;
+    return {};
+}
 scene::Scene& SceneRenderer::Document()
 {
     return impl_->document;

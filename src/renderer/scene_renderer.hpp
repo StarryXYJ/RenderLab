@@ -164,6 +164,9 @@ public:
     ~SceneRenderer();
     SceneRenderer(const SceneRenderer&) = delete;
     SceneRenderer& operator=(const SceneRenderer&) = delete;
+    /// Registered project pipeline IDs and the optional project-authored default.
+    std::vector<std::string> ProjectPipelines() const;
+    std::string_view ProjectDefaultPipeline() const;
     /// @brief Owner-thread editable scene; apply changes between Render calls.
     scene::Scene& Document();
     /// Validate composition/material compatibility before changing an interactive selection.

@@ -245,7 +245,7 @@ install(FILES sample/m4/RenderLab.rlproject sample/m4/Pbr.rlproject sample/m4/Sh
 install(FILES sample/m4/PathTracing-README.txt DESTINATION .)
 
 if(BUILD_TESTING)
-    foreach(variant RANGE 0 10)
+    foreach(variant RANGE 0 11)
         add_library(renderlab_project_fixture_${variant} SHARED tests/project_module_fixture.cpp)
         target_include_directories(renderlab_project_fixture_${variant} PRIVATE src)
         target_compile_definitions(renderlab_project_fixture_${variant} PRIVATE PROJECT_TEST_VARIANT=${variant})
@@ -253,7 +253,7 @@ if(BUILD_TESTING)
     endforeach()
     add_executable(renderlab_project_module_tests tests/project_module_tests.cpp)
     target_link_libraries(renderlab_project_module_tests PRIVATE renderlab_options renderlab_project_module)
-    foreach(variant RANGE 0 10)
+    foreach(variant RANGE 0 11)
         add_dependencies(renderlab_project_module_tests renderlab_project_fixture_${variant})
     endforeach()
     add_test(NAME project_module.contracts COMMAND renderlab_project_module_tests
@@ -262,12 +262,13 @@ if(BUILD_TESTING)
         $<TARGET_FILE:renderlab_project_fixture_4> $<TARGET_FILE:renderlab_project_fixture_5>
         $<TARGET_FILE:renderlab_project_fixture_6> $<TARGET_FILE:renderlab_project_fixture_7>
         $<TARGET_FILE:renderlab_project_fixture_8> $<TARGET_FILE:renderlab_project_fixture_9>
-        $<TARGET_FILE:renderlab_project_fixture_10>)
+        $<TARGET_FILE:renderlab_project_fixture_10> $<TARGET_FILE:renderlab_project_fixture_11>)
     add_library(renderlab_project_render_fixture SHARED tests/project_render_fixture.cpp)
     target_link_libraries(renderlab_project_render_fixture PRIVATE renderlab_options renderlab_rendergraph)
     add_executable(renderlab_project_render_tests tests/project_render_tests.cpp)
     target_link_libraries(renderlab_project_render_tests PRIVATE renderlab_options renderlab_renderer
-        renderlab_project_module renderlab_rhi renderlab_content renderlab_core renderlab_platform)
+        renderlab_project_module renderlab_rhi renderlab_content renderlab_core renderlab_platform
+        nlohmann_json::nlohmann_json)
     add_dependencies(renderlab_project_render_tests renderlab_project_render_fixture renderlab_scene_shaders)
     add_custom_command(TARGET renderlab_project_render_tests POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_FILE:renderlab_dxc>

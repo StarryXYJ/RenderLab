@@ -111,7 +111,9 @@ R1 契约修订、B1 样例整理/Benchmark、B2 调查和 B3 资源复用已完
 
 图执行（DONE，2026 年 11 月 24 日）：SceneRenderer 支持 Forward 基底的项目管线，按顺序插入节点，图和提交各自持有模块至回调销毁和 GPU 退休。Graph ABI 更新为 2。Release 的 `project_module.contracts`、`rendergraph.contracts`、DX12/Vulkan `gpu.*.project_render` 共 4/4 通过；真实独立 DLL 节点改变 HDR 输出，验证图顺序、构图失败、内置管线恢复及资源账本；假运行时覆盖正常退休与录制、提交前和部分提交失败的所有权。仅在本机设备上验证，未重跑 Debug、设备丢失或热重载，后续宿主和真实项目接入仍需验证。
 
-- [ ] 项目运行描述提供模块路径及默认管线，Editor 和 Player 使用相同实现；在现有控件中按稳定 ID 选择并保存项目管线，诊断失败并恢复已应用选择。
+项目运行描述（DONE，2026 年 11 月 24 日）：可选清单字段记录项目内模块相对路径和默认管线 ID，SceneRenderer 加载并检查注册结果；保留旧清单行为，`renderlab.` 管线命名空间保留给内置。Release 的 `content.contracts`、`project_module.contracts` 和双后端 `gpu.*.project_render` 共 4/4 通过，覆盖路径越界、重复、无效 ID、缺失模块及默认管线、真实 DLL 加载与 HDR 输出。宿主尚未选择或应用默认项目管线，未验证 Debug 和真实窗口。
+
+- [ ] Editor 和 Player 使用同一运行描述；在现有控件中按稳定 ID 选择并保存项目管线，诊断失败并恢复已应用选择。
 - [ ] 支持项目定义管线所需的宿主输入、资源读写、输出和能力诊断，不绕开图编译。适用范围与现有硬编码分支明确验证。
 - [ ] 拒绝缺失/冲突模块、节点与不兼容 ABI，模块及回调在 GPU 退休前保持有效；项目切换失败回退。提供项目样例和双后端图/画面验证。
 - [ ] 扩展 Player 构建并消费相同运行描述，验证无 Editor 依赖；更新文档，完成测试后提交。
