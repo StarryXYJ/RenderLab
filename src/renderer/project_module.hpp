@@ -5,6 +5,7 @@
 #include <filesystem>
 #include <map>
 #include <memory>
+#include <optional>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -42,7 +43,8 @@ struct ProjectPipeline
 class ProjectModules final
 {
 public:
-    explicit ProjectModules(const std::vector<std::filesystem::path>& paths);
+    explicit ProjectModules(const std::vector<std::filesystem::path>& paths,
+                            const std::optional<std::filesystem::path>& pipelines = std::nullopt);
     ~ProjectModules();
     ProjectModules(const ProjectModules&) = delete;
     ProjectModules& operator=(const ProjectModules&) = delete;

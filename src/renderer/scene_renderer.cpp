@@ -251,8 +251,10 @@ struct SceneRenderer::Impl
     {
         if (project.rendering)
         {
-            if (!projectModules && !project.rendering->modules.empty())
-                projectModules = std::make_shared<ProjectModules>(project.rendering->modules);
+            if (!projectModules &&
+                (!project.rendering->modules.empty() || project.rendering->pipelines))
+                projectModules = std::make_shared<ProjectModules>(project.rendering->modules,
+                                                                  project.rendering->pipelines);
             const auto& id = project.rendering->defaultPipeline;
             if (id != "renderlab.forward" && id != "renderlab.deferred" &&
                 id != "renderlab.raytracing" && id != "renderlab.pathtracing")

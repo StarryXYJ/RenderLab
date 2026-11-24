@@ -2,6 +2,9 @@
   <Folder Name="/Editor/">
     <Project Path="src/editor/managed/RenderLab.Editor/RenderLab.Editor.csproj" />
   </Folder>
+  <Folder Name="/Project/">
+    <Project Path="src/project/managed/RenderLab.Project/RenderLab.Project.csproj" />
+  </Folder>
   <Folder Name="/Build/">
     <File Path="CMakeLists.txt" />
     <File Path="CMakePresets.json" />

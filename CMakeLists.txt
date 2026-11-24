@@ -85,7 +85,8 @@ target_link_libraries(renderlab_rendergraph PRIVATE renderlab_options renderlab_
 
 add_library(renderlab_project_module STATIC src/renderer/project_module.cpp)
 target_include_directories(renderlab_project_module PUBLIC src)
-target_link_libraries(renderlab_project_module PRIVATE renderlab_options renderlab_rendergraph)
+target_link_libraries(renderlab_project_module PRIVATE renderlab_options renderlab_rendergraph
+    nlohmann_json::nlohmann_json)
 
 add_library(renderlab_renderer STATIC src/renderer/forward.cpp src/renderer/deferred.cpp
     src/renderer/raytracing.cpp src/renderer/acceleration_scene.cpp

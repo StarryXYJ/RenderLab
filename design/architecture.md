@@ -466,7 +466,7 @@ flowchart LR
 
 ProjectManifest 定义项目 ID、引擎版本要求、资源根目录、启动场景和渲染配置。AssetDatabase 管理稳定身份、路径、类型、依赖和导入产物。初期用简单文件和轻量索引即可，完整数据库与编辑界面后置。
 
-项目清单可声明同构建的原生渲染模块及默认管线 ID。可信项目可通过可选 CMake 源目录将自己的模块目标加入引擎构建，由项目目标负责部署 DLL；宿主不自动构建。Editor、Player 共用 SceneRenderer 的图构建路径；Editor 通过会话内能力目录把稳定 ID 映射到现有配置控件，并在项目作用域保存个人选择。当前项目管线以 Forward 为基底插入 C++ 节点，图编译和提交仍由原生层负责；接口与限制见 [项目模块](../docs/project-modules.md)。
+项目清单可声明同构建的原生渲染模块及默认管线 ID。可信项目可通过可选 CMake 源目录将自己的模块目标加入引擎构建，由项目目标负责部署 DLL；宿主不自动构建。项目可以在 C# 中注册管线及节点 ID，导出版本化运行描述；原生宿主将其与模块注册合并并验证，由 Editor、Player 共用 SceneRenderer 的图构建路径。Editor 通过会话内能力目录把稳定 ID 映射到现有配置控件，并在项目作用域保存个人选择。当前项目管线以 Forward 为基底插入 C++ 节点，图编译和提交仍由原生层负责；接口与限制见 [项目模块](../docs/project-modules.md)。
 
 ```text
 ExampleProject/

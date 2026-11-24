@@ -595,3 +595,14 @@ cmake --build --preset windows-release --target example_project renderlab_player
 ```
 
 项目的 `CMakeLists.txt` 可引用 `renderlab_options` 和 `renderlab_rendergraph`，并负责把生成模块放到清单指定位置；入口只接受一个可信源码目录。DLL 与宿主必须同源、同工具链及构建配置。重编译前关闭正在使用该 DLL 的会话；构建树不再需要该项目时重新配置 `-DRENDERLAB_PROJECT_SOURCE_DIR=`。项目切换不会自动构建或重新加载 DLL，Player 打包也不会自动收集它。
+
+同一节点也可由 C# 注册到管线：先按上面步骤构建原生模块，然后在仓库根目录导出描述并打开示例项目：
+
+```powershell
+dotnet run --project sample/m4/ExperimentSource/managed/ExperimentPipelines.csproj -c Release -- sample/m4/Library/experiment-pipelines.json
+./out/dotnet/RenderLab.Editor/bin/Release/net10.0/RenderLab.Editor.exe --project sample/m4/ExperimentManaged.rlproject
+./out/build/windows-release/renderlab_player.exe --backend dx12 --project sample/m4/ExperimentManaged.rlproject
+```
+
+示例 C# 入口位于 `sample/m4/ExperimentSource/managed/Program.cs`。输出文件位于被忽略的
+Library 目录，须先导出才能打开项目；运行中的项目不监视它的变化，重新导出后须重新打开。

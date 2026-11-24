@@ -536,6 +536,9 @@
           "Serilog.Extensions.Logging": "[9.0.0, )",
           "Serilog.Sinks.File": "[7.0.0, )"
         }
+      },
+      "renderlab.project": {
+        "type": "Project"
       }
     }
   }

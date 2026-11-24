@@ -1,0 +1,13 @@
+{
+  "version": 1,
+  "id": "3186d19ef901455e8bd14992030bc545",
+  "assets": "Assets",
+  "library": "Library",
+  "startScene": "7769f044b94a4f26b81cec8994bef5ad",
+  "rendering": {
+    "version": 1,
+    "modules": ["Library/Modules/experiment.dll"],
+    "pipelines": "Library/experiment-pipelines.json",
+    "defaultPipeline": "example.managed-blue"
+  }
+}

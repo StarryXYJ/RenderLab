@@ -14,6 +14,21 @@
 
 模块路径相对项目根目录，不能越出项目；最多 64 个且不能重复。`defaultPipeline` 使用稳定 ID，`renderlab.` 前缀保留给内置管线。SceneRenderer 加载清单中的模块并验证默认管线存在；模块是宿主进程内的原生代码。Player、Sandbox 和 Editor 使用项目默认管线；Editor 可在现有管线下拉框选择项目管线，显式 `--pipeline` 选择内置管线会覆盖默认值。宿主不会自动构建模块。
 
+项目也可用 `RenderLab.Project.PipelineCatalog` 在 C# 中注册 Forward 管线及原生节点 ID，
+通过 `Save` 生成运行描述。清单的 `rendering.pipelines` 是相对项目根目录的描述文件路径：
+
+```json
+"pipelines": "Library/experiment-pipelines.json"
+```
+
+描述格式为 `{"version":1,"pipelines":[{"id":"example.managed-blue","base":"forward","nodes":["example.clear"]}]}`。
+注册器将其与模块中的管线合并；管线 ID 不得重复，节点必须由所加载的原生模块提供，
+每个文件最多 256 条管线、每条最多 256 个不重复节点，文件最大 1 MiB。读取、版本、
+路径、ID 或节点错误会使项目加载失败；不会发布部分注册结果。生成文件属于可重建的
+Library，构建和运行之前须执行项目自己的导出程序。Editor 和 Player 读取相同文件，
+不会执行 C# 代码或自动重建导出；修改描述后需重新打开项目。只有 Forward 基底，
+这套接口描述节点组成和顺序，不直接在 C# 中调用 RHI 或定义 C++ 节点实现。
+
 模块需与宿主使用同一 RenderLab 源码、MSVC 编译器、CRT 和 Debug/Release 配置构建。入口是 C ABI；调用节点时，Graph、RenderFrame 和 Runtime 是同构建的借用 C++ 对象，不构成跨版本 C++ ABI。版本检查包含显式模块/Graph ABI、MSVC 版本、CRT 和迭代器调试级别，但不能自动证明源码或所有编译选项一致；这些接口变化时必须同步提升 Graph ABI 并重编模块。当前 Graph ABI 为 2。节点回调返回零表示成功，失败通过有界 UTF-8 缓冲报告，不得向宿主抛异常。
 
 `ProjectModules` 拥有模块 DLL，查询返回的引用和函数指针仅在该对象存活期间有效。`SceneRenderer` 持有模块，并让项目图及其提交保留模块：图的回调和资源销毁后、在途命令退休后才释放相应所有权，包括构图或提交失败路径。调用方仍须遵循 Runtime 的线程及 GPU 资源退休契约；设备丢失恢复不在本次验证范围。节点不得跨帧保留临时 Graph、帧引用或 Graph 句柄；Graph 内回调需按值捕获所需数据并遵循 Graph/RHI 资源所有权约定。

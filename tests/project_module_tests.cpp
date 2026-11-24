@@ -4,6 +4,7 @@
 
 #include <exception>
 #include <filesystem>
+#include <fstream>
 #include <iostream>
 #include <stdexcept>
 #include <string>
@@ -75,6 +76,51 @@ int wmain(int argc, wchar_t** argv)
             const auto incompatible = std::filesystem::absolute(argv[13]);
             Fails([&] { ProjectModules invalid({incompatible}); }, "ABI");
         }
+        const auto descriptor =
+            std::filesystem::temp_directory_path() /
+            (L"renderlab-pipelines-" + std::to_wstring(GetCurrentProcessId()) + L".json");
+        const auto write = [&](const char* value)
+        {
+            std::ofstream file(descriptor, std::ios::binary | std::ios::trunc);
+            file << value;
+            if (!file)
+                throw std::runtime_error("Cannot write pipeline test descriptor");
+        };
+        try
+        {
+            write(
+                R"({"version":1,"pipelines":[{"id":"test.managed","base":"forward","nodes":["test.demo.node"]}]})");
+            {
+                ProjectModules registry({paths[0]}, descriptor);
+                Require(registry.Pipelines().size() == 2 &&
+                            registry.Pipeline("test.managed").nodes.at(0) == "test.demo.node",
+                        "Described and module pipelines must share one registry");
+            }
+            write(
+                R"({"version":1,"pipelines":[{"id":"test.demo.pipeline","base":"forward","nodes":[]}]})");
+            Fails([&] { ProjectModules invalid({paths[0]}, descriptor); },
+                  "Duplicate project pipeline");
+            write(
+                R"({"version":1,"pipelines":[{"id":"test.missing","base":"forward","nodes":["missing"]}]})");
+            Fails([&] { ProjectModules invalid({paths[0]}, descriptor); }, "Missing node");
+            write(
+                R"({"version":1,"pipelines":[{"id":"test.repeat","base":"forward","nodes":["test.demo.node","test.demo.node"]}]})");
+            Fails([&] { ProjectModules invalid({paths[0]}, descriptor); },
+                  "Duplicate project node");
+            write(R"({"version":2,"pipelines":[]})");
+            Fails([&] { ProjectModules invalid({paths[0]}, descriptor); },
+                  "Invalid project pipelines");
+            write(
+                R"({"version":1,"pipelines":[{"id":"bad\u0000id","base":"forward","nodes":[]}]})");
+            Fails([&] { ProjectModules invalid({paths[0]}, descriptor); },
+                  "Invalid project module ID");
+        }
+        catch (...)
+        {
+            std::filesystem::remove(descriptor);
+            throw;
+        }
+        std::filesystem::remove(descriptor);
         std::cout << "Project module contracts passed\n";
         return 0;
     }

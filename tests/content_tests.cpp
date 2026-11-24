@@ -121,6 +121,15 @@ void ContentContracts(const std::filesystem::path& manifest, const std::filesyst
                     described.rendering->modules[0] ==
                         project::Inside(root, "Library/Modules/example.dll"),
                 "Project rendering descriptor was not resolved inside its project");
+        data["rendering"]["pipelines"] = "Library/pipelines.json";
+        assets::detail::SaveJson(path, data);
+        Require(project::Project::Open(path, engine).rendering->pipelines ==
+                    project::Inside(root, "Library/pipelines.json"),
+                "Pipeline descriptor must resolve inside its project");
+        data["rendering"]["pipelines"] = "../outside.json";
+        assets::detail::SaveJson(path, data);
+        Fails([&] { project::Project::Open(path, engine); }, "escapes");
+        data["rendering"].erase("pipelines");
         data["rendering"]["modules"] = {"../outside.dll"};
         assets::detail::SaveJson(path, data);
         Fails([&] { project::Project::Open(path, engine); }, "escapes");

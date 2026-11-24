@@ -92,6 +92,13 @@ Project Project::Open(const std::filesystem::path& path, const std::filesystem::
                 throw std::invalid_argument("Duplicate project module path");
             rendering.modules.push_back(resolved);
         }
+        if (source.contains("pipelines"))
+        {
+            const auto relative = assets::detail::Path(source.at("pipelines").get<std::string>());
+            if (relative.has_root_name() || relative.has_root_directory())
+                throw std::invalid_argument("Project pipelines path must be relative");
+            rendering.pipelines = Inside(result.root, relative);
+        }
         result.rendering = std::move(rendering);
     }
     if (!std::filesystem::is_directory(result.assets) || result.assets == result.library ||

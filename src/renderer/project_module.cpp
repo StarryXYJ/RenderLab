@@ -2,10 +2,12 @@
 #include "rendergraph/graph.hpp"
 
 #include <Windows.h>
+#include <nlohmann/json.hpp>
 
 #include <algorithm>
 #include <array>
 #include <bit>
+#include <fstream>
 #include <set>
 #include <stdexcept>
 #include <string_view>
@@ -40,11 +42,8 @@ struct Library
     Library(const Library&) = delete;
     Library& operator=(const Library&) = delete;
 };
-std::string Id(const char* value)
+std::string Id(std::string_view id)
 {
-    if (!value)
-        throw std::invalid_argument("Missing project module ID");
-    const std::string_view id(value);
     if (id.empty() || id.size() > 128 ||
         !std::ranges::all_of(id,
                              [](char c)
@@ -55,6 +54,12 @@ std::string Id(const char* value)
         throw std::invalid_argument("Invalid project module ID");
     return std::string(id);
 }
+std::string Id(const char* value)
+{
+    if (!value)
+        throw std::invalid_argument("Missing project module ID");
+    return Id(std::string_view(value));
+}
 } // namespace
 
 struct ProjectModules::Impl
@@ -64,7 +69,8 @@ struct ProjectModules::Impl
     std::map<std::string, ProjectNode> nodes;
     std::map<std::string, ProjectPipeline> pipelines;
 
-    explicit Impl(const std::vector<std::filesystem::path>& paths)
+    explicit Impl(const std::vector<std::filesystem::path>& paths,
+                  const std::optional<std::filesystem::path>& description)
     {
         if (paths.size() > 64)
             throw std::invalid_argument("Too many project modules");
@@ -123,6 +129,42 @@ struct ProjectModules::Impl
             }
             libraries.push_back(std::move(library));
         }
+        if (description)
+        {
+            if (std::filesystem::file_size(*description) > 1024 * 1024)
+                throw std::invalid_argument("Project pipelines descriptor exceeds budget");
+            std::ifstream input(*description, std::ios::binary);
+            if (!input)
+                throw std::runtime_error("Cannot open project pipelines descriptor");
+            const auto data = nlohmann::json::parse(input);
+            if (!data.is_object() || data.at("version") != 1 || !data.at("pipelines").is_array() ||
+                data.at("pipelines").size() > 256)
+                throw std::invalid_argument("Invalid project pipelines descriptor");
+            for (const auto& source : data.at("pipelines"))
+            {
+                if (!source.is_object() || source.at("base") != "forward" ||
+                    !source.at("nodes").is_array() || source.at("nodes").size() > 256)
+                    throw std::invalid_argument("Invalid project pipeline descriptor");
+                const auto pipelineId = source.at("id").get<std::string>();
+                ProjectPipeline pipeline{
+                    Id(std::string_view(pipelineId)), RENDERLAB_PROJECT_FORWARD, {}};
+                if (pipeline.id.starts_with("renderlab."))
+                    throw std::invalid_argument(
+                        "Project pipeline ID uses reserved renderlab namespace");
+                std::set<std::string> used;
+                for (const auto& entry : source.at("nodes"))
+                {
+                    const auto nodeId = entry.get<std::string>();
+                    auto id = Id(std::string_view(nodeId));
+                    if (!used.insert(id).second)
+                        throw std::invalid_argument("Duplicate project node in pipeline: " + id);
+                    pipeline.nodes.push_back(std::move(id));
+                }
+                const auto key = pipeline.id;
+                if (!pipelines.emplace(key, std::move(pipeline)).second)
+                    throw std::invalid_argument("Duplicate project pipeline ID: " + key);
+            }
+        }
         for (const auto& [pipelineId, pipeline] : pipelines)
             for (const auto& node : pipeline.nodes)
                 if (!nodes.contains(node))
@@ -131,8 +173,9 @@ struct ProjectModules::Impl
     }
 };
 
-ProjectModules::ProjectModules(const std::vector<std::filesystem::path>& paths)
-    : impl_(std::make_unique<Impl>(paths))
+ProjectModules::ProjectModules(const std::vector<std::filesystem::path>& paths,
+                               const std::optional<std::filesystem::path>& pipelines)
+    : impl_(std::make_unique<Impl>(paths, pipelines))
 {
 }
 ProjectModules::~ProjectModules() = default;

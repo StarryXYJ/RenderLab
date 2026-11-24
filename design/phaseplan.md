@@ -105,7 +105,7 @@ R1 契约修订、B1 样例整理/Benchmark、B2 调查和 B3 资源复用已完
 
 ### E3 C# 配置与管线描述
 
-状态：IN_PROGRESS。依赖 E2；AutoSettingUI 2.0.0 的公共包已完成隔离探针，继续项目配置接入。
+状态：IN_PROGRESS。依赖 E2；E3a、E3b 已完成，接下来实现项目配置。
 
 隔离验证：NuGet 1.4.2 基于 Avalonia 11 编译，加载其面板时在 Avalonia 12.0.5 的
 XAML 模板处因 `TemplateBinding.ProvideValue()` 签名不兼容而抛出 `MissingMethodException`。
@@ -141,7 +141,22 @@ AutoSettingUI 2.0.0 的独立本地化接口及可选 DynamicLocalization 适配
 已载入但工作台尚未展示项目配置控件。未验证真实人工交互或生成数值控件的 Windows UI
 Automation，后续配置界面验收需覆盖。
 
-- [ ] 以项目作用域加载配置 DTO 和管线描述，提供自动生成的项目配置区；稳定字段 ID、类型、默认值、持久化版本、参数校验及请求/应用/拒绝状态。
+#### E3b C# 管线描述
+
+状态：DONE（2026 年 11 月 24 日）。C# 注册并导出节点顺序，原生加载后与模块节点合并、
+校验并供 Editor/Player 共用；旧模块管线仍有效。接口及限制见 [项目模块](../docs/project-modules.md)，
+示例步骤见 [手册](../manual/build.md#项目渲染模块示例)。
+
+验证：Release 托管 39/39，原生项目模块、项目内容及双后端 GPU 图测试 4/4；RTX 5060
+双后端 Player 执行计划含 `Example.BlueClear`，截图与原生模块管线逐字节一致；双后端
+Editor 短测应用项目管线，错误节点项目切换探针拒绝目标并恢复原项目及管线，关闭账本
+无剩余分配、验证错误或 worker_failed。证据 `out/experiment-platform/e3-graph`、
+`e3-graph-editor` 和 `e3-switch`；临时切换探针已撤回。已有图形警告保留；手工交互、其他
+设备和更复杂图未验证，描述变更需重新打开项目。
+
+#### E3c 项目配置
+
+- [ ] 以项目作用域加载配置 DTO，提供自动生成的项目配置区；稳定字段 ID、类型、默认值、持久化版本、参数校验及请求/应用/拒绝状态。
 - [ ] 定义项目默认值、个人设置及实验预设合并和保存策略；构建时导出 Player 可消费的描述，验证跨项目隔离、版本不匹配、错误恢复与 Editor/Player 一致性。
 - [ ] 托管测试、真实窗口交互和适用后端验证通过后更新文档、提交。
 

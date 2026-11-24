@@ -17,6 +17,7 @@ struct Rendering
 {
     std::vector<std::filesystem::path> modules;
     std::string defaultPipeline;
+    std::optional<std::filesystem::path> pipelines;
 };
 /** @brief Manifest paths stay inside the project; built-in engine resources are mounted by host. */
 struct Project
