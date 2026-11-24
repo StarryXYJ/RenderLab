@@ -119,7 +119,7 @@ public partial class MainWindow : Window
         ProfilerModel.GraphRequested += () => Docks.Show("Render Graph");
         Workbench.InitializeFactory = false;
         Workbench.InitializeLayout = false;
-        var settingsRoot = options.Smoke || options.Isolated || options.BenchmarkSeconds > 0 || options.SoakSeconds > 0 ? options.Output : Path.Combine(Path.GetDirectoryName(options.Project)!, "UserSettings", "Editor");
+        var settingsRoot = viewportService.UserSettingsPath;
         layoutPath = Path.Combine(settingsRoot, "layout.json");
         Docks.UseLayout(Docks.CreateLayout());
         if (!options.Smoke && !options.Isolated && options.BenchmarkSeconds == 0 && options.SoakSeconds == 0) { LoadLayout(); }
@@ -367,7 +367,10 @@ public partial class MainWindow : Window
         {
             var screen = Screens.Primary;
             var area = screen is null ? new Rect(0, 0, 1920, 1080) : new Rect(screen.WorkingArea.X, screen.WorkingArea.Y, screen.WorkingArea.Width, screen.WorkingArea.Height);
-            Docks.UseLayout(File.Exists(layoutPath) ? Docks.Restore(File.ReadAllText(layoutPath), area) : Docks.CreateLayout());
+            var source = layoutPath;
+            if (!File.Exists(source) && options is not null && ProjectUserSettings.Persistent(options))
+            { source = Path.Combine(ProjectUserSettings.LegacyDirectory(options), "layout.json"); }
+            Docks.UseLayout(File.Exists(source) ? Docks.Restore(File.ReadAllText(source), area) : Docks.CreateLayout());
         }
         catch (Exception error) { logger?.LogWarning(error, "Restoring layout failed; using default"); Docks.UseLayout(Docks.CreateLayout()); }
     }

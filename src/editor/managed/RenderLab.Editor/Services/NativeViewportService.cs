@@ -31,14 +31,16 @@ public sealed class NativeViewportService : IDisposable
     private ViewportConfig? savedConfiguration;
     private ulong requestSequence;
     private bool restoreConfiguration;
+    private ProjectPreferences? startupPreferences, persistedPreferences;
+    private bool preferencesLoaded, restorePreferences;
+    private ulong preferenceRequestId, restorePreferenceRequestId;
     private bool observationConfigured;
     private bool retiring, viewportHidden;
     private string? switchFailure;
     private CancellationTokenSource? switchCancellation;
     private DeviceSelection creatingDevice;
     internal DeviceSwitchTransaction DeviceSwitch { get; }
-    internal string UserSettingsPath => options.Smoke || options.Isolated || options.BenchmarkSeconds > 0 || options.SoakSeconds > 0 ? options.Output :
-        Path.Combine(Path.GetDirectoryName(options.Project)!, "UserSettings", "Editor");
+    internal string UserSettingsPath => ProjectUserSettings.DirectoryFor(options);
     private readonly ViewportStats[] completedFrames = new ViewportStats[512];
     internal FrameTimingWindow Timings { get; } = new();
     internal uint AbiVersion { get; private set; }
@@ -65,6 +67,12 @@ public sealed class NativeViewportService : IDisposable
     internal nint Create(nint parent)
     {
         Dispatcher.UIThread.VerifyAccess();
+        if (!preferencesLoaded && ProjectUserSettings.Persistent(options))
+        {
+            preferencesLoaded = true;
+            try { startupPreferences = persistedPreferences = ProjectUserSettings.Load(UserSettingsPath); }
+            catch (Exception error) { Program.Logging?.Logger.Warning(error, "Unable to restore project user settings"); }
+        }
         if (Session != 0)
         {
             // Dock can materialize the replacement presenter before detaching a cached one.
@@ -77,9 +85,13 @@ public sealed class NativeViewportService : IDisposable
         {
             throw new InvalidOperationException("Managed/native bridge ABI mismatch.");
         }
+        var initial = savedConfiguration ?? new ViewportConfig { Pipeline = options.Pipeline, TargetFps = options.TargetFps };
+        if (savedConfiguration is null && startupPreferences is not null)
+        { initial = ProjectUserSettings.Apply(startupPreferences, options, initial); }
+        Pipeline = initial.Pipeline;
         NativeMethods.Check(NativeMethods.Create(parent, creatingDevice.Backend == "dx12" ? 0u : 1u,
             creatingDevice.Validation ? 1u : 0u, options.Profiling ? 1u : 0u,
-            options.TargetFps, options.BenchmarkSeconds > 0 ? 1u : 0u,
+            initial.TargetFps, options.BenchmarkSeconds > 0 ? 1u : 0u,
             options.Project, options.Shaders, Path.Combine(options.Output, $"native-{logOwner}-{++logSequence}.log"),
             out var session, out var child));
         Session = session;
@@ -88,6 +100,7 @@ public sealed class NativeViewportService : IDisposable
         Configuration = default;
         Capabilities = "";
         restoreConfiguration = savedConfiguration is not null;
+        restorePreferences = !restoreConfiguration && startupPreferences is not null;
         lastNativeSequence = 0;
         nativeLogFailed = false;
         Timings.Reset();
@@ -181,6 +194,7 @@ public sealed class NativeViewportService : IDisposable
         var pose = new float[7];
         NativeMethods.Check(NativeMethods.Stop(Session, out var report));
         if (NativeMethods.GetConfig(Session, out var finalConfiguration, out _) == 0) { Configuration = finalConfiguration; }
+        PersistPreferences(Configuration);
         if (Configuration.Ready != 0) { savedConfiguration = EditableConfig; }
         if (NativeMethods.Camera(Session, pose, 0) == 0) { savedCamera = pose; }
         try { DrainLogs(true); }
@@ -296,7 +310,7 @@ public sealed class NativeViewportService : IDisposable
     }
 
     internal ViewportConfig EditableConfig => Configuration.Status == 3 && Configuration.Applied.Size != 0 ? Configuration.Applied : Configuration.Requested;
-    internal void Submit(ViewportConfig config)
+    internal void Submit(ViewportConfig config, bool remember = true)
     {
         Dispatcher.UIThread.VerifyAccess();
         if (Session == 0 || Configuration.Ready == 0) { throw new InvalidOperationException("Viewport is not ready for configuration."); }
@@ -304,6 +318,7 @@ public sealed class NativeViewportService : IDisposable
         config.RequestId = Math.Max(requestSequence, Configuration.RequestedId) + 1;
         requestSequence = config.RequestId;
         NativeMethods.Check(NativeMethods.ConfigureV2(Session, in config));
+        if (remember) { preferenceRequestId = config.RequestId; }
         var state = Configuration;
         state.SupersededId = state.Status == 1 ? state.RequestedId : state.SupersededId;
         state.Requested = config; state.RequestedId = config.RequestId; state.Status = 1;
@@ -323,6 +338,8 @@ public sealed class NativeViewportService : IDisposable
     internal void LoadPreset()
     {
         var path = Path.Combine(UserSettingsPath, "render-preset.json");
+        if (!File.Exists(path) && ProjectUserSettings.Persistent(options))
+        { path = Path.Combine(ProjectUserSettings.LegacyDirectory(options), "render-preset.json"); }
         if (new FileInfo(path).Length > 16384) { throw new InvalidDataException("Preset exceeds budget."); }
         var config = JsonSerializer.Deserialize<ViewportConfig>(File.ReadAllText(path), EditorDiagnostics.JsonOptions);
         if (config.Version != 1 || config.Size != 112) { throw new InvalidDataException("Unsupported preset schema."); }
@@ -353,7 +370,15 @@ public sealed class NativeViewportService : IDisposable
         if (restoreConfiguration && state.Ready != 0)
         {
             restoreConfiguration = false;
-            Submit(savedConfiguration!.Value);
+            Submit(savedConfiguration!.Value, false);
+            return;
+        }
+        if (restorePreferences && state.Ready != 0)
+        {
+            restorePreferences = false;
+            var config = ProjectUserSettings.Apply(startupPreferences!, options, EditableConfig);
+            Submit(config, false);
+            restorePreferenceRequestId = Configuration.RequestedId;
             return;
         }
         if (!observationConfigured && state.Ready != 0 && options.Observation != "normal")
@@ -363,15 +388,42 @@ public sealed class NativeViewportService : IDisposable
             config.Submission = 3;
             config.Profiling = options.Profiling ? 1u : 0u;
             config.Flags = options.Observation == "readback" ? config.Flags | 32u : config.Flags & ~32u;
-            Submit(config);
+            Submit(config, false);
             return;
         }
         if (changed)
         {
             ConfigurationError = state.Status == 3 ? ReadConfigText(1) : "";
             if (state.Status == 3 && state.Applied.Size != 0) { Pipeline = state.Applied.Pipeline; Exposure = state.Applied.Exposure; }
+            PersistPreferences(state);
+            if (state.Status == 2 && state.AppliedId == restorePreferenceRequestId && restorePreferenceRequestId != 0)
+            {
+                Program.Logging?.Logger.Information("Restored project pipeline {Pipeline} and frame limit {TargetFps}",
+                    state.Applied.Pipeline, state.Applied.TargetFps);
+                restorePreferenceRequestId = 0;
+            }
+            if (state.Status == 3 && state.RejectedId == restorePreferenceRequestId) { restorePreferenceRequestId = 0; }
             ConfigurationUpdated?.Invoke();
         }
+    }
+
+    private void PersistPreferences(ViewportConfigState state)
+    {
+        var accepted = ProjectUserSettings.Accepted(state, preferenceRequestId);
+        if (accepted is not null)
+        {
+            if (ProjectUserSettings.Persistent(options) && accepted != persistedPreferences)
+            {
+                try
+                {
+                    ProjectUserSettings.Save(UserSettingsPath, accepted);
+                    persistedPreferences = accepted;
+                }
+                catch (Exception error) { Program.Logging?.Logger.Warning(error, "Unable to save project user settings"); }
+            }
+            preferenceRequestId = 0;
+        }
+        if (state.Status == 3 && state.RejectedId == preferenceRequestId) { preferenceRequestId = 0; }
     }
 
     private void DrainLogs(bool all)

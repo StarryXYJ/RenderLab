@@ -4,6 +4,9 @@ public sealed record EditorOptions(string Backend, string Project, string Shader
     bool Validation, bool Profiling, uint Pipeline, double BenchmarkSeconds, double WarmupSeconds,
     uint TargetFps = 60, string Observation = "normal", double SoakSeconds = 0, bool Isolated = false)
 {
+    internal bool PipelineExplicit { get; init; }
+    internal bool TargetFpsExplicit { get; init; }
+
     internal static EditorOptions Parse(string[] args)
     {
         var root = new DirectoryInfo(AppContext.BaseDirectory);
@@ -20,6 +23,8 @@ public sealed record EditorOptions(string Backend, string Project, string Shader
         var profiling = true;
         uint pipeline = 2;
         uint targetFps = 60;
+        var pipelineExplicit = false;
+        var targetFpsExplicit = false;
         var observation = "normal";
         double soakSeconds = 0;
         var isolated = false;
@@ -45,10 +50,11 @@ public sealed record EditorOptions(string Backend, string Project, string Shader
                 case "--output": output = args[i]; break;
                 case "--validation": validation = ParseSwitch(args[i]); break;
                 case "--profile": profiling = ParseSwitch(args[i]); break;
-                case "--target-fps": targetFps = uint.Parse(args[i], System.Globalization.CultureInfo.InvariantCulture); break;
+                case "--target-fps": targetFps = uint.Parse(args[i], System.Globalization.CultureInfo.InvariantCulture); targetFpsExplicit = true; break;
                 case "--observation": observation = args[i]; break;
                 case "--soak-seconds": soakSeconds = double.Parse(args[i], System.Globalization.CultureInfo.InvariantCulture); break;
                 case "--pipeline":
+                    pipelineExplicit = true;
                     pipeline = args[i] switch
                     {
                         "forward" => 1,
@@ -79,7 +85,8 @@ public sealed record EditorOptions(string Backend, string Project, string Shader
         validation ??= smoke;
 #endif
         return new EditorOptions(backend, Path.GetFullPath(project), Path.GetFullPath(shaders), Path.GetFullPath(output), smoke,
-            validation.Value, profiling, pipeline, benchmarkSeconds, warmupSeconds, targetFps, observation, soakSeconds, isolated);
+            validation.Value, profiling, pipeline, benchmarkSeconds, warmupSeconds, targetFps, observation, soakSeconds, isolated)
+        { PipelineExplicit = pipelineExplicit, TargetFpsExplicit = targetFpsExplicit };
     }
 
     private static bool ParseSwitch(string value) => value switch

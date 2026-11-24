@@ -68,7 +68,9 @@ File / Open Project 选择 `.rlproject`，Recent Projects 列出最多十个成�
 
 支持拖动停靠、标签合并、拆分、面板最大化、浮动和关闭恢复。顶部 Window 菜单列出 Scene、Render Settings、Render Graph、Profiler、Log，显示打开状态；已打开时激活/定位原面板，隐藏时重新显示，同一面板 ID 不重复创建多个实例。Render Graph、Profiler、Log 首次打开默认停靠在 Scene 下方的标签区，不挤占右侧设置面板；可自行拆分并列或浮动。
 
-Layout 菜单提供 Default（只显示 Scene/Render Settings）、Diagnostics（同时打开 Graph、Profiler、Log，Graph 与 Profiler 可并列）与恢复上次布局。首次启动、重置默认或布局损坏恢复都采用两面板布局；正常重启恢复用户最后保存的面板可见性、位置和比例。布局与设置保存到项目 `UserSettings/Editor/`，写入失败时保留内存配置并报告；不改变项目源数据。
+Layout 菜单提供 Default（只显示 Scene/Render Settings）、Diagnostics（同时打开 Graph、Profiler、Log，Graph 与 Profiler 可并列）与恢复上次布局。首次启动、重置默认或布局损坏恢复都采用两面板布局；正常重启恢复用户最后保存的面板可见性、位置和比例。布局与设置保存到项目 `UserSettings/Editor/<项目 ID>/`，同目录下的不同项目互不覆盖；不改变项目源数据。没有项目专属布局时可读取旧的 `UserSettings/Editor/layout.json`，保存写入新目录。手动加载预设时新目录无预设则读取旧目录中的预设，不自动迁移或删除旧文件。
+
+普通运行在用户请求成功应用后，将内置管线稳定 ID 与目标帧率保存为项目专属的 `session.json`；下次打开该项目时恢复。显式 `--pipeline` 和 `--target-fps` 分别覆盖对应的已保存值。Pending、被替代或拒绝的请求不写入；文件损坏、版本不支持或写入失败记录日志，已有文件不会因读取失败而立即覆盖。自检、隔离、基准和 soak 不读写这份个人设置。手动 Save/Load preset 仍使用独立的完整预设文件。
 
 面板关闭不等同于暂停场景。Graph 关闭后停止该面板的快照订阅/自动刷新，Profiler 关闭后停止图表发布；显式采样请求或已开启的 Profiling 配置按其独立状态继续，关闭 Dock 不静默修改渲染设置。Log 关闭后停止列表更新，后台日志记录与有界缓存继续，重新打开可查看缓存内的既有消息。
 
