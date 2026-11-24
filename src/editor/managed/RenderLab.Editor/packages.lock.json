@@ -2,6 +2,19 @@
   "version": 1,
   "dependencies": {
     "net10.0": {
+      "AutoSettingUI.Avalonia12": {
+        "type": "Direct",
+        "requested": "[2.0.0, )",
+        "resolved": "2.0.0",
+        "contentHash": "QqBZ+zQQAy34FYUwufR5K3FXQfbSbnBkkZTpKwoP1NOiuV9N0vHLr4KI0MaafDPCSJwrXe3QKOp4+3zSq1Jr1A==",
+        "dependencies": {
+          "AutoSettingUI.Core": "2.0.0",
+          "AutoSettingUI.Extension.Shared": "2.0.0",
+          "Avalonia": "12.0.5",
+          "Avalonia.Controls.ColorPicker": "12.0.5",
+          "Avalonia.Themes.Fluent": "12.0.5"
+        }
+      },
       "Avalonia": {
         "type": "Direct",
         "requested": "[12.0.5, )",
@@ -130,6 +143,19 @@
           "Serilog": "4.2.0"
         }
       },
+      "AutoSettingUI.Core": {
+        "type": "Transitive",
+        "resolved": "2.0.0",
+        "contentHash": "qXTUWpPWJqpJMg1mikBsqshFt5vrYNzuyAFEzM5qvF9qbQ3kHV8KRzWp1Dk3rzH+onCkkbB8EZmBoh9vc5QUnQ=="
+      },
+      "AutoSettingUI.Extension.Shared": {
+        "type": "Transitive",
+        "resolved": "2.0.0",
+        "contentHash": "7WfUqYl9lqh4XEIKGnqU6iVKnfw67ApfaaRBbeO4VMKOiOcFesf+IyvxLRweJ6gNWHifLcwQYvCU6lFYztr6Jg==",
+        "dependencies": {
+          "AutoSettingUI.Core": "2.0.0"
+        }
+      },
       "Avalonia.Angle.Windows.Natives": {
         "type": "Transitive",
         "resolved": "2.1.27548.20260419",
@@ -139,6 +165,15 @@
         "type": "Transitive",
         "resolved": "11.3.2",
         "contentHash": "qHDToxto1e3hci5YqbG9n0Ty8mlp3zBUN5wT66wKqaDVzXyQ0do3EnRILd4Ke9jpvsktaPpgE0YjEk7hornryQ=="
+      },
+      "Avalonia.Controls.ColorPicker": {
+        "type": "Transitive",
+        "resolved": "12.0.5",
+        "contentHash": "EmYXjNZq5wevvvvbLTNvnDBnZfQ6YuFBPOwDc6IXMFFIFLY4WAfpi3Dr94/qmt55shDcMceogaUiNy0yyLf5NQ==",
+        "dependencies": {
+          "Avalonia": "12.0.5",
+          "Avalonia.Remote.Protocol": "12.0.5"
+        }
       },
       "Avalonia.FreeDesktop": {
         "type": "Transitive",

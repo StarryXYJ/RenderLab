@@ -105,9 +105,42 @@ R1 契约修订、B1 样例整理/Benchmark、B2 调查和 B3 资源复用已完
 
 ### E3 C# 配置与管线描述
 
-状态：IN_PROGRESS。依赖 E2；首先隔离验证 AutoSettingUI 的运行兼容性与界面。
+状态：IN_PROGRESS。依赖 E2；AutoSettingUI 2.0.0 的公共包已完成隔离探针，继续项目配置接入。
 
-- [ ] 验证固定版本 AutoSettingUI 与 Avalonia 12、现有主题及所需控件兼容；不改变 Dock 布局。失败时记录具体阻塞，不把未验证的适配当作已完成。
+隔离验证：NuGet 1.4.2 基于 Avalonia 11 编译，加载其面板时在 Avalonia 12.0.5 的
+XAML 模板处因 `TemplateBinding.ProvideValue()` 签名不兼容而抛出 `MissingMethodException`。
+替换模板后，生成字段控件时仍因 `Binding(string, BindingMode)` 签名不兼容而失败。
+将同一源码改为针对 Avalonia 12.0.5 编译后，独立窗口可打开，文本、数字、复选框和
+滑块经程序修改可写回 DTO（`out/experiment-platform/e3-probe`）。这不是完整工作台或
+人工交互验收；发布包崩溃与源码重编译的验证均未改变工作台依赖。
+
+AutoSettingUI 独立工作副本 `D:/Personal/AutoSettingUI` 的提交 `a54b768` 和 `c0de704`
+增加共享源码的 Avalonia 12 包构建入口、无窗口回归测试及发布工作流步骤；.NET 8/9/10
+构建、.NET 10 测试通过。
+本地 NuGet 包的独立窗口探针通过（`out/experiment-platform/e3-package-probe`），旧入口
+以 Avalonia 11.3.3 构建及窗口探针通过（`out/experiment-platform/e3-legacy`）；11.0.0、
+真实人工交互及工作台集成未验证。上述提交及工作流修复 `a6b1d92` 已推送：`v1.4.3`
+因重复获取标签失败；`v1.4.4` 的远程构建、测试和打包通过，但发布返回 NuGet API key
+已过期，七个包均被拒绝。仓库密钥更新后重跑及同标签新建工作流仍返回相同错误；需核对
+`NUGET_API_KEY` 后续已处理，2.0.0 的发布结果见下文。
+
+AutoSettingUI 2.0.0 的独立本地化接口及可选 DynamicLocalization 适配器已随 PR #17
+合并至 main，PR 和标签构建、测试、打包通过。`v2.0.0` 发布时 NuGet 已接收
+`AutoSettingUI.Avalonia`，但 `AutoSettingUI.Avalonia12` 返回 403，后续包未推送。
+重跑后发布工作流成功，NuGet 接收全部八个包。2026 年 11 月 24 日复查公共索引，八个
+2.0.0 包均可见；`AutoSettingUI.Avalonia12` 及依赖从公共源在独立缓存还原，Release/.NET 10
+独立窗口可生成文本、数字、复选框和滑块并写回 DTO（`out/experiment-platform/e3-public`）。
+未逐个还原其余包，也未验证真实人工交互。
+
+#### E3a 依赖与主题接入
+
+状态：DONE（2026 年 11 月 24 日）。编辑器固定 AutoSettingUI.Avalonia12 2.0.0 并加载其
+主题；Release 托管测试 37/37（含生成控件与 DTO 写回），RTX 5060 的 DX12/Vulkan 完整
+工作台 smoke 通过，关闭账本中剩余分配、验证错误和 worker_failed 均为零；已有图形警告
+保留。证据 `out/experiment-platform/e3-public`、`e3-package-smoke/{dx12,vulkan}`；主题
+已载入但工作台尚未展示项目配置控件。未验证真实人工交互或生成数值控件的 Windows UI
+Automation，后续配置界面验收需覆盖。
+
 - [ ] 以项目作用域加载配置 DTO 和管线描述，提供自动生成的项目配置区；稳定字段 ID、类型、默认值、持久化版本、参数校验及请求/应用/拒绝状态。
 - [ ] 定义项目默认值、个人设置及实验预设合并和保存策略；构建时导出 Player 可消费的描述，验证跨项目隔离、版本不匹配、错误恢复与 Editor/Player 一致性。
 - [ ] 托管测试、真实窗口交互和适用后端验证通过后更新文档、提交。

@@ -469,7 +469,7 @@ python -m unittest discover -s tools/benchmark -p "test_*.py"
 
 IDE 打开根目录 `RenderLab.slnx`，应用项目位于 `src/editor/managed/RenderLab.Editor`；它负责托管项目导航和构建，C++ 依赖仍由 CMake 构建。根目录 `global.json` 锁定 SDK，`Directory.Build.props` 统一规则并将各项目产物分别放到 `out/dotnet/<项目名>/{bin,obj}`。首次运行先用下面的构建脚本准备原生 DLL/Shader，再由 IDE 启动 Editor；IDE 构建不会隐式配置或编译 CMake；如果原生构建树缺少当前源码中的 Shader，托管构建会报错，需先重新构建该目录的 `renderlab_editor_bridge`，避免运行时才发现缺文件。此检查不保证已有文件内容或 DLL 是最新的，修改原生源码或 Shader 后仍需重建原生目标。自定义本机构建树时给 MSBuild 传 `-p:NativeBuildDir=绝对路径`，或将同名环境变量设为该绝对路径。
 
-额外需要 .NET SDK 10.0.401（根目录 global.json 允许同 feature band 的更新补丁）和 PowerShell 7。Avalonia/Fonts.Inter 固定 12.0.5，CommunityToolkit.Mvvm 8.4.1、Microsoft.Extensions.DependencyInjection 10.0.0；Debug 开发工具使用模板的 AvaloniaUI.DiagnosticsSupport 2.2.3。包图由 `src/editor/managed/RenderLab.Editor/packages.lock.json` 锁定。宿主作为后续 Editor 的 MVVM/DI 骨架复用，目前只支持 Windows x64，属于 M7.1 的提前集成试验；模块职责、生命周期和未验证边界见 [宿主契约](../docs/editor-host.md)。
+额外需要 .NET SDK 10.0.401（根目录 global.json 允许同 feature band 的更新补丁）和 PowerShell 7。Avalonia/Fonts.Inter 固定 12.0.5，AutoSettingUI.Avalonia12 固定 2.0.0，CommunityToolkit.Mvvm 8.4.1、Microsoft.Extensions.DependencyInjection 10.0.0；Debug 开发工具使用模板的 AvaloniaUI.DiagnosticsSupport 2.2.3。包图由 `src/editor/managed/RenderLab.Editor/packages.lock.json` 锁定。AutoSettingUI 依赖及主题已接入，项目自定义配置界面仍在开发。宿主作为后续 Editor 的 MVVM/DI 骨架复用，目前只支持 Windows x64，属于 M7.1 的提前集成试验；模块职责、生命周期和未验证边界见 [宿主契约](../docs/editor-host.md)。
 
 当前工程已从官方 12.0.5 MVVM 模板的 CommunityToolkit 分支整理，不需要重新生成。要在独立目录重现参考模板，可执行以下命令；不要向现有宿主目录使用 `--force` 覆盖 Bridge、manifest 或生命周期实现。
 
