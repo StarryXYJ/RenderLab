@@ -157,6 +157,8 @@ public:
                       std::source_location source = std::source_location::current());
     uint32_t PassCount() const;
     PassHandle GetPass(uint32_t index) const;
+    /// Keep code or resources alive through graph destruction and GPU submission retirement.
+    void Retain(std::shared_ptr<const void> owner);
     /// Ordering only; never retains an otherwise dead pass.
     void After(PassHandle pass, PassHandle predecessor);
     void Before(PassHandle pass, PassHandle successor)

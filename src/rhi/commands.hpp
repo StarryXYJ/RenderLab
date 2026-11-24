@@ -205,6 +205,8 @@ public:
 private:
     friend class Runtime;
     friend class rendergraph::Graph;
+    // Released after command packets and their referenced objects.
+    std::vector<std::shared_ptr<const void>> owners_;
     void SelectQueue(QueueType queue, bool waitCompute = false);
     struct QueueChange
     {

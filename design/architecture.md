@@ -42,7 +42,7 @@ RenderLab 是面向引擎岗和渲染岗求职的渲染引擎项目。核心采�
 - 首期一个 Device、一个项目、一个主视口和一条 Graphics Queue。多视图历史数据仍按 ViewID 命名，避免未来改成全局单例。
 - Render Graph 是图内同步计划的唯一生成者；RHI 执行计划并验证，不另做隐式自动状态切换。
 - Schema 是材质属性的权威描述，Template 是 ShaderPackage 的只读视图，GPU 数据是可重建投影。
-- 内置 Feature 使用薄基类并按显式依赖组合；项目原生扩展采用项目作用域模块，不引入全局插件市场。当前只完成模块注册器，渲染接入状态见阶段计划；接口与寿命边界见 [项目模块](../docs/project-modules.md)。
+- 内置 Feature 使用薄基类并按显式依赖组合；项目原生扩展采用项目作用域模块，不引入全局插件市场。场景 Renderer 可在 Forward Graph 中执行项目节点，图和在途命令持有模块；Editor/Player 接入状态见阶段计划，接口与寿命边界见 [项目模块](../docs/project-modules.md)。
 - 不提前实现执行计划缓存、通用属性表达式语言、跨进程编辑协议、通用资源流送或通用 Job System。
 
 ## 总体分层

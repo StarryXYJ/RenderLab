@@ -579,6 +579,48 @@ void AccessValidation()
         Fails([&] { p.ColorTarget(t, rhi::LoadOp::Discard); }, "Clear or Load");
     }
 }
+void RetainedOwnerContracts()
+{
+    for (uint32_t mode = 0; mode < 4; ++mode)
+    {
+        FakeRuntime runtime;
+        Pool pool(runtime);
+        runtime.failBefore = mode == 1;
+        runtime.failAfter = mode == 2;
+        auto owner = std::make_shared<int>(42);
+        std::weak_ptr<int> retained = owner;
+        {
+            Graph graph;
+            graph.Retain(owner);
+            owner.reset();
+            for (uint32_t i = 0; i < 2; ++i)
+            {
+                auto pass = graph.AddCopyPass("Retained." + std::to_string(i));
+                pass.SideEffect();
+                pass.Execute(
+                    [mode](CopyContext&)
+                    {
+                        if (mode == 3)
+                            throw std::runtime_error("Injected recording failure");
+                    });
+            }
+            graph.Compile();
+            if (mode == 0)
+                graph.Execute(pool);
+            else
+                Fails([&] { graph.Execute(pool); }, mode == 1   ? "Injected before"
+                                                    : mode == 2 ? "Injected after"
+                                                                : "Injected recording");
+            Require(!retained.expired(), "Graph lost its retained owner");
+        }
+        if (mode == 0 || mode == 2)
+        {
+            Require(!retained.expired(), "Pending submission lost its retained owner");
+            runtime.WaitIdle();
+        }
+        Require(retained.expired(), "Retired or cancelled graph retained its owner");
+    }
+}
 void Lifecycle()
 {
     FakeRuntime runtime;
@@ -1352,6 +1394,7 @@ int main()
         AliasContracts();
         NamesAndBuilders();
         AccessValidation();
+        RetainedOwnerContracts();
         Lifecycle();
         RecordingValidation();
         FeatureCreationContracts();

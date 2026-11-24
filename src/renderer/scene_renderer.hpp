@@ -15,6 +15,7 @@
 #include <map>
 #include <memory>
 #include <optional>
+#include <string>
 #include <string_view>
 #include <vector>
 
@@ -25,6 +26,7 @@ class Swapchain;
 } // namespace renderlab::rhi
 namespace renderlab::renderer
 {
+class ProjectModules;
 enum class SceneView
 {
     Final,
@@ -46,6 +48,8 @@ enum class GeometrySubmission
 struct SceneRenderOptions
 {
     PipelineType pipeline = PipelineType::Forward;
+    /// Optional project pipeline extending Forward.
+    std::string projectPipeline;
     GeometrySubmission submission = GeometrySubmission::Direct;
     uint32_t recordingThreads = 1;
     bool asyncCompute = false;
@@ -155,7 +159,8 @@ class SceneRenderer final
 public:
     /// @brief Loads the project, compiles scene shaders and synchronously uploads static assets.
     SceneRenderer(rhi::Runtime&, shader::Target, const std::filesystem::path& project,
-                  const std::filesystem::path& engineShaders, std::string_view sceneId = {});
+                  const std::filesystem::path& engineShaders, std::string_view sceneId = {},
+                  std::shared_ptr<const ProjectModules> modules = {});
     ~SceneRenderer();
     SceneRenderer(const SceneRenderer&) = delete;
     SceneRenderer& operator=(const SceneRenderer&) = delete;

@@ -88,6 +88,8 @@ uint64_t EstimatedBytes(const Resource& resource);
 } // namespace detail
 struct Graph::Impl
 {
+    // Released after pass callbacks and graph-owned resources.
+    std::vector<std::shared_ptr<const void>> owners;
     uint64_t id;
     detail::Phase phase = detail::Phase::Building;
     uint32_t active = UINT32_MAX;

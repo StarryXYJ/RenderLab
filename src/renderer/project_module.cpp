@@ -1,8 +1,10 @@
 #include "renderer/project_module.hpp"
+#include "rendergraph/graph.hpp"
 
 #include <Windows.h>
 
 #include <algorithm>
+#include <array>
 #include <bit>
 #include <set>
 #include <stdexcept>
@@ -148,5 +150,27 @@ const ProjectPipeline& ProjectModules::Pipeline(const std::string& id) const
 const std::map<std::string, ProjectPipeline>& ProjectModules::Pipelines() const
 {
     return impl_->pipelines;
+}
+void ProjectModules::Build(const std::string& id, rendergraph::Graph& graph,
+                           const RenderFrame& frame, rhi::Runtime& runtime) const
+{
+    const auto& pipeline = Pipeline(id);
+    for (const auto& nodeId : pipeline.nodes)
+    {
+        const auto& node = Node(nodeId);
+        const auto first = graph.PassCount();
+        std::array<char, 1024> error{};
+        const auto status = node.build(node.user, &graph, &frame, &runtime, error.data(),
+                                       static_cast<uint32_t>(error.size()));
+        if (status != 0)
+        {
+            error.back() = '\0';
+            throw std::runtime_error("Project node " + nodeId + " failed: " + error.data());
+        }
+        const auto end = graph.PassCount();
+        for (auto pass = first; pass < end; ++pass)
+            for (uint32_t predecessor = 0; predecessor < first; ++predecessor)
+                graph.After(graph.GetPass(pass), graph.GetPass(predecessor));
+    }
 }
 } // namespace renderlab::renderer

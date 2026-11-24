@@ -13,6 +13,7 @@
 #include "renderer/forward.hpp"
 #include "renderer/ltc_table.hpp"
 #include "renderer/pipeline.hpp"
+#include "renderer/project_module.hpp"
 #include "renderer/shadow.hpp"
 #include "rendergraph/graph.hpp"
 #include "rendergraph/pool.hpp"
@@ -66,6 +67,7 @@ std::array<float, 4> Vector(math::Vec3 value, float w = 0)
 } // namespace
 struct SceneRenderer::Impl
 {
+    std::shared_ptr<const ProjectModules> projectModules;
     rhi::Runtime& runtime;
     shader::Target shaderTarget;
     project::Project project;
@@ -237,9 +239,10 @@ struct SceneRenderer::Impl
         return entry.path;
     }
     Impl(rhi::Runtime& r, shader::Target target, const std::filesystem::path& manifest,
-         const std::filesystem::path& engine, std::string_view sceneId)
-        : runtime(r), shaderTarget(target), project(project::Project::Open(manifest, engine)),
-          database(project),
+         const std::filesystem::path& engine, std::string_view sceneId,
+         std::shared_ptr<const ProjectModules> modules)
+        : projectModules(std::move(modules)), runtime(r), shaderTarget(target),
+          project(project::Project::Open(manifest, engine)), database(project),
           document(scene::Scene::Load(
               ScenePath(database, sceneId.empty() ? project.startScene : std::string(sceneId)))),
           materials(r, target),
@@ -1165,8 +1168,9 @@ struct SceneRenderer::Impl
 };
 SceneRenderer::SceneRenderer(rhi::Runtime& runtime, shader::Target target,
                              const std::filesystem::path& project,
-                             const std::filesystem::path& engine, std::string_view sceneId)
-    : impl_(std::make_unique<Impl>(runtime, target, project, engine, sceneId))
+                             const std::filesystem::path& engine, std::string_view sceneId,
+                             std::shared_ptr<const ProjectModules> modules)
+    : impl_(std::make_unique<Impl>(runtime, target, project, engine, sceneId, std::move(modules)))
 {
 }
 SceneRenderer::~SceneRenderer() = default;
@@ -1225,6 +1229,12 @@ const scene::Snapshot& SceneRenderer::LastSnapshot() const
 }
 void SceneRenderer::ValidateOptions(const SceneRenderOptions& options)
 {
+    if (!options.projectPipeline.empty())
+    {
+        if (options.pipeline != PipelineType::Forward || !impl_->projectModules)
+            throw std::invalid_argument("Project pipeline requires its modules and Forward base");
+        (void)impl_->projectModules->Pipeline(options.projectPipeline);
+    }
     if (options.shadowDiagnostics && options.pipeline != PipelineType::RayTracing)
         throw std::invalid_argument("Shadow diagnostics require the ray tracing pipeline");
     ValidatePipeline(options.pipeline);
@@ -1316,6 +1326,12 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
 {
     const auto preparationStart = std::chrono::steady_clock::now();
     auto& self = *impl_;
+    if (!options.projectPipeline.empty())
+    {
+        if (options.pipeline != PipelineType::Forward || !self.projectModules)
+            throw std::invalid_argument("Project pipeline requires its modules and Forward base");
+        (void)self.projectModules->Pipeline(options.projectPipeline);
+    }
     if (self.memoryAlias != options.memoryAlias)
     {
         self.pool.Trim();
@@ -2543,6 +2559,11 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
         self.deferredPipeline.Build(graph, frame);
     else
         self.forwardPipeline.Build(graph, frame);
+    if (!options.projectPipeline.empty())
+    {
+        graph.Retain(self.projectModules);
+        self.projectModules->Build(options.projectPipeline, graph, frame, self.runtime);
+    }
     if (reflections)
     {
         graph.Export(graph.GetTexture(frame.rayTracing.historyRadiance), rhi::State::Sampled);

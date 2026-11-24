@@ -225,6 +225,12 @@ PassHandle Graph::GetPass(uint32_t index) const
     Require(index < impl_->passes.size(), "Invalid pass index");
     return {impl_->id, index};
 }
+void Graph::Retain(std::shared_ptr<const void> owner)
+{
+    impl_->Building();
+    Require(bool(owner), "Cannot retain an empty owner");
+    impl_->owners.push_back(std::move(owner));
+}
 void Graph::Poison()
 {
     impl_->commands.reset();

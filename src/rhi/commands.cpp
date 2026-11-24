@@ -408,5 +408,6 @@ void CommandList::Cancel()
     group_.reset();
     vertex_.reset();
     index_.reset();
+    owners_.clear();
 }
 } // namespace renderlab::rhi

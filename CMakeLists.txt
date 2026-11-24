@@ -84,7 +84,7 @@ target_link_libraries(renderlab_rendergraph PRIVATE renderlab_options renderlab_
 
 add_library(renderlab_project_module STATIC src/renderer/project_module.cpp)
 target_include_directories(renderlab_project_module PUBLIC src)
-target_link_libraries(renderlab_project_module PRIVATE renderlab_options)
+target_link_libraries(renderlab_project_module PRIVATE renderlab_options renderlab_rendergraph)
 
 add_library(renderlab_renderer STATIC src/renderer/forward.cpp src/renderer/deferred.cpp
     src/renderer/raytracing.cpp src/renderer/acceleration_scene.cpp
@@ -263,6 +263,17 @@ if(BUILD_TESTING)
         $<TARGET_FILE:renderlab_project_fixture_6> $<TARGET_FILE:renderlab_project_fixture_7>
         $<TARGET_FILE:renderlab_project_fixture_8> $<TARGET_FILE:renderlab_project_fixture_9>
         $<TARGET_FILE:renderlab_project_fixture_10>)
+    add_library(renderlab_project_render_fixture SHARED tests/project_render_fixture.cpp)
+    target_link_libraries(renderlab_project_render_fixture PRIVATE renderlab_options renderlab_rendergraph)
+    add_executable(renderlab_project_render_tests tests/project_render_tests.cpp)
+    target_link_libraries(renderlab_project_render_tests PRIVATE renderlab_options renderlab_renderer
+        renderlab_project_module renderlab_rhi renderlab_content renderlab_core renderlab_platform)
+    add_dependencies(renderlab_project_render_tests renderlab_project_render_fixture renderlab_scene_shaders)
+    add_custom_command(TARGET renderlab_project_render_tests POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_FILE:renderlab_dxc>
+            $<TARGET_FILE_DIR:renderlab_project_render_tests>
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_FILE:renderlab_pix>
+            $<TARGET_FILE_DIR:renderlab_project_render_tests> VERBATIM)
     add_executable(renderlab_gpu_memory_tests tests/gpu_memory_tests.cpp)
     target_link_libraries(renderlab_gpu_memory_tests PRIVATE renderlab_options renderlab_rhi renderlab_core nlohmann_json::nlohmann_json)
     target_compile_definitions(renderlab_gpu_memory_tests PRIVATE RENDERLAB_SOURCE_ROOT="${CMAKE_SOURCE_DIR}")
@@ -483,6 +494,11 @@ if(BUILD_TESTING)
             set_tests_properties(gpu.dx12.memory PROPERTIES LABELS gpu RUN_SERIAL TRUE TIMEOUT 90)
         endif()
         foreach(backend IN ITEMS dx12 vulkan)
+            add_test(NAME gpu.${backend}.project_render COMMAND renderlab_project_render_tests
+                ${backend} $<TARGET_FILE:renderlab_project_render_fixture>
+                ${CMAKE_SOURCE_DIR}/sample/m4/Pbr.rlproject ${CMAKE_SOURCE_DIR}/shaders
+                ${CMAKE_BINARY_DIR}/project-render/${backend})
+            set_tests_properties(gpu.${backend}.project_render PROPERTIES LABELS gpu RUN_SERIAL TRUE TIMEOUT 120)
             add_test(NAME gpu.${backend}.alias COMMAND renderlab_alias_tests ${backend}
                 ${CMAKE_BINARY_DIR}/alias/${backend})
             set_tests_properties(gpu.${backend}.alias PROPERTIES LABELS gpu RUN_SERIAL TRUE TIMEOUT 90)

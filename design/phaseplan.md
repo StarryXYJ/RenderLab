@@ -101,14 +101,18 @@ R1 契约修订、B1 样例整理/Benchmark、B2 调查和 B3 资源复用已完
 
 #### E2a 模块注册与版本边界
 
-状态：DONE（2026 年 11 月 24 日）。同构建原生模块入口、节点/Forward 基底管线 ID 和跨模块节点引用；注册器在拥有 DLL 期间提供回调，校验版本、MSVC/CRT 配置、描述、冲突和缺失引用。接口、同构建限制及回调寿命见 [项目模块](../docs/project-modules.md)。尚未接入 SceneRenderer、Editor 或 Player。
+状态：DONE（2026 年 11 月 24 日）。同构建原生模块入口、节点/Forward 基底管线 ID 和跨模块节点引用；注册器在拥有 DLL 期间提供回调，校验版本、MSVC/CRT 配置、描述、冲突和缺失引用。接口、同构建限制及回调寿命见 [项目模块](../docs/project-modules.md)。
 
 验证：MSVC Debug/Release 独立 DLL 和 `project_module.contracts` 均通过；覆盖模块驻留/释放、回调、跨模块引用、重复/缺失和 ABI 失败，Debug 宿主加载 Release 模块被拒绝。尚未验证节点真实图执行、GPU 资源及热重载；这些留在 E2b/E4。
 
 #### E2b 渲染与 Player 纵切
 
-- [ ] 定义同版本原生模块 ABI、节点和管线稳定 ID、注册和输入输出契约；项目 C++ 模块可编译并加载，Editor 和 Player 使用相同实现。
-- [ ] 将管线描述接入 SceneRenderer 和 Graph，在 Forward 中插入项目节点；支持项目定义管线所需的宿主输入、资源读写、输出和能力诊断，不绕开图编译。适用范围与现有硬编码分支明确验证。
+状态：IN_PROGRESS。按可独立验证的图执行与宿主接入两部分推进；前者不表示 Editor 或 Player 已可选择项目管线。
+
+图执行（DONE，2026 年 11 月 24 日）：SceneRenderer 支持 Forward 基底的项目管线，按顺序插入节点，图和提交各自持有模块至回调销毁和 GPU 退休。Graph ABI 更新为 2。Release 的 `project_module.contracts`、`rendergraph.contracts`、DX12/Vulkan `gpu.*.project_render` 共 4/4 通过；真实独立 DLL 节点改变 HDR 输出，验证图顺序、构图失败、内置管线恢复及资源账本；假运行时覆盖正常退休与录制、提交前和部分提交失败的所有权。仅在本机设备上验证，未重跑 Debug、设备丢失或热重载，后续宿主和真实项目接入仍需验证。
+
+- [ ] 项目运行描述提供模块路径及默认管线，Editor 和 Player 使用相同实现；在现有控件中按稳定 ID 选择并保存项目管线，诊断失败并恢复已应用选择。
+- [ ] 支持项目定义管线所需的宿主输入、资源读写、输出和能力诊断，不绕开图编译。适用范围与现有硬编码分支明确验证。
 - [ ] 拒绝缺失/冲突模块、节点与不兼容 ABI，模块及回调在 GPU 退休前保持有效；项目切换失败回退。提供项目样例和双后端图/画面验证。
 - [ ] 扩展 Player 构建并消费相同运行描述，验证无 Editor 依赖；更新文档，完成测试后提交。
 

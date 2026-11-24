@@ -4,7 +4,7 @@
 
 /* Same-build interface: graph, frame and runtime are borrowed C++ objects from this build. */
 #define RENDERLAB_PROJECT_MODULE_ABI 1u
-#define RENDERLAB_PROJECT_GRAPH_ABI 1u
+#define RENDERLAB_PROJECT_GRAPH_ABI 2u
 #define RENDERLAB_PROJECT_FORWARD 1u
 #if defined(_DLL)
 #define RENDERLAB_PROJECT_DYNAMIC_CRT 1u

@@ -87,6 +87,7 @@ void Graph::Record()
     auto& g = *impl_;
     Require(g.phase == detail::Phase::Prepared, "Record requires prepared graph");
     g.commands = g.pool->Device().CreateCommands();
+    g.commands->owners_ = g.owners;
     g.commands->SetRecordingThreads(g.recordingThreads);
     g.phase = detail::Phase::Recording;
     uint32_t position = 0;

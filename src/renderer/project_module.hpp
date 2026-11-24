@@ -8,8 +8,17 @@
 #include <string>
 #include <vector>
 
+namespace renderlab::rendergraph
+{
+class Graph;
+}
+namespace renderlab::rhi
+{
+class Runtime;
+}
 namespace renderlab::renderer
 {
+struct RenderFrame;
 struct ProjectNode
 {
     std::string id;
@@ -33,6 +42,9 @@ public:
     const ProjectNode& Node(const std::string& id) const;
     const ProjectPipeline& Pipeline(const std::string& id) const;
     const std::map<std::string, ProjectPipeline>& Pipelines() const;
+    /// Builds into the caller's graph; the caller must keep this owner through GPU retirement.
+    void Build(const std::string& id, rendergraph::Graph& graph, const RenderFrame& frame,
+               rhi::Runtime& runtime) const;
 
 private:
     struct Impl;
