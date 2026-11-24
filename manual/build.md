@@ -576,3 +576,22 @@ M1 首期资源为单 mip/layer 的 2D 纹理、显式单流顶点布局和单 G
 ```
 
 可将 `--pipeline` 改为 `deferred`、`raytracing` 或 `pathtracing`，`--backend` 改为 `vulkan`。RTX 5060 Release 的八点灯场景中，Vulkan 四条管线的 headless 短测完成且 validation errors 为零；Release Editor 的 Vulkan Forward、Deferred、Ray Tracing 固定相机短测也完成。旧版本存在描述符块预算耗尽问题；当前仍有有界描述符页预算，更多灯或物体不保证可运行。其他设备、窗口交互和长期性能未验证。更多数据见 [CPU 性能记录](../docs/performance/light-stress-cpu.md) 和 [示例说明](../sample/m4/README.md#多物体光照压测)。
+
+## 项目渲染模块示例
+
+在 x64 Developer PowerShell 中，将示例项目的 CMake 源目录加入同一个 Release 构建，再编译并部署其 DLL：
+
+```powershell
+cmake --preset windows-release "-DRENDERLAB_PROJECT_SOURCE_DIR=$((Resolve-Path sample/m4/ExperimentSource).Path)"
+cmake --build --preset windows-release --target example_project renderlab_player renderlab_editor_bridge
+./tools/build-editor.ps1
+./out/dotnet/RenderLab.Editor/bin/Release/net10.0/RenderLab.Editor.exe --project sample/m4/Experiment.rlproject
+```
+
+`example_project` 将 `experiment.dll` 放入 `sample/m4/Library/Modules`，该目录不纳入版本管理；重复构建目标会补回删除的 DLL。示例节点清空 HDR CameraColor 为蓝色，便于确认管线生效；在 Render Settings 可切到内置管线查看原场景。Player 直接使用同一项目描述：
+
+```powershell
+./out/build/windows-release/renderlab_player.exe --backend dx12 --project sample/m4/Experiment.rlproject
+```
+
+项目的 `CMakeLists.txt` 可引用 `renderlab_options` 和 `renderlab_rendergraph`，并负责把生成模块放到清单指定位置；入口只接受一个可信源码目录。DLL 与宿主必须同源、同工具链及构建配置。重编译前关闭正在使用该 DLL 的会话；构建树不再需要该项目时重新配置 `-DRENDERLAB_PROJECT_SOURCE_DIR=`。项目切换不会自动构建或重新加载 DLL，Player 打包也不会自动收集它。

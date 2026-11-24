@@ -5,6 +5,7 @@ set(CMAKE_CXX_SCAN_FOR_MODULES OFF)
 if(NOT WIN32 OR NOT CMAKE_SIZEOF_VOID_P EQUAL 8)
     message(FATAL_ERROR "RenderLab currently requires Windows x64.")
 endif()
+
 if(CMAKE_SOURCE_DIR STREQUAL CMAKE_BINARY_DIR)
     message(FATAL_ERROR "Use an out-of-source build: cmake --preset windows-debug")
 endif()
@@ -638,4 +639,11 @@ if(BUILD_TESTING)
                 LABELS gpu RUN_SERIAL TRUE TIMEOUT 30)
         endforeach()
     endif()
+endif()
+
+# A project can contribute its own targets to the same engine build. The directory is
+# opt-in and is expected to contain a trusted CMakeLists.txt.
+set(RENDERLAB_PROJECT_SOURCE_DIR "" CACHE PATH "Project CMake source directory")
+if(RENDERLAB_PROJECT_SOURCE_DIR)
+    add_subdirectory("${RENDERLAB_PROJECT_SOURCE_DIR}" "${CMAKE_BINARY_DIR}/project-source")
 endif()

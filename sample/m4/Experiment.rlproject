@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "id": "56df718b09f044ecb9ee50d411c16592",
+  "assets": "Assets",
+  "library": "Library",
+  "startScene": "7769f044b94a4f26b81cec8994bef5ad",
+  "rendering": {
+    "version": 1,
+    "modules": ["Library/Modules/experiment.dll"],
+    "defaultPipeline": "example.blue"
+  }
+}

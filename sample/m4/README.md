@@ -40,6 +40,10 @@ Add `--debug-panel` for native view/exposure/shadow controls, or press F1 in a s
 
 顶灯使用显式单面矩形光源，Path Tracing 对灯面和 BSDF 联合采样；低样本仍可能有噪声，静止累积或开启 Spatial denoise 可改善预览，降噪有偏差。当前最多四段路径，且仅支持不透明几何；该示例不代表标准参考图或完全收敛的 GI 基准。普通光栅管线不会模拟该顶灯的间接照明。
 
+## 项目渲染模块
+
+`Experiment.rlproject` 与 `ExperimentSource` 展示项目自行编译并注册 C++ Render Graph 节点和管线。示例节点将画面清成蓝色，便于与内置 Forward 区分；构建与运行见 [手册](../../manual/build.md#项目渲染模块示例)。
+
 ## 多物体光照压测
 
 `LightStress.rlproject` 包含 12×12 个球和立方体、地面、两盏暖/冷矩形面光源、八盏彩色点光源与一盏方向光，共 145 个网格。多种金属度和粗糙度便于观察照明与阴影；在 Editor 中通过 File / Open Project 打开。矩形面光源最多同时启用两盏，点光源最多八盏，方向光只选一盏主光。光栅及透明物体的点灯目前没有阴影；混合管线不透明主表面和路径追踪对点灯做有限距离遮挡查询。
