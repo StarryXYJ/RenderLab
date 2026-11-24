@@ -29,6 +29,15 @@ Library，构建和运行之前须执行项目自己的导出程序。Editor 和
 不会执行 C# 代码或自动重建导出；修改描述后需重新打开项目。只有 Forward 基底，
 这套接口描述节点组成和顺序，不直接在 C# 中调用 RHI 或定义 C++ 节点实现。
 
+`RenderLab.Project.SettingsSchema<T>` 为项目配置 DTO 提供版本化值快照：公共可读写属性用
+`[ProjectSetting("stable.id")]` 注册，支持 `bool`、`int`、`float`、`double` 和非空
+`string`；数值可指定 `Minimum`/`Maximum`，DTO 可实现 `IProjectSettingsValidator` 做
+跨字段校验。ID 使用与管线相同的小写 ASCII 规则，最多 256 项。`CreateDefaults()`
+创建默认实例，`Apply` 在副本上逐层应用同版本的 `{"version":1,"values":{...}}`，
+`Serialize` 输出所有字段；未知或重复 ID、错误类型、无效数值及版本不匹配会被拒绝，
+原 DTO 不受影响。快照限 64 KiB。当前这是独立托管数据接口；项目作用域加载、UI、
+持久化和向渲染节点传值尚未接入，实施状态见 [阶段计划](../design/phaseplan.md)。
+
 模块需与宿主使用同一 RenderLab 源码、MSVC 编译器、CRT 和 Debug/Release 配置构建。入口是 C ABI；调用节点时，Graph、RenderFrame 和 Runtime 是同构建的借用 C++ 对象，不构成跨版本 C++ ABI。版本检查包含显式模块/Graph ABI、MSVC 版本、CRT 和迭代器调试级别，但不能自动证明源码或所有编译选项一致；这些接口变化时必须同步提升 Graph ABI 并重编模块。当前 Graph ABI 为 2。节点回调返回零表示成功，失败通过有界 UTF-8 缓冲报告，不得向宿主抛异常。
 
 `ProjectModules` 拥有模块 DLL，查询返回的引用和函数指针仅在该对象存活期间有效。`SceneRenderer` 持有模块，并让项目图及其提交保留模块：图的回调和资源销毁后、在途命令退休后才释放相应所有权，包括构图或提交失败路径。调用方仍须遵循 Runtime 的线程及 GPU 资源退休契约；设备丢失恢复不在本次验证范围。节点不得跨帧保留临时 Graph、帧引用或 Graph 句柄；Graph 内回调需按值捕获所需数据并遵循 Graph/RHI 资源所有权约定。
