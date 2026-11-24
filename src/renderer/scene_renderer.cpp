@@ -2615,7 +2615,19 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
     if (!options.projectPipeline.empty())
     {
         graph.Retain(self.projectModules);
-        self.projectModules->Build(options.projectPipeline, graph, frame, self.runtime);
+        try
+        {
+            self.projectModules->Build(options.projectPipeline, graph, frame, self.runtime);
+        }
+        catch (const ProjectPipelineError&)
+        {
+            throw;
+        }
+        catch (const std::exception& failure)
+        {
+            throw ProjectPipelineError("Project graph build failed: " +
+                                       std::string(failure.what()));
+        }
     }
     if (reflections)
     {
@@ -2970,11 +2982,36 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
                                                                       instance.world});
         }
     }
-    graph.Compile({.profile = options.profile,
-                   .recordingThreads = options.recordingThreads,
-                   .asyncCompute = options.asyncCompute,
-                   .memoryAlias = options.memoryAlias});
-    auto submitted = graph.Execute(self.pool, swapchain);
+    try
+    {
+        graph.Compile({.profile = options.profile,
+                       .recordingThreads = options.recordingThreads,
+                       .asyncCompute = options.asyncCompute,
+                       .memoryAlias = options.memoryAlias});
+    }
+    catch (const std::exception& failure)
+    {
+        if (!options.projectPipeline.empty())
+            throw ProjectPipelineError("Project graph compilation failed: " +
+                                       std::string(failure.what()));
+        throw;
+    }
+    const auto beforeSubmit = self.runtime.LastSubmitted();
+    auto submitted = [&]
+    {
+        try
+        {
+            return graph.Execute(self.pool, swapchain);
+        }
+        catch (const std::exception& failure)
+        {
+            if (!options.projectPipeline.empty() && !self.runtime.Poisoned() &&
+                self.runtime.LastSubmitted() == beforeSubmit)
+                throw ProjectPipelineError("Project graph execution failed before submission: " +
+                                           std::string(failure.what()));
+            throw;
+        }
+    }();
     if (indexed)
     {
         self.indexedScene->Commit(submitted.completion);

@@ -5,6 +5,7 @@
 #include <filesystem>
 #include <map>
 #include <memory>
+#include <stdexcept>
 #include <string>
 #include <vector>
 
@@ -19,6 +20,12 @@ class Runtime;
 namespace renderlab::renderer
 {
 struct RenderFrame;
+/// Project graph construction or recording failed before graph submission.
+class ProjectPipelineError : public std::runtime_error
+{
+public:
+    using std::runtime_error::runtime_error;
+};
 struct ProjectNode
 {
     std::string id;

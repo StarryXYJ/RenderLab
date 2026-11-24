@@ -18,7 +18,7 @@ inline void ValidateConfig(const rl_viewport_config& c)
     };
     require(c.size == sizeof(c) && c.version == 1 && c.request_id > 0,
             "Invalid configuration size/version/request ID");
-    require(c.pipeline >= 1 && c.pipeline <= 4 && c.submission <= 3 && c.view <= 7,
+    require(c.pipeline >= 1 && c.pipeline <= 4 + 64 * 256 && c.submission <= 3 && c.view <= 7,
             "Unknown pipeline/submission/debug view");
     require(c.pipeline != 4 || (c.submission == 0 && c.view <= 1 && (c.flags & 32u) == 0),
             "Path tracing requires direct submission and Final/HDR view without culling readback");
@@ -57,7 +57,8 @@ inline renderer::SceneRenderOptions RenderOptions(const rl_viewport_config& c,
                                                   const scene::MainLight& source)
 {
     renderer::SceneRenderOptions options;
-    options.pipeline = static_cast<renderer::PipelineType>(c.pipeline);
+    options.pipeline = c.pipeline <= 4 ? static_cast<renderer::PipelineType>(c.pipeline)
+                                       : renderer::PipelineType::Forward;
     options.submission = static_cast<renderer::GeometrySubmission>(c.submission);
     options.recordingThreads = c.recording_threads;
     options.asyncCompute = c.async_compute != 0;

@@ -89,6 +89,25 @@ public sealed partial class RenderSettingsViewModel : ObservableObject, IDisposa
                 _ => $"Pending #{state.RequestedId} · applied #{state.AppliedId} (resume or step if paused)"
             };
             Error = viewport.ConfigurationError;
+            if (seenCapabilities != viewport.Capabilities && viewport.Capabilities.Length > 0)
+            {
+                seenCapabilities = viewport.Capabilities;
+                using var json = JsonDocument.Parse(seenCapabilities);
+                var root = json.RootElement;
+                if (root.GetProperty("schemaVersion").GetInt32() != 2) { throw new InvalidDataException("Unsupported device capability schema."); }
+                AsyncSupported = root.GetProperty("asyncCompute").GetBoolean();
+                string[] builtins = ["Forward", "Deferred", "RayTracing", "PathTracing"];
+                Pipelines = root.GetProperty("pipelines").EnumerateArray().Select((entry, index) =>
+                    new CapabilityChoice(index < builtins.Length ? builtins[index] : entry.GetProperty("id").GetString()!,
+                        entry.GetProperty("available").GetBoolean(), entry.GetProperty("reason").GetString() ?? "")).ToArray();
+                string[] submissions = ["Direct", "Indexed Direct", "CPU Indirect", "GPU Culled"];
+                Submissions = root.GetProperty("submissions").EnumerateArray().Select((entry, index) =>
+                    new CapabilityChoice(submissions[index], entry.GetProperty("available").GetBoolean(), entry.GetProperty("reason").GetString() ?? "")).ToArray();
+                CapabilityText = $"{root.GetProperty("adapter").GetString()}\nDriver {root.GetProperty("driver").GetString()}\n" +
+                    $"Indexed: {root.GetProperty("instanceCapacity").GetInt32()} instances / {root.GetProperty("textureCapacity").GetInt32()} textures\n" +
+                    string.Join("\n", Pipelines.Concat(Submissions).Where(choice => !choice.Available).Select(choice => $"{choice.Name}: {choice.Reason}")) +
+                    (AsyncSupported ? "" : "\nAsync compute queue unavailable");
+            }
             AppliedSummary = state.Applied.Size == 112
                 ? $"Actual #{state.AppliedId}: {Pipelines[(int)state.Applied.Pipeline - 1].Name} / {Submissions[(int)state.Applied.Submission].Name}\n" +
                   $"Exposure {state.Applied.Exposure:F2} · {state.Applied.RecordingThreads} threads · {(state.Applied.TargetFps == 0 ? "uncapped" : $"{state.Applied.TargetFps} FPS cap")}"
@@ -104,22 +123,6 @@ public sealed partial class RenderSettingsViewModel : ObservableObject, IDisposa
             LightR = c.LightR; LightG = c.LightG; LightB = c.LightB; LightIntensity = c.LightIntensity;
             ShadowBias = c.ShadowBias; ShadowNormalBias = c.ShadowNormalBias;
             EnvironmentIntensity = c.EnvironmentIntensity; EnvironmentRotation = c.EnvironmentRotation;
-            if (seenCapabilities != viewport.Capabilities && viewport.Capabilities.Length > 0)
-            {
-                seenCapabilities = viewport.Capabilities;
-                using var json = JsonDocument.Parse(seenCapabilities);
-                var root = json.RootElement;
-                if (root.GetProperty("schemaVersion").GetInt32() != 1) { throw new InvalidDataException("Unsupported device capability schema."); }
-                AsyncSupported = root.GetProperty("asyncCompute").GetBoolean();
-                CapabilityChoice[] Choices(string key, string[] names) => root.GetProperty(key).EnumerateArray().Select((entry, index) =>
-                    new CapabilityChoice(names[index], entry.GetProperty("available").GetBoolean(), entry.GetProperty("reason").GetString() ?? "")).ToArray();
-                Pipelines = Choices("pipelines", ["Forward", "Deferred", "RayTracing", "PathTracing"]);
-                Submissions = Choices("submissions", ["Direct", "Indexed Direct", "CPU Indirect", "GPU Culled"]);
-                CapabilityText = $"{root.GetProperty("adapter").GetString()}\nDriver {root.GetProperty("driver").GetString()}\n" +
-                    $"Indexed: {root.GetProperty("instanceCapacity").GetInt32()} instances / {root.GetProperty("textureCapacity").GetInt32()} textures\n" +
-                    string.Join("\n", Pipelines.Concat(Submissions).Where(choice => !choice.Available).Select(choice => $"{choice.Name}: {choice.Reason}")) +
-                    (AsyncSupported ? "" : "\nAsync compute queue unavailable");
-            }
         }
         finally { reflecting = false; }
     }

@@ -70,7 +70,7 @@ Scene / Open Scene 列出 Asset Database 索引的 `.scene` 与相对路径，�
 
 Layout 菜单提供 Default（只显示 Scene/Render Settings）、Diagnostics（同时打开 Graph、Profiler、Log，Graph 与 Profiler 可并列）与恢复上次布局。首次启动、重置默认或布局损坏恢复都采用两面板布局；正常重启恢复用户最后保存的面板可见性、位置和比例。布局与设置保存到项目 `UserSettings/Editor/<项目 ID>/`，同目录下的不同项目互不覆盖；不改变项目源数据。没有项目专属布局时可读取旧的 `UserSettings/Editor/layout.json`，保存写入新目录。手动加载预设时新目录无预设则读取旧目录中的预设，不自动迁移或删除旧文件。
 
-普通运行在用户请求成功应用后，将内置管线稳定 ID、目标帧率与成功显示的场景 ID 保存为项目专属的 `session.json`；下次打开该项目时恢复。显式 `--pipeline` 和 `--target-fps` 分别覆盖对应的已保存值。Pending、被替代或拒绝的请求不写入；文件损坏、版本不支持或写入失败记录日志，已有文件不会因读取失败而立即覆盖。自检、隔离、基准和 soak 不读写这份个人设置。手动 Save/Load preset 仍使用独立的完整预设文件。
+普通运行在用户请求成功应用后，将内置或项目管线的稳定 ID、目标帧率与成功显示的场景 ID 保存为项目专属的 `session.json`；下次打开该项目时恢复。显式 `--pipeline` 和 `--target-fps` 分别覆盖对应的已保存值；已保存管线不再存在时回到项目默认管线并记录日志。Pending、被替代或拒绝的请求不写入；文件损坏、版本不支持或写入失败记录日志，已有文件不会因读取失败而立即覆盖。自检、隔离、基准和 soak 不读写这份个人设置。手动 Save/Load preset 使用独立的完整预设文件，新预设保存稳定 ID；旧的内置管线编号预设仍可加载。
 
 面板关闭不等同于暂停场景。Graph 关闭后停止该面板的快照订阅/自动刷新，Profiler 关闭后停止图表发布；显式采样请求或已开启的 Profiling 配置按其独立状态继续，关闭 Dock 不静默修改渲染设置。Log 关闭后停止列表更新，后台日志记录与有界缓存继续，重新打开可查看缓存内的既有消息。
 
@@ -208,7 +208,7 @@ flowchart TD
 
 保持单个托管应用项目。增加具体 Workbench ViewModel、DockFactory 与 RenderSettings/RenderGraph/Profiler/Log ViewModel；将图表或图绘制封装为控件。Dock Document 的 Context 保存稳定面板身份与 View 工厂，每个 presenter 新建控件，服务和模型共享；布局仅保存白名单值，不序列化控件、工厂或服务。Serilog 的文件/内存 sinks 在应用入口装配，Log ViewModel 只展示有界事件投影。NativeViewportService 继续负责 Session 生命周期，具体快照模型与统计窗口可分文件，不引入插件总线或另一份 GPU Scene。
 
-配置桥接已随同 DLL/托管程序集升至 v12，不兼容旧布局时启动明确拒绝；Stats 为 256 字节，Config/ConfigState 为带 size/version 的 112/272 字节定宽 POD。能力说明使用 schemaVersion=1 的 UTF-8 JSON。后续可变 Graph 快照/导出也使用有版本的 UTF-8 JSON，不能每帧把完整图序列化并跨边界。
+配置桥接已随同 DLL/托管程序集升至 v14，不兼容版本时启动明确拒绝；Stats 为 256 字节，Config/ConfigState 为带 size/version 的 112/272 字节定宽 POD。能力说明使用 schemaVersion=2 的 UTF-8 JSON，项目管线的编号只在当前会话有效。可变 Graph 快照/导出也使用有版本的 UTF-8 JSON，不能每帧把完整图序列化并跨边界。
 
 可变快照采用 AcquireLatest/Copy/Release 的不透明快照 ID，先钉住不可变 CPU 值数据，再查询长度并复制，防止两次调用之间图已更换；不跨 ABI 暴露 STL、指针或资源引用。每 Session 最多保留 latest 与一个 pinned 快照，单份初始上限 4 MiB；超限明确报告，不返回截断的半张图。完成帧队列沿用有界 512 项，UI 曲线最多保留 240 个活动样本，展示统计窗口时长/数量；基础 UI 250 ms 发布，关闭面板停止对应视图更新。
 

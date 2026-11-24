@@ -36,7 +36,9 @@ internal static class ProjectUserSettings
         return Path.Combine(LegacyDirectory(options), id);
     }
 
-    internal static string PipelineId(uint pipeline) => pipeline switch
+    internal static string PipelineId(uint pipeline, IReadOnlyList<string>? ids = null) => ids is not null
+        ? pipeline > 0 && pipeline <= ids.Count ? ids[(int)pipeline - 1] : throw new InvalidDataException("Unknown pipeline selection.")
+        : pipeline switch
     {
         1 => "renderlab.forward",
         2 => "renderlab.deferred",
@@ -45,7 +47,10 @@ internal static class ProjectUserSettings
         _ => throw new InvalidDataException("Unknown pipeline selection.")
     };
 
-    internal static uint PipelineNumber(string pipeline) => pipeline switch
+    internal static uint PipelineNumber(string pipeline, IReadOnlyList<string>? ids = null) => ids is not null
+        ? ids.Contains(pipeline, StringComparer.Ordinal) ? (uint)ids.ToList().FindIndex(id => id == pipeline) + 1
+            : throw new InvalidDataException("Saved pipeline is unavailable in this project.")
+        : pipeline switch
     {
         "renderlab.forward" => 1,
         "renderlab.deferred" => 2,
@@ -54,9 +59,10 @@ internal static class ProjectUserSettings
         _ => throw new InvalidDataException("Unknown saved pipeline selection.")
     };
 
-    internal static ViewportConfig Apply(ProjectPreferences preferences, EditorOptions options, ViewportConfig config)
+    internal static ViewportConfig Apply(ProjectPreferences preferences, EditorOptions options, ViewportConfig config,
+        IReadOnlyList<string>? ids = null)
     {
-        if (!options.PipelineExplicit) { config.Pipeline = PipelineNumber(preferences.Pipeline); }
+        if (!options.PipelineExplicit) { config.Pipeline = PipelineNumber(preferences.Pipeline, ids); }
         if (!options.TargetFpsExplicit) { config.TargetFps = preferences.TargetFps; }
         if (config.Pipeline == 4)
         {
@@ -67,11 +73,11 @@ internal static class ProjectUserSettings
         return config;
     }
 
-    internal static ProjectPreferences? Accepted(ViewportConfigState state, ulong requestId)
+    internal static ProjectPreferences? Accepted(ViewportConfigState state, ulong requestId, IReadOnlyList<string>? ids = null)
     {
         if (requestId == 0 || state.Status != 2 || state.AppliedId != requestId || state.Applied.Size != 112)
         { return null; }
-        return new ProjectPreferences(1, PipelineId(state.Applied.Pipeline), state.Applied.TargetFps);
+        return new ProjectPreferences(1, PipelineId(state.Applied.Pipeline, ids), state.Applied.TargetFps);
     }
 
     internal static ProjectPreferences? Load(string directory)
@@ -83,7 +89,7 @@ internal static class ProjectUserSettings
             ?? throw new InvalidDataException("Invalid user settings.");
         if (preferences.Version != 1 || preferences.TargetFps > 240 || !ValidSceneId(preferences.LastScene))
         { throw new InvalidDataException("Unsupported user settings version or frame limit."); }
-        _ = PipelineNumber(preferences.Pipeline);
+        if (!ValidPipelineId(preferences.Pipeline)) { throw new InvalidDataException("Invalid saved pipeline ID."); }
         return preferences;
     }
 
@@ -91,7 +97,7 @@ internal static class ProjectUserSettings
     {
         if (preferences.Version != 1 || preferences.TargetFps > 240 || !ValidSceneId(preferences.LastScene))
         { throw new InvalidDataException("Invalid user settings version or frame limit."); }
-        _ = PipelineNumber(preferences.Pipeline);
+        if (!ValidPipelineId(preferences.Pipeline)) { throw new InvalidDataException("Invalid pipeline ID."); }
         Directory.CreateDirectory(directory);
         var path = Path.Combine(directory, "session.json");
         var temporary = path + "." + Guid.NewGuid().ToString("N") + ".tmp";
@@ -108,4 +114,6 @@ internal static class ProjectUserSettings
 
     private static bool ValidSceneId(string? id) => id is null ||
         (id.Length == 32 && id.All(c => (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f')));
+    private static bool ValidPipelineId(string? id) => id is { Length: > 0 and <= 128 } &&
+        id.All(c => (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c is '.' or '-' or '_');
 }

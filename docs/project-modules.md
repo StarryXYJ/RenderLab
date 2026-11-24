@@ -12,7 +12,7 @@
 }
 ```
 
-模块路径相对项目根目录，不能越出项目；最多 64 个且不能重复。`defaultPipeline` 使用稳定 ID，`renderlab.` 前缀保留给内置管线。SceneRenderer 加载清单中的模块并验证默认管线存在；模块是宿主进程内的原生代码。Player 和 Sandbox 默认使用该管线，显式 `--pipeline` 选择内置管线会覆盖默认值。Editor 尚未提供项目管线选择，宿主不负责构建模块。
+模块路径相对项目根目录，不能越出项目；最多 64 个且不能重复。`defaultPipeline` 使用稳定 ID，`renderlab.` 前缀保留给内置管线。SceneRenderer 加载清单中的模块并验证默认管线存在；模块是宿主进程内的原生代码。Player、Sandbox 和 Editor 使用项目默认管线；Editor 可在现有管线下拉框选择项目管线，显式 `--pipeline` 选择内置管线会覆盖默认值。宿主不负责构建模块。
 
 模块需与宿主使用同一 RenderLab 源码、MSVC 编译器、CRT 和 Debug/Release 配置构建。入口是 C ABI；调用节点时，Graph、RenderFrame 和 Runtime 是同构建的借用 C++ 对象，不构成跨版本 C++ ABI。版本检查包含显式模块/Graph ABI、MSVC 版本、CRT 和迭代器调试级别，但不能自动证明源码或所有编译选项一致；这些接口变化时必须同步提升 Graph ABI 并重编模块。当前 Graph ABI 为 2。节点回调返回零表示成功，失败通过有界 UTF-8 缓冲报告，不得向宿主抛异常。
 
@@ -20,4 +20,4 @@
 
 `SceneRenderer` 的 `SceneRenderOptions.projectPipeline` 可指定已注册项目管线，当前只支持 Forward 基底：先构建内置 Forward，再按节点声明顺序插入 Pass，最后构建显示及诊断 Pass。节点通过借用的 Graph 声明资源访问，例如读写 `CameraColor`；Graph 负责依赖、剔除和同步，节点顺序边不会保活无输出的 Pass。节点失败或管线不存在会报告错误，调用方可继续使用内置管线。设备能力声明和其他基底尚未提供。
 
-Editor 管线选择仍在接入中。独立 DLL 的图执行样例在 `tests/project_render_fixture.cpp`；注册样例在 `tests/project_module_fixture.cpp`。构建 `renderlab_project_render_tests`、`renderlab_project_module_tests` 后，运行 `ctest -R "^(project_module.contracts|gpu\.(dx12|vulkan)\.project_render)$" --output-on-failure`。
+独立 DLL 的图执行样例在 `tests/project_render_fixture.cpp`；注册样例在 `tests/project_module_fixture.cpp`。构建 `renderlab_project_render_tests`、`renderlab_project_module_tests` 后，运行 `ctest -R "^(project_module.contracts|gpu\.(dx12|vulkan)\.project_render)$" --output-on-failure`。

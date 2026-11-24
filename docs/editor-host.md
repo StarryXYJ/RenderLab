@@ -1,6 +1,6 @@
 # Avalonia 原生视口原型
 
-桥接 ABI v13 提供项目场景目录和指定场景创建，场景目录是有界 UTF-8 JSON，采用大小查询与复制；选择按项目资源 UUID 而非路径。目录扫描沿用 Asset Database 行为，会为缺失的源资产创建 `.meta`。视口仍在渲染线程加载场景，错误经现有 Session 轮询报告；v12 增加默认关闭的路径 HDR 压缩域显示滤波配置；v11 将 `PathTracing` 作为第四种管线提供给工作台；启动能力报告包含设备和当前场景
+桥接 ABI v14 的能力目录 schema 2 包含项目管线的稳定 ID 与会话内编号。ABI v13 提供项目场景目录和指定场景创建，场景目录是有界 UTF-8 JSON，采用大小查询与复制；选择按项目资源 UUID 而非路径。目录扫描沿用 Asset Database 行为，会为缺失的源资产创建 `.meta`。视口仍在渲染线程加载场景，错误经现有 Session 轮询报告；v12 增加默认关闭的路径 HDR 压缩域显示滤波配置；v11 将 `PathTracing` 作为第四种管线提供给工作台；启动能力报告包含设备和当前场景
 是否支持及拒绝原因。路径追踪仅支持直接提交和 Final/HDR，切换时自动将不兼容的提交、视图和
 可见数读回恢复到支持的配置；其它显式不兼容请求会被拒绝。静止时持续累积，达到样本上限后
 按需停止。此前 M7.2f 真实输入、用户画质和混合 DPI 未验收限制仍然成立。
@@ -88,7 +88,9 @@ M7.2b 将桥接升为 v6。Stats 顺序布局 256 字节，在原 232 字节字�
 
 `rl_viewport_config_state` 为 272 字节，携带 requested/applied 配置与 requested/applied/rejected/superseded ID。status=0 初始化、1 Pending、2 Applied、3 Rejected。Applied 只在该配置成功 Render/Present 后发布；暂停时可准备配置但保持 Pending，恢复或 Single frame 后确认。原生初始化发布只读设备/管线/提交能力 JSON 和从场景提取的 defaults，配置拒绝文本使用独立有界复制接口。后端与 Validation 为设备创建参数，运行时切换通过上述退休/重建事务完成。
 
-目标帧率 0↔非 0 会在 render owner 退休并重建 Swapchain，失败先尝试恢复原展示模式；不创建第二个 Device。非 0 帧率间切换只更新调度期限。单帧要求暂停的 ready Session，隐藏/最小化时不强制 Present。宿主重建保存完整运行配置与相机，新 Session 重新校验后应用；UserSettings/Editor/render-preset.json 只保存有版本的数值配置，读入同样走原生验证，不保存 GPU 指针或资源身份。
+能力目录的管线条目含稳定 `id`、会话内 `value` 和可用性；1–4 为内置管线，其余编号只在本次会话有效。Graph 快照的配置同时带 `pipelineId`。Editor 在 Forward 基线首帧后请求保存值、命令行或项目默认管线；项目管线在新配置首帧构图、编译或提交前录制失败时，等待在途工作、重建 Swapchain 并恢复上一次已应用配置，状态显示 Rejected。部分提交、设备丢失或恢复自身失败仍是会话错误；已应用管线之后的运行时故障也不承诺回退。
+
+目标帧率 0↔非 0 会在 render owner 退休并重建 Swapchain，失败先尝试恢复原展示模式；不创建第二个 Device。非 0 帧率间切换只更新调度期限。单帧要求暂停的 ready Session，隐藏/最小化时不强制 Present。宿主重建保存完整运行配置与相机，新 Session 以稳定 ID 重新解析管线并校验后应用；项目个人预设保存数值配置和管线 ID，读入同样走原生验证，不保存 GPU 指针或资源身份。
 
 完成帧、GPU profile slot 和托管导出的 FrameSample 都携带实际配置/Session 来源；配置变化清理旧统计窗口，不把旧配置的 GPU 时间归到新帧。曝光仅改变显示，不无条件清空 HDR progressive 历史；照明/环境变化沿用 Renderer 的真实历史签名失效。
 

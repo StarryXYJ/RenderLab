@@ -8,6 +8,24 @@ namespace RenderLab.Editor.Tests;
 public class ProjectUserSettingsTests
 {
     [Test]
+    public void ProjectPipelineIsRestoredByStableIdAcrossCatalogChanges()
+    {
+        string[] first = ["renderlab.forward", "renderlab.deferred", "renderlab.raytracing", "renderlab.pathtracing", "test.blue", "test.other"];
+        string[] reordered = ["renderlab.forward", "renderlab.deferred", "renderlab.raytracing", "renderlab.pathtracing", "test.other", "test.blue"];
+        var state = new ViewportConfigState
+        {
+            Status = 2, AppliedId = 7, Applied = new ViewportConfig { Size = 112, Pipeline = 5, TargetFps = 37 }
+        };
+        var saved = ProjectUserSettings.Accepted(state, 7, first)!;
+        var options = new EditorOptions("dx12", "project", "shaders", "output", false, false, true, 2, 0, 0);
+        var restored = ProjectUserSettings.Apply(saved, options, new ViewportConfig(), reordered);
+        Assert.That(saved.Pipeline, Is.EqualTo("test.blue"));
+        Assert.That(restored.Pipeline, Is.EqualTo(6));
+        Assert.That(restored.TargetFps, Is.EqualTo(37));
+        Assert.Throws<InvalidDataException>(() => ProjectUserSettings.PipelineNumber(saved.Pipeline, first.Take(4).ToArray()));
+    }
+
+    [Test]
     public void ProjectsSharingFolderKeepSeparateSettingsAndIsolatedRunsUseOutput()
     {
         var root = Path.Combine(Path.GetTempPath(), "renderlab-user-settings-" + Guid.NewGuid().ToString("N"));
@@ -86,7 +104,7 @@ public class ProjectUserSettingsTests
             File.WriteAllText(file, invalid);
             Assert.Throws<System.Text.Json.JsonException>(() => ProjectUserSettings.Load(root));
             Assert.That(File.ReadAllText(file), Is.EqualTo(invalid));
-            Assert.Throws<InvalidDataException>(() => ProjectUserSettings.Save(root, new ProjectPreferences(1, "unknown", 60)));
+            Assert.Throws<InvalidDataException>(() => ProjectUserSettings.Save(root, new ProjectPreferences(1, "Bad pipeline", 60)));
             Assert.That(File.ReadAllText(file), Is.EqualTo(invalid));
         }
         finally { Directory.Delete(root, true); }

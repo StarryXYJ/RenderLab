@@ -70,7 +70,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
 
     partial void OnSelectedPipelineIndexChanged(int oldValue, int newValue)
     {
-        if (restoringSettings)
+        if (restoringSettings || newValue < 0)
         {
             return;
         }

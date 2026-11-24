@@ -116,6 +116,10 @@ public:
     {
         return pending_.size();
     }
+    bool Poisoned() const
+    {
+        return poisoned_;
+    }
     uint64_t LastSubmitted() const
     {
         return lastSubmitted_;

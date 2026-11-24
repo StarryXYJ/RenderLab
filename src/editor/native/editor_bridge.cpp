@@ -3,6 +3,7 @@
 #include "editor/native/camera_input.hpp"
 #include "editor/native/snapshot_store.hpp"
 #include "editor/native/viewport_config.hpp"
+#include "renderer/project_module.hpp"
 
 #include "assets/database.hpp"
 #include "core/log.hpp"
@@ -46,11 +47,12 @@ uint64_t ElapsedNs(Clock::time_point start)
     return static_cast<uint64_t>(
         std::chrono::duration_cast<std::chrono::nanoseconds>(Clock::now() - start).count());
 }
-nlohmann::json ConfigurationJson(const rl_viewport_config& c)
+nlohmann::json ConfigurationJson(const rl_viewport_config& c, const std::string& pipelineId)
 {
     return {{"version", c.version},
             {"requestId", c.request_id},
             {"pipeline", c.pipeline},
+            {"pipelineId", pipelineId},
             {"submission", c.submission},
             {"recordingThreads", c.recording_threads},
             {"asyncCompute", c.async_compute},
@@ -146,6 +148,7 @@ struct RenderState
     std::unique_ptr<renderer::SceneRenderer> scene;
     std::unique_ptr<rhi::Swapchain> swapchain;
     renderer::SceneRenderOptions options;
+    uint32_t pipelineSelection = 2;
     scene::Transform initialCamera;
     float cameraSpeed = 3;
     std::array<uint64_t, 2> completions{};
@@ -209,6 +212,18 @@ struct RenderState
         catch (...)
         {
         }
+    }
+    void RecreateSwapchain(bool vsync)
+    {
+        runtime->WaitIdle();
+        profiles = {};
+        observations = {};
+        capturedPlan.reset();
+        swapchain.reset();
+        swapchain = runtime->CreateSwapchain({child, GetModuleHandleW(nullptr)}, 1, 1, vsync);
+        completions = {};
+        initialized.clear();
+        stats.width = stats.height = 0;
     }
     void RetireObservation(size_t slot)
     {
@@ -437,7 +452,7 @@ struct RenderState
         stats.present_ns = ElapsedNs(start);
         ++stats.frames;
         stats.config_revision = configRevision;
-        stats.pipeline = static_cast<uint32_t>(options.pipeline);
+        stats.pipeline = pipelineSelection;
         stats.native_bytes = runtime->GetMemoryStats().used;
         stats.peak_bytes = runtime->GetMemoryStats().highWater;
         stats.tick_ns = ElapsedNs(tickStart);
@@ -510,7 +525,9 @@ struct Session
     rl_viewport_config configuration{}, defaults{};
     rl_viewport_config_state configurationState{sizeof(rl_viewport_config_state), 1};
     std::string configurationError, capabilities;
-    std::array<std::string, 4> pipelineErrors;
+    std::vector<std::string> pipelineErrors;
+    std::vector<std::string> pipelineIds{"renderlab.forward", "renderlab.deferred",
+                                         "renderlab.raytracing", "renderlab.pathtracing"};
     std::string error;
     std::string pendingLogs;
     scene::Transform camera;
@@ -628,16 +645,22 @@ struct Session
                                                           profiling, project, shaders, logger,
                                                           targetFps != 0, sceneId);
                     auto& render = *state;
-                    std::array<std::string, 4> failures;
-                    for (uint32_t p = 1; p <= 4; ++p)
+                    std::vector<std::string> ids{"renderlab.forward", "renderlab.deferred",
+                                                 "renderlab.raytracing", "renderlab.pathtracing"};
+                    const auto projectIds = render.scene->ProjectPipelines();
+                    ids.insert(ids.end(), projectIds.begin(), projectIds.end());
+                    std::vector<std::string> failures(ids.size());
+                    for (size_t p = 0; p < ids.size(); ++p)
                     {
                         try
                         {
-                            render.scene->ValidatePipeline(static_cast<renderer::PipelineType>(p));
+                            renderer::SceneRenderOptions candidate;
+                            render.scene->SelectPipeline(ids[p], candidate);
+                            render.scene->ValidateOptions(candidate);
                         }
                         catch (const std::exception& failure)
                         {
-                            failures[p - 1] = failure.what();
+                            failures[p] = failure.what();
                         }
                     }
                     scene::Extractor configExtractor;
@@ -645,8 +668,17 @@ struct Session
                                                                         render.scene->Models());
                     auto activeConfig =
                         editor::DefaultConfig(sourceSnapshot, targetFps, continuous, profiling);
+                    auto defaultConfig = activeConfig;
+                    const auto defaultId = render.scene->ProjectDefaultPipeline();
+                    if (!defaultId.empty())
+                    {
+                        const auto found = std::ranges::find(ids, defaultId);
+                        if (found == ids.end())
+                            throw std::logic_error("Project default pipeline is not registered");
+                        defaultConfig.pipeline = static_cast<uint32_t>(found - ids.begin() + 1);
+                    }
                     nlohmann::json capabilityData{
-                        {"schemaVersion", 1},
+                        {"schemaVersion", 2},
                         {"backend", backend == 0 ? "dx12" : "vulkan"},
                         {"adapter", render.device->GetReport()
                                         .adapters.at(render.device->GetReport().selectedAdapter)
@@ -657,11 +689,11 @@ struct Session
                         {"textureCapacity", renderer::IndexedTextureCapacity},
                         {"pipelines", nlohmann::json::array()},
                         {"submissions", nlohmann::json::array()}};
-                    for (uint32_t p = 1; p <= 4; ++p)
-                        capabilityData["pipelines"].push_back(
-                            {{"value", p},
-                             {"available", failures[p - 1].empty()},
-                             {"reason", failures[p - 1]}});
+                    for (size_t p = 0; p < ids.size(); ++p)
+                        capabilityData["pipelines"].push_back({{"value", p + 1},
+                                                               {"id", ids[p]},
+                                                               {"available", failures[p].empty()},
+                                                               {"reason", failures[p]}});
                     for (uint32_t mode = 0; mode < 4; ++mode)
                     {
                         std::string reason;
@@ -683,8 +715,9 @@ struct Session
                     {
                         std::lock_guard lock(mutex);
                         pipelineErrors = std::move(failures);
-                        defaults = activeConfig;
-                        configuration = defaults;
+                        pipelineIds = ids;
+                        defaults = defaultConfig;
+                        configuration = activeConfig;
                         configuration.pipeline = pipeline;
                         configuration.exposure = exposure;
                         configuration.request_id = revision;
@@ -709,6 +742,7 @@ struct Session
                     bool dirty = true, wasPaused = true;
                     float pendingYaw = 0, pendingPitch = 0;
                     std::optional<Clock::time_point> previousCompleted;
+                    std::optional<rl_viewport_config> lastApplied;
                     while (true)
                     {
                         const auto remaining = std::chrono::duration_cast<std::chrono::nanoseconds>(
@@ -756,6 +790,10 @@ struct Session
                                 editor::ValidateConfig(selectedConfig);
                                 auto nextOptions =
                                     editor::RenderOptions(selectedConfig, sourceSnapshot.light);
+                                if (selectedConfig.pipeline > ids.size())
+                                    throw std::invalid_argument("Unknown pipeline selection");
+                                render.scene->SelectPipeline(ids[selectedConfig.pipeline - 1],
+                                                             nextOptions);
                                 render.scene->ValidateOptions(nextOptions);
                                 if ((activeConfig.target_fps == 0) !=
                                     (selectedConfig.target_fps == 0))
@@ -791,6 +829,7 @@ struct Session
                                     render.stats.width = render.stats.height = 0;
                                 }
                                 render.options = std::move(nextOptions);
+                                render.pipelineSelection = selectedConfig.pipeline;
                                 render.cameraSpeed = selectedConfig.camera_speed;
                                 render.configRevision = selectedRevision;
                                 render.stats.profiling_enabled = selectedConfig.profiling;
@@ -885,7 +924,47 @@ struct Session
                             snapshot.pitch = pendingPitch;
                             pendingYaw = pendingPitch = 0;
                             const auto before = render.stats.frames;
-                            render.Tick(dt, snapshot);
+                            try
+                            {
+                                render.Tick(dt, snapshot);
+                            }
+                            catch (const renderer::ProjectPipelineError& failure)
+                            {
+                                if (!lastApplied ||
+                                    lastApplied->request_id == activeConfig.request_id)
+                                    throw;
+                                const auto rejected = activeConfig.request_id;
+                                logger.Write(LogLevel::Warning,
+                                             std::format("Configuration {} rejected: {}", rejected,
+                                                         failure.what()));
+                                render.RecreateSwapchain(lastApplied->target_fps != 0);
+                                auto restored =
+                                    editor::RenderOptions(*lastApplied, sourceSnapshot.light);
+                                render.scene->SelectPipeline(ids.at(lastApplied->pipeline - 1),
+                                                             restored);
+                                render.scene->ValidateOptions(restored);
+                                render.options = std::move(restored);
+                                render.pipelineSelection = lastApplied->pipeline;
+                                render.cameraSpeed = lastApplied->camera_speed;
+                                render.configRevision = lastApplied->request_id;
+                                render.stats.profiling_enabled = lastApplied->profiling;
+                                activeConfig = *lastApplied;
+                                period = std::chrono::nanoseconds(activeConfig.target_fps
+                                                                      ? 1'000'000'000 /
+                                                                            activeConfig.target_fps
+                                                                      : 0);
+                                deadline = Clock::now();
+                                dirty = true;
+                                previousCompleted.reset();
+                                {
+                                    std::lock_guard lock(mutex);
+                                    configurationState.rejected_id = rejected;
+                                    configurationError = failure.what();
+                                    if (configuration.request_id == rejected)
+                                        configurationState.status = 3;
+                                }
+                                continue;
+                            }
                             previous = now;
                             if (render.stats.frames != before)
                             {
@@ -972,7 +1051,9 @@ struct Session
                                     {"sessionGeneration", identity},
                                     {"frameId", render.stats.frames},
                                     {"configRevision", render.stats.config_revision},
-                                    {"configuration", ConfigurationJson(activeConfig)},
+                                    {"configuration",
+                                     ConfigurationJson(activeConfig,
+                                                       ids.at(activeConfig.pipeline - 1))},
                                     {"topologyRevision", topologyRevision},
                                     {"backend", backend == 0 ? "dx12" : "vulkan"},
                                     {"project", platform::WideToUtf8(project.wstring())},
@@ -1014,6 +1095,7 @@ struct Session
                             stats = render.stats;
                             if (framePublished)
                             {
+                                lastApplied = activeConfig;
                                 configurationState.applied = activeConfig;
                                 configurationState.applied_id = activeConfig.request_id;
                                 if (configurationState.requested_id == activeConfig.request_id)
@@ -1102,6 +1184,8 @@ struct Session
     {
         std::lock_guard lock(mutex);
         CheckError();
+        Require(selected && selected <= (ready ? pipelineIds.size() : 4),
+                "Unknown pipeline selection");
         if (ready && !pipelineErrors[selected - 1].empty())
             throw std::runtime_error(pipelineErrors[selected - 1]);
         pipeline = selected;
@@ -1235,7 +1319,7 @@ template <class F> rl_status Guard(F&& operation, bool lockSessions = true)
 
 uint32_t RENDERLAB_EDITOR_CALL rl_editor_abi_version()
 {
-    return 13;
+    return 14;
 }
 rl_status RENDERLAB_EDITOR_CALL rl_project_scenes(const char* projectPath, const char* shaders,
                                                   char* output, uint32_t capacity,
@@ -1352,6 +1436,7 @@ rl_status RENDERLAB_EDITOR_CALL rl_viewport_configure_v2(rl_viewport_handle hand
             std::lock_guard lock(session.mutex);
             session.CheckError();
             Require(session.ready && !session.closing, "Viewport configuration is not ready");
+            Require(config->pipeline <= session.pipelineIds.size(), "Unknown pipeline selection");
             Require(config->request_id > session.revision,
                     "Configuration request ID must increase");
             if (session.configurationState.status == 1)
@@ -1551,8 +1636,8 @@ rl_status RENDERLAB_EDITOR_CALL rl_viewport_configure(rl_viewport_handle handle,
     return Guard(
         [&]
         {
-            Require(pipeline >= 1 && pipeline <= 4 && std::isfinite(exposure) && exposure >= -10 &&
-                        exposure <= 10 && reset <= 1,
+            Require(pipeline >= 1 && std::isfinite(exposure) && exposure >= -10 && exposure <= 10 &&
+                        reset <= 1,
                     "Invalid viewport settings");
             auto& session = Find(handle);
             session.Configure(pipeline, exposure, reset != 0);

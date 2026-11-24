@@ -26,13 +26,15 @@ public sealed class NativeViewportService : IDisposable
     internal ViewportConfigState Configuration { get; private set; }
     internal ViewportConfig Defaults { get; private set; }
     internal string Capabilities { get; private set; } = "";
+    private IReadOnlyList<string> pipelineIds = [];
     internal string ConfigurationError { get; private set; } = "";
     internal event Action? ConfigurationUpdated;
     private ViewportConfig? savedConfiguration;
+    private string? savedPipelineId;
     private ulong requestSequence;
     private bool restoreConfiguration;
     private ProjectPreferences? startupPreferences, persistedPreferences;
-    private bool preferencesLoaded, restorePreferences, preferencesLoadFailed;
+    private bool preferencesLoaded, restorePreferences, restoreDefault, preferencesLoadFailed;
     private ulong preferenceRequestId, restorePreferenceRequestId;
     private bool observationConfigured;
     private bool retiring, viewportHidden;
@@ -68,7 +70,7 @@ public sealed class NativeViewportService : IDisposable
 
     internal void InitializeScenes()
     {
-        if (NativeMethods.AbiVersion() != 13) { throw new InvalidOperationException("Managed/native bridge ABI mismatch."); }
+        if (NativeMethods.AbiVersion() != 14) { throw new InvalidOperationException("Managed/native bridge ABI mismatch."); }
         if (!preferencesLoaded && ProjectUserSettings.Persistent(options))
         {
             preferencesLoaded = true;
@@ -95,14 +97,16 @@ public sealed class NativeViewportService : IDisposable
             Close(Session);
         }
         AbiVersion = NativeMethods.AbiVersion();
-        if (AbiVersion != 13 || Marshal.SizeOf<ViewportStats>() != 256 || Marshal.SizeOf<CloseReport>() != 24 ||
+        if (AbiVersion != 14 || Marshal.SizeOf<ViewportStats>() != 256 || Marshal.SizeOf<CloseReport>() != 24 ||
             Marshal.SizeOf<ViewportConfig>() != 112 || Marshal.SizeOf<ViewportConfigState>() != 272)
         {
             throw new InvalidOperationException("Managed/native bridge ABI mismatch.");
         }
-        var initial = savedConfiguration ?? new ViewportConfig { Pipeline = options.Pipeline, TargetFps = options.TargetFps };
+        var initial = savedConfiguration ?? new ViewportConfig { TargetFps = options.TargetFps };
         if (savedConfiguration is null && startupPreferences is not null)
-        { initial = ProjectUserSettings.Apply(startupPreferences, options, initial); }
+        { if (!options.TargetFpsExplicit) { initial.TargetFps = startupPreferences.TargetFps; } }
+        // Establish a known baseline before applying a saved or requested pipeline.
+        initial.Pipeline = 1;
         Pipeline = initial.Pipeline;
         NativeMethods.Check(NativeMethods.Create(parent, creatingDevice.Backend == "dx12" ? 0u : 1u,
             creatingDevice.Validation ? 1u : 0u, options.Profiling ? 1u : 0u,
@@ -114,8 +118,10 @@ public sealed class NativeViewportService : IDisposable
         retiring = false;
         Configuration = default;
         Capabilities = "";
+        pipelineIds = [];
         restoreConfiguration = savedConfiguration is not null;
         restorePreferences = !restoreConfiguration && startupPreferences is not null;
+        restoreDefault = !restoreConfiguration && !restorePreferences;
         lastNativeSequence = 0;
         nativeLogFailed = false;
         Timings.Reset();
@@ -210,7 +216,13 @@ public sealed class NativeViewportService : IDisposable
         NativeMethods.Check(NativeMethods.Stop(Session, out var report));
         if (NativeMethods.GetConfig(Session, out var finalConfiguration, out _) == 0) { Configuration = finalConfiguration; }
         PersistPreferences(Configuration);
-        if (Configuration.Ready != 0) { savedConfiguration = EditableConfig; }
+        if (Configuration.Ready != 0)
+        {
+            savedConfiguration = EditableConfig;
+            savedPipelineId = pipelineIds.Count > 0
+                ? ProjectUserSettings.PipelineId(savedConfiguration.Value.Pipeline, pipelineIds)
+                : ProjectUserSettings.PipelineId(savedConfiguration.Value.Pipeline);
+        }
         if (NativeMethods.Camera(Session, pose, 0) == 0) { savedCamera = pose; }
         try { DrainLogs(true); }
         catch (Exception error) { Program.Logging?.Logger.Warning(error, "Final native log drain failed; original file remains available"); }
@@ -264,6 +276,7 @@ public sealed class NativeViewportService : IDisposable
         switchCancellation = new CancellationTokenSource();
         var token = switchCancellation.Token;
         ViewportConfig? preservedConfig = null;
+        string? preservedPipelineId = null;
         float[]? preservedPose = null;
         var captured = false;
         await DeviceSwitch.RunAsync(new(backend, validation), async target =>
@@ -286,8 +299,8 @@ public sealed class NativeViewportService : IDisposable
                 Close(Session);
             }
             token.ThrowIfCancellationRequested();
-            if (!captured) { preservedConfig = savedConfiguration; preservedPose = savedCamera; captured = true; }
-            savedConfiguration = preservedConfig; savedCamera = preservedPose;
+            if (!captured) { preservedConfig = savedConfiguration; preservedPipelineId = savedPipelineId; preservedPose = savedCamera; captured = true; }
+            savedConfiguration = preservedConfig; savedPipelineId = preservedPipelineId; savedCamera = preservedPose;
             creatingDevice = target; switchFailure = null;
             DeviceSwitch.Report("Creating " + target.Backend);
             Program.Logging?.Logger.Information("Creating device {Backend} with validation {Validation}", target.Backend, target.Validation);
@@ -329,11 +342,16 @@ public sealed class NativeViewportService : IDisposable
     {
         Dispatcher.UIThread.VerifyAccess();
         if (Session == 0 || Configuration.Ready == 0) { throw new InvalidOperationException("Viewport is not ready for configuration."); }
+        if (Configuration.Applied.Size == 0) { throw new InvalidOperationException("Wait for the first viewport frame."); }
         config.Size = 112; config.Version = 1;
         config.RequestId = Math.Max(requestSequence, Configuration.RequestedId) + 1;
         requestSequence = config.RequestId;
         NativeMethods.Check(NativeMethods.ConfigureV2(Session, in config));
-        if (remember) { preferenceRequestId = config.RequestId; }
+        if (remember)
+        {
+            restoreConfiguration = restorePreferences = restoreDefault = false;
+            preferenceRequestId = config.RequestId;
+        }
         var state = Configuration;
         state.SupersededId = state.Status == 1 ? state.RequestedId : state.SupersededId;
         state.Requested = config; state.RequestedId = config.RequestId; state.Status = 1;
@@ -344,11 +362,16 @@ public sealed class NativeViewportService : IDisposable
     }
     internal void SingleStep() => NativeMethods.Check(NativeMethods.Step(Session));
     internal void ResetConfiguration() => Submit(Defaults);
+    private sealed record RenderPreset(int Version, string Pipeline, ViewportConfig Configuration);
     internal void SavePreset()
     {
         if (Configuration.Ready == 0) { throw new InvalidOperationException("Viewport is not ready."); }
         Directory.CreateDirectory(UserSettingsPath);
-        File.WriteAllText(Path.Combine(UserSettingsPath, "render-preset.json"), JsonSerializer.Serialize(EditableConfig, EditorDiagnostics.JsonOptions) + "\n");
+        var config = EditableConfig;
+        var id = ProjectUserSettings.PipelineId(config.Pipeline, pipelineIds);
+        config.Pipeline = 0;
+        File.WriteAllText(Path.Combine(UserSettingsPath, "render-preset.json"),
+            JsonSerializer.Serialize(new RenderPreset(2, id, config), EditorDiagnostics.JsonOptions) + "\n");
     }
     internal void LoadPreset()
     {
@@ -356,7 +379,22 @@ public sealed class NativeViewportService : IDisposable
         if (!File.Exists(path) && ProjectUserSettings.Persistent(options))
         { path = Path.Combine(ProjectUserSettings.LegacyDirectory(options), "render-preset.json"); }
         if (new FileInfo(path).Length > 16384) { throw new InvalidDataException("Preset exceeds budget."); }
-        var config = JsonSerializer.Deserialize<ViewportConfig>(File.ReadAllText(path), EditorDiagnostics.JsonOptions);
+        var text = File.ReadAllText(path);
+        using var json = JsonDocument.Parse(text);
+        ViewportConfig config;
+        if (json.RootElement.TryGetProperty("Configuration", out _))
+        {
+            var preset = JsonSerializer.Deserialize<RenderPreset>(text, EditorDiagnostics.JsonOptions)
+                ?? throw new InvalidDataException("Invalid preset.");
+            if (preset.Version != 2) { throw new InvalidDataException("Unsupported preset schema."); }
+            config = preset.Configuration;
+            config.Pipeline = ProjectUserSettings.PipelineNumber(preset.Pipeline, pipelineIds);
+        }
+        else
+        {
+            config = JsonSerializer.Deserialize<ViewportConfig>(text, EditorDiagnostics.JsonOptions);
+            if (config.Pipeline is < 1 or > 4) { throw new InvalidDataException("Legacy preset has an unknown pipeline."); }
+        }
         if (config.Version != 1 || config.Size != 112) { throw new InvalidDataException("Unsupported preset schema."); }
         Submit(config);
     }
@@ -381,20 +419,67 @@ public sealed class NativeViewportService : IDisposable
             state.Status != Configuration.Status || state.Ready != Configuration.Ready;
         Configuration = state; Defaults = defaults;
         requestSequence = Math.Max(requestSequence, state.RequestedId);
-        if (state.Ready != 0 && Capabilities.Length == 0) { Capabilities = ReadConfigText(0); changed = true; }
-        if (restoreConfiguration && state.Ready != 0)
+        if (state.Ready != 0 && Capabilities.Length == 0)
+        {
+            Capabilities = ReadConfigText(0);
+            using var json = JsonDocument.Parse(Capabilities);
+            var root = json.RootElement;
+            if (root.GetProperty("schemaVersion").GetInt32() != 2) { throw new InvalidDataException("Unsupported capability schema."); }
+            pipelineIds = root.GetProperty("pipelines").EnumerateArray().Select((entry, index) =>
+                entry.GetProperty("value").GetUInt32() == index + 1 ? entry.GetProperty("id").GetString() ?? ""
+                    : throw new InvalidDataException("Invalid pipeline catalog.")).ToArray();
+            if (pipelineIds.Count < 4 || pipelineIds.Distinct(StringComparer.Ordinal).Count() != pipelineIds.Count ||
+                pipelineIds[0] != "renderlab.forward" || pipelineIds[1] != "renderlab.deferred" ||
+                pipelineIds[2] != "renderlab.raytracing" || pipelineIds[3] != "renderlab.pathtracing")
+            { throw new InvalidDataException("Invalid pipeline catalog."); }
+            changed = true;
+        }
+        if (restoreConfiguration && state.Status == 2 && state.Applied.Size != 0)
         {
             restoreConfiguration = false;
-            Submit(savedConfiguration!.Value, false);
+            var config = savedConfiguration!.Value;
+            try { config.Pipeline = ProjectUserSettings.PipelineNumber(savedPipelineId!, pipelineIds); }
+            catch (InvalidDataException error)
+            {
+                Program.Logging?.Logger.Warning(error, "Previously selected pipeline is unavailable; using project default");
+                config.Pipeline = defaults.Pipeline;
+            }
+            Submit(config, false);
             return;
         }
-        if (restorePreferences && state.Ready != 0)
+        if (restorePreferences && state.Status == 2 && state.Applied.Size != 0)
         {
             restorePreferences = false;
-            var config = ProjectUserSettings.Apply(startupPreferences!, options, EditableConfig);
+            ViewportConfig config;
+            try
+            {
+                config = EditableConfig;
+                if (options.PipelineExplicit) { config.Pipeline = options.Pipeline; }
+                config = ProjectUserSettings.Apply(startupPreferences!, options, config, pipelineIds);
+            }
+            catch (InvalidDataException error)
+            {
+                Program.Logging?.Logger.Warning(error, "Saved pipeline is unavailable; using project default");
+                config = EditableConfig;
+                config.Pipeline = options.PipelineExplicit ? options.Pipeline : defaults.Pipeline;
+                if (!options.TargetFpsExplicit) { config.TargetFps = startupPreferences!.TargetFps; }
+            }
             Submit(config, false);
             restorePreferenceRequestId = Configuration.RequestedId;
             return;
+        }
+        if (restoreDefault && state.Status == 2 && state.Applied.Size != 0)
+        {
+            restoreDefault = false;
+            var requestedPipeline = options.PipelineExplicit ? options.Pipeline : defaults.Pipeline;
+            if (state.Applied.Pipeline != requestedPipeline)
+            {
+                var config = EditableConfig;
+                config.Pipeline = requestedPipeline;
+                if (config.Pipeline == 4) { config.Submission = 0; config.View = Math.Min(config.View, 1); config.Flags &= ~32u; }
+                Submit(config, false);
+                return;
+            }
         }
         if (!observationConfigured && state.Ready != 0 && options.Observation != "normal")
         {
@@ -424,7 +509,7 @@ public sealed class NativeViewportService : IDisposable
 
     private void PersistPreferences(ViewportConfigState state)
     {
-        var accepted = ProjectUserSettings.Accepted(state, preferenceRequestId);
+        var accepted = ProjectUserSettings.Accepted(state, preferenceRequestId, pipelineIds);
         if (accepted is not null)
         {
             accepted = accepted with { LastScene = persistedPreferences?.LastScene };
@@ -438,7 +523,7 @@ public sealed class NativeViewportService : IDisposable
     {
         if (preferencesLoadFailed || SceneId is null || Configuration.Applied.Size != 112) { return; }
         var preferences = persistedPreferences ?? new ProjectPreferences(1,
-            ProjectUserSettings.PipelineId(Configuration.Applied.Pipeline), Configuration.Applied.TargetFps);
+            ProjectUserSettings.PipelineId(Configuration.Applied.Pipeline, pipelineIds), Configuration.Applied.TargetFps);
         SavePreferences(preferences with { LastScene = SceneId });
     }
 

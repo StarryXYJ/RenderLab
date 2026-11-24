@@ -168,7 +168,7 @@ void ProjectModules::Build(const std::string& id, rendergraph::Graph& graph,
         if (status != 0)
         {
             error.back() = '\0';
-            throw std::runtime_error("Project node " + nodeId + " failed: " + error.data());
+            throw ProjectPipelineError("Project node " + nodeId + " failed: " + error.data());
         }
         const auto end = graph.PassCount();
         for (auto pass = first; pass < end; ++pass)
