@@ -178,7 +178,13 @@ E3c 数据契约已实现：DTO 稳定字段 ID、基础类型、范围和跨字
 Editor/Player 都读取项目默认文件，节点负责验证所需字段和范围。Release 原生模块、内容及
 双后端项目图测试 4/4；RTX 5060 双后端 Player 默认值画面与旧版一致，修改默认值后画面
 改变，Editor 双后端加载设置项目短测通过；证据 `out/experiment-platform/e3-settings-default`、
-`e3-settings-alternate` 和 `e3-settings-default-editor`。编辑器个人值尚未传递给原生节点。
+`e3-settings-alternate` 和 `e3-settings-default-editor`。编辑器尚未自动提交个人值。
+
+桥接 ABI v15 增加项目快照与常规配置的原子提交及独立请求/应用/拒绝 ID。RTX 5060
+双后端窗口探针覆盖暂停等待、单帧确认、节点拒绝后恢复上一快照以及常规配置覆盖请求；
+退出账本为零，见 `out/experiment-platform/e3-settings-mailbox`、`e3-settings-supersede`。
+临时探针已撤回；Release 双后端完整工作台 smoke 含错误 JSON 不改变状态检查，通过并见
+`out/experiment-platform/e3-mailbox-final`。项目设置 UI、持久化及程序集重载尚未接入。
 - [ ] 定义项目默认值、个人设置及实验预设合并和保存策略；构建时导出 Player 可消费的描述，验证跨项目隔离、版本不匹配、错误恢复与 Editor/Player 一致性。
 - [ ] 托管测试、真实窗口交互和适用后端验证通过后更新文档、提交。
 

@@ -63,8 +63,19 @@ extern "C"
         uint32_t status, ready;
         rl_viewport_config requested, applied;
     } rl_viewport_config_state;
+    /* Project snapshot IDs are configuration request IDs; zero denotes project defaults. */
+    typedef struct rl_project_settings_state
+    {
+        uint64_t requested_id, applied_id, rejected_id;
+    } rl_project_settings_state;
     RENDERLAB_EDITOR_API rl_status RENDERLAB_EDITOR_CALL
     rl_viewport_configure_v2(rl_viewport_handle session, const rl_viewport_config* config);
+    /* Atomically submit the regular configuration and a bounded UTF-8 project value snapshot. */
+    RENDERLAB_EDITOR_API rl_status RENDERLAB_EDITOR_CALL
+    rl_viewport_configure_project_v1(rl_viewport_handle session, const rl_viewport_config* config,
+                                     const char* json, uint32_t length);
+    RENDERLAB_EDITOR_API rl_status RENDERLAB_EDITOR_CALL rl_viewport_get_project_settings_state(
+        rl_viewport_handle session, rl_project_settings_state* state);
     RENDERLAB_EDITOR_API rl_status RENDERLAB_EDITOR_CALL rl_viewport_get_config(
         rl_viewport_handle session, rl_viewport_config_state* state, rl_viewport_config* defaults);
     /* UTF-8 immutable capabilities / latest config rejection text. kind: 0 capabilities, 1 error.

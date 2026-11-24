@@ -24,6 +24,12 @@ internal struct CloseReport
     public uint ValidationErrors, WorkerFailed;
 }
 
+[StructLayout(LayoutKind.Sequential)]
+internal struct ProjectSettingsState
+{
+    public ulong RequestedId, AppliedId, RejectedId;
+}
+
 internal static class NativeMethods
 {
     private const string Library = "renderlab_editor_bridge";
@@ -47,6 +53,10 @@ internal static class NativeMethods
     internal static extern int IsRetired(ulong session, out uint retired);
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "rl_viewport_configure_v2")]
     internal static extern int ConfigureV2(ulong session, in ViewportConfig config);
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "rl_viewport_configure_project_v1")]
+    internal static extern int ConfigureProject(ulong session, in ViewportConfig config, byte[] json, uint length);
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "rl_viewport_get_project_settings_state")]
+    internal static extern int GetProjectSettingsState(ulong session, out ProjectSettingsState state);
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "rl_viewport_get_config")]
     internal static extern int GetConfig(ulong session, out ViewportConfigState state, out ViewportConfig defaults);
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "rl_viewport_config_text")]

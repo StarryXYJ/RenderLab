@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Text;
 using System.Text.Json;
 using Avalonia;
 using Avalonia.Controls;
@@ -148,6 +149,14 @@ internal sealed class SmokeTest
                     Require(Task.Run(() => NativeMethods.GetStats(host.Session, out _)).GetAwaiter().GetResult() == 3,
                         "Wrong-thread access was accepted.");
                     Require(NativeMethods.Configure(host.Session, 99, 0, 0) == 1, "Invalid pipeline accepted.");
+                    var priorProjectStatus = window.ViewportService.ProjectSettingsState;
+                    var malformedConfig = window.ViewportService.EditableConfig;
+                    malformedConfig.RequestId = window.ViewportService.Configuration.RequestedId + 1;
+                    var malformedJson = Encoding.UTF8.GetBytes("{");
+                    Require(NativeMethods.ConfigureProject(host.Session, in malformedConfig, malformedJson,
+                        (uint)malformedJson.Length) == 1, "Malformed project settings were accepted.");
+                    Require(NativeMethods.GetProjectSettingsState(host.Session, out var afterProjectStatus) == 0 &&
+                        afterProjectStatus.Equals(priorProjectStatus), "Invalid project settings changed the state.");
                     window.ViewModel.SelectedPipelineIndex = 99;
                     Require(window.ViewModel.SelectedPipelineIndex == 1 && window.ViewModel.ErrorText.Length > 0,
                         "Rejected renderer settings did not restore the view model selection.");

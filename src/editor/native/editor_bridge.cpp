@@ -4,6 +4,7 @@
 #include "editor/native/snapshot_store.hpp"
 #include "editor/native/viewport_config.hpp"
 #include "renderer/project_module.hpp"
+#include "renderer/project_settings.hpp"
 
 #include "assets/database.hpp"
 #include "core/log.hpp"
@@ -524,6 +525,9 @@ struct Session
     editor::SnapshotStore snapshots;
     rl_viewport_config configuration{}, defaults{};
     rl_viewport_config_state configurationState{sizeof(rl_viewport_config_state), 1};
+    std::shared_ptr<const renderer::ProjectSettings> requestedProjectSettings,
+        appliedProjectSettings;
+    rl_project_settings_state projectSettingsState{};
     std::string configurationError, capabilities;
     std::vector<std::string> pipelineErrors;
     std::vector<std::string> pipelineIds{"renderlab.forward", "renderlab.deferred",
@@ -743,6 +747,8 @@ struct Session
                     float pendingYaw = 0, pendingPitch = 0;
                     std::optional<Clock::time_point> previousCompleted;
                     std::optional<rl_viewport_config> lastApplied;
+                    std::shared_ptr<const renderer::ProjectSettings> lastAppliedProjectSettings;
+                    uint64_t activeProjectSettingsId = 0, lastAppliedProjectSettingsId = 0;
                     while (true)
                     {
                         const auto remaining = std::chrono::duration_cast<std::chrono::nanoseconds>(
@@ -761,6 +767,8 @@ struct Session
                         InputSnapshot snapshot;
                         uint32_t selected;
                         rl_viewport_config selectedConfig;
+                        std::shared_ptr<const renderer::ProjectSettings> selectedProjectSettings;
+                        uint64_t selectedProjectSettingsId;
                         uint64_t selectedRevision, selectedResets, selectedSteps;
                         uint64_t selectedSnapshot;
                         {
@@ -778,6 +786,8 @@ struct Session
                             }
                             input.yaw = input.pitch = 0;
                             selectedConfig = configuration;
+                            selectedProjectSettings = requestedProjectSettings;
+                            selectedProjectSettingsId = projectSettingsState.requested_id;
                             selectedRevision = configuration.request_id;
                             selectedResets = resets;
                             selectedSteps = steps;
@@ -790,6 +800,7 @@ struct Session
                                 editor::ValidateConfig(selectedConfig);
                                 auto nextOptions =
                                     editor::RenderOptions(selectedConfig, sourceSnapshot.light);
+                                nextOptions.projectSettings = selectedProjectSettings;
                                 if (selectedConfig.pipeline > ids.size())
                                     throw std::invalid_argument("Unknown pipeline selection");
                                 render.scene->SelectPipeline(ids[selectedConfig.pipeline - 1],
@@ -829,6 +840,7 @@ struct Session
                                     render.stats.width = render.stats.height = 0;
                                 }
                                 render.options = std::move(nextOptions);
+                                activeProjectSettingsId = selectedProjectSettingsId;
                                 render.pipelineSelection = selectedConfig.pipeline;
                                 render.cameraSpeed = selectedConfig.camera_speed;
                                 render.configRevision = selectedRevision;
@@ -856,6 +868,8 @@ struct Session
                                                          selectedRevision, failure.what()));
                                 std::lock_guard lock(mutex);
                                 configurationState.rejected_id = selectedRevision;
+                                if (selectedProjectSettingsId != lastAppliedProjectSettingsId)
+                                    projectSettingsState.rejected_id = selectedProjectSettingsId;
                                 configurationError = failure.what();
                                 if (configuration.request_id == selectedRevision)
                                     configurationState.status = 3;
@@ -940,10 +954,17 @@ struct Session
                                 render.RecreateSwapchain(lastApplied->target_fps != 0);
                                 auto restored =
                                     editor::RenderOptions(*lastApplied, sourceSnapshot.light);
+                                restored.projectSettings = lastAppliedProjectSettings;
                                 render.scene->SelectPipeline(ids.at(lastApplied->pipeline - 1),
                                                              restored);
                                 render.scene->ValidateOptions(restored);
                                 render.options = std::move(restored);
+                                if (activeProjectSettingsId != lastAppliedProjectSettingsId)
+                                {
+                                    std::lock_guard lock(mutex);
+                                    projectSettingsState.rejected_id = activeProjectSettingsId;
+                                }
+                                activeProjectSettingsId = lastAppliedProjectSettingsId;
                                 render.pipelineSelection = lastApplied->pipeline;
                                 render.cameraSpeed = lastApplied->camera_speed;
                                 render.configRevision = lastApplied->request_id;
@@ -1096,6 +1117,10 @@ struct Session
                             if (framePublished)
                             {
                                 lastApplied = activeConfig;
+                                lastAppliedProjectSettings = render.options.projectSettings;
+                                appliedProjectSettings = lastAppliedProjectSettings;
+                                lastAppliedProjectSettingsId = activeProjectSettingsId;
+                                projectSettingsState.applied_id = lastAppliedProjectSettingsId;
                                 configurationState.applied = activeConfig;
                                 configurationState.applied_id = activeConfig.request_id;
                                 if (configurationState.requested_id == activeConfig.request_id)
@@ -1198,7 +1223,11 @@ struct Session
                 configurationState.superseded_id = configuration.request_id;
             if (configurationState.status == 3 &&
                 configurationState.applied.size == sizeof(rl_viewport_config))
+            {
                 configuration = configurationState.applied;
+                requestedProjectSettings = appliedProjectSettings;
+                projectSettingsState.requested_id = projectSettingsState.applied_id;
+            }
             configuration.pipeline = selected;
             if (selected == 4)
             {
@@ -1288,6 +1317,44 @@ Session& Find(rl_viewport_handle handle)
         throw Failure(RL_WRONG_THREAD, "Viewport call must run on its creating UI thread");
     return session;
 }
+void SubmitConfiguration(Session& session, const rl_viewport_config& config,
+                         std::optional<std::shared_ptr<const renderer::ProjectSettings>> settings)
+{
+    try
+    {
+        editor::ValidateConfig(config);
+    }
+    catch (const std::invalid_argument& failure)
+    {
+        throw Failure(RL_INVALID_ARGUMENT, failure.what());
+    }
+    std::lock_guard lock(session.mutex);
+    session.CheckError();
+    Require(session.ready && !session.closing, "Viewport configuration is not ready");
+    Require(config.pipeline <= session.pipelineIds.size(), "Unknown pipeline selection");
+    Require(config.request_id > session.revision, "Configuration request ID must increase");
+    if (session.configurationState.status == 1)
+        session.configurationState.superseded_id = session.configuration.request_id;
+    if (settings)
+    {
+        session.requestedProjectSettings = std::move(*settings);
+        session.projectSettingsState.requested_id = config.request_id;
+    }
+    else if (session.configurationState.status == 3)
+    {
+        session.requestedProjectSettings = session.appliedProjectSettings;
+        session.projectSettingsState.requested_id = session.projectSettingsState.applied_id;
+    }
+    session.configuration = config;
+    session.revision = config.request_id;
+    session.pipeline = config.pipeline;
+    session.exposure = config.exposure;
+    session.configurationState.requested = config;
+    session.configurationState.requested_id = config.request_id;
+    session.configurationState.status = 1;
+    session.configurationError.clear();
+    SetEvent(session.wake.value);
+}
 template <class F> rl_status Guard(F&& operation, bool lockSessions = true)
 {
     try
@@ -1319,7 +1386,7 @@ template <class F> rl_status Guard(F&& operation, bool lockSessions = true)
 
 uint32_t RENDERLAB_EDITOR_CALL rl_editor_abi_version()
 {
-    return 14;
+    return 15;
 }
 rl_status RENDERLAB_EDITOR_CALL rl_project_scenes(const char* projectPath, const char* shaders,
                                                   char* output, uint32_t capacity,
@@ -1424,32 +1491,27 @@ rl_status RENDERLAB_EDITOR_CALL rl_viewport_configure_v2(rl_viewport_handle hand
         [&]
         {
             Require(config != nullptr, "Configuration input is null");
+            SubmitConfiguration(Find(handle), *config, std::nullopt);
+        });
+}
+rl_status RENDERLAB_EDITOR_CALL rl_viewport_configure_project_v1(rl_viewport_handle handle,
+                                                                 const rl_viewport_config* config,
+                                                                 const char* json, uint32_t length)
+{
+    return Guard(
+        [&]
+        {
+            Require(config && json && length && length <= 65536, "Invalid project settings input");
+            std::shared_ptr<const renderer::ProjectSettings> settings;
             try
             {
-                editor::ValidateConfig(*config);
+                settings = renderer::ParseProjectSettings(std::string_view(json, length));
             }
-            catch (const std::invalid_argument& failure)
+            catch (const std::exception& failure)
             {
                 throw Failure(RL_INVALID_ARGUMENT, failure.what());
             }
-            auto& session = Find(handle);
-            std::lock_guard lock(session.mutex);
-            session.CheckError();
-            Require(session.ready && !session.closing, "Viewport configuration is not ready");
-            Require(config->pipeline <= session.pipelineIds.size(), "Unknown pipeline selection");
-            Require(config->request_id > session.revision,
-                    "Configuration request ID must increase");
-            if (session.configurationState.status == 1)
-                session.configurationState.superseded_id = session.configuration.request_id;
-            session.configuration = *config;
-            session.revision = config->request_id;
-            session.pipeline = config->pipeline;
-            session.exposure = config->exposure;
-            session.configurationState.requested = *config;
-            session.configurationState.requested_id = config->request_id;
-            session.configurationState.status = 1;
-            session.configurationError.clear();
-            SetEvent(session.wake.value);
+            SubmitConfiguration(Find(handle), *config, std::move(settings));
         });
 }
 rl_status RENDERLAB_EDITOR_CALL rl_viewport_get_config(rl_viewport_handle handle,
@@ -1465,6 +1527,19 @@ rl_status RENDERLAB_EDITOR_CALL rl_viewport_get_config(rl_viewport_handle handle
             session.CheckError();
             *state = session.configurationState;
             *defaults = session.defaults;
+        });
+}
+rl_status RENDERLAB_EDITOR_CALL
+rl_viewport_get_project_settings_state(rl_viewport_handle handle, rl_project_settings_state* state)
+{
+    return Guard(
+        [&]
+        {
+            Require(state != nullptr, "Project settings state output is null");
+            auto& session = Find(handle);
+            std::lock_guard lock(session.mutex);
+            session.CheckError();
+            *state = session.projectSettingsState;
         });
 }
 rl_status RENDERLAB_EDITOR_CALL rl_viewport_config_text(rl_viewport_handle handle, uint32_t kind,

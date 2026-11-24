@@ -29,6 +29,8 @@ public sealed class NativeViewportService : IDisposable
     private IReadOnlyList<string> pipelineIds = [];
     internal string ConfigurationError { get; private set; } = "";
     internal event Action? ConfigurationUpdated;
+    internal ProjectSettingsState ProjectSettingsState { get; private set; }
+    internal event Action? ProjectSettingsUpdated;
     private ViewportConfig? savedConfiguration;
     private string? savedPipelineId;
     private ulong requestSequence;
@@ -70,7 +72,7 @@ public sealed class NativeViewportService : IDisposable
 
     internal void InitializeScenes()
     {
-        if (NativeMethods.AbiVersion() != 14) { throw new InvalidOperationException("Managed/native bridge ABI mismatch."); }
+        if (NativeMethods.AbiVersion() != 15) { throw new InvalidOperationException("Managed/native bridge ABI mismatch."); }
         if (!preferencesLoaded && ProjectUserSettings.Persistent(options))
         {
             preferencesLoaded = true;
@@ -97,7 +99,8 @@ public sealed class NativeViewportService : IDisposable
             Close(Session);
         }
         AbiVersion = NativeMethods.AbiVersion();
-        if (AbiVersion != 14 || Marshal.SizeOf<ViewportStats>() != 256 || Marshal.SizeOf<CloseReport>() != 24 ||
+        if (AbiVersion != 15 || Marshal.SizeOf<ProjectSettingsState>() != 24 ||
+            Marshal.SizeOf<ViewportStats>() != 256 || Marshal.SizeOf<CloseReport>() != 24 ||
             Marshal.SizeOf<ViewportConfig>() != 112 || Marshal.SizeOf<ViewportConfigState>() != 272)
         {
             throw new InvalidOperationException("Managed/native bridge ABI mismatch.");
@@ -117,6 +120,7 @@ public sealed class NativeViewportService : IDisposable
         observationConfigured = false;
         retiring = false;
         Configuration = default;
+        ProjectSettingsState = default;
         Capabilities = "";
         pipelineIds = [];
         restoreConfiguration = savedConfiguration is not null;
@@ -182,6 +186,12 @@ public sealed class NativeViewportService : IDisposable
         NativeMethods.Check(NativeMethods.GetStats(Session, out var stats));
         Stats = stats;
         ReadConfiguration();
+        NativeMethods.Check(NativeMethods.GetProjectSettingsState(Session, out var projectSettings));
+        if (!projectSettings.Equals(ProjectSettingsState))
+        {
+            ProjectSettingsState = projectSettings;
+            ProjectSettingsUpdated?.Invoke();
+        }
         if (Configuration.Status is 2 or 3 && !restoreConfiguration && Stats.SessionGeneration == Session && Stats.ConfigRevision == Configuration.AppliedId)
         { DeviceSwitch.ObserveReady(creatingDevice); }
         if (Stopwatch.GetElapsedTime(lastLogPoll).TotalMilliseconds >= 250)
@@ -232,6 +242,8 @@ public sealed class NativeViewportService : IDisposable
         var state = Configuration; state.Ready = 0;
         Configuration = state;
         ConfigurationUpdated?.Invoke();
+        ProjectSettingsState = default;
+        ProjectSettingsUpdated?.Invoke();
         CloseReports.Add(report);
         File.WriteAllText(Path.Combine(options.Output, "close-reports.json"),
             JsonSerializer.Serialize(CloseReports, EditorDiagnostics.JsonOptions));
@@ -338,7 +350,7 @@ public sealed class NativeViewportService : IDisposable
     }
 
     internal ViewportConfig EditableConfig => Configuration.Status == 3 && Configuration.Applied.Size != 0 ? Configuration.Applied : Configuration.Requested;
-    internal void Submit(ViewportConfig config, bool remember = true)
+    internal void Submit(ViewportConfig config, bool remember = true, byte[]? projectSettings = null)
     {
         Dispatcher.UIThread.VerifyAccess();
         if (Session == 0 || Configuration.Ready == 0) { throw new InvalidOperationException("Viewport is not ready for configuration."); }
@@ -346,7 +358,9 @@ public sealed class NativeViewportService : IDisposable
         config.Size = 112; config.Version = 1;
         config.RequestId = Math.Max(requestSequence, Configuration.RequestedId) + 1;
         requestSequence = config.RequestId;
-        NativeMethods.Check(NativeMethods.ConfigureV2(Session, in config));
+        NativeMethods.Check(projectSettings is null
+            ? NativeMethods.ConfigureV2(Session, in config)
+            : NativeMethods.ConfigureProject(Session, in config, projectSettings, (uint)projectSettings.Length));
         if (remember)
         {
             restoreConfiguration = restorePreferences = restoreDefault = false;
@@ -359,6 +373,12 @@ public sealed class NativeViewportService : IDisposable
         Pipeline = config.Pipeline; Exposure = config.Exposure;
         Program.Logging?.Logger.Information("Requested configuration {RequestId} for {SessionGeneration}", config.RequestId, Session);
         ConfigurationUpdated?.Invoke();
+    }
+    internal ulong SubmitProjectSettings(string json)
+    {
+        var bytes = Encoding.UTF8.GetBytes(json);
+        Submit(EditableConfig, false, bytes);
+        return Configuration.RequestedId;
     }
     internal void SingleStep() => NativeMethods.Check(NativeMethods.Step(Session));
     internal void ResetConfiguration() => Submit(Defaults);
