@@ -37,6 +37,7 @@ public partial class App : Application
                 .AddLogging(builder => builder.ClearProviders().AddSerilog(Program.Logging.Logger, dispose: false))
                 .AddSingleton<LogViewModel>()
                 .AddScoped<RenderSettingsViewModel>()
+                .AddScoped<ProjectSettingsSession>()
                 .AddScoped<NativeViewportService>()
                 .AddScoped<MainWindowViewModel>()
                 .AddSingleton<MainWindow>()

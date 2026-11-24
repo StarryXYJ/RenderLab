@@ -35,6 +35,7 @@ internal sealed class ProjectSession(IServiceScope scope) : IDisposable
 {
     internal EditorOptions Options => scope.ServiceProvider.GetRequiredService<ProjectContext>().Options;
     internal NativeViewportService Viewport => scope.ServiceProvider.GetRequiredService<NativeViewportService>();
+    internal ProjectSettingsSession Settings => scope.ServiceProvider.GetRequiredService<ProjectSettingsSession>();
     internal MainWindowViewModel ViewModel => scope.ServiceProvider.GetRequiredService<MainWindowViewModel>();
     public void Dispose() => scope.Dispose();
 }

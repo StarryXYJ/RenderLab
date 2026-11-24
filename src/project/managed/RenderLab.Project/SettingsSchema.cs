@@ -5,11 +5,16 @@ using System.Text.Json;
 namespace RenderLab.Project;
 
 /// <summary>Validates and layers project DTO values without modifying the source object.</summary>
-public sealed class SettingsSchema<T> where T : class, new()
+public sealed class SettingsSchema<T> : IProjectSettingsSchema where T : class, new()
 {
     private const int MaxBytes = 65536;
     private readonly SortedDictionary<string, Field> fields = new(StringComparer.Ordinal);
     public int Version { get; }
+    public Type SettingsType => typeof(T);
+
+    object IProjectSettingsSchema.CreateDefaults() => CreateDefaults();
+    object IProjectSettingsSchema.Apply(object baseline, string json) => Apply((T)baseline, json);
+    string IProjectSettingsSchema.Serialize(object settings) => Serialize((T)settings);
 
     public SettingsSchema(int version)
     {

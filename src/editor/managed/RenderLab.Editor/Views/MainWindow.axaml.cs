@@ -98,6 +98,7 @@ public partial class MainWindow : Window
     private void AttachProject(string project, DeviceSelection? device = null, string? sceneId = null)
     {
         projectSession = sessions!.Create(project, device, sceneId);
+        _ = projectSession.Settings;
         options = projectSession.Options;
         var viewModel = projectSession.ViewModel;
         var viewportService = projectSession.Viewport;

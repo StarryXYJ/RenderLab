@@ -532,6 +532,7 @@
           "Dock.Avalonia.Themes.Fluent": "[12.0.0.2, )",
           "Dock.Model.Mvvm": "[12.0.0.2, )",
           "Microsoft.Extensions.DependencyInjection": "[10.0.0, )",
+          "RenderLab.Project": "[1.0.0, )",
           "Serilog": "[4.2.0, )",
           "Serilog.Extensions.Logging": "[9.0.0, )",
           "Serilog.Sinks.File": "[7.0.0, )"
@@ -539,6 +540,12 @@
       },
       "renderlab.project": {
         "type": "Project"
+      },
+      "renderlab.project.fixture": {
+        "type": "Project",
+        "dependencies": {
+          "RenderLab.Project": "[1.0.0, )"
+        }
       }
     }
   }

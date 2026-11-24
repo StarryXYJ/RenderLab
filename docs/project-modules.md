@@ -35,8 +35,24 @@ Library，构建和运行之前须执行项目自己的导出程序。Editor 和
 跨字段校验。ID 使用与管线相同的小写 ASCII 规则，最多 256 项。`CreateDefaults()`
 创建默认实例，`Apply` 在副本上逐层应用同版本的 `{"version":1,"values":{...}}`，
 `Serialize` 输出所有字段；未知或重复 ID、错误类型、无效数值及版本不匹配会被拒绝，
-原 DTO 不受影响。快照限 64 KiB。当前这是独立托管数据接口；项目作用域加载、UI、
-持久化和向渲染节点传值尚未接入，实施状态见 [阶段计划](../design/phaseplan.md)。
+原 DTO 不受影响。快照限 64 KiB。项目程序集可实现 `IProjectSettingsDefinition` 并返回
+schema，在清单顶层声明：
+
+```json
+"settings": {
+  "version": 1,
+  "assembly": "Library/Managed/Experiment.dll",
+  "entry": "Experiment.SettingsDefinition",
+  "defaults": "ProjectSettings/experiment.json"
+}
+```
+
+`defaults` 可省略，此时使用 DTO 构造默认值。程序集和默认值路径相对项目目录，不能越出
+项目或经过符号链接。编辑器项目 scope 加载可信项目代码，合并 DTO、项目默认值和
+`UserSettings/Editor/<项目 ID>/project-settings.json`；无效个人设置保留原文件并使用项目
+默认值。关闭 scope 后释放 DTO 并请求卸载程序集上下文。当前尚未接入配置 UI、保存及向
+渲染节点传值；程序集重载、界面绑定持有期及运行时卸载尚未验证，实施状态见
+[阶段计划](../design/phaseplan.md)。
 
 模块需与宿主使用同一 RenderLab 源码、MSVC 编译器、CRT 和 Debug/Release 配置构建。入口是 C ABI；调用节点时，Graph、RenderFrame 和 Runtime 是同构建的借用 C++ 对象，不构成跨版本 C++ ABI。版本检查包含显式模块/Graph ABI、MSVC 版本、CRT 和迭代器调试级别，但不能自动证明源码或所有编译选项一致；这些接口变化时必须同步提升 Graph ABI 并重编模块。当前 Graph ABI 为 2。节点回调返回零表示成功，失败通过有界 UTF-8 缓冲报告，不得向宿主抛异常。
 
