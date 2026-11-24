@@ -417,6 +417,8 @@ ctest --preset windows-debug -R 'tools_window|player|surface|rendergraph.contrac
 
 Player 必须指定 --project，不运行 Sandbox 的 RHI/Graph 验收示例。安装为独立目录后，进入该目录运行同样的项目格式；无需 C# 或源码树，机器仍需当前 MSVC x64 运行库和图形驱动。
 
+带 `rendering` 的项目使用清单中的默认管线；`--pipeline forward|deferred|raytracing|pathtracing` 显式覆盖为内置管线。项目模块需先与宿主同构建并放在清单指定的项目内路径，部署项目时一并携带；模块格式与限制见 [项目模块](../docs/project-modules.md)。原生调试面板只提供内置管线选择。
+
 ```powershell
 cmake --install out/build/windows-release --prefix out/player
 cd out/player

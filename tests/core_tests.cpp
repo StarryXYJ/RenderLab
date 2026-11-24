@@ -106,6 +106,9 @@ int main()
                                     "--view"sv, "reflection-denoised"sv, "--denoise"sv, "off"sv});
         Require(!denoise.reflectionDenoise && denoise.view == "reflection-denoised",
                 "Spatial denoise options were not parsed independently");
+        Require(denoise.pipelineExplicit &&
+                    !ParseOptions(std::array{"--project"sv, "p"sv}).pipelineExplicit,
+                "Explicit pipeline override must be distinguished from the default");
         RequireInvalid([] { ParseOptions(std::array{"--profile"sv, ""sv}); });
         RequireInvalid([] { ParseOptions(std::array{"--benchmark"sv, "0"sv}); });
         RequireInvalid([] { ParseOptions(std::array{"--debug-panel"sv, "--headless"sv}); });

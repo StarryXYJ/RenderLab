@@ -179,7 +179,19 @@ int main(int argc, char** argv)
                     auto color =
                         runtime->CreateTexture({40, 40, rhi::Format::Rgba8Srgb, false, true});
                     renderer::SceneRenderOptions settings;
-                    settings.projectPipeline = std::string(described.ProjectDefaultPipeline());
+                    described.SelectPipeline(described.ProjectDefaultPipeline(), settings);
+                    Require(settings.pipeline == renderer::PipelineType::Forward &&
+                                settings.projectPipeline == "test.blue",
+                            "Stable project pipeline ID was not resolved");
+                    Fails([&] { described.SelectPipeline("test.missing", settings); },
+                          "Unknown project pipeline");
+                    Require(settings.projectPipeline == "test.blue",
+                            "Failed resolution changed the current pipeline");
+                    described.SelectPipeline("renderlab.deferred", settings);
+                    Require(settings.pipeline == renderer::PipelineType::Deferred &&
+                                settings.projectPipeline.empty(),
+                            "Built-in selection retained a project pipeline");
+                    described.SelectPipeline(described.ProjectDefaultPipeline(), settings);
                     settings.sceneHdrDiagnostics = true;
                     const auto frame = described.Render(color, rhi::State::Undefined, nullptr,
                                                         false, {}, settings);

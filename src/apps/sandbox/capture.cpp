@@ -25,7 +25,12 @@ void CaptureScene(rhi::Runtime& runtime, const rhi::Device& device, const Option
         std::filesystem::path(platform::Utf8ToWide(options.projectPath)), shaders);
     auto target = runtime.CreateTexture(
         {options.width, options.height, rhi::Format::Rgba8Srgb, false, true, "Capture.Display"});
-    const auto settings = RenderOptions(options);
+    auto settings = RenderOptions(options);
+    auto actualOptions = options;
+    const auto selectedPipeline = SelectScenePipeline(scene, options, settings);
+    if (!settings.projectPipeline.empty() ||
+        (!options.pipelineExplicit && !scene.ProjectDefaultPipeline().empty()))
+        actualOptions.pipeline = selectedPipeline;
     auto initial = rhi::State::Undefined;
     Statistics statistics;
     using Clock = std::chrono::steady_clock;
@@ -112,7 +117,7 @@ void CaptureScene(rhi::Runtime& runtime, const rhi::Device& device, const Option
     samples::SaveImage(output / "scene.bmp", capture.pixels->Map(), options.width, options.height,
                        rhi::TextureRowPitch(options.width));
     if (recording || !options.profilePath.empty())
-        statistics.Save(reportPath, options, device.GetReport(), memory, recording.get(),
+        statistics.Save(reportPath, actualOptions, device.GetReport(), memory, recording.get(),
                         options.cpuProfile ? &cpuOperations : nullptr, &descriptors, &uploads,
                         &rayScene, &driverBudgets);
     if (recording)

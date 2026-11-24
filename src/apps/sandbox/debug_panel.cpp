@@ -66,6 +66,7 @@ struct DebugPanel::Impl
                 if (index >= 0 && size_t(index) < self->choices.size())
                 {
                     self->controls.render.pipeline = self->choices[size_t(index)].type;
+                    self->controls.render.projectPipeline.clear();
                     if (self->controls.render.pipeline != renderer::PipelineType::RayTracing &&
                         self->controls.render.view >= renderer::SceneView::ReflectionRaw)
                     {

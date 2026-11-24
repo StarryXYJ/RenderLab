@@ -167,6 +167,8 @@ public:
     /// Registered project pipeline IDs and the optional project-authored default.
     std::vector<std::string> ProjectPipelines() const;
     std::string_view ProjectDefaultPipeline() const;
+    /// Resolve a stable built-in or project ID without publishing the options.
+    void SelectPipeline(std::string_view id, SceneRenderOptions& options) const;
     /// @brief Owner-thread editable scene; apply changes between Render calls.
     scene::Scene& Document();
     /// Validate composition/material compatibility before changing an interactive selection.

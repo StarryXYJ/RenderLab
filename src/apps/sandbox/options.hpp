@@ -20,6 +20,7 @@ struct Options
     std::string projectPath;
     std::string outputPath = "out/m1";
     std::string quality = "scene", view = "final", pipeline = "forward", profilePath;
+    bool pipelineExplicit = false;
     std::string submission = "direct";
     uint32_t recordingThreads = 1;
     bool asyncCompute = false;

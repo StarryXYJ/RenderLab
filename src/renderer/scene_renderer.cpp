@@ -1204,6 +1204,29 @@ std::string_view SceneRenderer::ProjectDefaultPipeline() const
         return impl_->project.rendering->defaultPipeline;
     return {};
 }
+void SceneRenderer::SelectPipeline(std::string_view id, SceneRenderOptions& options) const
+{
+    PipelineType base;
+    std::string projectId;
+    if (id == "renderlab.forward")
+        base = PipelineType::Forward;
+    else if (id == "renderlab.deferred")
+        base = PipelineType::Deferred;
+    else if (id == "renderlab.raytracing")
+        base = PipelineType::RayTracing;
+    else if (id == "renderlab.pathtracing")
+        base = PipelineType::PathTracing;
+    else
+    {
+        if (!impl_->projectModules)
+            throw std::invalid_argument("Unknown project pipeline: " + std::string(id));
+        (void)impl_->projectModules->Pipeline(std::string(id));
+        base = PipelineType::Forward;
+        projectId = id;
+    }
+    options.pipeline = base;
+    options.projectPipeline = std::move(projectId);
+}
 scene::Scene& SceneRenderer::Document()
 {
     return impl_->document;

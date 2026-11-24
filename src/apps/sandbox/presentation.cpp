@@ -121,8 +121,14 @@ void RunRendering(platform::Window* window, rhi::Device& device, rhi::Runtime& r
     if (demo)
         demo->Prepare(swapchain->GetFormat());
     auto settings = RenderOptions(options);
+    auto actualOptions = options;
     if (scene)
-        scene->ValidatePipeline(settings.pipeline);
+    {
+        const auto selectedPipeline = SelectScenePipeline(*scene, options, settings);
+        if (!settings.projectPipeline.empty() ||
+            (!options.pipelineExplicit && !scene->ProjectDefaultPipeline().empty()))
+            actualOptions.pipeline = selectedPipeline;
+    }
     Statistics statistics;
     std::unique_ptr<DebugPanel> panel;
     scene::Transform originalCamera;
@@ -246,15 +252,17 @@ void RunRendering(platform::Window* window, rhi::Device& device, rhi::Runtime& r
             statistics.Add(frame.rendered, runtime, frame.cpuMs);
             frame.rendered = {};
         }
-        if (panel && panel->Controls().render.pipeline != settings.pipeline)
+        if (panel && (panel->Controls().render.pipeline != settings.pipeline ||
+                      panel->Controls().render.projectPipeline != settings.projectPipeline))
         {
             try
             {
-                scene->ValidatePipeline(panel->Controls().render.pipeline);
+                scene->ValidateOptions(panel->Controls().render);
             }
             catch (const std::exception& error)
             {
                 panel->SelectPipeline(settings.pipeline);
+                panel->Controls().render = settings;
                 logger.Write(LogLevel::Warning, error.what());
                 const auto message = platform::Utf8ToWide(error.what());
                 MessageBoxW(static_cast<HWND>(window->GetNativeSurface().window), message.c_str(),
@@ -343,9 +351,9 @@ void RunRendering(platform::Window* window, rhi::Device& device, rhi::Runtime& r
     if (!options.profilePath.empty())
     {
         const auto driverBudgets = device.QueryMemoryBudget();
-        statistics.Save(std::filesystem::path(platform::Utf8ToWide(options.profilePath)), options,
-                        device.GetReport(), runtime.GetMemoryStats(), nullptr, nullptr, nullptr,
-                        nullptr, nullptr, &driverBudgets);
+        statistics.Save(std::filesystem::path(platform::Utf8ToWide(options.profilePath)),
+                        actualOptions, device.GetReport(), runtime.GetMemoryStats(), nullptr,
+                        nullptr, nullptr, nullptr, nullptr, &driverBudgets);
     }
     if (options.windowTest && (!frameNumber || resizeCount < 8 || suspendedTicks < 2))
         throw std::runtime_error("In-flight presentation resize/minimize coverage incomplete");

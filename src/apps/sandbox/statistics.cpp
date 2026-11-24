@@ -54,6 +54,16 @@ renderer::SceneRenderOptions RenderOptions(const Options& options)
         render.view = renderer::SceneView::ReflectionDenoised;
     return render;
 }
+std::string SelectScenePipeline(renderer::SceneRenderer& scene, const Options& options,
+                                renderer::SceneRenderOptions& render)
+{
+    const auto id = !options.pipelineExplicit && !scene.ProjectDefaultPipeline().empty()
+                        ? std::string(scene.ProjectDefaultPipeline())
+                        : "renderlab." + options.pipeline;
+    scene.SelectPipeline(id, render);
+    scene.ValidateOptions(render);
+    return id;
+}
 void Statistics::Samples::Add(double value)
 {
     if (!count)

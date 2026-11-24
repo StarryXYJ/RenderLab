@@ -19,6 +19,9 @@ class Recording;
 namespace renderlab::sandbox
 {
 renderer::SceneRenderOptions RenderOptions(const Options& options);
+/// Use the project default unless the caller supplied an explicit built-in override.
+std::string SelectScenePipeline(renderer::SceneRenderer& scene, const Options& options,
+                                renderer::SceneRenderOptions& render);
 /** @brief Accumulates completed frames only; startup/retirement waits are excluded from CPU work.
  */
 class Statistics final

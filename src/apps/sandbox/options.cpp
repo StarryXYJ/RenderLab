@@ -148,7 +148,10 @@ Options ParseOptions(std::span<const std::string_view> arguments)
             options.pathHdrNormalize = mode == "on";
         }
         else if (arg == "--pipeline")
+        {
             options.pipeline = value();
+            options.pipelineExplicit = true;
+        }
         else if (arg == "--recording-threads")
         {
             options.recordingThreads = number();
@@ -300,7 +303,8 @@ std::string_view Usage()
            "  --quality scene|low|medium|high  Scene shadows, or 128/512/1024 resolution\n"
            "  --temporal-denoise on|off        Camera reprojection denoising (default on)\n"
            "  --denoise on|off                 Spatial ray-tracing denoising (default on)\n"
-           "  --path-hdr-normalize on|off      Experimental path sample HDR compression (default off)\n"
+           "  --path-hdr-normalize on|off      Experimental path sample HDR compression (default "
+           "off)\n"
            "  --view "
            "final|hdr|shadow|environment|brdf|reflection-raw|reflection-history|reflection-"
            "denoised  Select "
