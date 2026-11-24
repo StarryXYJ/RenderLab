@@ -82,13 +82,17 @@ target_include_directories(renderlab_rendergraph PUBLIC src)
 target_link_libraries(renderlab_rendergraph PRIVATE renderlab_options renderlab_rhi
     nlohmann_json::nlohmann_json)
 
+add_library(renderlab_project_module STATIC src/renderer/project_module.cpp)
+target_include_directories(renderlab_project_module PUBLIC src)
+target_link_libraries(renderlab_project_module PRIVATE renderlab_options)
+
 add_library(renderlab_renderer STATIC src/renderer/forward.cpp src/renderer/deferred.cpp
     src/renderer/raytracing.cpp src/renderer/acceleration_scene.cpp
     src/renderer/pipeline.cpp src/renderer/indexed_scene.cpp
     src/renderer/scene_renderer.cpp src/renderer/environment.cpp src/renderer/ltc_table.cpp src/renderer/shadow.cpp)
 target_include_directories(renderlab_renderer PUBLIC src)
 target_link_libraries(renderlab_renderer PRIVATE renderlab_options renderlab_rendergraph renderlab_rhi
-    renderlab_content renderlab_material nlohmann_json::nlohmann_json)
+    renderlab_content renderlab_material renderlab_project_module nlohmann_json::nlohmann_json)
 include(cmake/EnvironmentSimd.cmake)
 
 add_library(renderlab_sandbox_options STATIC src/apps/sandbox/options.cpp)
@@ -241,6 +245,24 @@ install(FILES sample/m4/RenderLab.rlproject sample/m4/Pbr.rlproject sample/m4/Sh
 install(FILES sample/m4/PathTracing-README.txt DESTINATION .)
 
 if(BUILD_TESTING)
+    foreach(variant RANGE 0 10)
+        add_library(renderlab_project_fixture_${variant} SHARED tests/project_module_fixture.cpp)
+        target_include_directories(renderlab_project_fixture_${variant} PRIVATE src)
+        target_compile_definitions(renderlab_project_fixture_${variant} PRIVATE PROJECT_TEST_VARIANT=${variant})
+        target_link_libraries(renderlab_project_fixture_${variant} PRIVATE renderlab_options)
+    endforeach()
+    add_executable(renderlab_project_module_tests tests/project_module_tests.cpp)
+    target_link_libraries(renderlab_project_module_tests PRIVATE renderlab_options renderlab_project_module)
+    foreach(variant RANGE 0 10)
+        add_dependencies(renderlab_project_module_tests renderlab_project_fixture_${variant})
+    endforeach()
+    add_test(NAME project_module.contracts COMMAND renderlab_project_module_tests
+        $<TARGET_FILE:renderlab_project_fixture_0> $<TARGET_FILE:renderlab_project_fixture_1>
+        $<TARGET_FILE:renderlab_project_fixture_2> $<TARGET_FILE:renderlab_project_fixture_3>
+        $<TARGET_FILE:renderlab_project_fixture_4> $<TARGET_FILE:renderlab_project_fixture_5>
+        $<TARGET_FILE:renderlab_project_fixture_6> $<TARGET_FILE:renderlab_project_fixture_7>
+        $<TARGET_FILE:renderlab_project_fixture_8> $<TARGET_FILE:renderlab_project_fixture_9>
+        $<TARGET_FILE:renderlab_project_fixture_10>)
     add_executable(renderlab_gpu_memory_tests tests/gpu_memory_tests.cpp)
     target_link_libraries(renderlab_gpu_memory_tests PRIVATE renderlab_options renderlab_rhi renderlab_core nlohmann_json::nlohmann_json)
     target_compile_definitions(renderlab_gpu_memory_tests PRIVATE RENDERLAB_SOURCE_ROOT="${CMAKE_SOURCE_DIR}")
