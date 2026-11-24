@@ -95,12 +95,15 @@ public partial class MainWindow : Window
         else if (options.SoakSeconds > 0) { soak = new WorkbenchSoak(this, viewportService!, options); }
     }
 
-    private void AttachProject(string project, DeviceSelection? device = null)
+    private void AttachProject(string project, DeviceSelection? device = null, string? sceneId = null)
     {
-        projectSession = sessions!.Create(project, device);
+        projectSession = sessions!.Create(project, device, sceneId);
         options = projectSession.Options;
         var viewModel = projectSession.ViewModel;
         var viewportService = projectSession.Viewport;
+        viewportService.InitializeScenes();
+        var scene = viewportService.Scenes.Scenes.First(entry => entry.Id == viewportService.SceneId);
+        viewModel.SceneName = Path.GetFileNameWithoutExtension(project) + " / " + Path.GetFileNameWithoutExtension(scene.Path);
         this.viewportService = viewportService;
         DataContext = viewModel;
         initialRecorded = false;
@@ -131,7 +134,19 @@ public partial class MainWindow : Window
         viewportService.RecreateRequested += RecreateViewport;
         viewportService.StatsUpdated += ForwardStats;
         viewportService.Failed += OnViewportFailure;
+        RefreshScenes();
         RefreshMenus();
+    }
+
+    private void RefreshScenes()
+    {
+        var service = viewportService!;
+        OpenSceneMenu.ItemsSource = service.Scenes.Scenes.Select(scene =>
+        {
+            var item = new MenuItem { Header = (scene.Id == service.SceneId ? "✓ " : "") + scene.Path };
+            item.Click += async (_, _) => await SwitchScene(scene.Id);
+            return item;
+        }).ToArray();
     }
 
     private void DetachProject()
@@ -221,6 +236,7 @@ public partial class MainWindow : Window
         if (viewportService?.DeviceSwitch.Busy == true)
         { await ShowProjectError("Cannot open project", "Wait for the graphics device switch to finish."); return; }
         var previous = projectSession?.Options.Project;
+        var previousScene = viewportService?.SceneId;
         var device = viewportService?.DeviceSwitch.Current;
         projectSwitch = new CancellationTokenSource();
         var token = projectSwitch.Token;
@@ -229,7 +245,8 @@ public partial class MainWindow : Window
         try
         {
             var result = await ProjectSwitchTransaction.RunAsync(target, previous,
-                (path, cancellation) => OpenProjectSession(path, device, cancellation), token);
+                (path, cancellation) => OpenProjectSession(path, device, cancellation,
+                    string.Equals(path, previous, StringComparison.OrdinalIgnoreCase) ? previousScene : null), token);
             if (result.TargetError is not null)
             {
                 var message = result.TargetError.Message;
@@ -251,14 +268,62 @@ public partial class MainWindow : Window
         }
     }
 
-    private async Task OpenProjectSession(string path, DeviceSelection? device, CancellationToken token)
+    private async Task OpenProjectSession(string path, DeviceSelection? device, CancellationToken token, string? sceneId = null)
     {
         DetachProject();
         token.ThrowIfCancellationRequested();
         firstFrame = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        AttachProject(path, device);
-        Docks.Show("Scene");
-        await firstFrame.Task.WaitAsync(TimeSpan.FromSeconds(120), token);
+        try
+        {
+            AttachProject(path, device, sceneId);
+            Docks.Show("Scene");
+            await firstFrame.Task.WaitAsync(TimeSpan.FromSeconds(120), token);
+        }
+        catch (Exception error) when (error is not OperationCanceledException && sceneId is null &&
+            viewportService?.SceneId is { } selected && selected != viewportService.Scenes.StartScene)
+        {
+            var fallback = viewportService!.Scenes.StartScene;
+            logger?.LogWarning(error, "Saved scene failed; reopening project start scene");
+            await OpenProjectSession(path, device, token, fallback);
+        }
+    }
+
+    private async Task SwitchScene(string target)
+    {
+        if (projectSwitch is not null || closingWindow || viewportService is null || options is null ||
+            target == viewportService.SceneId) { return; }
+        if (viewportService.DeviceSwitch.Busy)
+        { await ShowProjectError("Cannot open scene", "Wait for the graphics device switch to finish."); return; }
+        var project = options.Project;
+        var previous = viewportService.SceneId;
+        var device = viewportService.DeviceSwitch.Current;
+        projectSwitch = new CancellationTokenSource();
+        var token = projectSwitch.Token;
+        FileMenu.IsEnabled = false;
+        SetProjectControlsEnabled(false);
+        try
+        {
+            var result = await ProjectSwitchTransaction.RunAsync(target, previous,
+                (id, cancellation) => OpenProjectSession(project, device, cancellation, id), token);
+            if (result.TargetError is not null)
+            {
+                var message = result.TargetError.Message;
+                if (result.Restored) { message += "\n\nPrevious scene reopened."; }
+                else
+                {
+                    DetachProject();
+                    if (result.RollbackError is not null) { message += "\n\nCould not reopen previous scene: " + result.RollbackError.Message; }
+                }
+                if (!closingWindow) { await ShowProjectError("Cannot open scene", message); }
+            }
+        }
+        catch (OperationCanceledException) when (token.IsCancellationRequested) { }
+        finally
+        {
+            firstFrame = null;
+            projectSwitch.Dispose(); projectSwitch = null;
+            if (!closingWindow) { FileMenu.IsEnabled = true; SetProjectControlsEnabled(projectSession is not null); }
+        }
     }
 
     private void SetProjectControlsEnabled(bool enabled)
@@ -281,13 +346,26 @@ public partial class MainWindow : Window
         await dialog.ShowDialog(this);
     }
 
-    private void OnViewportFailure(Exception error) { firstFrame?.TrySetException(error); smoke?.Fail(error); }
+    private void OnViewportFailure(Exception error)
+    {
+        if (firstFrame is not null) { firstFrame.TrySetException(error); }
+        else if (!projectReady && projectSwitch is null && viewportService is { } service &&
+            options?.SceneId is null && service.SceneId != service.Scenes.StartScene)
+        {
+            logger?.LogWarning(error, "Saved scene failed; reopening project start scene");
+            Dispatcher.UIThread.Post(async () => await SwitchScene(service.Scenes.StartScene));
+        }
+        smoke?.Fail(error);
+    }
 
     private void ForwardStats(ViewportStats stats)
     {
-        if (stats.Ready != 0 && stats.Frames > 0)
+        if (stats.Ready != 0 && stats.Frames > 0 && viewportService is { } service &&
+            stats.SessionGeneration == service.Session && service.Configuration.Applied.Size == 112 &&
+            service.Configuration.Status is 2 or 3 &&
+            stats.ConfigRevision == service.Configuration.AppliedId)
         {
-            projectReady = true;
+            if (!projectReady) { projectReady = true; service.RecordSuccessfulScene(); }
             firstFrame?.TrySetResult();
             if (!initialRecorded && options is { Smoke: false, Isolated: false, BenchmarkSeconds: 0, SoakSeconds: 0 })
             { initialRecorded = true; recent!.Add(options.Project); RefreshRecent(); }

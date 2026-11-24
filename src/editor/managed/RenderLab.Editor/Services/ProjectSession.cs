@@ -13,7 +13,7 @@ public sealed class ProjectContext
 
 public sealed class ProjectSessionFactory(IServiceScopeFactory scopes, StartupOptions startup)
 {
-    internal ProjectSession Create(string project, DeviceSelection? device = null)
+    internal ProjectSession Create(string project, DeviceSelection? device = null, string? sceneId = null)
     {
         var scope = scopes.CreateScope();
         try
@@ -21,6 +21,7 @@ public sealed class ProjectSessionFactory(IServiceScopeFactory scopes, StartupOp
             scope.ServiceProvider.GetRequiredService<ProjectContext>().Options = startup.Value with
             {
                 Project = project,
+                SceneId = sceneId,
                 Backend = device?.Backend ?? startup.Value.Backend,
                 Validation = device?.Validation ?? startup.Value.Validation
             };

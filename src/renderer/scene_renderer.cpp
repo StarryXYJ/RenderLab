@@ -229,10 +229,19 @@ struct SceneRenderer::Impl
     math::Mat4 shadowMatrix = math::Mat4::Identity();
     scene::Extractor extractor;
     scene::Snapshot snapshot;
+    static std::filesystem::path ScenePath(const assets::Database& database, const std::string& id)
+    {
+        const auto& entry = database.Get(id);
+        if (entry.path.extension() != ".scene")
+            throw std::invalid_argument("Selected asset is not a scene");
+        return entry.path;
+    }
     Impl(rhi::Runtime& r, shader::Target target, const std::filesystem::path& manifest,
-         const std::filesystem::path& engine)
+         const std::filesystem::path& engine, std::string_view sceneId)
         : runtime(r), shaderTarget(target), project(project::Project::Open(manifest, engine)),
-          database(project), document(scene::Scene::Load(database.Get(project.startScene).path)),
+          database(project),
+          document(scene::Scene::Load(
+              ScenePath(database, sceneId.empty() ? project.startScene : std::string(sceneId)))),
           materials(r, target),
           // The host owns the native limit. Leave room for assets, AS, histories and uploads.
           pool(r, 64, r.GetMemoryStats().budget * 3 / 4), uploadPool(r), accelerationScene(r, pool)
@@ -1156,8 +1165,8 @@ struct SceneRenderer::Impl
 };
 SceneRenderer::SceneRenderer(rhi::Runtime& runtime, shader::Target target,
                              const std::filesystem::path& project,
-                             const std::filesystem::path& engine)
-    : impl_(std::make_unique<Impl>(runtime, target, project, engine))
+                             const std::filesystem::path& engine, std::string_view sceneId)
+    : impl_(std::make_unique<Impl>(runtime, target, project, engine, sceneId))
 {
 }
 SceneRenderer::~SceneRenderer() = default;
@@ -1917,12 +1926,11 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
             frame.rayTracing.denoisePipeline = self.reflectionDenoise;
         if (pathTracing && options.pathHdrNormalize && options.reflectionDenoise)
             self.EnsurePathProgram(true);
-        frame.rayTracing.reflectionTable = pathTracing ? (options.pathHdrNormalize &&
-                                                                   options.reflectionDenoise
-                                                               ? self.pathTableNormalized
-                                                               : self.pathTable)
-                                           : frame.rayTracing.denoisePipeline
-                                               ? self.reflectionTable
+        frame.rayTracing.reflectionTable =
+            pathTracing
+                ? (options.pathHdrNormalize && options.reflectionDenoise ? self.pathTableNormalized
+                                                                         : self.pathTable)
+            : frame.rayTracing.denoisePipeline ? self.reflectionTable
                                                : self.reflectionTableWithoutGuide;
         if ((frame.rayTracing.denoisePipeline || frame.rayTracing.pathDenoisePipeline) &&
             options.reflectionTemporal && accumulate)

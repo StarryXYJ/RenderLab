@@ -15,6 +15,7 @@
 #include <map>
 #include <memory>
 #include <optional>
+#include <string_view>
 #include <vector>
 
 namespace renderlab::rhi
@@ -154,7 +155,7 @@ class SceneRenderer final
 public:
     /// @brief Loads the project, compiles scene shaders and synchronously uploads static assets.
     SceneRenderer(rhi::Runtime&, shader::Target, const std::filesystem::path& project,
-                  const std::filesystem::path& engineShaders);
+                  const std::filesystem::path& engineShaders, std::string_view sceneId = {});
     ~SceneRenderer();
     SceneRenderer(const SceneRenderer&) = delete;
     SceneRenderer& operator=(const SceneRenderer&) = delete;

@@ -32,7 +32,7 @@ public sealed class NativeViewportService : IDisposable
     private ulong requestSequence;
     private bool restoreConfiguration;
     private ProjectPreferences? startupPreferences, persistedPreferences;
-    private bool preferencesLoaded, restorePreferences;
+    private bool preferencesLoaded, restorePreferences, preferencesLoadFailed;
     private ulong preferenceRequestId, restorePreferenceRequestId;
     private bool observationConfigured;
     private bool retiring, viewportHidden;
@@ -45,6 +45,8 @@ public sealed class NativeViewportService : IDisposable
     internal FrameTimingWindow Timings { get; } = new();
     internal uint AbiVersion { get; private set; }
     internal ulong Session { get; private set; }
+    internal string? SceneId { get; private set; }
+    internal ProjectScenes Scenes { get; private set; } = null!;
     internal nint Child { get; private set; }
     internal ViewportStats Stats { get; private set; }
     internal uint Pipeline { get; private set; } = 2;
@@ -64,15 +66,28 @@ public sealed class NativeViewportService : IDisposable
         Pipeline = options.Pipeline;
     }
 
-    internal nint Create(nint parent)
+    internal void InitializeScenes()
     {
-        Dispatcher.UIThread.VerifyAccess();
+        if (NativeMethods.AbiVersion() != 13) { throw new InvalidOperationException("Managed/native bridge ABI mismatch."); }
         if (!preferencesLoaded && ProjectUserSettings.Persistent(options))
         {
             preferencesLoaded = true;
             try { startupPreferences = persistedPreferences = ProjectUserSettings.Load(UserSettingsPath); }
-            catch (Exception error) { Program.Logging?.Logger.Warning(error, "Unable to restore project user settings"); }
+            catch (Exception error)
+            {
+                preferencesLoadFailed = true;
+                Program.Logging?.Logger.Warning(error, "Unable to restore project user settings");
+            }
         }
+        Scenes = ProjectScenes.Load(options);
+        SceneId = Scenes.Select(options.SceneId, startupPreferences?.LastScene);
+        if (options.SceneId is null && startupPreferences?.LastScene is { } saved && saved != SceneId)
+        { Program.Logging?.Logger.Warning("Saved scene {SceneId} is no longer available; using start scene", saved); }
+    }
+
+    internal nint Create(nint parent)
+    {
+        Dispatcher.UIThread.VerifyAccess();
         if (Session != 0)
         {
             // Dock can materialize the replacement presenter before detaching a cached one.
@@ -80,7 +95,7 @@ public sealed class NativeViewportService : IDisposable
             Close(Session);
         }
         AbiVersion = NativeMethods.AbiVersion();
-        if (AbiVersion != 12 || Marshal.SizeOf<ViewportStats>() != 256 || Marshal.SizeOf<CloseReport>() != 24 ||
+        if (AbiVersion != 13 || Marshal.SizeOf<ViewportStats>() != 256 || Marshal.SizeOf<CloseReport>() != 24 ||
             Marshal.SizeOf<ViewportConfig>() != 112 || Marshal.SizeOf<ViewportConfigState>() != 272)
         {
             throw new InvalidOperationException("Managed/native bridge ABI mismatch.");
@@ -92,7 +107,7 @@ public sealed class NativeViewportService : IDisposable
         NativeMethods.Check(NativeMethods.Create(parent, creatingDevice.Backend == "dx12" ? 0u : 1u,
             creatingDevice.Validation ? 1u : 0u, options.Profiling ? 1u : 0u,
             initial.TargetFps, options.BenchmarkSeconds > 0 ? 1u : 0u,
-            options.Project, options.Shaders, Path.Combine(options.Output, $"native-{logOwner}-{++logSequence}.log"),
+            options.Project, options.Shaders, Path.Combine(options.Output, $"native-{logOwner}-{++logSequence}.log"), SceneId,
             out var session, out var child));
         Session = session;
         observationConfigured = false;
@@ -412,18 +427,33 @@ public sealed class NativeViewportService : IDisposable
         var accepted = ProjectUserSettings.Accepted(state, preferenceRequestId);
         if (accepted is not null)
         {
-            if (ProjectUserSettings.Persistent(options) && accepted != persistedPreferences)
-            {
-                try
-                {
-                    ProjectUserSettings.Save(UserSettingsPath, accepted);
-                    persistedPreferences = accepted;
-                }
-                catch (Exception error) { Program.Logging?.Logger.Warning(error, "Unable to save project user settings"); }
-            }
+            accepted = accepted with { LastScene = persistedPreferences?.LastScene };
+            SavePreferences(accepted);
             preferenceRequestId = 0;
         }
         if (state.Status == 3 && state.RejectedId == preferenceRequestId) { preferenceRequestId = 0; }
+    }
+
+    internal void RecordSuccessfulScene()
+    {
+        if (preferencesLoadFailed || SceneId is null || Configuration.Applied.Size != 112) { return; }
+        var preferences = persistedPreferences ?? new ProjectPreferences(1,
+            ProjectUserSettings.PipelineId(Configuration.Applied.Pipeline), Configuration.Applied.TargetFps);
+        SavePreferences(preferences with { LastScene = SceneId });
+    }
+
+    private void SavePreferences(ProjectPreferences preferences)
+    {
+        if (ProjectUserSettings.Persistent(options) && preferences != persistedPreferences)
+        {
+            try
+            {
+                ProjectUserSettings.Save(UserSettingsPath, preferences);
+                persistedPreferences = preferences;
+                preferencesLoadFailed = false;
+            }
+            catch (Exception error) { Program.Logging?.Logger.Warning(error, "Unable to save project user settings"); }
+        }
     }
 
     private void DrainLogs(bool all)

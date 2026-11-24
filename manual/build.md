@@ -501,7 +501,7 @@ cmake --preset windows-release
 
 有完整 NuGet 缓存的离线机器可以增加 `-OfflinePackageCache C:/你的目录/.nuget/packages`；恢复仍使用 locked mode。直接运行 dotnet 时在仓库根目录使用 `RenderLab.slnx` 作为构建入口；需要自定义原生路径时使用 `-p:NativeBuildDir=绝对路径`。构建脚本跳过本原型没有使用的 Avalonia 商业产品构建遥测，不修改用户全局设置。
 
-默认加载源码仓库的 `sample/m4/RayTracing.rlproject`，初始为 Deferred。运行中可通过 File / Open Project 选择 `.rlproject`，或从 File / Recent Projects 切换最近成功打开的项目；项目决定启动场景。切换会重建视口，失败时尝试重开旧项目。`--project` 可以指定其他项目，`--shaders` 可指定引擎 Shader 根目录；默认使用 exe 同目录的 shaders。点击原生视口后使用 WASD/QE、方向键或右键拖动。此宿主未打包示例项目，移出仓库运行时必须显式提供项目路径。
+默认加载源码仓库的 `sample/m4/RayTracing.rlproject`，初始为 Deferred。运行中可通过 File / Open Project 选择 `.rlproject`，或从 File / Recent Projects 切换最近成功打开的项目；Scene / Open Scene 可选择项目 Assets 下已有场景；首次打开使用项目启动场景，普通运行恢复上次成功打开的场景。切换会重建视口，失败时尝试重开旧项目或场景。`--project` 可以指定其他项目，`--shaders` 可指定引擎 Shader 根目录；默认使用 exe 同目录的 shaders。点击原生视口后使用 WASD/QE、方向键或右键拖动。此宿主未打包示例项目，移出仓库运行时必须显式提供项目路径。
 
 Cornell Box 风格 GI 场景可打开 `sample/m4/CornellBox.rlproject`，并将管线切为 Path Tracing；场景与限制见 [示例说明](../sample/m4/README.md#cornell-box)。
 
@@ -511,7 +511,7 @@ Final/HDR；不支持的组合会拒绝并保留已生效配置。静止时按�
 
 M7.2a 接入 Dock.Avalonia 12.0.0.2 与 Serilog：首次启动只显示 Scene 与 Render Settings，Window 菜单打开 Log、Profiler 与 Render Graph；Profiler 现提供实际计数与完成帧诊断。Layout 提供 Default、Diagnostics 与恢复保存布局；普通运行将布局写到项目旁的 UserSettings/Editor/<项目 ID>/layout.json，自检/基准使用各自输出目录，不覆盖日常布局。Scene 浮动/停回会安全重建原生视口并保留相机与管线/曝光。Log 支持筛选、搜索、复制、清空显示和打开日志目录；关闭面板仍写输出目录 logs 下的滚动 JSONL，原生日志保留独立文件。相关包与测试依赖均进入锁文件。
 
-M7.2b 的 Render Settings 已接入提交方式、录制线程/异步/Alias、已有调试视图、光照/环境、阴影、反射、导航速度、帧率/连续刷新和 GPU profiling。面板显示 Pending/Applied/Rejected 及配置 ID；暂停后可继续改参数，但须恢复或点击 Single frame 才确认生效。Defaults 恢复本次载入默认值，Save/Load preset 使用 UserSettings/Editor/<项目 ID>/render-preset.json，不改 Scene/Material。上次成功应用的内置管线与帧率自动保存在同目录的 session.json，显式命令行参数优先；旧布局和预设读取规则见 [工作台](../docs/editor-workbench.md#默认布局与交互)。Scene 浮动/重建保留整份运行配置。M7.2c 支持在同一面板选择 API/Validation 并点击 Apply API / Retry，等待退休/创建/首帧确认；失败会尝试一次原后端，双重失败可显式 Retry。布局、相机和覆盖保留，GPU 历史重建。
+M7.2b 的 Render Settings 已接入提交方式、录制线程/异步/Alias、已有调试视图、光照/环境、阴影、反射、导航速度、帧率/连续刷新和 GPU profiling。面板显示 Pending/Applied/Rejected 及配置 ID；暂停后可继续改参数，但须恢复或点击 Single frame 才确认生效。Defaults 恢复本次载入默认值，Save/Load preset 使用 UserSettings/Editor/<项目 ID>/render-preset.json，不改 Scene/Material。上次成功应用的内置管线、帧率和成功打开的场景自动保存在同目录的 session.json，显式命令行参数优先；旧布局和预设读取规则见 [工作台](../docs/editor-workbench.md#默认布局与交互)。Scene 浮动/重建保留整份运行配置。M7.2c 支持在同一面板选择 API/Validation 并点击 Apply API / Retry，等待退休/创建/首帧确认；失败会尝试一次原后端，双重失败可显式 Retry。布局、相机和覆盖保留，GPU 历史重建。
 
 配置验收沿用下方 --smoke：扩展覆盖受支持的三管线/四提交、能力拒绝、快速请求合并、暂停/单帧、预设/宿主重建保留、目标帧率 0↔60，以及曝光保留/照明失效历史。检查实际挂载的 Settings/Log，并通过菜单恢复保存布局，确认 Scene、设置控件和运行配置仍有效。报告保存参与检查的源文件 hash，GPU 专项 gpu.dx12.indexed_scene / gpu.vulkan.indexed_scene 还验证运行覆盖改变真实像素、移除覆盖恢复原图。
 

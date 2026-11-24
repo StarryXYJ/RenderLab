@@ -5,6 +5,7 @@
 #include <filesystem>
 #include <map>
 #include <string>
+#include <vector>
 
 namespace renderlab::assets
 {
@@ -28,6 +29,8 @@ public:
         return project_;
     }
     const Entry& Get(const std::string& id) const;
+    /// @brief Returns indexed scene entries in path order; no GPU resources are retained.
+    std::vector<Entry> Scenes() const;
     bool Contains(const std::string& id) const
     {
         return entries_.contains(id);

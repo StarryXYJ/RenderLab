@@ -595,7 +595,7 @@ internal sealed class SmokeTest
         NativeMethods.Check(NativeMethods.Create(window.TryGetPlatformHandle()!.Handle,
             options.Backend == "dx12" ? 0u : 1u, options.Validation ? 1u : 0u,
             options.Profiling ? 1u : 0u, options.TargetFps, 0,
-            options.Project, options.Shaders, Path.Combine(options.Output, "startup-close.log"),
+            options.Project, options.Shaders, Path.Combine(options.Output, "startup-close.log"), null,
             out var startupSession, out _));
         NativeMethods.Check(NativeMethods.Destroy(startupSession, out var startupClose));
         Require(startupClose.RemainingBytes == 0 && startupClose.ValidationErrors == 0 && startupClose.WorkerFailed == 0,

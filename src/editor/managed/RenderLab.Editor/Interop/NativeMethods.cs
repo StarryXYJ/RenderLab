@@ -30,6 +30,9 @@ internal static class NativeMethods
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "rl_editor_abi_version")]
     internal static extern uint AbiVersion();
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "rl_project_scenes")]
+    internal static extern int ProjectScenes([MarshalAs(UnmanagedType.LPUTF8Str)] string project,
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string shaders, [Out] byte[]? output, uint capacity, out uint required);
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "rl_viewport_request_snapshot")]
     internal static extern int RequestSnapshot(ulong session);
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "rl_viewport_acquire_snapshot")]
@@ -57,12 +60,13 @@ internal static class NativeMethods
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "rl_viewport_camera")]
     internal static extern int Camera(ulong session, [In, Out] float[] pose, uint write);
 
-    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "rl_viewport_create")]
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "rl_viewport_create_v2")]
     internal static extern int Create(nint parent, uint backend, uint validation, uint profiling,
         uint targetFps, uint continuous,
         [MarshalAs(UnmanagedType.LPUTF8Str)] string project,
         [MarshalAs(UnmanagedType.LPUTF8Str)] string shaders,
         [MarshalAs(UnmanagedType.LPUTF8Str)] string log,
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string? sceneId,
         out ulong session, out nint child);
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "rl_viewport_update")]

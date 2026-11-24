@@ -91,4 +91,24 @@ public class ProjectUserSettingsTests
         }
         finally { Directory.Delete(root, true); }
     }
+
+    [Test]
+    public void OlderSettingsReadAndSceneIdentityRoundTrips()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "renderlab-scene-settings-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        try
+        {
+            File.WriteAllText(Path.Combine(root, "session.json"),
+                "{\"version\":1,\"pipeline\":\"renderlab.forward\",\"targetFps\":37}");
+            var legacy = ProjectUserSettings.Load(root)!;
+            Assert.That(legacy.LastScene, Is.Null);
+            var selected = legacy with { LastScene = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" };
+            ProjectUserSettings.Save(root, selected);
+            Assert.That(ProjectUserSettings.Load(root), Is.EqualTo(selected));
+            Assert.Throws<InvalidDataException>(() => ProjectUserSettings.Save(root, selected with { LastScene = "invalid" }));
+            Assert.That(ProjectUserSettings.Load(root), Is.EqualTo(selected));
+        }
+        finally { Directory.Delete(root, true); }
+    }
 }

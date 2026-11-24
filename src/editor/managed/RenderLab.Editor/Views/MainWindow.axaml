@@ -30,6 +30,8 @@
                         <MenuItem x:Name="RestoreLayoutMenu" Header="Restore saved layout" Click="RestoreLayout" />
                     </MenuItem>
                     <MenuItem x:Name="SceneActionsMenu" Header="Scene">
+                        <MenuItem x:Name="OpenSceneMenu" Header="Open Scene" />
+                        <Separator />
                         <MenuItem Header="Pause / Resume" Command="{Binding TogglePauseCommand}" />
                         <MenuItem Header="Reset camera" Command="{Binding ResetCameraCommand}" />
                     </MenuItem>

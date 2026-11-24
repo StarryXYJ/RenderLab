@@ -76,6 +76,12 @@ extern "C"
     rl_viewport_step(rl_viewport_handle session);
 
     RENDERLAB_EDITOR_API uint32_t RENDERLAB_EDITOR_CALL rl_editor_abi_version(void);
+    /* Lists the project's indexed scene IDs and relative paths as UTF-8 JSON. */
+    RENDERLAB_EDITOR_API rl_status RENDERLAB_EDITOR_CALL rl_project_scenes(const char* project_utf8,
+                                                                           const char* shaders_utf8,
+                                                                           char* output,
+                                                                           uint32_t capacity,
+                                                                           uint32_t* required);
     /* Request a metadata snapshot. Acquire pins CPU values; Copy never consumes; Release unpins. */
     RENDERLAB_EDITOR_API rl_status RENDERLAB_EDITOR_CALL
     rl_viewport_request_snapshot(rl_viewport_handle session);
@@ -108,6 +114,12 @@ extern "C"
                        uint32_t target_fps, uint32_t continuous, const char* project_utf8,
                        const char* shaders_utf8, const char* log_utf8, rl_viewport_handle* session,
                        void** child_hwnd);
+    /* scene_id is an optional 32-character project asset ID; null selects startScene. */
+    RENDERLAB_EDITOR_API rl_status RENDERLAB_EDITOR_CALL
+    rl_viewport_create_v2(void* parent_hwnd, uint32_t backend, uint32_t validation,
+                          uint32_t profiling, uint32_t target_fps, uint32_t continuous,
+                          const char* project_utf8, const char* shaders_utf8, const char* log_utf8,
+                          const char* scene_id, rl_viewport_handle* session, void** child_hwnd);
     /* All session calls run on its creating thread. No message loop is pumped by the bridge. */
     RENDERLAB_EDITOR_API rl_status RENDERLAB_EDITOR_CALL
     rl_viewport_update(rl_viewport_handle session, uint32_t paused);

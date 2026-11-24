@@ -107,6 +107,14 @@ void ContentContracts(const std::filesystem::path& manifest, const std::filesyst
     std::filesystem::copy_file(manifest, root / "RenderLab.rlproject");
     const auto project = project::Project::Open(root / "RenderLab.rlproject", engine);
     assets::Database db(project);
+    const auto scenes = db.Scenes();
+    Require(!scenes.empty() && std::ranges::any_of(scenes, [&](const auto& entry)
+                                                   { return entry.id == project.startScene; }),
+            "Scene catalog includes the project start scene");
+    Require(std::ranges::is_sorted(scenes, {}, &assets::Entry::path) &&
+                std::ranges::all_of(scenes, [](const auto& entry)
+                                    { return entry.path.extension() == ".scene"; }),
+            "Scene catalog contains only scenes in path order");
     Fails([&] { project.ResolveAssetPath("../escape"); }, "escapes");
     auto scene = scene::Scene::Load(db.Get(project.startScene).path);
     auto& renderer = *std::ranges::find_if(scene.objects, [](const auto& object)

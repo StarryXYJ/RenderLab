@@ -1,6 +1,7 @@
 #include "assets/database.hpp"
 #include "assets/json_io.hpp"
 
+#include <algorithm>
 #include <set>
 #include <stdexcept>
 
@@ -68,6 +69,15 @@ const Entry& Database::Get(const std::string& id) const
     if (found == entries_.end())
         throw std::invalid_argument("Missing asset UUID: " + id);
     return found->second;
+}
+std::vector<Entry> Database::Scenes() const
+{
+    std::vector<Entry> result;
+    for (const auto& [id, entry] : entries_)
+        if (entry.path.extension() == ".scene")
+            result.push_back(entry);
+    std::ranges::sort(result, {}, &Entry::path);
+    return result;
 }
 const Entry& Database::AtPath(const std::filesystem::path& path) const
 {

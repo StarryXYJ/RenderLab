@@ -4,6 +4,7 @@
 #include "editor/native/snapshot_store.hpp"
 #include "editor/native/viewport_config.hpp"
 
+#include "assets/database.hpp"
 #include "core/log.hpp"
 #include "platform/text.hpp"
 #include "platform/window.hpp"
@@ -172,7 +173,7 @@ struct RenderState
 
     RenderState(HWND window, uint32_t backend, bool validation, bool profiling,
                 const std::filesystem::path& project, const std::filesystem::path& shaders,
-                Logger& output, bool vsync)
+                Logger& output, bool vsync, const std::string& sceneId)
         : logger(output), child(window)
     {
         device =
@@ -187,8 +188,8 @@ struct RenderState
                                  report.driverVersion));
         runtime->SetAllocationBudget(2048ull * 1024 * 1024);
         scene = std::make_unique<renderer::SceneRenderer>(
-            *runtime, backend == 0 ? shader::Target::Dxil : shader::Target::Spirv, project,
-            shaders);
+            *runtime, backend == 0 ? shader::Target::Dxil : shader::Target::Spirv, project, shaders,
+            sceneId);
         initialCamera = scene->Document().Get(scene->Document().activeCamera).transform;
         swapchain = runtime->CreateSwapchain({child, GetModuleHandleW(nullptr)}, 1, 1, vsync);
         options.pipeline = renderer::PipelineType::Deferred;
@@ -593,7 +594,8 @@ struct Session
     }
     Session(uint64_t id, HWND parent, uint32_t backend, bool validation, bool profiling,
             uint32_t targetFps, bool continuous, const std::filesystem::path& project,
-            const std::filesystem::path& shaders, const std::filesystem::path& log)
+            const std::filesystem::path& shaders, const std::filesystem::path& log,
+            std::string sceneId)
         : identity(id), logger(log)
     {
         logger.EnableMirror();
@@ -615,16 +617,16 @@ struct Session
         if (!child.value)
             throw std::runtime_error("Embedded viewport child creation failed");
         worker = std::thread(
-            [this, backend, validation, profiling, project, shaders, targetFps, continuous]
+            [this, backend, validation, profiling, project, shaders, targetFps, continuous, sceneId]
             {
                 std::unique_ptr<RenderState> state;
                 try
                 {
                     NativeHandle timer{CreateWaitableTimerExW(
                         nullptr, nullptr, CREATE_WAITABLE_TIMER_HIGH_RESOLUTION, TIMER_ALL_ACCESS)};
-                    state =
-                        std::make_unique<RenderState>(child.value, backend, validation, profiling,
-                                                      project, shaders, logger, targetFps != 0);
+                    state = std::make_unique<RenderState>(child.value, backend, validation,
+                                                          profiling, project, shaders, logger,
+                                                          targetFps != 0, sceneId);
                     auto& render = *state;
                     std::array<std::string, 4> failures;
                     for (uint32_t p = 1; p <= 4; ++p)
@@ -1202,11 +1204,13 @@ Session& Find(rl_viewport_handle handle)
         throw Failure(RL_WRONG_THREAD, "Viewport call must run on its creating UI thread");
     return session;
 }
-template <class F> rl_status Guard(F&& operation)
+template <class F> rl_status Guard(F&& operation, bool lockSessions = true)
 {
     try
     {
-        std::lock_guard lock(sessionsMutex);
+        std::unique_lock lock(sessionsMutex, std::defer_lock);
+        if (lockSessions)
+            lock.lock();
         operation();
         lastError.clear();
         return RL_OK;
@@ -1231,7 +1235,37 @@ template <class F> rl_status Guard(F&& operation)
 
 uint32_t RENDERLAB_EDITOR_CALL rl_editor_abi_version()
 {
-    return 12;
+    return 13;
+}
+rl_status RENDERLAB_EDITOR_CALL rl_project_scenes(const char* projectPath, const char* shaders,
+                                                  char* output, uint32_t capacity,
+                                                  uint32_t* required)
+{
+    return Guard(
+        [&]
+        {
+            Require(projectPath && shaders && required, "Invalid scene catalog arguments");
+            const auto project = renderlab::project::Project::Open(
+                platform::Utf8ToWide(projectPath), platform::Utf8ToWide(shaders));
+            const assets::Database database(project);
+            nlohmann::json scenes = nlohmann::json::array();
+            for (const auto& entry : database.Scenes())
+                scenes.push_back(
+                    {{"id", entry.id},
+                     {"path",
+                      platform::WideToUtf8(
+                          entry.path.lexically_relative(project.assets).generic_wstring())}});
+            const auto json = nlohmann::json{{"version", 1},
+                                             {"startScene", project.startScene},
+                                             {"scenes", std::move(scenes)}}
+                                  .dump();
+            Require(json.size() < 4 * 1024 * 1024, "Scene catalog exceeds budget");
+            *required = static_cast<uint32_t>(json.size() + 1);
+            if (!output || capacity < *required)
+                throw Failure(RL_BUFFER_TOO_SMALL, "Scene catalog buffer is too small");
+            std::memcpy(output, json.c_str(), *required);
+        },
+        false);
 }
 rl_status RENDERLAB_EDITOR_CALL rl_viewport_request_snapshot(rl_viewport_handle handle)
 {
@@ -1460,6 +1494,16 @@ rl_status RENDERLAB_EDITOR_CALL rl_viewport_create(void* parent, uint32_t backen
                                                    const char* log, rl_viewport_handle* handle,
                                                    void** child)
 {
+    return rl_viewport_create_v2(parent, backend, validation, profiling, targetFps, continuous,
+                                 project, shaders, log, nullptr, handle, child);
+}
+rl_status RENDERLAB_EDITOR_CALL rl_viewport_create_v2(void* parent, uint32_t backend,
+                                                      uint32_t validation, uint32_t profiling,
+                                                      uint32_t targetFps, uint32_t continuous,
+                                                      const char* project, const char* shaders,
+                                                      const char* log, const char* sceneId,
+                                                      rl_viewport_handle* handle, void** child)
+{
     if (handle)
         *handle = 0;
     if (child)
@@ -1471,6 +1515,7 @@ rl_status RENDERLAB_EDITOR_CALL rl_viewport_create(void* parent, uint32_t backen
                         validation <= 1 && profiling <= 1 && targetFps <= 240 && continuous <= 1 &&
                         project && shaders && log && handle && child,
                     "Invalid viewport creation arguments");
+            Require(!sceneId || renderlab::project::ValidId(sceneId), "Invalid scene asset ID");
             Require(GetWindowThreadProcessId(static_cast<HWND>(parent), nullptr) ==
                         GetCurrentThreadId(),
                     "Native parent must belong to the creating UI thread");
@@ -1481,7 +1526,8 @@ rl_status RENDERLAB_EDITOR_CALL rl_viewport_create(void* parent, uint32_t backen
                         (uint64_t(sessions[i].generation) << 32) | (i + 1),
                         static_cast<HWND>(parent), backend, validation != 0, profiling != 0,
                         targetFps, continuous != 0, platform::Utf8ToWide(project),
-                        platform::Utf8ToWide(shaders), platform::Utf8ToWide(log));
+                        platform::Utf8ToWide(shaders), platform::Utf8ToWide(log),
+                        sceneId ? sceneId : "");
                     *handle = (uint64_t(sessions[i].generation) << 32) | (i + 1);
                     *child = session->child.value;
                     sessions[i].session = std::move(session);

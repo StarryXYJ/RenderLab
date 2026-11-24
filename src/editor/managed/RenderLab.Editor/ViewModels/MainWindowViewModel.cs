@@ -26,7 +26,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     public RenderSettingsViewModel Settings { get; }
     public string PauseLabel => IsPaused ? "Resume viewport" : "Pause viewport";
     public string PauseGlyph => IsPaused ? "\uE768" : "\uE769";
-    public string SceneName { get; }
+    [ObservableProperty] private string sceneName = "";
     public bool IsSmokeTest { get; }
 
     [ObservableProperty]

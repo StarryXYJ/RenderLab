@@ -8,7 +8,8 @@ namespace RenderLab.Editor.Services;
 internal sealed record ProjectPreferences(
     [property: JsonRequired] int Version,
     [property: JsonRequired] string Pipeline,
-    [property: JsonRequired] uint TargetFps);
+    [property: JsonRequired] uint TargetFps,
+    string? LastScene = null);
 
 /// <summary>Project-local user state; the manifest ID separates projects sharing a directory.</summary>
 internal static class ProjectUserSettings
@@ -80,7 +81,7 @@ internal static class ProjectUserSettings
         if (new FileInfo(path).Length > 16384) { throw new InvalidDataException("User settings exceed budget."); }
         var preferences = JsonSerializer.Deserialize<ProjectPreferences>(File.ReadAllText(path), JsonOptions)
             ?? throw new InvalidDataException("Invalid user settings.");
-        if (preferences.Version != 1 || preferences.TargetFps > 240)
+        if (preferences.Version != 1 || preferences.TargetFps > 240 || !ValidSceneId(preferences.LastScene))
         { throw new InvalidDataException("Unsupported user settings version or frame limit."); }
         _ = PipelineNumber(preferences.Pipeline);
         return preferences;
@@ -88,7 +89,7 @@ internal static class ProjectUserSettings
 
     internal static void Save(string directory, ProjectPreferences preferences)
     {
-        if (preferences.Version != 1 || preferences.TargetFps > 240)
+        if (preferences.Version != 1 || preferences.TargetFps > 240 || !ValidSceneId(preferences.LastScene))
         { throw new InvalidDataException("Invalid user settings version or frame limit."); }
         _ = PipelineNumber(preferences.Pipeline);
         Directory.CreateDirectory(directory);
@@ -104,4 +105,7 @@ internal static class ProjectUserSettings
             if (File.Exists(temporary)) { File.Delete(temporary); }
         }
     }
+
+    private static bool ValidSceneId(string? id) => id is null ||
+        (id.Length == 32 && id.All(c => (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f')));
 }

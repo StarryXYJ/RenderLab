@@ -2,6 +2,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using NUnit.Framework;
 using RenderLab.Editor.Configuration;
+using RenderLab.Editor.Interop;
 using RenderLab.Editor.Services;
 using RenderLab.Editor.ViewModels;
 
@@ -49,6 +50,47 @@ public class ProjectSessionTests
         Assert.That(result.TargetError!.Message, Is.EqualTo("load failed"));
         Assert.That(result.Restored, Is.True);
         Assert.That(result.RollbackError, Is.Null);
+    }
+
+    [Test]
+    public void SceneSelectionUsesStableIdsAndFallsBackOnlyForMissingSavedScene()
+    {
+        var scenes = new ProjectScenes("start", [new("start", "first.scene"), new("other", "second.scene")]);
+        Assert.That(scenes.Select(null, null), Is.EqualTo("start"));
+        Assert.That(scenes.Select(null, "other"), Is.EqualTo("other"));
+        Assert.That(scenes.Select(null, "removed"), Is.EqualTo("start"));
+        Assert.That(scenes.Select("start", "other"), Is.EqualTo("start"));
+        Assert.Throws<InvalidDataException>(() => scenes.Select("removed", "other"));
+    }
+
+    [Test]
+    public void NativeCatalogListsProjectScenesAndRejectsSmallBuffers()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "renderlab-scenes-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(Path.Combine(root, "Assets"));
+        try
+        {
+            const string first = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", second = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+            var manifest = Path.Combine(root, "test.rlproject");
+            File.WriteAllText(manifest, $"{{\"version\":1,\"id\":\"cccccccccccccccccccccccccccccccc\",\"startScene\":\"{first}\"}}");
+            foreach (var (path, id) in new[] { ("甲.scene", first), ("b.scene", second), ("other.txt", "dddddddddddddddddddddddddddddddd") })
+            {
+                var file = Path.Combine(root, "Assets", path);
+                File.WriteAllText(file, "{}");
+                File.WriteAllText(file + ".meta", $"{{\"version\":1,\"id\":\"{id}\"}}");
+            }
+            var sentinel = new byte[] { 0x5a };
+            Assert.That(NativeMethods.ProjectScenes(manifest, root, sentinel, 1, out var required), Is.EqualTo(5));
+            Assert.That(required, Is.GreaterThan(1));
+            Assert.That(sentinel[0], Is.EqualTo(0x5a));
+            var options = new EditorOptions("dx12", manifest, root, root, true, false, true, 2, 0, 0);
+            var scenes = ProjectScenes.Load(options);
+            Assert.That(scenes.StartScene, Is.EqualTo(first));
+            Assert.That(scenes.Scenes.Select(scene => scene.Id), Is.EquivalentTo(new[] { first, second }));
+            Assert.That(scenes.Scenes.Single(scene => scene.Id == first).Path, Is.EqualTo("甲.scene"));
+            Assert.That(NativeMethods.ProjectScenes(Path.Combine(root, "missing.rlproject"), root, null, 0, out _), Is.Not.Zero);
+        }
+        finally { Directory.Delete(root, true); }
     }
 
     [Test]

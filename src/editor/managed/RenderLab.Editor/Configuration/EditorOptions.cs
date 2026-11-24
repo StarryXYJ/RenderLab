@@ -6,6 +6,7 @@ public sealed record EditorOptions(string Backend, string Project, string Shader
 {
     internal bool PipelineExplicit { get; init; }
     internal bool TargetFpsExplicit { get; init; }
+    internal string? SceneId { get; init; }
 
     internal static EditorOptions Parse(string[] args)
     {
