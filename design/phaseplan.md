@@ -171,8 +171,14 @@ E3c 数据契约已实现：DTO 稳定字段 ID、基础类型、范围和跨字
 项目 scope 现可从清单加载可信 C# 设置程序集及 DTO，合并项目默认值与个人设置；错误个人
 设置保留文件并回退默认值，scope 关闭请求卸载程序集。Release 托管 46/46，覆盖两项目
 隔离、错误版本/默认值、路径越界、程序集释放和文件不锁定；RTX 5060 双后端 Editor 加载
-临时项目短测正常关闭，见 `out/experiment-platform/e3-settings-load`。界面、保存、原生节点
-传值及真实项目程序集重载仍未实现；控件绑定后能否卸载也未验证。
+临时项目短测正常关闭，见 `out/experiment-platform/e3-settings-load`。界面、个人值保存、
+编辑器个人值传递及真实项目程序集重载仍未实现；控件绑定后能否卸载也未验证。
+
+原生默认值快照现随 `RenderFrame` 提供给项目节点，Graph ABI 升至 3，项目模块需重编；
+Editor/Player 都读取项目默认文件，节点负责验证所需字段和范围。Release 原生模块、内容及
+双后端项目图测试 4/4；RTX 5060 双后端 Player 默认值画面与旧版一致，修改默认值后画面
+改变，Editor 双后端加载设置项目短测通过；证据 `out/experiment-platform/e3-settings-default`、
+`e3-settings-alternate` 和 `e3-settings-default-editor`。编辑器个人值尚未传递给原生节点。
 - [ ] 定义项目默认值、个人设置及实验预设合并和保存策略；构建时导出 Player 可消费的描述，验证跨项目隔离、版本不匹配、错误恢复与 Editor/Player 一致性。
 - [ ] 托管测试、真实窗口交互和适用后端验证通过后更新文档、提交。
 

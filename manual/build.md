@@ -606,3 +606,14 @@ dotnet run --project sample/m4/ExperimentSource/managed/ExperimentPipelines.cspr
 
 示例 C# 入口位于 `sample/m4/ExperimentSource/managed/Program.cs`。输出文件位于被忽略的
 Library 目录，须先导出才能打开项目；运行中的项目不监视它的变化，重新导出后须重新打开。
+
+配置 DTO 与原生默认值示例还需构建项目设置程序集，然后打开 `ExperimentSettings.rlproject`：
+
+```powershell
+dotnet build sample/m4/ExperimentSource/settings/ExperimentSettings.csproj -c Release -o sample/m4/Library/Managed
+./out/dotnet/RenderLab.Editor/bin/Release/net10.0/RenderLab.Editor.exe --project sample/m4/ExperimentSettings.rlproject
+./out/build/windows-release/renderlab_player.exe --backend dx12 --project sample/m4/ExperimentSettings.rlproject
+```
+
+`sample/m4/ProjectSettings/experiment.json` 定义蓝色分量的项目默认值；改变后需重新打开项目。
+Editor 的项目设置界面及个人值传递尚在开发，当前两种宿主使用文件中的项目默认值。

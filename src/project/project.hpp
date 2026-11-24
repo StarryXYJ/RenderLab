@@ -25,6 +25,7 @@ struct Project
     std::filesystem::path manifest, root, assets, library, engine;
     std::string id, startScene;
     std::optional<Rendering> rendering;
+    std::optional<std::filesystem::path> settingsDefaults;
     /// @brief Loads version 1 and validates mount containment; engineRoot is supplied by the host.
     static Project Open(const std::filesystem::path& manifest,
                         const std::filesystem::path& engineRoot);

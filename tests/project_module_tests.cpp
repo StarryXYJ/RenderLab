@@ -1,4 +1,5 @@
 #include "renderer/project_module.hpp"
+#include "renderer/project_settings.hpp"
 
 #include <Windows.h>
 
@@ -121,6 +122,22 @@ int wmain(int argc, wchar_t** argv)
             throw;
         }
         std::filesystem::remove(descriptor);
+        using renderlab::renderer::ParseProjectSettings;
+        const auto settings = ParseProjectSettings(
+            R"({"version":1,"values":{"enabled":true,"count":3,"gain":1.25,"name":"test"}})");
+        Require(settings->version == 1 && std::get<bool>(settings->values.at("enabled")) &&
+                    std::get<int32_t>(settings->values.at("count")) == 3 &&
+                    std::get<double>(settings->values.at("gain")) == 1.25 &&
+                    std::get<std::string>(settings->values.at("name")) == "test",
+                "Project settings values must retain their supported types");
+        Fails([] { ParseProjectSettings(R"({"version":0,"values":{}})"); }, "version");
+        Fails([] { ParseProjectSettings(R"({"version":1,"values":{"x":1,"x":2}})"); }, "Duplicate");
+        const auto wide = ParseProjectSettings(R"({"version":1,"values":{"x":4294967295}})");
+        Require(std::get<double>(wide->values.at("x")) == 4294967295.0,
+                "Integral representations of double values must be supported");
+        Fails([] { ParseProjectSettings(R"({"version":1,"values":{"Bad":true}})"); }, "ID");
+        Fails([] { ParseProjectSettings(R"({"version":1,"values":{"x":null}})"); }, "Unsupported");
+        Fails([] { ParseProjectSettings(std::string(65537, 'x')); }, "budget");
         std::cout << "Project module contracts passed\n";
         return 0;
     }

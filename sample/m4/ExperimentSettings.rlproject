@@ -1,0 +1,19 @@
+{
+  "version": 1,
+  "id": "b2c63d3a96514330a63dca68f7e9ed36",
+  "assets": "Assets",
+  "library": "Library",
+  "startScene": "7769f044b94a4f26b81cec8994bef5ad",
+  "rendering": {
+    "version": 1,
+    "modules": ["Library/Modules/experiment.dll"],
+    "pipelines": "Library/experiment-pipelines.json",
+    "defaultPipeline": "example.managed-blue"
+  },
+  "settings": {
+    "version": 1,
+    "assembly": "Library/Managed/ExperimentSettings.dll",
+    "entry": "Experiment.SettingsDefinition",
+    "defaults": "ProjectSettings/experiment.json"
+  }
+}

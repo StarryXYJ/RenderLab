@@ -50,11 +50,15 @@ schema，在清单顶层声明：
 `defaults` 可省略，此时使用 DTO 构造默认值。程序集和默认值路径相对项目目录，不能越出
 项目或经过符号链接。编辑器项目 scope 加载可信项目代码，合并 DTO、项目默认值和
 `UserSettings/Editor/<项目 ID>/project-settings.json`；无效个人设置保留原文件并使用项目
-默认值。关闭 scope 后释放 DTO 并请求卸载程序集上下文。当前尚未接入配置 UI、保存及向
-渲染节点传值；程序集重载、界面绑定持有期及运行时卸载尚未验证，实施状态见
+默认值。关闭 scope 后释放 DTO 并请求卸载程序集上下文。Player 与 Editor 的原生渲染器也
+读取 `defaults` 快照，项目节点从借用的 `RenderFrame::projectSettings` 访问只读值；
+`ProjectSettingValue` 包含布尔、32 位整数、双精度数和字符串，整数形式的浮点数可能表示为
+整数，节点应接受两种数值形式并自行验证版本、必填字段和算法范围。缺失默认文件时指针为
+空，节点决定自身默认值；每帧回调不得保留借用的 Frame，延迟回调应按值捕获所需数据。
+当前尚未接入配置 UI、保存及编辑器个人值向渲染节点传递；程序集重载、界面绑定持有期及运行时卸载尚未验证，实施状态见
 [阶段计划](../design/phaseplan.md)。
 
-模块需与宿主使用同一 RenderLab 源码、MSVC 编译器、CRT 和 Debug/Release 配置构建。入口是 C ABI；调用节点时，Graph、RenderFrame 和 Runtime 是同构建的借用 C++ 对象，不构成跨版本 C++ ABI。版本检查包含显式模块/Graph ABI、MSVC 版本、CRT 和迭代器调试级别，但不能自动证明源码或所有编译选项一致；这些接口变化时必须同步提升 Graph ABI 并重编模块。当前 Graph ABI 为 2。节点回调返回零表示成功，失败通过有界 UTF-8 缓冲报告，不得向宿主抛异常。
+模块需与宿主使用同一 RenderLab 源码、MSVC 编译器、CRT 和 Debug/Release 配置构建。入口是 C ABI；调用节点时，Graph、RenderFrame 和 Runtime 是同构建的借用 C++ 对象，不构成跨版本 C++ ABI。版本检查包含显式模块/Graph ABI、MSVC 版本、CRT 和迭代器调试级别，但不能自动证明源码或所有编译选项一致；这些接口变化时必须同步提升 Graph ABI 并重编模块。当前 Graph ABI 为 3，旧版模块需要重新编译。节点回调返回零表示成功，失败通过有界 UTF-8 缓冲报告，不得向宿主抛异常。
 
 `ProjectModules` 拥有模块 DLL，查询返回的引用和函数指针仅在该对象存活期间有效。`SceneRenderer` 持有模块，并让项目图及其提交保留模块：图的回调和资源销毁后、在途命令退休后才释放相应所有权，包括构图或提交失败路径。调用方仍须遵循 Runtime 的线程及 GPU 资源退休契约；设备丢失恢复不在本次验证范围。节点不得跨帧保留临时 Graph、帧引用或 Graph 句柄；Graph 内回调需按值捕获所需数据并遵循 Graph/RHI 资源所有权约定。
 

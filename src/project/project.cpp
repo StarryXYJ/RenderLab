@@ -101,6 +101,19 @@ Project Project::Open(const std::filesystem::path& path, const std::filesystem::
         }
         result.rendering = std::move(rendering);
     }
+    if (data.contains("settings"))
+    {
+        const auto& source = data.at("settings");
+        if (!source.is_object() || source.at("version") != 1)
+            throw std::invalid_argument("Invalid project settings declaration");
+        if (source.contains("defaults"))
+        {
+            const auto relative = assets::detail::Path(source.at("defaults").get<std::string>());
+            if (relative.has_root_name() || relative.has_root_directory())
+                throw std::invalid_argument("Project settings path must be relative");
+            result.settingsDefaults = Inside(result.root, relative);
+        }
+    }
     if (!std::filesystem::is_directory(result.assets) || result.assets == result.library ||
         result.library == result.root || result.assets == result.root)
         throw std::invalid_argument("Invalid project asset/library roots");

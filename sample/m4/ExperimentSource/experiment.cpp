@@ -1,18 +1,42 @@
+#include "renderer/frame.hpp"
 #include "renderer/project_module.h"
+#include "renderer/project_settings.hpp"
 #include "rendergraph/graph.hpp"
 
 #include <cstdio>
 #include <exception>
+#include <stdexcept>
 
 namespace
 {
-int32_t Blue(void*, void* opaqueGraph, const void*, void*, char* error, uint32_t capacity)
+int32_t Blue(void*, void* opaqueGraph, const void* opaqueFrame, void*, char* error,
+             uint32_t capacity)
 {
     try
     {
         auto& graph = *static_cast<renderlab::rendergraph::Graph*>(opaqueGraph);
+        const auto& frame = *static_cast<const renderlab::renderer::RenderFrame*>(opaqueFrame);
+        double blue = .75;
+        if (frame.projectSettings)
+        {
+            if (frame.projectSettings->version != 1)
+                throw std::invalid_argument("Unsupported example settings version");
+            const auto found = frame.projectSettings->values.find("example.blue");
+            if (found != frame.projectSettings->values.end())
+            {
+                if (const auto* value = std::get_if<double>(&found->second))
+                    blue = *value;
+                else if (const auto* integerValue = std::get_if<int32_t>(&found->second))
+                    blue = *integerValue;
+                else
+                    throw std::invalid_argument("example.blue must be numeric");
+                if (blue < 0 || blue > 4)
+                    throw std::invalid_argument("example.blue must be in [0,4]");
+            }
+        }
         auto pass = graph.AddRasterPass("Example.BlueClear");
-        pass.ColorTarget("CameraColor", renderlab::rhi::LoadOp::Clear, {0, .25f, .75f, 1});
+        pass.ColorTarget("CameraColor", renderlab::rhi::LoadOp::Clear,
+                         {0, .25f, static_cast<float>(blue), 1});
         pass.Execute([](renderlab::rendergraph::RasterContext&) {});
         return 0;
     }

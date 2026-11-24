@@ -10,6 +10,7 @@
 
 namespace renderlab::renderer
 {
+struct ProjectSettings;
 struct TextureBinding
 {
     uint32_t slot;
@@ -63,6 +64,8 @@ struct DrawPacket
 /** @brief Per-frame immutable inputs; no graph handles or ownership of graph outputs. */
 struct RenderFrame
 {
+    /// Project values are immutable for the frame; graph callbacks must retain what they use.
+    std::shared_ptr<const ProjectSettings> projectSettings;
     struct RayTracingInputs
     {
         std::shared_ptr<rhi::AccelerationStructure> scene;

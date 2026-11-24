@@ -83,7 +83,7 @@ target_include_directories(renderlab_rendergraph PUBLIC src)
 target_link_libraries(renderlab_rendergraph PRIVATE renderlab_options renderlab_rhi
     nlohmann_json::nlohmann_json)
 
-add_library(renderlab_project_module STATIC src/renderer/project_module.cpp)
+add_library(renderlab_project_module STATIC src/renderer/project_module.cpp src/renderer/project_settings.cpp)
 target_include_directories(renderlab_project_module PUBLIC src)
 target_link_libraries(renderlab_project_module PRIVATE renderlab_options renderlab_rendergraph
     nlohmann_json::nlohmann_json)

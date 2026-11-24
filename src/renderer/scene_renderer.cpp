@@ -14,6 +14,7 @@
 #include "renderer/ltc_table.hpp"
 #include "renderer/pipeline.hpp"
 #include "renderer/project_module.hpp"
+#include "renderer/project_settings.hpp"
 #include "renderer/shadow.hpp"
 #include "rendergraph/graph.hpp"
 #include "rendergraph/pool.hpp"
@@ -68,6 +69,7 @@ std::array<float, 4> Vector(math::Vec3 value, float w = 0)
 struct SceneRenderer::Impl
 {
     std::shared_ptr<const ProjectModules> projectModules;
+    std::shared_ptr<const ProjectSettings> defaultProjectSettings;
     rhi::Runtime& runtime;
     shader::Target shaderTarget;
     project::Project project;
@@ -249,6 +251,14 @@ struct SceneRenderer::Impl
           // The host owns the native limit. Leave room for assets, AS, histories and uploads.
           pool(r, 64, r.GetMemoryStats().budget * 3 / 4), uploadPool(r), accelerationScene(r, pool)
     {
+        if (project.settingsDefaults)
+        {
+            if (std::filesystem::file_size(*project.settingsDefaults) > 65536)
+                throw std::invalid_argument("Project settings exceed budget");
+            const auto bytes = assets::detail::Read(*project.settingsDefaults);
+            defaultProjectSettings = ParseProjectSettings(
+                std::string_view(reinterpret_cast<const char*>(bytes.data()), bytes.size()));
+        }
         if (project.rendering)
         {
             if (!projectModules &&
@@ -1617,6 +1627,8 @@ SceneReadback SceneRenderer::Render(std::shared_ptr<rhi::Texture> target, rhi::S
                                         rhi::Format::Rgba32Float, false, true});
     auto cameraDepthFormat = rhi::Format::D32;
     RenderFrame frame;
+    frame.projectSettings =
+        options.projectSettings ? options.projectSettings : self.defaultProjectSettings;
     const auto scan = [&](const std::vector<scene::Instance>& instances, shader::PassRole role,
                           rhi::Format& format)
     {

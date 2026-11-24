@@ -130,6 +130,15 @@ void ContentContracts(const std::filesystem::path& manifest, const std::filesyst
         assets::detail::SaveJson(path, data);
         Fails([&] { project::Project::Open(path, engine); }, "escapes");
         data["rendering"].erase("pipelines");
+        data["settings"] = {{"version", 1}, {"defaults", "ProjectSettings/defaults.json"}};
+        assets::detail::SaveJson(path, data);
+        Require(project::Project::Open(path, engine).settingsDefaults ==
+                    project::Inside(root, "ProjectSettings/defaults.json"),
+                "Project defaults must resolve inside the project");
+        data["settings"]["defaults"] = "../outside.json";
+        assets::detail::SaveJson(path, data);
+        Fails([&] { project::Project::Open(path, engine); }, "escapes");
+        data.erase("settings");
         data["rendering"]["modules"] = {"../outside.dll"};
         assets::detail::SaveJson(path, data);
         Fails([&] { project::Project::Open(path, engine); }, "escapes");

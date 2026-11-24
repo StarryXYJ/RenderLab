@@ -27,6 +27,7 @@ class Swapchain;
 namespace renderlab::renderer
 {
 class ProjectModules;
+struct ProjectSettings;
 enum class SceneView
 {
     Final,
@@ -50,6 +51,8 @@ struct SceneRenderOptions
     PipelineType pipeline = PipelineType::Forward;
     /// Optional project pipeline extending Forward.
     std::string projectPipeline;
+    /// Optional session override; null uses the project's default settings snapshot.
+    std::shared_ptr<const ProjectSettings> projectSettings;
     GeometrySubmission submission = GeometrySubmission::Direct;
     uint32_t recordingThreads = 1;
     bool asyncCompute = false;
