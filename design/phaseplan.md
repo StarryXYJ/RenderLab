@@ -4,7 +4,7 @@
 
 ## 当前状态
 
-- 实验平台 E2 IN_PROGRESS（2026 年 11 月 24 日）：E1 项目级设置和项目内场景切换已验收；正在接入项目渲染模块，后续继续配置界面和有限热更新。各阶段的交付和验证见下方“实验平台”，未验收内容不视为已支持。
+- 实验平台 E3 IN_PROGRESS（2026 年 11 月 24 日）：E1 项目设置与多场景、E2 项目渲染模块和宿主接入已验收；正在验证 AutoSettingUI 与现有工作台的兼容性。各阶段的交付和验证见下方“实验平台”，未验收内容不视为已支持。
 
 - 逐样本 HDR 压缩实验 DONE（2026 年 11 月 12 日）：采样变体和压缩域累积已接入，切换重置不兼容历史；RTX 5060 Release DX12/Vulkan 场景、加速结构和编辑器自检通过，默认关闭的 12 张原始 HDR 图与修改前逐字节一致。Gallery 白点 1024 spp 由 0.416 降至 0.056，但 4096 spp 三种子全图平均 MSE 由 0.0000713 上升至 0.004830，存在明显偏暗；具体数据、限制及验证入口见 [实验记录](../docs/performance/m8-path-tracing.md#逐样本-hdr-压缩实验2026-年-11-月-12-日)。
 
@@ -97,31 +97,15 @@ R1 契约修订、B1 样例整理/Benchmark、B2 调查和 B3 资源复用已完
 
 ### E2 项目渲染模块与管线
 
-状态：IN_PROGRESS。依赖 E1；先做可运行的插件节点纵切，不预先建设通用插件市场。
+状态：DONE（2026 年 11 月 24 日）。项目清单使用稳定管线 ID 和项目内模块路径；同构建 C++ 模块注册节点并在 Forward 基底中加入 Graph Pass，Editor、Player 和 Sandbox 共用原生图编译/执行。Editor 在现有控件选择和保存管线，候选首帧失败回退；可信项目可通过 CMake 将模块加入引擎构建。接口、示例与构建见 [项目模块](../docs/project-modules.md) 和 [手册](../manual/build.md#项目渲染模块示例)。
 
-#### E2a 模块注册与版本边界
+验证：Debug/Release 注册合约覆盖版本、重复、缺失及 DLL 生命周期；Release 原生项目图、提交失败和退休合约、托管 36/36、双后端项目渲染与完整工作台 smoke 通过。RTX 5060 双后端窗口/离屏验证项目 Pass、改变后的画面、内置覆盖、项目选择/预设/保存/重开及候选失败回退；缺失模块的项目切换恢复原项目与管线。关闭账本和验证错误为零，既有图形警告保留。证据分别在 `out/experiment-platform/e2-player`、`e2-editor` 和 `e2-sample`；临时窗口探针已撤销。
 
-状态：DONE（2026 年 11 月 24 日）。同构建原生模块入口、节点/Forward 基底管线 ID 和跨模块节点引用；注册器在拥有 DLL 期间提供回调，校验版本、MSVC/CRT 配置、描述、冲突和缺失引用。接口、同构建限制及回调寿命见 [项目模块](../docs/project-modules.md)。
-
-验证：MSVC Debug/Release 独立 DLL 和 `project_module.contracts` 均通过；覆盖模块驻留/释放、回调、跨模块引用、重复/缺失和 ABI 失败，Debug 宿主加载 Release 模块被拒绝。尚未验证节点真实图执行、GPU 资源及热重载；这些留在 E2b/E4。
-
-#### E2b 渲染与 Player 纵切
-
-状态：IN_PROGRESS。按可独立验证的图执行与宿主接入两部分推进；前者不表示 Editor 或 Player 已可选择项目管线。
-
-图执行（DONE，2026 年 11 月 24 日）：SceneRenderer 支持 Forward 基底的项目管线，按顺序插入节点，图和提交各自持有模块至回调销毁和 GPU 退休。Graph ABI 更新为 2。Release 的 `project_module.contracts`、`rendergraph.contracts`、DX12/Vulkan `gpu.*.project_render` 共 4/4 通过；真实独立 DLL 节点改变 HDR 输出，验证图顺序、构图失败、内置管线恢复及资源账本；假运行时覆盖正常退休与录制、提交前和部分提交失败的所有权。仅在本机设备上验证，未重跑 Debug、设备丢失或热重载，后续宿主和真实项目接入仍需验证。
-
-项目运行描述（DONE，2026 年 11 月 24 日）：可选清单字段记录项目内模块相对路径和默认管线 ID，SceneRenderer 加载并检查注册结果；保留旧清单行为，`renderlab.` 管线命名空间保留给内置。Release 的 `content.contracts`、`project_module.contracts` 和双后端 `gpu.*.project_render` 共 4/4 通过，覆盖路径越界、重复、无效 ID、缺失模块及默认管线、真实 DLL 加载与 HDR 输出。该轮未验证 Debug 和真实窗口；宿主后续接入见下方。
-
-Player 管线（DONE，2026 年 11 月 24 日）：Player/Sandbox 使用项目默认管线，显式 `--pipeline` 保持内置覆盖；报告记录实际项目管线 ID。Release 的 `core.contracts`、双后端 `gpu.*.project_render` 和原有 `gpu.*.player` 共 5/5 通过。隔离项目在 RTX 5060 双后端窗口各提交三帧、离屏图显示项目 Pass 和改变后的画面；显式 Forward 覆盖的图及画面不同，validation errors 和关闭分配均为零；DX12 另验证节点失败诊断。证据 `out/experiment-platform/e2-player`。Debug、其他设备、项目模块自动构建与独立分发未验证；原生调试面板仅选择内置管线。
-
-Editor 管线（DONE，2026 年 11 月 24 日）：ABI v14 发布会话内编号及稳定 ID，复用现有下拉框、配置状态和预设；启动、宿主重建和项目切换按 ID 恢复，项目管线候选首帧失败回退已应用配置。Release 托管 36/36、原生合约和双后端项目渲染 5/5，完整双后端工作台 smoke 通过（`out/experiment-platform/e2-editor/smoke2-{dx12,vulkan}`）；临时隔离项目窗口探针覆盖两后端项目 Pass、构图失败回退、旧/新预设、项目切换、37 FPS 保存与重开、失效保存 ID 回退，关闭账本及验证错误均为零（`probe2-{dx12,vulkan}`）。探针已撤销；未验证其他设备、设备丢失、人工操作及已应用项目管线后续帧故障恢复。
-项目同构建入口与样例（DONE，2026 年 11 月 24 日）：可信项目 CMake 源目录可加入同一构建，示例目标构建并部署模块到项目 Library；删除目标 DLL 后再次构建可恢复。Release RTX 5060 上 DX12/Vulkan Player 窗口各提交三帧，图含示例节点；离屏项目蓝色画面与内置 Forward 覆盖不同；Editor 双后端窗口确认项目管线生效，关闭账本和验证错误为零。证据 `out/experiment-platform/e2-sample`；图形验证层仍有既有警告。仅支持 Forward 基底，其他设备、自动构建和独立分发未验证；入口见 [手册](../manual/build.md#项目渲染模块示例)。
-- [ ] 核对项目模块拒绝、回调退休、项目切换失败回退的已有证据，补齐未覆盖项并完成 E2 收尾；明确未实现的其他管线基底和能力描述。
+限制：仅 Forward 基底及现有宿主资源契约，没有项目声明设备需求、自动构建、独立分发或 C++ 热重载。未验证其他设备、设备丢失、人工交互及已应用项目管线后续帧故障恢复；E3/E4 不视为完成。
 
 ### E3 C# 配置与管线描述
 
-状态：NOT_STARTED。依赖 E2。
+状态：IN_PROGRESS。依赖 E2；首先隔离验证 AutoSettingUI 的运行兼容性与界面。
 
 - [ ] 验证固定版本 AutoSettingUI 与 Avalonia 12、现有主题及所需控件兼容；不改变 Dock 布局。失败时记录具体阻塞，不把未验证的适配当作已完成。
 - [ ] 以项目作用域加载配置 DTO 和管线描述，提供自动生成的项目配置区；稳定字段 ID、类型、默认值、持久化版本、参数校验及请求/应用/拒绝状态。
